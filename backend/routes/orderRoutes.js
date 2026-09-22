@@ -1,5 +1,8 @@
 const express = require("express");
 const db = require("../config/db");
+const {
+    checkMaterialAvailability
+} = require("../services/materialRequirementService");
 
 const router = express.Router();
 
@@ -157,5 +160,41 @@ router.post("/", async (req, res) => {
         });
     } finally {
         connection.release();
+    }
+});
+
+router.get("/:id/material-check", async (req, res) => {
+    try {
+        const orderId = Number(req.params.id);
+
+        if (!Number.isInteger(orderId) || orderId <= 0) {
+            return res.status(400).json({
+                message: "Invalid order ID"
+            });
+        }
+
+        const result =
+            await checkMaterialAvailability(orderId);
+
+        res.json(result);
+
+    } catch (error) {
+        console.error(error);
+
+        if (error.message === "Order not found") {
+            return res.status(404).json({
+                message: "Order not found"
+            });
+        }
+
+        if (error.message === "Order has no products or BOM data") {
+            return res.status(400).json({
+                message: error.message
+            });
+        }
+
+        res.status(500).json({
+            message: "Failed to check material availability"
+        });
     }
 });
