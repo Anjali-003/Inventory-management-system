@@ -2,45 +2,29 @@ import { NavLink, Outlet } from "react-router-dom";
 
 function Layout() {
     return (
-        <div className="app-layout">
+      <div className="app-layout">
+        <aside className="sidebar">
+          <div className="logo">Inventory System</div>
 
-            <aside className="sidebar">
+          <nav>
+            <NavLink to="/">Dashboard</NavLink>
 
-                <div className="logo">
-                    Inventory System
-                </div>
+            <NavLink to="/products">Products</NavLink>
 
-                <nav>
+            <NavLink to="/inventory">Inventory</NavLink>
 
-                    <NavLink to="/">
-                        Dashboard
-                    </NavLink>
+            <NavLink to="/orders">Orders</NavLink>
 
-                    <NavLink to="/products">
-                        Products
-                    </NavLink>
+            <NavLink to="/existing-orders">Existing Orders</NavLink>
 
-                    <NavLink to="/inventory">
-                        Inventory
-                    </NavLink>
+            <NavLink to="/production">Production</NavLink>
+          </nav>
+        </aside>
 
-                    <NavLink to="/orders">
-                        Orders
-                    </NavLink>
-
-                    <NavLink to="/production">
-                        Production
-                    </NavLink>
-
-                </nav>
-
-            </aside>
-
-            <main className="main-content">
-                <Outlet />
-            </main>
-
-        </div>
+        <main className="main-content">
+          <Outlet />
+        </main>
+      </div>
     );
 }
 

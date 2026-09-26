@@ -137,7 +137,6 @@ import { useEffect, useState } from "react";
 import api from "../api/api";
 
 function Orders() {
-  const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
 
   const [selectedProduct, setSelectedProduct] = useState("");
@@ -153,19 +152,8 @@ function Orders() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    fetchOrders();
     fetchProducts();
   }, []);
-
-  const fetchOrders = async () => {
-    try {
-      const response = await api.get("/orders");
-
-      setOrders(response.data);
-    } catch (error) {
-      console.error(error);
-    }
-  };
 
   const fetchProducts = async () => {
     try {
@@ -176,7 +164,6 @@ function Orders() {
       console.error(error);
     }
   };
-  
 
   const handleCreateOrder = async () => {
     setMessage("");
@@ -207,7 +194,9 @@ function Orders() {
 
       setMessage("Order created successfully");
 
-      await fetchOrders();
+      // Clear previous material check
+      setMaterialCheck(null);
+
     } catch (error) {
       console.error(error);
 
@@ -226,7 +215,7 @@ function Orders() {
       setLoading(true);
 
       const response = await api.get(
-        `/orders/${selectedOrder.orderId}/material-check`,
+        `/orders/${selectedOrder.orderId}/material-check`
       );
 
       setMaterialCheck(response.data);
@@ -239,84 +228,51 @@ function Orders() {
     }
   };
 
-  const handleStartProduction =
-    async () => {
+  const handleStartProduction = async () => {
+    if (!selectedOrder) {
+      return;
+    }
 
-        if (!selectedOrder) {
-            return;
-        }
+    try {
+      setLoading(true);
 
-        try {
+      const response = await api.post(
+        `/orders/${selectedOrder.orderId}/start-production`
+      );
 
-            setLoading(true);
+      setMessage("Production started successfully");
 
-            const response =
-                await api.post(
-                    `/orders/${selectedOrder.orderId}/start-production`
-                );
+      setSelectedOrder({
+        ...selectedOrder,
+        status: response.data.status,
+      });
 
+      // Clear material check after production starts
+      setMaterialCheck(null);
 
-            setMessage(
-                "Production started successfully"
-            );
+    } catch (error) {
+      console.error(error);
 
-
-            /*
-                Store new production information
-            */
-            setSelectedOrder({
-                ...selectedOrder,
-                status: response.data.status
-            });
-
-
-            /*
-                Reload orders so the table
-                shows IN_PRODUCTION.
-            */
-            await fetchOrders();
-
-
-            /*
-                Run material check again.
-            */
-            setMaterialCheck(null);
-
-        } catch (error) {
-
-            console.error(error);
-
-
-            if (
-                error.response?.status === 409 &&
-                error.response?.data?.shortages
-            ) {
-
-                setMaterialCheck({
-                    canProduce: false,
-                    status: "MATERIAL_SHORTAGE",
-                    materials:
-                        error.response.data.shortages,
-                    shortages:
-                        error.response.data.shortages
-                });
-
-            } else {
-
-                setMessage(
-                    error.response?.data?.message ||
-                    "Failed to start production"
-                );
-
-            }
-
-        } finally {
-
-            setLoading(false);
-
-        }
-
-    };
+      if (
+        error.response?.status === 409 &&
+        error.response?.data?.shortages
+      ) {
+        setMaterialCheck({
+          canProduce: false,
+          status: "MATERIAL_SHORTAGE",
+          materials: error.response.data.shortages,
+          shortages: error.response.data.shortages,
+        });
+      } else {
+        setMessage(
+          error.response?.data?.message ||
+            "Failed to start production"
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div>
@@ -333,10 +289,15 @@ function Orders() {
           value={selectedProduct}
           onChange={(e) => setSelectedProduct(e.target.value)}
         >
-          <option value="">Select Product</option>
+          <option value="">
+            Select Product
+          </option>
 
           {products.map((product) => (
-            <option key={product.id} value={product.id}>
+            <option
+              key={product.id}
+              value={product.id}
+            >
               {product.name}
             </option>
           ))}
@@ -348,54 +309,76 @@ function Orders() {
           type="number"
           min="1"
           value={quantity}
-          onChange={(e) => setQuantity(Number(e.target.value))}
+          onChange={(e) =>
+            setQuantity(Number(e.target.value))
+          }
         />
 
-        <button onClick={handleCreateOrder} disabled={loading}>
-          {loading ? "Creating..." : "Create Order"}
+        <button
+          onClick={handleCreateOrder}
+          disabled={loading}
+        >
+          {loading
+            ? "Creating..."
+            : "Create Order"}
         </button>
 
-        {selectedOrder && (
-          <div className="order-result">
-            <h2>Order Created</h2>
+        {message && (
+          <p>
+            {message}
+          </p>
+        )}
+      </div>
 
-            <p>Order Number: {selectedOrder.orderNumber}</p>
+      {selectedOrder && (
+        <div className="order-result">
+          <h2>Order Created</h2>
 
-            <p>Order ID: {selectedOrder.orderId}</p>
+          <p>
+            Order Number:{" "}
+            {selectedOrder.orderNumber}
+          </p>
 
-            <button onClick={handleMaterialCheck}>Check Materials</button>
+          <p>
+            Order ID:{" "}
+            {selectedOrder.orderId}
+          </p>
+
+          <p>
+            Status:{" "}
+            {selectedOrder.status}
+          </p>
+
+          <button
+            onClick={handleMaterialCheck}
+            disabled={loading}
+          >
+            {loading
+              ? "Checking..."
+              : "Check Materials"}
+          </button>
+        </div>
+      )}
+
+      {materialCheck && (
+        <div className="material-result">
+          <h2>Material Availability</h2>
+
+          <div
+            className={
+              materialCheck.canProduce
+                ? "success-box"
+                : "error-box"
+            }
+          >
+            <h3>
+              {materialCheck.canProduce
+                ? "✓ Ready for Production"
+                : "✕ Material Shortage"}
+            </h3>
           </div>
-        )}
 
-        {materialCheck &&
-          materialCheck.canProduce && (
-
-            <button
-              onClick={handleStartProduction}
-              disabled={loading}
-            >
-              {loading
-                ? "Starting..."
-                : "Start Production"
-              }
-            </button>
-
-        )}
-
-        {materialCheck && (
-          <div className="material-result">
-            <h2>Material Availability</h2>
-
-            <div
-              className={materialCheck.canProduce ? "success-box" : "error-box"}
-            >
-              <h3>
-                {materialCheck.canProduce
-                  ? "✓ Ready for Production"
-                  : "✕ Material Shortage"}
-              </h3>
-            </div>
-
+          <div className="table-container">
             <table>
               <thead>
                 <tr>
@@ -408,53 +391,51 @@ function Orders() {
               </thead>
 
               <tbody>
-                {materialCheck.materials.map((material) => (
-                  <tr key={material.componentId}>
-                    <td>{material.name}</td>
+                {materialCheck.materials.map(
+                  (material) => (
+                    <tr
+                      key={
+                        material.componentId
+                      }
+                    >
+                      <td>
+                        {material.name}
+                      </td>
 
-                    <td>{material.required}</td>
+                      <td>
+                        {material.required}
+                      </td>
 
-                    <td>{material.available}</td>
+                      <td>
+                        {material.available}
+                      </td>
 
-                    <td>{material.shortage}</td>
+                      <td>
+                        {material.shortage}
+                      </td>
 
-                    <td>{material.status}</td>
-                  </tr>
-                ))}
-
-                <div className="table-container">
-                  <h2>Existing Orders</h2>
-
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Order</th>
-                        <th>Product</th>
-                        <th>Quantity</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {orders.map((order) => (
-                        <tr key={`${order.id}-${order.product_id}`}>
-                          <td>{order.order_number}</td>
-
-                          <td>{order.product_name}</td>
-
-                          <td>{order.quantity}</td>
-
-                          <td>{order.status}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      <td>
+                        {material.status}
+                      </td>
+                    </tr>
+                  )
+                )}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+
+          {materialCheck.canProduce && (
+            <button
+              onClick={handleStartProduction}
+              disabled={loading}
+            >
+              {loading
+                ? "Starting..."
+                : "Start Production"}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

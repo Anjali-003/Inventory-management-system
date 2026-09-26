@@ -7,43 +7,28 @@ import Products from "./pages/Products";
 import Inventory from "./pages/Inventory";
 import Orders from "./pages/Orders";
 import Production from "./pages/Production";
+import ExistingOrders from "./pages/ExistingOrders";
 
 function App() {
-    return (
-        <BrowserRouter>
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Dashboard />} />
 
-            <Routes>
+          <Route path="/products" element={<Products />} />
 
-                <Route element={<Layout />}>
+          <Route path="/inventory" element={<Inventory />} />
 
-                    <Route path="/" element={<Dashboard />} />
+          <Route path="/orders" element={<Orders />} />
 
-                    <Route
-                        path="/products"
-                        element={<Products />}
-                    />
+          <Route path="/production" element={<Production />} />
 
-                    <Route
-                        path="/inventory"
-                        element={<Inventory />}
-                    />
-
-                    <Route
-                        path="/orders"
-                        element={<Orders />}
-                    />
-
-                    <Route
-                        path="/production"
-                        element={<Production />}
-                    />
-
-                </Route>
-
-            </Routes>
-
-        </BrowserRouter>
-    );
+          <Route path="/existing-orders" element={<ExistingOrders />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
 export default App;
