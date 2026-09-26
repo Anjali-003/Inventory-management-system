@@ -62,7 +62,7 @@ function Inventory() {
                         <tr>
                             <th>SKU</th>
                             <th>Component</th>
-                            <th>On Hand</th>
+                            <th>Total</th>
                             <th>Reserved</th>
                             <th>Available</th>
                             <th>Minimum</th>
