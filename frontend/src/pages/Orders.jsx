@@ -176,6 +176,7 @@ function Orders() {
       console.error(error);
     }
   };
+  
 
   const handleCreateOrder = async () => {
     setMessage("");
@@ -238,6 +239,85 @@ function Orders() {
     }
   };
 
+  const handleStartProduction =
+    async () => {
+
+        if (!selectedOrder) {
+            return;
+        }
+
+        try {
+
+            setLoading(true);
+
+            const response =
+                await api.post(
+                    `/orders/${selectedOrder.orderId}/start-production`
+                );
+
+
+            setMessage(
+                "Production started successfully"
+            );
+
+
+            /*
+                Store new production information
+            */
+            setSelectedOrder({
+                ...selectedOrder,
+                status: response.data.status
+            });
+
+
+            /*
+                Reload orders so the table
+                shows IN_PRODUCTION.
+            */
+            await fetchOrders();
+
+
+            /*
+                Run material check again.
+            */
+            setMaterialCheck(null);
+
+        } catch (error) {
+
+            console.error(error);
+
+
+            if (
+                error.response?.status === 409 &&
+                error.response?.data?.shortages
+            ) {
+
+                setMaterialCheck({
+                    canProduce: false,
+                    status: "MATERIAL_SHORTAGE",
+                    materials:
+                        error.response.data.shortages,
+                    shortages:
+                        error.response.data.shortages
+                });
+
+            } else {
+
+                setMessage(
+                    error.response?.data?.message ||
+                    "Failed to start production"
+                );
+
+            }
+
+        } finally {
+
+            setLoading(false);
+
+        }
+
+    };
+
   return (
     <div>
       <h1>Orders</h1>
@@ -285,6 +365,21 @@ function Orders() {
 
             <button onClick={handleMaterialCheck}>Check Materials</button>
           </div>
+        )}
+
+        {materialCheck &&
+          materialCheck.canProduce && (
+
+            <button
+              onClick={handleStartProduction}
+              disabled={loading}
+            >
+              {loading
+                ? "Starting..."
+                : "Start Production"
+              }
+            </button>
+
         )}
 
         {materialCheck && (

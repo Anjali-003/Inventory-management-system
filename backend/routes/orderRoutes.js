@@ -5,6 +5,9 @@ const {
 } = require("../services/materialRequirementService");
 
 const router = express.Router();
+const {
+    startProduction
+} = require("../services/productionService");
 
 router.get("/", async (req, res) => {
     try {
@@ -197,4 +200,93 @@ router.get("/:id/material-check", async (req, res) => {
             message: "Failed to check material availability"
         });
     }
+});
+
+router.post("/:id/start-production", async (req, res) => {
+
+    try {
+
+        const orderId =
+            Number(req.params.id);
+
+
+        if (
+            !Number.isInteger(orderId) ||
+            orderId <= 0
+        ) {
+
+            return res.status(400).json({
+                message: "Invalid order ID"
+            });
+
+        }
+
+
+        /*
+            For now we have only one Admin user.
+
+            Later authentication will give us
+            the real logged-in user ID.
+        */
+        const userId = 1;
+
+
+        const result =
+            await startProduction(
+                orderId,
+                userId
+            );
+
+
+        /*
+            If material shortage exists,
+            return HTTP 409.
+        */
+        if (!result.success) {
+
+            return res.status(409).json(result);
+
+        }
+
+
+        res.status(200).json(result);
+
+
+    } catch (error) {
+
+        console.error(error);
+
+
+        if (
+            error.message ===
+            "Order not found"
+        ) {
+
+            return res.status(404).json({
+                message: error.message
+            });
+
+        }
+
+
+        if (
+            error.message ===
+            "Production has already started" ||
+            error.message ===
+            "Order is already completed"
+        ) {
+
+            return res.status(409).json({
+                message: error.message
+            });
+
+        }
+
+
+        res.status(500).json({
+            message: "Failed to start production"
+        });
+
+    }
+
 });
