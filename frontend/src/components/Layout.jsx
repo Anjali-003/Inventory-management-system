@@ -1,66 +1,124 @@
-import { NavLink, Outlet } from "react-router-dom"
-import { motion } from "motion/react"
-import { Boxes, ClipboardList, Cpu, Factory, LayoutDashboard, Warehouse } from "lucide-react"
-import { cn } from "../lib/utils"
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { AnimatePresence, motion } from "motion/react";
+import { Menu, X, Boxes, ClipboardList, Cpu, Factory, History, LayoutDashboard, Warehouse, Users, CalendarCheck } from "lucide-react";
+import { cn } from "../lib/utils";
 
-const NAV = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/products", label: "Products", icon: Boxes },
-  { to: "/inventory", label: "Inventory", icon: Warehouse },
-  { to: "/orders", label: "Orders", icon: ClipboardList },
-  { to: "/production", label: "Production", icon: Factory },
-]
+const GROUPS = [
+  { label: "Overview", items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard, end: true }] },
+  { label: "Catalog", items: [
+    { to: "/products", label: "Products", icon: Boxes },
+    { to: "/inventory", label: "Inventory", icon: Warehouse },
+  ] },
+  { label: "Operations", items: [
+    { to: "/orders", label: "Orders", icon: ClipboardList },
+    { to: "/existing-orders", label: "Existing Orders", icon: History },
+    { to: "/production", label: "Production", icon: Factory },
+  ] },
+  { label: "HR", items: [
+    { to: "/employees", label: "Employees", icon: Users },
+    { to: "/attendance", label: "Attendance", icon: CalendarCheck },
+  ] },
+];
+
+function NavItem({ to, label, icon: Icon, end, id }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      className={({ isActive }) =>
+        cn(
+          "relative flex items-center gap-3 rounded-sm px-3 py-2.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground hover:bg-muted hover:text-foreground"
+        )
+      }
+    >
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <motion.span
+              layoutId={`nav-active-${id}`}
+              className="absolute inset-0 rounded-sm border-l-[3px] border-primary bg-sidebar-accent"
+              transition={{ type: "spring", stiffness: 500, damping: 40 }}
+            />
+          )}
+          <Icon className="relative size-[18px]" />
+          <span className="relative">{label}</span>
+        </>
+      )}
+    </NavLink>
+  );
+}
+
+function NavList({ id }) {
+  return (
+    <nav className="flex flex-col gap-5 p-3 pt-4">
+      {GROUPS.map((g) => (
+        <div key={g.label} className="flex flex-col gap-1">
+          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{g.label}</p>
+          {g.items.map((i) => <NavItem key={i.to} id={id} {...i} />)}
+        </div>
+      ))}
+    </nav>
+  );
+}
 
 export default function Layout() {
+  const { pathname } = useLocation();
+  const [open, setOpen] = useState(false);
+  useEffect(() => setOpen(false), [pathname]);
+  const today = new Date().toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+
   return (
-    <div className="min-h-screen md:flex">
-      <aside className="bg-sidebar text-sidebar-foreground md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col">
-        <div className="flex items-center gap-2.5 px-5 py-5">
-          <span className="grid size-8 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-            <Cpu className="size-4" />
-          </span>
-          <div className="leading-tight">
-            <p className="text-sm font-semibold text-white">EPIMS</p>
-            <p className="text-xs text-sidebar-foreground/60">Production and inventory</p>
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-primary px-3 text-primary-foreground shadow-md md:px-6">
+        <div className="flex items-center gap-2 md:gap-3">
+          <button aria-label="Open menu" onClick={() => setOpen(true)} className="grid size-9 place-items-center rounded-sm hover:bg-white/10 md:hidden">
+            <Menu className="size-5" />
+          </button>
+          <span className="grid size-8 place-items-center rounded-sm bg-white text-primary"><Cpu className="size-[18px]" /></span>
+          <div className="leading-none">
+            <p className="text-lg font-bold italic tracking-tight">EPIMS</p>
+            <p className="mt-0.5 text-[11px] font-medium text-[#ffe500]">Production Suite</p>
           </div>
         </div>
-
-        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-col md:pb-0">
-          {NAV.map(({ to, label, icon: Icon, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                cn(
-                  "relative flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-                  isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/75 hover:text-white"
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && (
-                    <motion.span
-                      layoutId="nav-pill"
-                      className="absolute inset-0 rounded-md bg-sidebar-accent"
-                      transition={{ type: "spring", stiffness: 500, damping: 40 }}
-                    />
-                  )}
-                  <Icon className="relative size-4" />
-                  <span className="relative">{label}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-      </aside>
-
-      <main className="min-w-0 flex-1">
-        <div className="mx-auto max-w-6xl px-5 py-8 md:px-10">
-          <Outlet />
+        <div className="flex items-center gap-4">
+          <span className="hidden text-xs text-white/80 sm:block">{today}</span>
+          <span className="grid size-8 place-items-center rounded-full bg-white/15 text-xs font-semibold ring-1 ring-white/30">AD</span>
         </div>
-      </main>
+      </header>
+
+      <div className="md:flex">
+        <aside className="hidden bg-sidebar md:sticky md:top-14 md:block md:h-[calc(100vh-3.5rem)] md:w-60 md:shrink-0 md:overflow-y-auto md:border-r">
+          <NavList id="desktop" />
+        </aside>
+
+        <AnimatePresence>
+          {open && (
+            <>
+              <motion.div key="backdrop" className="fixed inset-0 z-40 bg-black/50 md:hidden" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setOpen(false)} />
+              <motion.aside
+                key="drawer"
+                className="fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] overflow-y-auto bg-sidebar shadow-xl md:hidden"
+                initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
+                transition={{ type: "tween", duration: 0.25, ease: "easeOut" }}
+              >
+                <div className="flex h-14 items-center justify-between bg-primary px-4 text-primary-foreground">
+                  <p className="text-lg font-bold italic">EPIMS</p>
+                  <button aria-label="Close menu" onClick={() => setOpen(false)} className="grid size-9 place-items-center rounded-sm hover:bg-white/10"><X className="size-5" /></button>
+                </div>
+                <NavList id="mobile" />
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
+
+        <main className="min-w-0 flex-1">
+          <motion.div key={pathname} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: "easeOut" }} className="mx-auto max-w-6xl px-4 py-5 md:px-8 md:py-6">
+            <Outlet />
+          </motion.div>
+        </main>
+      </div>
     </div>
-  )
+  );
 }

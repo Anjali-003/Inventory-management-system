@@ -1,10 +1,10 @@
 import { cn } from "../../lib/utils"
 
 export const Card = ({ className, ...p }) => (
-  <div className={cn("rounded-xl border bg-card text-card-foreground", className)} {...p} />
+  <div className={cn("rounded-md border bg-card text-card-foreground shadow-[0_1px_2px_rgb(0_0_0/0.06)]", className)} {...p} />
 )
 export const CardHeader = ({ className, ...p }) => (
-  <div className={cn("flex items-start justify-between gap-4 border-b px-5 py-4", className)} {...p} />
+  <div className={cn("flex items-start justify-between gap-4 border-b px-5 py-3.5", className)} {...p} />
 )
 export const CardTitle = ({ className, ...p }) => (
   <h2 className={cn("text-sm font-semibold leading-none", className)} {...p} />

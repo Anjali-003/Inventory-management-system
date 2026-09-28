@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { Boxes, X } from "lucide-react"
+import { Boxes, SearchX, X } from "lucide-react"
 import api from "../api/api"
 import PageHeader from "../components/PageHeader"
+import SearchBar from "../components/SearchBar"
 import { EmptyState, Notice, TableSkeleton } from "../components/feedback"
 import { Button } from "../components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
@@ -14,6 +15,7 @@ export default function Products() {
   const [error, setError] = useState("")
   const [selected, setSelected] = useState(null)
   const [bom, setBom] = useState([])
+  const [search, setSearch] = useState("")
 
   useEffect(() => {
     api
@@ -25,6 +27,17 @@ export default function Products() {
       })
       .finally(() => setLoading(false))
   }, [])
+
+  const filteredProducts = useMemo(() => {
+    const text = search.trim().toLowerCase()
+    if (!text) return products
+    return products.filter(
+      (p) =>
+        (p.name || "").toLowerCase().includes(text) ||
+        (p.sku || "").toLowerCase().includes(text) ||
+        (p.description || "").toLowerCase().includes(text)
+    )
+  }, [products, search])
 
   const openBom = async (product) => {
     try {
@@ -39,7 +52,9 @@ export default function Products() {
 
   return (
     <>
-      <PageHeader title="Products" description="Finished products and the components each one needs." />
+      <PageHeader title="Products" description="Finished products and the components each one needs.">
+        <SearchBar value={search} onChange={setSearch} placeholder="Search products" />
+      </PageHeader>
       {error && <div className="mb-6"><Notice title="Something went wrong">{error}</Notice></div>}
 
       <Card className="overflow-hidden">
@@ -47,6 +62,8 @@ export default function Products() {
           <TableSkeleton />
         ) : products.length === 0 ? (
           <EmptyState icon={Boxes} title="No products yet">Products added to the database will appear here.</EmptyState>
+        ) : filteredProducts.length === 0 ? (
+          <EmptyState icon={SearchX} title="No matching products">Try a different name, SKU or description.</EmptyState>
         ) : (
           <Table>
             <TableHeader>
@@ -58,11 +75,11 @@ export default function Products() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((p) => (
+              {filteredProducts.map((p) => (
                 <TableRow key={p.id} data-active={selected?.id === p.id}>
                   <TableCell className="font-medium tabular-nums">{p.sku}</TableCell>
                   <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell className="max-w-xs text-muted-foreground">{p.description}</TableCell>
+                  <TableCell className="min-w-56 max-w-xs whitespace-normal text-muted-foreground">{p.description}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="outline" size="sm" onClick={() => openBom(p)}>View BOM</Button>
                   </TableCell>
