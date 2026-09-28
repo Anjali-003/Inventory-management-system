@@ -1,3 +1,53 @@
+// import { BrowserRouter, Routes, Route } from "react-router-dom";
+
+// import Layout from "./components/Layout";
+
+// import Dashboard from "./pages/Dashboard";
+// import Products from "./pages/Products";
+// import Inventory from "./pages/Inventory";
+// import Orders from "./pages/Orders";
+// import Production from "./pages/Production";
+// import ExistingOrders from "./pages/ExistingOrders";
+// import Login from "./pages/Login";
+// import ProtectedRoute from "./components/ProtectedRoute";
+
+// function App() {
+//   return (
+//     <BrowserRouter>
+//       <Routes>
+//         <Route element={<Layout />}>
+//           <Route path="/login" element={<Login />} />
+
+//           {/* PROTECTED */}
+
+//           <Route
+//             element={
+//               <ProtectedRoute>
+//                 <Layout />
+//               </ProtectedRoute>
+//             }
+//           ></Route>
+//           <Route path="/" element={<Dashboard />} />
+
+//           <Route path="/products" element={<Products />} />
+
+//           <Route path="/inventory" element={<Inventory />} />
+
+//           <Route path="/orders" element={<Orders />} />
+
+//           <Route path="/production" element={<Production />} />
+
+//           <Route path="/existing-orders" element={<ExistingOrders />} />
+//           <Route path="/login" element={<Login />} />
+//         </Route>
+//       </Routes>
+//     </BrowserRouter>
+//   );
+// }
+
+// export default App;
+
+
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Layout from "./components/Layout";
@@ -8,27 +58,65 @@ import Inventory from "./pages/Inventory";
 import Orders from "./pages/Orders";
 import Production from "./pages/Production";
 import ExistingOrders from "./pages/ExistingOrders";
+import Login from "./pages/Login";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
 
-          <Route path="/products" element={<Products />} />
+        {/* PUBLIC ROUTE */}
 
-          <Route path="/inventory" element={<Inventory />} />
+        <Route
+          path="/login"
+          element={<Login />}
+        />
 
-          <Route path="/orders" element={<Orders />} />
+        {/* PROTECTED ROUTES */}
 
-          <Route path="/production" element={<Production />} />
+        <Route
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route
+            path="/"
+            element={<Dashboard />}
+          />
 
-          <Route path="/existing-orders" element={<ExistingOrders />} />
+          <Route
+            path="/products"
+            element={<Products />}
+          />
+
+          <Route
+            path="/inventory"
+            element={<Inventory />}
+          />
+
+          <Route
+            path="/orders"
+            element={<Orders />}
+          />
+
+          <Route
+            path="/production"
+            element={<Production />}
+          />
+
+          <Route
+            path="/existing-orders"
+            element={<ExistingOrders />}
+          />
         </Route>
+
       </Routes>
     </BrowserRouter>
   );
 }
 
 export default App;
+

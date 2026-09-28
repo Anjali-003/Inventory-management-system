@@ -135,6 +135,7 @@
 
 import { useEffect, useState } from "react";
 import api from "../api/api";
+import SearchBar from "../components/SearchBar";
 
 function Orders() {
   const [products, setProducts] = useState([]);
@@ -150,6 +151,7 @@ function Orders() {
   const [loading, setLoading] = useState(false);
 
   const [message, setMessage] = useState("");
+  
 
   useEffect(() => {
     fetchProducts();

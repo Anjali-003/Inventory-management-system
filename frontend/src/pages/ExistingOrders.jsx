@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/api";
+import SearchBar from "../components/SearchBar";
 
 function ExistingOrders() {
   const [orders, setOrders] = useState([]);
@@ -7,6 +8,17 @@ function ExistingOrders() {
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+
+  const filteredOrders = orders.filter((order) => {
+    const searchText = search.toLowerCase();
+
+    return (
+      order.order_number.toLowerCase().includes(searchText) ||
+      order.product_name.toLowerCase().includes(searchText) ||
+      order.status.toLowerCase().includes(searchText)
+    );
+  });
 
   useEffect(() => {
     fetchOrders();
@@ -40,9 +52,7 @@ function ExistingOrders() {
     <div>
       <h1>Existing Orders</h1>
 
-      <p>
-        View all previously created manufacturing orders
-      </p>
+      <p>View all previously created manufacturing orders</p>
 
       <div className="table-container">
         <table>
@@ -70,30 +80,18 @@ function ExistingOrders() {
               </tr>
             ) : (
               orders.map((order) => (
-                <tr
-                  key={`${order.id}-${order.product_id}`}
-                >
-                  <td>
-                    {order.order_number}
-                  </td>
+                <tr key={`${order.id}-${order.product_id}`}>
+                  <td>{order.order_number}</td>
 
-                  <td>
-                    {order.product_name}
-                  </td>
+                  <td>{order.product_name}</td>
 
-                  <td>
-                    {order.quantity}
-                  </td>
+                  <td>{order.quantity}</td>
 
-                  <td>
-                    {order.status}
-                  </td>
+                  <td>{order.status}</td>
 
                   <td>
                     {order.created_at
-                      ? new Date(
-                          order.created_at
-                        ).toLocaleString()
+                      ? new Date(order.created_at).toLocaleString()
                       : "-"}
                   </td>
                 </tr>
