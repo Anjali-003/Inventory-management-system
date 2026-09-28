@@ -2,108 +2,76 @@ import { useEffect, useState } from "react";
 import api from "../api/api";
 
 function Inventory() {
+  const [inventory, setInventory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-    const [inventory, setInventory] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
+  useEffect(() => {
+    const fetchInventory = async () => {
+      try {
+        const response = await api.get("/inventory");
 
-    useEffect(() => {
+        setInventory(response.data);
+      } catch (error) {
+        console.error(error);
 
-        const fetchInventory = async () => {
+        setError("Failed to load inventory");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-            try {
+    fetchInventory();
+  }, []);
 
-                const response =
-                    await api.get("/inventory");
+  if (loading) {
+    return <h1>Loading inventory...</h1>;
+  }
 
-                setInventory(response.data);
+  if (error) {
+    return <h1>{error}</h1>;
+  }
 
-            } catch (error) {
+  return (
+    <div>
+      <h1>Inventory</h1>
 
-                console.error(error);
+      <p>Current raw material stock</p>
 
-                setError("Failed to load inventory");
+      <div className="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Component</th>
+              <th>Total</th>
+              <th>Reserved</th>
+              <th>Available</th>
+              <th>Minimum</th>
+            </tr>
+          </thead>
 
-            } finally {
+          <tbody>
+            {inventory.map((item) => (
+              <tr key={item.id}>
+                <td>{item.sku}</td>
 
-                setLoading(false);
+                <td>{item.component_name}</td>
 
-            }
-        };
+                <td>{item.quantity_on_hand}</td>
 
-        fetchInventory();
+                <td>{item.quantity_reserved}</td>
 
-    }, []);
+                <td>{item.available}</td>
 
-    if (loading) {
-        return <h1>Loading inventory...</h1>;
-    }
-
-    if (error) {
-        return <h1>{error}</h1>;
-    }
-
-    return (
-
-        <div>
-
-            <h1>Inventory</h1>
-
-            <p>
-                Current raw material stock
-            </p>
-
-            <div className="table-container">
-
-                <table>
-
-                    <thead>
-
-                        <tr>
-                            <th>SKU</th>
-                            <th>Component</th>
-                            <th>Total</th>
-                            <th>Reserved</th>
-                            <th>Available</th>
-                            <th>Minimum</th>
-                        </tr>
-
-                    </thead>
-
-                    <tbody>
-
-                        {inventory.map(item => (
-
-                            <tr key={item.id}>
-
-                                <td>{item.sku}</td>
-
-                                <td>{item.component_name}</td>
-
-                                <td>{item.quantity_on_hand}</td>
-
-                                <td>{item.quantity_reserved}</td>
-
-                                <td>
-                                    {item.available}
-                                </td>
-
-                                <td>
-                                    {item.minimum_stock_level}
-                                </td>
-
-                            </tr>
-
-                        ))}
-
-                    </tbody>
-
-                </table>
-
-            </div>
-
-        </div>
-    );
+                <td>{item.minimum_stock_level}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 export default Inventory;
