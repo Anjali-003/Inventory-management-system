@@ -1,94 +1,132 @@
-import { useEffect, useState } from "react";
-import api from "../api/api";
-import SearchBar from "../components/SearchBar";
+import { useEffect, useMemo, useState } from "react"
+import { Warehouse } from "lucide-react"
+import api from "../api/api"
+import PageHeader from "../components/PageHeader"
+import SearchBar from "../components/SearchBar"
+import { EmptyState, Notice, TableSkeleton } from "../components/feedback"
+import { Badge } from "../components/ui/badge"
+import { Card } from "../components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
 
-function Inventory() {
-  const [inventory, setInventory] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
+export default function Inventory() {
+  const [inventory, setInventory] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [query, setQuery] = useState("")
 
   useEffect(() => {
-    const fetchInventory = async () => {
-      try {
-        const response = await api.get("/inventory");
+    api
+      .get("/inventory")
+      .then((r) => setInventory(r.data))
+      .catch((err) => {
+        console.error(err)
+        setError("Could not load inventory. Check that the server is running.")
+      })
+      .finally(() => setLoading(false))
+  }, [])
 
-        setInventory(response.data);
-      } catch (error) {
-        console.error(error);
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase()
 
-        setError("Failed to load inventory");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchInventory();
-  }, []);
-
-  const filteredInventory = inventory.filter((item) => {
-    const searchText = search.toLowerCase();
-
-    return (
-      item.sku.toLowerCase().includes(searchText) ||
-      item.component_name.toLowerCase().includes(searchText)
-    );
-  });
-
-  if (loading) {
-    return <h1>Loading inventory...</h1>;
-  }
-
-  if (error) {
-    return <h1>{error}</h1>;
-  }
+    return q
+      ? inventory.filter((item) =>
+          `${item.sku} ${item.component_name}`.toLowerCase().includes(q)
+        )
+      : inventory
+  }, [inventory, query])
 
   return (
-    <div>
-      <h1>Inventory</h1>
+    <>
+      <PageHeader
+        title="Inventory"
+        description="Raw material stock: on hand, reserved for production, and available."
+      >
+        <SearchBar
+          value={query}
+          onChange={setQuery}
+          placeholder="Search by component name or SKU..."
+        />
+      </PageHeader>
 
-      <p>Current raw material stock</p>
+      {error && (
+        <div className="mb-6">
+          <Notice title="Something went wrong">{error}</Notice>
+        </div>
+      )}
 
-      <SearchBar
-        value={search}
-        onChange={setSearch}
-        placeholder="Search by component name or SKU..."
-      />
+      <Card className="overflow-hidden">
+        {loading ? (
+          <TableSkeleton rows={8} />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon={Warehouse}
+            title={query ? "No matching components" : "No inventory yet"}
+          >
+            {query
+              ? "Try a different SKU or component name."
+              : "Components with stock records will appear here."}
+          </EmptyState>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SKU</TableHead>
+                <TableHead>Component</TableHead>
+                <TableHead className="text-right">On hand</TableHead>
+                <TableHead className="text-right">Reserved</TableHead>
+                <TableHead className="text-right">Available</TableHead>
+                <TableHead className="text-right">Minimum</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
 
-      <div className="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>SKU</th>
-              <th>Component</th>
-              <th>Total</th>
-              <th>Reserved</th>
-              <th>Available</th>
-              <th>Minimum</th>
-            </tr>
-          </thead>
+            <TableBody>
+              {rows.map((item) => {
+                const avail = Number(item.available)
+                const min = Number(item.minimum_stock_level)
 
-          <tbody>
-            {filteredInventory.map((item) => (
-              <tr key={item.id}>
-                <td>{item.sku}</td>
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell className="tabular-nums text-muted-foreground">
+                      {item.sku}
+                    </TableCell>
 
-                <td>{item.component_name}</td>
+                    <TableCell className="font-medium">
+                      {item.component_name}
+                    </TableCell>
 
-                <td>{item.quantity_on_hand}</td>
+                    <TableCell className="text-right tabular-nums">
+                      {item.quantity_on_hand}
+                    </TableCell>
 
-                <td>{item.quantity_reserved}</td>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {item.quantity_reserved}
+                    </TableCell>
 
-                <td>{item.available}</td>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {avail}
+                    </TableCell>
 
-                <td>{item.minimum_stock_level}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {min}
+                    </TableCell>
+
+                    <TableCell>
+                      {avail <= 0 ? (
+                        <Badge variant="danger">Out of stock</Badge>
+                      ) : avail <= min ? (
+                        <Badge variant="warning">Low</Badge>
+                      ) : (
+                        <Badge variant="success">In stock</Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
+    </>
+  )
 }
-
-export default Inventory;

@@ -1,20 +1,21 @@
-const express = require('express');
-const cors = require('cors');
-require('dotenv').config();
-const db = require("./config/db");
-const productRoutes = require("./routes/productRoutes");
-const componentRoutes = require("./routes/componentRoutes");
-const inventoryRoutes = require("./routes/inventoryRoutes");
-const orderRoutes = require("./routes/orderRoutes");
-const productionRoutes =
-    require("./routes/productionRoutes");
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config();
+
+const db = require("./src/config/db");
+const productRoutes = require("./src/routes/productRoutes");
+const componentRoutes = require("./src/routes/componentRoutes");
+const inventoryRoutes = require("./src/routes/inventoryRoutes");
+const orderRoutes = require("./src/routes/orderRoutes");
+const productionRoutes = require("./src/routes/productionRoutes");
+const employeeRoutes = require("./src/routes/employeeRoutes");
+const attendanceRoutes = require("./src/routes/attendanceRoutes");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-
-app.get('/', (req, res) => res.send('Server is running'));
+app.get("/", (req, res) => res.send("Server is running"));
 
 const PORT = process.env.PORT || 5000;
 
@@ -22,10 +23,9 @@ app.use("/api/products", productRoutes);
 app.use("/api/components", componentRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/orders", orderRoutes);
-app.use(
-    "/api/production",
-    productionRoutes
-);
+app.use("/api/production", productionRoutes);
+app.use("/api/employees", employeeRoutes);
+app.use("/api/attendance", attendanceRoutes);
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 // async function testDatabaseConnection() {
