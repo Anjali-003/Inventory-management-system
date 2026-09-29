@@ -47,7 +47,6 @@
 
 // export default App;
 
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Layout from "./components/Layout";
@@ -60,18 +59,16 @@ import Production from "./pages/Production";
 import ExistingOrders from "./pages/ExistingOrders";
 import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Employees from "./pages/Employees";
+import Attendance from "./pages/Attendance";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-
         {/* PUBLIC ROUTE */}
 
-        <Route
-          path="/login"
-          element={<Login />}
-        />
+        <Route path="/login" element={<Login />} />
 
         {/* PROTECTED ROUTES */}
 
@@ -82,41 +79,23 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route
-            path="/"
-            element={<Dashboard />}
-          />
+          <Route path="/" element={<Dashboard />} />
 
-          <Route
-            path="/products"
-            element={<Products />}
-          />
+          <Route path="/products" element={<Products />} />
 
-          <Route
-            path="/inventory"
-            element={<Inventory />}
-          />
+          <Route path="/inventory" element={<Inventory />} />
 
-          <Route
-            path="/orders"
-            element={<Orders />}
-          />
+          <Route path="/orders" element={<Orders />} />
 
-          <Route
-            path="/production"
-            element={<Production />}
-          />
+          <Route path="/production" element={<Production />} />
 
-          <Route
-            path="/existing-orders"
-            element={<ExistingOrders />}
-          />
+          <Route path="/existing-orders" element={<ExistingOrders />} />
+          <Route path="/employees" element={<Employees />} />
+          <Route path="/attendance" element={<Attendance />} />
         </Route>
-
       </Routes>
     </BrowserRouter>
   );
 }
 
 export default App;
-

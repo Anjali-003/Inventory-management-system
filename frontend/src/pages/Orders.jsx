@@ -1,264 +1,156 @@
-// import { useEffect, useState } from "react";
-// import api from "../api/api";
-
-// function Orders() {
-//   const [orders, setOrders] = useState([]);
-//   const [products, setProducts] = useState([]);
-
-//   const [selectedProduct, setSelectedProduct] = useState("");
-
-//   const [quantity, setQuantity] = useState(1);
-
-//   const [selectedOrder, setSelectedOrder] = useState(null);
-
-//   const [materialCheck, setMaterialCheck] = useState(null);
-
-//   const [loading, setLoading] = useState(false);
-
-//   const [message, setMessage] = useState("");
-
-//   useEffect(() => {
-//     fetchOrders();
-//     fetchProducts();
-//   }, []);
-
-//   const fetchOrders = async () => {
-//     try {
-//       const response = await api.get("/orders");
-
-//       setOrders(response.data);
-//     } catch (error) {
-//       console.error(error);
-//     }
-//   };
-
-//   const fetchProducts = async () => {
-//     try {
-//       const response = await api.get("/products");
-
-//       setProducts(response.data);
-//     } catch (error) {
-//       console.error(error);
-//     }
-//   };
-//   const handleCreateOrder = async () => {
-//     setMessage("");
-
-//     if (!selectedProduct) {
-//       setMessage("Please select a product");
-//       return;
-//     }
-
-//     if (quantity <= 0) {
-//       setMessage("Quantity must be greater than 0");
-//       return;
-//     }
-
-//     try {
-//       setLoading(true);
-
-//       const response = await api.post("/orders", {
-//         items: [
-//           {
-//             productId: Number(selectedProduct),
-//             quantity: quantity,
-//           },
-//         ],
-//       });
-
-//       setSelectedOrder(response.data);
-
-//       setMessage("Order created successfully");
-
-//       await fetchOrders();
-//     } catch (error) {
-//       console.error(error);
-
-//       setMessage("Failed to create order");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div>
-//       <h1>Orders</h1>
-
-//       <p>Create a manufacturing order</p>
-//       <div className="order-form">
-//         <h2>Create Order</h2>
-
-//         <label>Product</label>
-
-//         <select
-//           value={selectedProduct}
-//           onChange={(e) => setSelectedProduct(e.target.value)}
-//         >
-//           <option value="">Select Product</option>
-
-//           {products.map((product) => (
-//             <option key={product.id} value={product.id}>
-//               {product.name}
-//             </option>
-//           ))}
-//         </select>
-
-//         <label>Quantity</label>
-
-//         <input
-//           type="number"
-//           min="1"
-//           value={quantity}
-//           onChange={(e) => setQuantity(Number(e.target.value))}
-//         />
-
-//         <button onClick={handleCreateOrder} disabled={loading}>
-//           {loading ? "Creating..." : "Create Order"}
-//         </button>
-//         {selectedOrder && (
-//           <div className="order-result">
-//             <h2>Order Created</h2>
-
-//             <p>Order Number: {selectedOrder.orderNumber}</p>
-
-//             <p>Order ID: {selectedOrder.orderId}</p>
-
-//             <button onClick={handleMaterialCheck}>Check Materials</button>
-//           </div>
-//         )}
-//       </div>
-//     </div>
-//   );
-// }
-
-// export default Orders;
-
 import { useEffect, useState } from "react";
+import { ClipboardList, Loader2 } from "lucide-react";
 import api from "../api/api";
 import SearchBar from "../components/SearchBar";
+import PageHeader from "../components/PageHeader";
+import { EmptyState, Notice, OrderStatus } from "../components/feedback";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import { Input, Label, Select } from "../components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
+import { cn } from "../lib/utils";
 
-function Orders() {
+export default function Orders() {
+  const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
-
   const [selectedProduct, setSelectedProduct] = useState("");
-
   const [quantity, setQuantity] = useState(1);
 
-  const [selectedOrder, setSelectedOrder] = useState(null);
-
-  const [materialCheck, setMaterialCheck] = useState(null);
-
+  const [creating, setCreating] = useState(false);
+  const [checking, setChecking] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const [message, setMessage] = useState("");
-  
+  const [checkedOrder, setCheckedOrder] = useState(null);
+  const [materialCheck, setMaterialCheck] = useState(null);
+  const [message, setMessage] = useState(null);
+
+  const fetchOrders = () =>
+    api
+      .get("/orders")
+      .then((r) => setOrders(r.data))
+      .catch(console.error);
+
+  const fetchProducts = () =>
+    api
+      .get("/products")
+      .then((r) => setProducts(r.data))
+      .catch(console.error);
 
   useEffect(() => {
+    fetchOrders();
     fetchProducts();
   }, []);
 
-  const fetchProducts = async () => {
+  const runMaterialCheck = async (orderId, orderNumber) => {
     try {
-      const response = await api.get("/products");
+      setChecking(orderId);
 
-      setProducts(response.data);
-    } catch (error) {
-      console.error(error);
+      const r = await api.get(`/orders/${orderId}/material-check`);
+
+      setCheckedOrder({ orderId, orderNumber });
+      setMaterialCheck(r.data);
+    } catch (err) {
+      console.error(err);
+      setMessage({
+        tone: "error",
+        text: "Failed to check materials",
+      });
+    } finally {
+      setChecking(null);
     }
   };
 
-  const handleCreateOrder = async () => {
-    setMessage("");
+  const handleCreateOrder = async (e) => {
+    e.preventDefault();
+
+    setMessage(null);
 
     if (!selectedProduct) {
-      setMessage("Please select a product");
-      return;
+      return setMessage({
+        tone: "error",
+        text: "Please select a product",
+      });
     }
 
     if (quantity <= 0) {
-      setMessage("Quantity must be greater than 0");
-      return;
+      return setMessage({
+        tone: "error",
+        text: "Quantity must be greater than 0",
+      });
     }
 
     try {
-      setLoading(true);
+      setCreating(true);
 
-      const response = await api.post("/orders", {
+      const r = await api.post("/orders", {
         items: [
           {
             productId: Number(selectedProduct),
-            quantity: quantity,
+            quantity,
           },
         ],
       });
 
-      setSelectedOrder(response.data);
+      setMessage({
+        tone: "success",
+        text: `Order ${r.data.orderNumber} created`,
+      });
 
-      setMessage("Order created successfully");
+      await fetchOrders();
 
-      // Clear previous material check
-      setMaterialCheck(null);
+      // Automatically check materials for the newly created order
+      await runMaterialCheck(r.data.orderId, r.data.orderNumber);
+    } catch (err) {
+      console.error(err);
 
-    } catch (error) {
-      console.error(error);
-
-      setMessage("Failed to create order");
+      setMessage({
+        tone: "error",
+        text: "Failed to create order",
+      });
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleMaterialCheck = async () => {
-    if (!selectedOrder) {
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const response = await api.get(
-        `/orders/${selectedOrder.orderId}/material-check`
-      );
-
-      setMaterialCheck(response.data);
-    } catch (error) {
-      console.error(error);
-
-      setMessage("Failed to check materials");
-    } finally {
-      setLoading(false);
+      setCreating(false);
     }
   };
 
   const handleStartProduction = async () => {
-    if (!selectedOrder) {
+    if (!checkedOrder) {
       return;
     }
 
     try {
       setLoading(true);
+      setMessage(null);
 
-      const response = await api.post(
-        `/orders/${selectedOrder.orderId}/start-production`
+      await api.post(
+        `/orders/${checkedOrder.orderId}/start-production`,
       );
 
-      setMessage("Production started successfully");
-
-      setSelectedOrder({
-        ...selectedOrder,
-        status: response.data.status,
+      setMessage({
+        tone: "success",
+        text: "Production started successfully",
       });
 
-      // Clear material check after production starts
       setMaterialCheck(null);
 
+      await fetchOrders();
     } catch (error) {
       console.error(error);
 
-      if (
-        error.response?.status === 409 &&
-        error.response?.data?.shortages
-      ) {
+      if (error.response?.status === 409 && error.response?.data?.shortages) {
         setMaterialCheck({
           canProduce: false,
           status: "MATERIAL_SHORTAGE",
@@ -266,10 +158,10 @@ function Orders() {
           shortages: error.response.data.shortages,
         });
       } else {
-        setMessage(
-          error.response?.data?.message ||
-            "Failed to start production"
-        );
+        setMessage({
+          tone: "error",
+          text: error.response?.data?.message || "Failed to start production",
+        });
       }
     } finally {
       setLoading(false);
@@ -277,169 +169,217 @@ function Orders() {
   };
 
   return (
-    <div>
-      <h1>Orders</h1>
+    <>
+      <PageHeader
+        title="Orders"
+        description="Create manufacturing orders and check whether materials cover them."
+      />
 
-      <p>Create a manufacturing order</p>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
+        {/* CREATE ORDER */}
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>New order</CardTitle>
+              <CardDescription>
+                Materials are checked as soon as the order is created.
+              </CardDescription>
+            </div>
+          </CardHeader>
 
-      <div className="order-form">
-        <h2>Create Order</h2>
+          <CardContent>
+            <form onSubmit={handleCreateOrder} className="space-y-4">
+              <div>
+                <Label htmlFor="product">Product</Label>
 
-        <label>Product</label>
+                <Select
+                  id="product"
+                  value={selectedProduct}
+                  onChange={(e) => setSelectedProduct(e.target.value)}
+                >
+                  <option value="">Select a product</option>
 
-        <select
-          value={selectedProduct}
-          onChange={(e) => setSelectedProduct(e.target.value)}
-        >
-          <option value="">
-            Select Product
-          </option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
 
-          {products.map((product) => (
-            <option
-              key={product.id}
-              value={product.id}
-            >
-              {product.name}
-            </option>
-          ))}
-        </select>
+              <div>
+                <Label htmlFor="quantity">Quantity</Label>
 
-        <label>Quantity</label>
+                <Input
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(Number(e.target.value))}
+                />
+              </div>
 
-        <input
-          type="number"
-          min="1"
-          value={quantity}
-          onChange={(e) =>
-            setQuantity(Number(e.target.value))
-          }
-        />
+              {message && <Notice tone={message.tone}>{message.text}</Notice>}
 
-        <button
-          onClick={handleCreateOrder}
-          disabled={loading}
-        >
-          {loading
-            ? "Creating..."
-            : "Create Order"}
-        </button>
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full"
+                disabled={creating}
+              >
+                {creating && <Loader2 className="animate-spin" />}
 
-        {message && (
-          <p>
-            {message}
-          </p>
-        )}
+                {creating ? "Creating order" : "Create order"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* EXISTING ORDERS */}
+        <Card className="overflow-hidden">
+          <CardHeader>
+            <CardTitle>Existing orders</CardTitle>
+          </CardHeader>
+
+          {orders.length === 0 ? (
+            <EmptyState icon={ClipboardList} title="No orders yet">
+              Create your first order to see it here.
+            </EmptyState>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Product</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {orders.map((o) => (
+                  <TableRow
+                    key={`${o.id}-${o.product_id}`}
+                    data-active={checkedOrder?.orderId === o.id}
+                  >
+                    <TableCell className="font-medium tabular-nums">
+                      {o.order_number}
+                    </TableCell>
+
+                    <TableCell>{o.product_name}</TableCell>
+
+                    <TableCell className="text-right tabular-nums">
+                      {o.quantity}
+                    </TableCell>
+
+                    <TableCell>
+                      <OrderStatus status={o.status} />
+                    </TableCell>
+
+                    <TableCell className="text-right">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={checking === o.id}
+                        onClick={() => runMaterialCheck(o.id, o.order_number)}
+                      >
+                        {checking === o.id && (
+                          <Loader2 className="animate-spin" />
+                        )}
+                        Check materials
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
       </div>
 
-      {selectedOrder && (
-        <div className="order-result">
-          <h2>Order Created</h2>
-
-          <p>
-            Order Number:{" "}
-            {selectedOrder.orderNumber}
-          </p>
-
-          <p>
-            Order ID:{" "}
-            {selectedOrder.orderId}
-          </p>
-
-          <p>
-            Status:{" "}
-            {selectedOrder.status}
-          </p>
-
-          <button
-            onClick={handleMaterialCheck}
-            disabled={loading}
-          >
-            {loading
-              ? "Checking..."
-              : "Check Materials"}
-          </button>
-        </div>
-      )}
-
+      {/* MATERIAL CHECK */}
       {materialCheck && (
-        <div className="material-result">
-          <h2>Material Availability</h2>
+        <Card className="mt-6 overflow-hidden">
+          <CardHeader>
+            <div>
+              <CardTitle>Material availability</CardTitle>
 
-          <div
-            className={
-              materialCheck.canProduce
-                ? "success-box"
-                : "error-box"
-            }
-          >
-            <h3>
+              <CardDescription>{checkedOrder?.orderNumber}</CardDescription>
+            </div>
+
+            <Badge variant={materialCheck.canProduce ? "success" : "danger"}>
               {materialCheck.canProduce
-                ? "✓ Ready for Production"
-                : "✕ Material Shortage"}
-            </h3>
-          </div>
+                ? "Ready for production"
+                : "Material shortage"}
+            </Badge>
+          </CardHeader>
 
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Component</th>
-                  <th>Required</th>
-                  <th>Available</th>
-                  <th>Shortage</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Component</TableHead>
 
-              <tbody>
-                {materialCheck.materials.map(
-                  (material) => (
-                    <tr
-                      key={
-                        material.componentId
-                      }
+                <TableHead className="text-right">Required</TableHead>
+
+                <TableHead className="text-right">Available</TableHead>
+
+                <TableHead className="text-right">Shortage</TableHead>
+
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {materialCheck.materials?.map((m) => {
+                const short = Number(m.shortage) > 0;
+
+                return (
+                  <TableRow key={m.componentId}>
+                    <TableCell className="font-medium">{m.name}</TableCell>
+
+                    <TableCell className="text-right tabular-nums">
+                      {m.required}
+                    </TableCell>
+
+                    <TableCell className="text-right tabular-nums">
+                      {m.available}
+                    </TableCell>
+
+                    <TableCell
+                      className={cn(
+                        "text-right tabular-nums",
+                        short && "font-medium text-destructive",
+                      )}
                     >
-                      <td>
-                        {material.name}
-                      </td>
+                      {m.shortage}
+                    </TableCell>
 
-                      <td>
-                        {material.required}
-                      </td>
+                    <TableCell>
+                      <Badge variant={short ? "danger" : "success"}>
+                        {short ? "Short" : "Covered"}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
 
-                      <td>
-                        {material.available}
-                      </td>
-
-                      <td>
-                        {material.shortage}
-                      </td>
-
-                      <td>
-                        {material.status}
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
-
+          {/* START PRODUCTION */}
           {materialCheck.canProduce && (
-            <button
-              onClick={handleStartProduction}
-              disabled={loading}
-            >
-              {loading
-                ? "Starting..."
-                : "Start Production"}
-            </button>
+            <div className="p-6 pt-0">
+              <Button onClick={handleStartProduction} disabled={loading}>
+                {loading && <Loader2 className="animate-spin" />}
+
+                {loading ? "Starting..." : "Start Production"}
+              </Button>
+            </div>
           )}
-        </div>
+        </Card>
       )}
-    </div>
+    </>
   );
 }
-
-export default Orders;

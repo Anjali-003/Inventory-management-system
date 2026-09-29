@@ -1,107 +1,242 @@
-import { useEffect, useState } from "react";
+
 import api from "../api/api";
+
+import { useEffect, useMemo, useState } from "react";
+
+import { History, SearchX } from "lucide-react";
+
+import PageHeader from "../components/PageHeader";
 import SearchBar from "../components/SearchBar";
 
-function ExistingOrders() {
+import {
+  EmptyState,
+  Notice,
+  OrderStatus,
+  TableSkeleton,
+} from "../components/feedback";
+
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
+
+
+const formatDate = (value) =>
+  value
+    ? new Date(value).toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : "-";
+
+
+export default function ExistingOrders() {
+
   const [orders, setOrders] = useState([]);
 
   const [loading, setLoading] = useState(true);
 
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
 
-  const filteredOrders = orders.filter((order) => {
-    const searchText = search.toLowerCase();
+  const [query, setQuery] = useState("");
 
-    return (
-      order.order_number.toLowerCase().includes(searchText) ||
-      order.product_name.toLowerCase().includes(searchText) ||
-      order.status.toLowerCase().includes(searchText)
-    );
-  });
 
   useEffect(() => {
-    fetchOrders();
+
+    api
+      .get("/orders")
+      .then((r) => setOrders(r.data))
+      .catch((err) => {
+
+        console.error(err);
+
+        setError(
+          "Failed to load existing orders. Check that the server is running."
+        );
+
+      })
+      .finally(() => setLoading(false));
+
   }, []);
 
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
 
-      const response = await api.get("/orders");
+  const rows = useMemo(() => {
 
-      setOrders(response.data);
-    } catch (error) {
-      console.error(error);
+    const q = query.trim().toLowerCase();
 
-      setError("Failed to load existing orders");
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (!q) return orders;
 
-  if (loading) {
-    return <h1>Loading orders...</h1>;
-  }
+    return orders.filter((o) =>
+      `${o.order_number} ${o.product_name} ${o.status}`
+        .toLowerCase()
+        .includes(q)
+    );
 
-  if (error) {
-    return <h1>{error}</h1>;
-  }
+  }, [orders, query]);
+
 
   return (
-    <div>
-      <h1>Existing Orders</h1>
 
-      <p>View all previously created manufacturing orders</p>
+    <>
 
-      <div className="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Product</th>
-              <th>Quantity</th>
-              <th>Status</th>
-              <th>Created</th>
-            </tr>
-          </thead>
+      <PageHeader
+        title="Existing orders"
+        description="Every manufacturing order created so far."
+      >
 
-          <tbody>
-            {orders.length === 0 ? (
-              <tr>
-                <td
-                  colSpan="5"
-                  style={{
-                    textAlign: "center",
-                  }}
+        <SearchBar
+          value={query}
+          onChange={setQuery}
+          placeholder="Search by order, product or status"
+        />
+
+      </PageHeader>
+
+
+      {error && (
+
+        <div className="mb-6">
+
+          <Notice title="Something went wrong">
+            {error}
+          </Notice>
+
+        </div>
+
+      )}
+
+
+      <Card className="overflow-hidden">
+
+        <CardHeader>
+
+          <div>
+
+            <CardTitle>
+              Order history
+            </CardTitle>
+
+            <CardDescription>
+
+              {loading
+                ? "Loading orders"
+                : `${rows.length} of ${orders.length} orders shown`}
+
+            </CardDescription>
+
+          </div>
+
+        </CardHeader>
+
+
+        {loading ? (
+
+          <TableSkeleton rows={6} />
+
+        ) : rows.length === 0 ? (
+
+          <EmptyState
+            icon={query ? SearchX : History}
+            title={
+              query
+                ? "No matching orders"
+                : "No orders yet"
+            }
+          >
+
+            {query
+              ? "Try a different order number, product or status."
+              : "Orders you create will appear here."}
+
+          </EmptyState>
+
+        ) : (
+
+          <Table>
+
+            <TableHeader>
+
+              <TableRow>
+
+                <TableHead>
+                  Order
+                </TableHead>
+
+                <TableHead>
+                  Product
+                </TableHead>
+
+                <TableHead className="text-right">
+                  Quantity
+                </TableHead>
+
+                <TableHead>
+                  Status
+                </TableHead>
+
+                <TableHead>
+                  Created
+                </TableHead>
+
+              </TableRow>
+
+            </TableHeader>
+
+
+            <TableBody>
+
+              {rows.map((o) => (
+
+                <TableRow
+                  key={`${o.id}-${o.product_id}`}
                 >
-                  No orders found
-                </td>
-              </tr>
-            ) : (
-              orders.map((order) => (
-                <tr key={`${order.id}-${order.product_id}`}>
-                  <td>{order.order_number}</td>
 
-                  <td>{order.product_name}</td>
+                  <TableCell className="font-medium tabular-nums">
+                    {o.order_number}
+                  </TableCell>
 
-                  <td>{order.quantity}</td>
+                  <TableCell>
+                    {o.product_name}
+                  </TableCell>
 
-                  <td>{order.status}</td>
+                  <TableCell className="text-right tabular-nums">
+                    {o.quantity}
+                  </TableCell>
 
-                  <td>
-                    {order.created_at
-                      ? new Date(order.created_at).toLocaleString()
-                      : "-"}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+                  <TableCell>
+                    <OrderStatus status={o.status} />
+                  </TableCell>
+
+                  <TableCell className="text-muted-foreground">
+                    {formatDate(o.created_at)}
+                  </TableCell>
+
+                </TableRow>
+
+              ))}
+
+            </TableBody>
+
+          </Table>
+
+        )}
+
+      </Card>
+
+    </>
+
   );
 }
 
-export default ExistingOrders;
+
