@@ -58,3 +58,15 @@ export function OrderStatus({ status }) {
   ]
   return <Badge variant={variant}>{label}</Badge>
 }
+
+const ATTENDANCE_STATUS = {
+  PRESENT: ["success", "Present"],
+  ABSENT: ["danger", "Absent"],
+  HALF_DAY: ["warning", "Half day"],
+  LEAVE: ["info", "Leave"],
+}
+
+export function AttendanceStatus({ status }) {
+  const [variant, label] = ATTENDANCE_STATUS[status] ?? ["neutral", "Unmarked"]
+  return <Badge variant={variant}>{label}</Badge>
+}

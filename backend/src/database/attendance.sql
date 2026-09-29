@@ -25,9 +25,10 @@ CREATE TABLE IF NOT EXISTS attendance (
     id INT AUTO_INCREMENT PRIMARY KEY,
     employee_id INT NOT NULL,
     attendance_date DATE NOT NULL,
-    status VARCHAR(20) NOT NULL,
+    status VARCHAR(20) NULL,  -- NULL while checked in but not yet checked out
     check_in TIME NULL,
     check_out TIME NULL,
+    marked_at DATETIME NULL,
     notes VARCHAR(255) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
