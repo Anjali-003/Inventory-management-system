@@ -55,11 +55,11 @@ const GROUPS = [
         label: "Orders",
         icon: ClipboardList,
       },
-      {
-        to: "/existing-orders",
-        label: "Existing Orders",
-        icon: History,
-      },
+      // {
+      //   to: "/existing-orders",
+      //   label: "Existing Orders",
+      //   icon: History,
+      // },
       {
         to: "/production",
         label: "Production",
