@@ -1,314 +1,59 @@
-// const express = require("express");
-// const db = require("../config/db");
-// const {
-//     checkMaterialAvailability
-// } = require("../services/materialRequirementService");
-
-// const router = express.Router();
-// const {
-//     startProduction
-// } = require("../services/productionService");
-
-// router.get("/", async (req, res) => {
-//     try {
-//         const [rows] = await db.query(
-//             `
-//             SELECT
-//                 o.id,
-//                 o.order_number,
-//                 o.status,
-//                 o.created_at,
-//                 oi.product_id,
-//                 p.name AS product_name,
-//                 oi.quantity
-//             FROM orders o
-//             JOIN order_items oi
-//                 ON o.id = oi.order_id
-//             JOIN products p
-//                 ON oi.product_id = p.id
-//             ORDER BY o.id DESC
-//             `
-//         );
-
-//         res.json(rows);
-//     } catch (error) {
-//         console.error(error);
-
-//         res.status(500).json({
-//             message: "Failed to fetch orders"
-//         });
-//     }
-// });
-
-// module.exports = router;
-
-// router.get("/:id", async (req, res) => {
-//     try {
-//         const orderId = Number(req.params.id);
-
-//         const [rows] = await db.query(
-//             `
-//             SELECT
-//                 o.id AS order_id,
-//                 o.order_number,
-//                 o.status,
-//                 o.created_at,
-//                 oi.product_id,
-//                 p.sku AS product_sku,
-//                 p.name AS product_name,
-//                 oi.quantity
-//             FROM orders o
-//             JOIN order_items oi
-//                 ON o.id = oi.order_id
-//             JOIN products p
-//                 ON oi.product_id = p.id
-//             WHERE o.id = ?
-//             `,
-//             [orderId]
-//         );
-
-//         if (rows.length === 0) {
-//             return res.status(404).json({
-//                 message: "Order not found"
-//             });
-//         }
-
-//         res.json({
-//             orderId: rows[0].order_id,
-//             orderNumber: rows[0].order_number,
-//             status: rows[0].status,
-//             createdAt: rows[0].created_at,
-//             items: rows.map(row => ({
-//                 productId: row.product_id,
-//                 productSku: row.product_sku,
-//                 productName: row.product_name,
-//                 quantity: row.quantity
-//             }))
-//         });
-
-//     } catch (error) {
-//         console.error(error);
-
-//         res.status(500).json({
-//             message: "Failed to fetch order"
-//         });
-//     }
-// });
-
-// router.post("/", async (req, res) => {
-//     const connection = await db.getConnection();
-
-//     try {
-//         const { items } = req.body;
-
-//         if (!items || !Array.isArray(items) || items.length === 0) {
-//             return res.status(400).json({
-//                 message: "Order must contain at least one item"
-//             });
-//         }
-
-//         for (const item of items) {
-//             if (!item.productId || !item.quantity || item.quantity <= 0) {
-//                 return res.status(400).json({
-//                     message: "Each item needs a valid productId and quantity"
-//                 });
-//             }
-//         }
-
-//         await connection.beginTransaction();
-
-//         const orderNumber = `ORD-${Date.now()}`;
-
-//         const [orderResult] = await connection.query(
-//             `
-//             INSERT INTO orders (order_number, status)
-//             VALUES (?, 'PENDING')
-//             `,
-//             [orderNumber]
-//         );
-
-//         const orderId = orderResult.insertId;
-
-//         for (const item of items) {
-//             await connection.query(
-//                 `
-//                 INSERT INTO order_items
-//                 (order_id, product_id, quantity)
-//                 VALUES (?, ?, ?)
-//                 `,
-//                 [
-//                     orderId,
-//                     item.productId,
-//                     item.quantity
-//                 ]
-//             );
-//         }
-
-//         await connection.commit();
-
-//         res.status(201).json({
-//             message: "Order created successfully",
-//             orderId,
-//             orderNumber,
-//             status: "PENDING"
-//         });
-
-//     } catch (error) {
-//         await connection.rollback();
-
-//         console.error(error);
-
-//         res.status(500).json({
-//             message: "Failed to create order"
-//         });
-//     } finally {
-//         connection.release();
-//     }
-// });
-
-// router.get("/:id/material-check", async (req, res) => {
-//     try {
-//         const orderId = Number(req.params.id);
-
-//         if (!Number.isInteger(orderId) || orderId <= 0) {
-//             return res.status(400).json({
-//                 message: "Invalid order ID"
-//             });
-//         }
-
-//         const result =
-//             await checkMaterialAvailability(orderId);
-
-//         res.json(result);
-
-//     } catch (error) {
-//         console.error(error);
-
-//         if (error.message === "Order not found") {
-//             return res.status(404).json({
-//                 message: "Order not found"
-//             });
-//         }
-
-//         if (error.message === "Order has no products or BOM data") {
-//             return res.status(400).json({
-//                 message: error.message
-//             });
-//         }
-
-//         res.status(500).json({
-//             message: "Failed to check material availability"
-//         });
-//     }
-// });
-
-// router.post("/:id/start-production", async (req, res) => {
-
-//     try {
-
-//         const orderId =
-//             Number(req.params.id);
-
-//         if (
-//             !Number.isInteger(orderId) ||
-//             orderId <= 0
-//         ) {
-
-//             return res.status(400).json({
-//                 message: "Invalid order ID"
-//             });
-
-//         }
-
-//         const userId = 1;
-
-//         const result =
-//             await startProduction(
-//                 orderId,
-//                 userId
-//             );
-
-//         if (!result.success) {
-
-//             return res.status(409).json(result);
-
-//         }
-
-//         res.status(200).json(result);
-
-//     } catch (error) {
-
-//         console.error(error);
-
-//         if (
-//             error.message ===
-//             "Order not found"
-//         ) {
-
-//             return res.status(404).json({
-//                 message: error.message
-//             });
-
-//         }
-
-//         if (
-//             error.message ===
-//             "Production has already started" ||
-//             error.message ===
-//             "Order is already completed"
-//         ) {
-
-//             return res.status(409).json({
-//                 message: error.message
-//             });
-
-//         }
-
-//         res.status(500).json({
-//             message: "Failed to start production"
-//         });
-
-//     }
-
-// });
-
 const express = require("express");
+
 const db = require("../config/db");
+
 
 const {
     checkMaterialAvailability
 } = require("../services/materialRequirementService");
 
+
 const {
-    startProduction
+    startProduction,
+    getProductionInfo,
+    checkProductionMaterials
 } = require("../services/productionService");
+
 
 const router = express.Router();
 
 
-// GET ALL ORDERS
+/*
+=========================================================
+GET ALL ORDERS
+=========================================================
+*/
 router.get("/", async (req, res) => {
 
     try {
 
-        const [rows] = await db.query(
-            `
-            SELECT
-                o.id,
-                o.order_number,
-                o.status,
-                o.created_at,
-                oi.product_id,
-                p.name AS product_name,
-                oi.quantity
-            FROM orders o
-            JOIN order_items oi
-                ON o.id = oi.order_id
-            JOIN products p
-                ON oi.product_id = p.id
-            ORDER BY o.id DESC
-            `
-        );
+        const [rows] =
+            await db.query(
+                `
+                SELECT
+                    o.id,
+                    o.order_number,
+                    o.status,
+                    o.created_at,
+
+                    oi.product_id,
+
+                    p.name AS product_name,
+
+                    oi.quantity
+
+                FROM orders o
+
+                JOIN order_items oi
+                    ON o.id = oi.order_id
+
+                JOIN products p
+                    ON oi.product_id = p.id
+
+                ORDER BY o.id DESC
+                `
+            );
+
 
         res.json(rows);
 
@@ -316,8 +61,12 @@ router.get("/", async (req, res) => {
 
         console.error(error);
 
+
         res.status(500).json({
-            message: "Failed to fetch orders"
+
+            message:
+                "Failed to fetch orders"
+
         });
 
     }
@@ -325,68 +74,121 @@ router.get("/", async (req, res) => {
 });
 
 
-// GET SINGLE ORDER
+/*
+=========================================================
+GET SINGLE ORDER
+=========================================================
+*/
 router.get("/:id", async (req, res) => {
 
     try {
 
-        const orderId = Number(req.params.id);
+        const orderId =
+            Number(req.params.id);
 
-        if (!Number.isInteger(orderId) || orderId <= 0) {
+
+        if (
+            !Number.isInteger(orderId) ||
+            orderId <= 0
+        ) {
+
             return res.status(400).json({
-                message: "Invalid order ID"
+
+                message:
+                    "Invalid order ID"
+
             });
+
         }
 
-        const [rows] = await db.query(
-            `
-            SELECT
-                o.id AS order_id,
-                o.order_number,
-                o.status,
-                o.created_at,
-                oi.product_id,
-                p.sku AS product_sku,
-                p.name AS product_name,
-                oi.quantity
-            FROM orders o
-            JOIN order_items oi
-                ON o.id = oi.order_id
-            JOIN products p
-                ON oi.product_id = p.id
-            WHERE o.id = ?
-            `,
-            [orderId]
-        );
+
+        const [rows] =
+            await db.query(
+                `
+                SELECT
+                    o.id AS order_id,
+                    o.order_number,
+                    o.status,
+                    o.created_at,
+
+                    oi.product_id,
+
+                    p.sku AS product_sku,
+                    p.name AS product_name,
+
+                    oi.quantity
+
+                FROM orders o
+
+                JOIN order_items oi
+                    ON o.id = oi.order_id
+
+                JOIN products p
+                    ON oi.product_id = p.id
+
+                WHERE o.id = ?
+                `,
+                [orderId]
+            );
+
 
         if (rows.length === 0) {
 
             return res.status(404).json({
-                message: "Order not found"
+
+                message:
+                    "Order not found"
+
             });
 
         }
 
-        res.json({
-            orderId: rows[0].order_id,
-            orderNumber: rows[0].order_number,
-            status: rows[0].status,
-            createdAt: rows[0].created_at,
 
-            items: rows.map(row => ({
-                productId: row.product_id,
-                productSku: row.product_sku,
-                productName: row.product_name,
-                quantity: row.quantity
-            }))
+        res.json({
+
+            orderId:
+                rows[0].order_id,
+
+            orderNumber:
+                rows[0].order_number,
+
+            status:
+                rows[0].status,
+
+            createdAt:
+                rows[0].created_at,
+
+            items:
+                rows.map(
+                    (row) => ({
+
+                        productId:
+                            row.product_id,
+
+                        productSku:
+                            row.product_sku,
+
+                        productName:
+                            row.product_name,
+
+                        quantity:
+                            row.quantity
+
+                    })
+                )
+
         });
 
     } catch (error) {
 
         console.error(error);
 
+
         res.status(500).json({
-            message: "Failed to fetch order"
+
+            message:
+                "Failed to fetch order"
+
         });
 
     }
@@ -394,25 +196,43 @@ router.get("/:id", async (req, res) => {
 });
 
 
-// CREATE ORDER
+/*
+=========================================================
+CREATE ORDER
+=========================================================
+*/
 router.post("/", async (req, res) => {
 
-    const connection = await db.getConnection();
+    const connection =
+        await db.getConnection();
+
 
     try {
 
-        const { items } = req.body;
+        const { items } =
+            req.body;
 
-        if (!items || !Array.isArray(items) || items.length === 0) {
+
+        if (
+            !items ||
+            !Array.isArray(items) ||
+            items.length === 0
+        ) {
 
             return res.status(400).json({
-                message: "Order must contain at least one item"
+
+                message:
+                    "Order must contain at least one item"
+
             });
 
         }
 
 
-        for (const item of items) {
+        for (
+            const item
+            of items
+        ) {
 
             if (
                 !item.productId ||
@@ -421,8 +241,10 @@ router.post("/", async (req, res) => {
             ) {
 
                 return res.status(400).json({
+
                     message:
                         "Each item needs a valid productId and quantity"
+
                 });
 
             }
@@ -434,12 +256,11 @@ router.post("/", async (req, res) => {
 
 
         /*
-            STEP 1:
-            Create the order first with a temporary
-            unique order number.
+            Temporary order number.
 
-            We need the MySQL-generated ID because
-            that ID will become the sequence number.
+            We first insert the order because
+            we need the MySQL-generated ID for
+            the sequence number.
         */
         const temporaryOrderNumber =
             `TEMP-${Date.now()}`;
@@ -449,34 +270,30 @@ router.post("/", async (req, res) => {
             await connection.query(
                 `
                 INSERT INTO orders
-                (order_number, status)
+                (
+                    order_number,
+                    status
+                )
 
-                VALUES (?, 'PENDING')
+                VALUES
+                (
+                    ?,
+                    'PENDING'
+                )
                 `,
                 [temporaryOrderNumber]
             );
 
 
-        /*
-            MySQL automatically creates:
-
-            1
-            2
-            3
-            4
-            ...
-
-            We use this as the sequence number.
-        */
         const orderId =
             orderResult.insertId;
 
 
         /*
-            STEP 2:
-            Get current date and time.
+            Date
         */
-        const now = new Date();
+        const now =
+            new Date();
 
 
         const year =
@@ -496,14 +313,12 @@ router.post("/", async (req, res) => {
 
 
         /*
-            getHours() returns:
+            Normal 24-hour format:
 
-            0 = midnight
-            1 = 1 AM
+            00 = midnight
+            01 = 1 AM
             ...
             23 = 11 PM
-
-            This is the normal 24-hour clock format.
         */
         const hour =
             String(
@@ -512,23 +327,20 @@ router.post("/", async (req, res) => {
 
 
         /*
-            STEP 3:
-            Convert order ID into a 3-digit sequence.
+            Sequence:
 
-            1   → 001
-            2   → 002
-            10  → 010
-            100 → 100
+            1   -> 001
+            2   -> 002
+            10  -> 010
+            100 -> 100
         */
         const sequenceNumber =
-            String(orderId).padStart(3, "0");
+            String(orderId)
+                .padStart(3, "0");
 
 
         /*
-            STEP 4:
-            Create final order number.
-
-            Example:
+            Final format:
 
             ORD-20260929-15-001
         */
@@ -536,16 +348,12 @@ router.post("/", async (req, res) => {
             `ORD-${year}${month}${day}-${hour}-${sequenceNumber}`;
 
 
-        /*
-            STEP 5:
-            Replace temporary order number
-            with the final order number.
-        */
         await connection.query(
             `
             UPDATE orders
 
-            SET order_number = ?
+            SET
+                order_number = ?
 
             WHERE id = ?
             `,
@@ -557,17 +365,28 @@ router.post("/", async (req, res) => {
 
 
         /*
-            STEP 6:
             Create order items.
         */
-        for (const item of items) {
+        for (
+            const item
+            of items
+        ) {
 
             await connection.query(
                 `
                 INSERT INTO order_items
-                (order_id, product_id, quantity)
+                (
+                    order_id,
+                    product_id,
+                    quantity
+                )
 
-                VALUES (?, ?, ?)
+                VALUES
+                (
+                    ?,
+                    ?,
+                    ?
+                )
                 `,
                 [
                     orderId,
@@ -579,17 +398,9 @@ router.post("/", async (req, res) => {
         }
 
 
-        /*
-            STEP 7:
-            Save the transaction.
-        */
         await connection.commit();
 
 
-        /*
-            Return the final order number
-            to the frontend.
-        */
         res.status(201).json({
 
             message:
@@ -604,15 +415,18 @@ router.post("/", async (req, res) => {
 
         });
 
-
     } catch (error) {
 
         await connection.rollback();
 
         console.error(error);
 
+
         res.status(500).json({
-            message: "Failed to create order"
+
+            message:
+                "Failed to create order"
+
         });
 
     } finally {
@@ -624,139 +438,489 @@ router.post("/", async (req, res) => {
 });
 
 
-// CHECK MATERIAL AVAILABILITY
-router.get("/:id/material-check", async (req, res) => {
+/*
+=========================================================
+CHECK FULL ORDER MATERIAL AVAILABILITY
+=========================================================
 
-    try {
+This remains your old material check.
 
-        const orderId =
-            Number(req.params.id);
+It checks the complete order quantity.
+*/
+router.get(
+    "/:id/material-check",
+    async (req, res) => {
 
-        if (!Number.isInteger(orderId) || orderId <= 0) {
+        try {
 
-            return res.status(400).json({
-                message: "Invalid order ID"
+            const orderId =
+                Number(req.params.id);
+
+
+            if (
+                !Number.isInteger(orderId) ||
+                orderId <= 0
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        "Invalid order ID"
+
+                });
+
+            }
+
+
+            const result =
+                await checkMaterialAvailability(
+                    orderId
+                );
+
+
+            res.json(result);
+
+
+        } catch (error) {
+
+            console.error(error);
+
+
+            if (
+                error.message ===
+                "Order not found"
+            ) {
+
+                return res.status(404).json({
+
+                    message:
+                        "Order not found"
+
+                });
+
+            }
+
+
+            if (
+                error.message ===
+                "Order has no products or BOM data"
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        error.message
+
+                });
+
+            }
+
+
+            res.status(500).json({
+
+                message:
+                    "Failed to check material availability"
+
             });
 
         }
-
-        const result =
-            await checkMaterialAvailability(orderId);
-
-        res.json(result);
-
-    } catch (error) {
-
-        console.error(error);
-
-        if (
-            error.message ===
-            "Order not found"
-        ) {
-
-            return res.status(404).json({
-                message: "Order not found"
-            });
-
-        }
-
-        if (
-            error.message ===
-            "Order has no products or BOM data"
-        ) {
-
-            return res.status(400).json({
-                message: error.message
-            });
-
-        }
-
-        res.status(500).json({
-            message:
-                "Failed to check material availability"
-        });
 
     }
+);
 
-});
+
+/*
+=========================================================
+GET PARTIAL PRODUCTION INFORMATION
+=========================================================
+
+Example:
+
+GET /api/orders/15/production-info
+
+Returns:
+
+Ordered = 100
+Started = 30
+Completed = 10
+In production = 20
+Remaining to start = 70
+Maximum from inventory = 55
+*/
+router.get(
+    "/:id/production-info",
+    async (req, res) => {
+
+        try {
+
+            const orderId =
+                Number(req.params.id);
 
 
-// START PRODUCTION
-router.post("/:id/start-production", async (req, res) => {
+            if (
+                !Number.isInteger(orderId) ||
+                orderId <= 0
+            ) {
 
-    try {
+                return res.status(400).json({
 
-        const orderId =
-            Number(req.params.id);
+                    message:
+                        "Invalid order ID"
 
-        if (!Number.isInteger(orderId) || orderId <= 0) {
+                });
 
-            return res.status(400).json({
-                message: "Invalid order ID"
+            }
+
+
+            const result =
+                await getProductionInfo(
+                    orderId
+                );
+
+
+            res.json(result);
+
+
+        } catch (error) {
+
+            console.error(error);
+
+
+            if (
+                error.message ===
+                "Order not found"
+            ) {
+
+                return res.status(404).json({
+
+                    message:
+                        error.message
+
+                });
+
+            }
+
+
+            if (
+                error.message ===
+                    "Order has no products or BOM data" ||
+
+                error.message ===
+                    "Partial production currently supports one product per order"
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        error.message
+
+                });
+
+            }
+
+
+            res.status(500).json({
+
+                message:
+                    "Failed to get production information"
+
             });
 
         }
 
+    }
+);
 
-        // Temporary single-admin setup
-        const userId = 1;
+
+/*
+=========================================================
+CHECK MATERIALS FOR PARTIAL QUANTITY
+=========================================================
+
+Example:
+
+GET /api/orders/15/production-check?quantity=20
+*/
+router.get(
+    "/:id/production-check",
+    async (req, res) => {
+
+        try {
+
+            const orderId =
+                Number(req.params.id);
 
 
-        const result =
-            await startProduction(
-                orderId,
-                userId
+            const quantity =
+                Number(
+                    req.query.quantity
+                );
+
+
+            if (
+                !Number.isInteger(orderId) ||
+                orderId <= 0
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        "Invalid order ID"
+
+                });
+
+            }
+
+
+            if (
+                !Number.isInteger(quantity) ||
+                quantity <= 0
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        "Quantity must be a positive integer"
+
+                });
+
+            }
+
+
+            const result =
+                await checkProductionMaterials(
+                    orderId,
+                    quantity
+                );
+
+
+            res.json(result);
+
+
+        } catch (error) {
+
+            console.error(error);
+
+
+            if (
+                error.message ===
+                "Order not found"
+            ) {
+
+                return res.status(404).json({
+
+                    message:
+                        error.message
+
+                });
+
+            }
+
+
+            if (
+                error.message.startsWith(
+                    "Requested quantity exceeds"
+                )
+            ) {
+
+                return res.status(409).json({
+
+                    message:
+                        error.message
+
+                });
+
+            }
+
+
+            if (
+                error.message ===
+                    "Order has no products or BOM data" ||
+
+                error.message ===
+                    "Partial production currently supports one product per order"
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        error.message
+
+                });
+
+            }
+
+
+            res.status(500).json({
+
+                message:
+                    "Failed to check partial production materials"
+
+            });
+
+        }
+
+    }
+);
+
+
+/*
+=========================================================
+START PARTIAL PRODUCTION
+=========================================================
+
+Body:
+
+{
+    "quantity": 20
+}
+*/
+router.post(
+    "/:id/start-production",
+    async (req, res) => {
+
+        try {
+
+            const orderId =
+                Number(req.params.id);
+
+
+            if (
+                !Number.isInteger(orderId) ||
+                orderId <= 0
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        "Invalid order ID"
+
+                });
+
+            }
+
+
+            const quantity =
+                Number(
+                    req.body?.quantity
+                );
+
+
+            if (
+                !Number.isInteger(quantity) ||
+                quantity <= 0
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        "Production quantity must be a positive integer"
+
+                });
+
+            }
+
+
+            /*
+                Temporary single-admin setup.
+            */
+            const userId = 1;
+
+
+            const result =
+                await startProduction(
+                    orderId,
+                    quantity,
+                    userId
+                );
+
+
+            /*
+                Material shortage returns
+                success:false rather than throwing.
+            */
+            if (!result.success) {
+
+                return res.status(409).json(
+                    result
+                );
+
+            }
+
+
+            res.status(200).json(
+                result
             );
 
 
-        if (!result.success) {
+        } catch (error) {
 
-            return res.status(409).json(result);
-
-        }
+            console.error(error);
 
 
-        res.status(200).json(result);
+            if (
+                error.message ===
+                "Order not found"
+            ) {
 
-    } catch (error) {
+                return res.status(404).json({
 
-        console.error(error);
+                    message:
+                        error.message
+
+                });
+
+            }
 
 
-        if (
-            error.message ===
-            "Order not found"
-        ) {
+            if (
+                error.message ===
+                    "Order is already completed" ||
 
-            return res.status(404).json({
-                message: error.message
+                error.message.startsWith(
+                    "Requested quantity exceeds"
+                )
+            ) {
+
+                return res.status(409).json({
+
+                    message:
+                        error.message
+
+                });
+
+            }
+
+
+            if (
+                error.message ===
+                    "Order has no products or BOM data" ||
+
+                error.message ===
+                    "Partial production currently supports one product per order"
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        error.message
+
+                });
+
+            }
+
+
+            res.status(500).json({
+
+                message:
+                    "Failed to start production"
+
             });
 
         }
-
-
-        if (
-            error.message ===
-            "Production has already started" ||
-            error.message ===
-            "Order is already completed"
-        ) {
-
-            return res.status(409).json({
-                message: error.message
-            });
-
-        }
-
-
-        res.status(500).json({
-            message:
-                "Failed to start production"
-        });
 
     }
-
-});
+);
 
 
 module.exports = router;
