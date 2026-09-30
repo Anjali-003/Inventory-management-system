@@ -170,3 +170,11 @@ VALUES
 (16, 50, 0),      -- Relay Driver IC
 (17, 200, 0),     -- Terminal Block
 (18, 500, 0);     -- Green LED
+
+-- Optional sample data
+INSERT IGNORE INTO employees (employee_code, name, email, department, designation, joined_on) VALUES
+('EMP-0001', 'Aarav Sharma', 'aarav@example.com', 'Assembly', 'Line Supervisor', '2024-03-01'),
+('EMP-0002', 'Priya Verma', 'priya@example.com', 'Quality', 'QC Inspector', '2024-06-15'),
+('EMP-0003', 'Rohan Gupta', 'rohan@example.com', 'Stores', 'Store Keeper', '2023-11-20'),
+('EMP-0004', 'Sneha Iyer', 'sneha@example.com', 'Assembly', 'Technician', '2025-01-10'),
+('EMP-0005', 'Imran Khan', 'imran@example.com', 'Maintenance', 'Electrician', '2022-08-05');
