@@ -37,9 +37,24 @@ const authRoutes =
     require("./src/routes/authRoutes");
 
 
+/*
+    The React page can be opened as http://localhost:5173 on this PC, or as
+    http://<this-PC-LAN-IP>:5173 from a phone / another PC on the same Wi-Fi.
+    Cookies need an exact origin (not "*"), so allow localhost and private-network
+    addresses on the Vite port. Put CLIENT_ORIGIN in .env to allow one more origin.
+*/
+const LAN_ORIGIN =
+    /^http:\/\/(localhost|127\.0\.0\.1|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):5173$/;
+
 app.use(
     cors({
-        origin: "http://localhost:5173",
+        origin: (origin, callback) => {
+            const allowed =
+                !origin ||
+                LAN_ORIGIN.test(origin) ||
+                origin === process.env.CLIENT_ORIGIN;
+            callback(null, allowed ? origin : false);
+        },
         credentials: true
     })
 );

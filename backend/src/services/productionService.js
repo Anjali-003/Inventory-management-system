@@ -1214,28 +1214,18 @@ async function startProduction(
             await connection.query(
                 `
                 INSERT INTO inventory_transactions
-                (
-                    component_id,
-                    transaction_type,
-                    quantity,
-                    reference_type,
-                    reference_id,
-                    created_by
-                )
-
+                (component_id, transaction_type, direction, quantity, balance_after,
+                 reason, reference_type, reference_id, created_by)
                 VALUES
-                (
-                    ?,
-                    'RESERVED',
-                    ?,
-                    'PRODUCTION_ORDER',
-                    ?,
-                    ?
-                )
+                (?, 'RESERVED', 'RESERVE', ?,
+                 (SELECT quantity_on_hand FROM inventory WHERE component_id = ?),
+                 ?, 'PRODUCTION_ORDER', ?, ?)
                 `,
                 [
                     material.componentId,
                     material.required,
+                    material.componentId,
+                    `Reserved for production order #${productionId}`,
                     productionId,
                     userId
                 ]
@@ -1683,28 +1673,18 @@ async function updateProductionProgress(
             await connection.query(
                 `
                 INSERT INTO inventory_transactions
-                (
-                    component_id,
-                    transaction_type,
-                    quantity,
-                    reference_type,
-                    reference_id,
-                    created_by
-                )
-
+                (component_id, transaction_type, direction, quantity, balance_after,
+                 reason, reference_type, reference_id, created_by)
                 VALUES
-                (
-                    ?,
-                    'CONSUMED',
-                    ?,
-                    'PRODUCTION_ORDER',
-                    ?,
-                    ?
-                )
+                (?, 'CONSUMED', 'OUT', ?,
+                 (SELECT quantity_on_hand FROM inventory WHERE component_id = ?),
+                 ?, 'PRODUCTION_ORDER', ?, ?)
                 `,
                 [
                     material.componentId,
                     material.required,
+                    material.componentId,
+                    `Consumed by production order #${productionId}`,
                     productionId,
                     userId
                 ]

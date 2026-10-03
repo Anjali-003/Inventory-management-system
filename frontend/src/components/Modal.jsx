@@ -6,7 +6,7 @@ import { cn } from "../lib/utils"
 import { Button } from "./ui/button"
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-const SIZES = { sm: "sm:max-w-md", md: "sm:max-w-xl", lg: "sm:max-w-2xl" }
+const SIZES = { sm: "sm:max-w-md", md: "sm:max-w-xl", lg: "sm:max-w-2xl", xl: "sm:max-w-4xl" }
 
 function Panel({ onClose, title, description, size, busy, onSubmit, footer, children }) {
   const ref = useRef(null)
