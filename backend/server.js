@@ -29,6 +29,8 @@ const employeeRoutes =
 
 const attendanceRoutes =
     require("./src/routes/attendanceRoutes");
+const qualityControlRoutes =
+    require("./src/routes/qualityControlRoutes");
 
 
 const app = express();
@@ -92,6 +94,11 @@ app.use(
     "/api/production",
     authMiddleware,
     productionRoutes
+);
+
+app.use(
+    "/api/quality-control",
+    qualityControlRoutes
 );
 
 app.use(

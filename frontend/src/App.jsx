@@ -61,6 +61,7 @@ import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Employees from "./pages/Employees";
 import Attendance from "./pages/Attendance";
+import QualityControl from "./pages/QualityControl";
 
 function App() {
   return (
@@ -88,6 +89,7 @@ function App() {
           <Route path="/orders" element={<Orders />} />
 
           <Route path="/production" element={<Production />} />
+          <Route path="/quality-control" element={<QualityControl />} />
 
           {/* <Route path="/existing-orders" element={<ExistingOrders />} /> */}
           <Route path="/employees" element={<Employees />} />
