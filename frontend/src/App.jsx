@@ -50,6 +50,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Layout from "./components/Layout";
+import { ToastProvider } from "./components/toast";
 
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
@@ -64,6 +65,7 @@ import Attendance from "./pages/Attendance";
 
 function App() {
   return (
+    <ToastProvider>
     <BrowserRouter>
       <Routes>
         {/* PUBLIC ROUTE */}
@@ -95,6 +97,7 @@ function App() {
         </Route>
       </Routes>
     </BrowserRouter>
+    </ToastProvider>
   );
 }
 

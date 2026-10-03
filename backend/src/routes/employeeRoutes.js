@@ -81,4 +81,36 @@ router.put("/:id", async (req, res) => {
     }
 });
 
+/*
+    DELETE EMPLOYEE
+    Permanently removes the employee AND their attendance records (attendance has a foreign key
+    to employees, so the rows must go first). Use "is_active = false" via PUT to keep history instead.
+*/
+router.delete("/:id", async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid employee ID" });
+
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+        await connection.query("DELETE FROM attendance WHERE employee_id = ?", [id]);
+        const [result] = await connection.query("DELETE FROM employees WHERE id = ?", [id]);
+        if (result.affectedRows === 0) {
+            await connection.rollback();
+            return res.status(404).json({ message: "Employee not found" });
+        }
+        await connection.commit();
+        res.json({ message: "Employee deleted" });
+    } catch (error) {
+        await connection.rollback();
+        console.error(error);
+        if (error.code === "ER_ROW_IS_REFERENCED_2") {
+            return res.status(409).json({ message: "Employee is referenced by other records and cannot be deleted" });
+        }
+        res.status(500).json({ message: "Failed to delete employee" });
+    } finally {
+        connection.release();
+    }
+});
+
 module.exports = router;
