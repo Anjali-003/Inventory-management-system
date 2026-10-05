@@ -1,43 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  CheckCircle2,
-  PackageCheck,
-  Truck,
-  RefreshCw,
-  X,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react"
+import { CheckCircle2, PackageCheck, Truck, RefreshCw, X } from "lucide-react"
 
-import api from "../api/api";
+import api from "../api/api"
 
-import SearchBar from "../components/SearchBar";
-import PageHeader from "../components/PageHeader";
+import SearchBar from "../components/SearchBar"
+import PageHeader from "../components/PageHeader"
 
-import { Button } from "../components/ui/button";
+import { Button } from "../components/ui/button"
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
 
-import { Badge } from "../components/ui/badge";
+import { Badge } from "../components/ui/badge"
 
-import {
-  Notice,
-  EmptyState,
-  TableSkeleton,
-} from "../components/feedback";
-
+import { Notice, EmptyState, TableSkeleton } from "../components/feedback"
 
 /*
 =========================================================
@@ -49,8 +26,7 @@ const STATUS_LABELS = {
   PACKAGING: "Packaging",
   DISPATCHED: "Dispatched",
   COMPLETED: "Completed",
-};
-
+}
 
 /*
 =========================================================
@@ -74,26 +50,20 @@ function FinishedGoodsStatus({ status }) {
       variant: "neutral",
       label: "Completed",
     },
-  };
+  }
 
-  const current =
-    config[status] || {
-      variant: "neutral",
-      label:
-        STATUS_LABELS[status] ||
-        String(status || "Unknown")
-          .replace(/_/g, " ")
-          .toLowerCase()
-          .replace(/^./, (c) => c.toUpperCase()),
-    };
+  const current = config[status] || {
+    variant: "neutral",
+    label:
+      STATUS_LABELS[status] ||
+      String(status || "Unknown")
+        .replace(/_/g, " ")
+        .toLowerCase()
+        .replace(/^./, (c) => c.toUpperCase()),
+  }
 
-  return (
-    <Badge variant={current.variant}>
-      {current.label}
-    </Badge>
-  );
+  return <Badge variant={current.variant}>{current.label}</Badge>
 }
-
 
 /*
 =========================================================
@@ -101,77 +71,39 @@ CONFIRMATION MODAL
 =========================================================
 */
 
-function ConfirmationModal({
-  open,
-  title,
-  description,
-  confirmText,
-  loading,
-  onConfirm,
-  onClose,
-}) {
+function ConfirmationModal({ open, title, description, confirmText, loading, onConfirm, onClose }) {
   if (!open) {
-    return null;
+    return null
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
       <div className="w-full max-w-md rounded-xl border bg-background shadow-xl">
-
         <div className="flex items-center justify-between border-b px-5 py-4">
+          <h2 className="text-lg font-semibold">{title}</h2>
 
-          <h2 className="text-lg font-semibold">
-            {title}
-          </h2>
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            disabled={loading}
-          >
+          <Button type="button" variant="ghost" size="icon" onClick={onClose} disabled={loading}>
             <X className="size-4" />
           </Button>
-
         </div>
-
 
         <div className="px-5 py-5">
-
-          <p className="text-sm leading-6 text-muted-foreground">
-            {description}
-          </p>
-
+          <p className="text-sm leading-6 text-muted-foreground">{description}</p>
         </div>
 
-
         <div className="flex justify-end gap-2 border-t px-5 py-4">
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onClose}
-            disabled={loading}
-          >
+          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
 
-          <Button
-            type="button"
-            onClick={onConfirm}
-            disabled={loading}
-          >
+          <Button type="button" onClick={onConfirm} disabled={loading}>
             {loading ? "Updating..." : confirmText}
           </Button>
-
         </div>
-
       </div>
     </div>
-  );
+  )
 }
-
 
 /*
 =========================================================
@@ -180,18 +112,13 @@ MAIN COMPONENT
 */
 
 export default function FinishedGoods() {
-
   /*
   =======================================================
   FINISHED GOODS DATA
   =======================================================
   */
 
-  const [
-    finishedGoods,
-    setFinishedGoods,
-  ] = useState([]);
-
+  const [finishedGoods, setFinishedGoods] = useState([])
 
   /*
   =======================================================
@@ -199,11 +126,7 @@ export default function FinishedGoods() {
   =======================================================
   */
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
-
+  const [loading, setLoading] = useState(true)
 
   /*
   =======================================================
@@ -211,11 +134,7 @@ export default function FinishedGoods() {
   =======================================================
   */
 
-  const [
-    error,
-    setError,
-  ] = useState("");
-
+  const [error, setError] = useState("")
 
   /*
   =======================================================
@@ -223,11 +142,7 @@ export default function FinishedGoods() {
   =======================================================
   */
 
-  const [
-    message,
-    setMessage,
-  ] = useState("");
-
+  const [message, setMessage] = useState("")
 
   /*
   =======================================================
@@ -235,11 +150,7 @@ export default function FinishedGoods() {
   =======================================================
   */
 
-  const [
-    search,
-    setSearch,
-  ] = useState("");
-
+  const [search, setSearch] = useState("")
 
   /*
   =======================================================
@@ -247,11 +158,7 @@ export default function FinishedGoods() {
   =======================================================
   */
 
-  const [
-    selectedItem,
-    setSelectedItem,
-  ] = useState(null);
-
+  const [selectedItem, setSelectedItem] = useState(null)
 
   /*
   =======================================================
@@ -259,11 +166,7 @@ export default function FinishedGoods() {
   =======================================================
   */
 
-  const [
-    actionType,
-    setActionType,
-  ] = useState(null);
-
+  const [actionType, setActionType] = useState(null)
 
   /*
   =======================================================
@@ -271,11 +174,7 @@ export default function FinishedGoods() {
   =======================================================
   */
 
-  const [
-    actionLoading,
-    setActionLoading,
-  ] = useState(false);
-
+  const [actionLoading, setActionLoading] = useState(false)
 
   /*
   =======================================================
@@ -284,44 +183,22 @@ export default function FinishedGoods() {
   */
 
   const fetchFinishedGoods = async () => {
-
     try {
+      setLoading(true)
 
-      setLoading(true);
+      setError("")
 
-      setError("");
+      const response = await api.get("/finished-goods")
 
-      const response =
-        await api.get(
-          "/finished-goods"
-        );
-
-      setFinishedGoods(
-        Array.isArray(response.data)
-          ? response.data
-          : []
-      );
-
+      setFinishedGoods(Array.isArray(response.data) ? response.data : [])
     } catch (err) {
+      console.error("Failed to fetch finished goods:", err)
 
-      console.error(
-        "Failed to fetch finished goods:",
-        err
-      );
-
-      setError(
-        err.response?.data?.message ||
-        "Failed to load finished goods."
-      );
-
+      setError(err.response?.data?.message || "Failed to load finished goods.")
     } finally {
-
-      setLoading(false);
-
+      setLoading(false)
     }
-
-  };
-
+  }
 
   /*
   =======================================================
@@ -330,11 +207,8 @@ export default function FinishedGoods() {
   */
 
   useEffect(() => {
-
-    fetchFinishedGoods();
-
-  }, []);
-
+    fetchFinishedGoods()
+  }, [])
 
   /*
   =======================================================
@@ -342,65 +216,30 @@ export default function FinishedGoods() {
   =======================================================
   */
 
-  const filteredFinishedGoods =
-    useMemo(() => {
+  const filteredFinishedGoods = useMemo(() => {
+    const searchText = search.trim().toLowerCase()
 
-      const searchText =
-        search
-          .trim()
-          .toLowerCase();
+    if (!searchText) {
+      return finishedGoods
+    }
 
-
-      if (!searchText) {
-        return finishedGoods;
-      }
-
-
-      return finishedGoods.filter(
-        (item) => {
-
-          return (
-
-            String(
-              item.orderNumber || ""
-            )
-              .toLowerCase()
-              .includes(searchText)
-
-            ||
-
-            String(
-              item.productName || ""
-            )
-              .toLowerCase()
-              .includes(searchText)
-
-            ||
-
-            String(
-              item.productSku || ""
-            )
-              .toLowerCase()
-              .includes(searchText)
-
-            ||
-
-            String(
-              item.status || ""
-            )
-              .toLowerCase()
-              .includes(searchText)
-
-          );
-
-        }
-      );
-
-    }, [
-      finishedGoods,
-      search,
-    ]);
-
+    return finishedGoods.filter((item) => {
+      return (
+        String(item.orderNumber || "")
+          .toLowerCase()
+          .includes(searchText) ||
+        String(item.productName || "")
+          .toLowerCase()
+          .includes(searchText) ||
+        String(item.productSku || "")
+          .toLowerCase()
+          .includes(searchText) ||
+        String(item.status || "")
+          .toLowerCase()
+          .includes(searchText)
+      )
+    })
+  }, [finishedGoods, search])
 
   /*
   =======================================================
@@ -408,39 +247,20 @@ export default function FinishedGoods() {
   =======================================================
   */
 
-  const summary =
-    useMemo(() => {
+  const summary = useMemo(() => {
+    const packaging = finishedGoods.filter((item) => item.status === "PACKAGING").length
 
-      const packaging =
-        finishedGoods.filter(
-          (item) =>
-            item.status === "PACKAGING"
-        ).length;
+    const dispatched = finishedGoods.filter((item) => item.status === "DISPATCHED").length
 
+    const completed = finishedGoods.filter((item) => item.status === "COMPLETED").length
 
-      const dispatched =
-        finishedGoods.filter(
-          (item) =>
-            item.status === "DISPATCHED"
-        ).length;
-
-
-      const completed =
-        finishedGoods.filter(
-          (item) =>
-            item.status === "COMPLETED"
-        ).length;
-
-
-      return {
-        total: finishedGoods.length,
-        packaging,
-        dispatched,
-        completed,
-      };
-
-    }, [finishedGoods]);
-
+    return {
+      total: finishedGoods.length,
+      packaging,
+      dispatched,
+      completed,
+    }
+  }, [finishedGoods])
 
   /*
   =======================================================
@@ -448,21 +268,15 @@ export default function FinishedGoods() {
   =======================================================
   */
 
-  const openAction = (
-    item,
-    type
-  ) => {
+  const openAction = (item, type) => {
+    setSelectedItem(item)
 
-    setSelectedItem(item);
+    setActionType(type)
 
-    setActionType(type);
+    setMessage("")
 
-    setMessage("");
-
-    setError("");
-
-  };
-
+    setError("")
+  }
 
   /*
   =======================================================
@@ -471,17 +285,14 @@ export default function FinishedGoods() {
   */
 
   const closeAction = () => {
-
     if (actionLoading) {
-      return;
+      return
     }
 
-    setSelectedItem(null);
+    setSelectedItem(null)
 
-    setActionType(null);
-
-  };
-
+    setActionType(null)
+  }
 
   /*
   =======================================================
@@ -490,23 +301,16 @@ export default function FinishedGoods() {
   */
 
   const handleAction = async () => {
-
-    if (
-      !selectedItem ||
-      !actionType
-    ) {
-      return;
+    if (!selectedItem || !actionType) {
+      return
     }
 
-
     try {
+      setActionLoading(true)
 
-      setActionLoading(true);
+      setMessage("")
 
-      setMessage("");
-
-      setError("");
-
+      setError("")
 
       /*
       -------------------------------------------------
@@ -514,20 +318,11 @@ export default function FinishedGoods() {
       -------------------------------------------------
       */
 
-      if (
-        actionType === "DISPATCH"
-      ) {
+      if (actionType === "DISPATCH") {
+        await api.post(`/finished-goods/${selectedItem.id}/dispatch`)
 
-        await api.post(
-          `/finished-goods/${selectedItem.id}/dispatch`
-        );
-
-        setMessage(
-          `Order ${selectedItem.orderNumber} marked as dispatched.`
-        );
-
+        setMessage(`Order ${selectedItem.orderNumber} marked as dispatched.`)
       }
-
 
       /*
       -------------------------------------------------
@@ -535,20 +330,11 @@ export default function FinishedGoods() {
       -------------------------------------------------
       */
 
-      if (
-        actionType === "COMPLETE"
-      ) {
+      if (actionType === "COMPLETE") {
+        await api.post(`/finished-goods/${selectedItem.id}/complete`)
 
-        await api.post(
-          `/finished-goods/${selectedItem.id}/complete`
-        );
-
-        setMessage(
-          `Order ${selectedItem.orderNumber} marked as completed.`
-        );
-
+        setMessage(`Order ${selectedItem.orderNumber} marked as completed.`)
       }
-
 
       /*
       -------------------------------------------------
@@ -556,8 +342,7 @@ export default function FinishedGoods() {
       -------------------------------------------------
       */
 
-      await fetchFinishedGoods();
-
+      await fetchFinishedGoods()
 
       /*
       -------------------------------------------------
@@ -565,30 +350,17 @@ export default function FinishedGoods() {
       -------------------------------------------------
       */
 
-      setSelectedItem(null);
+      setSelectedItem(null)
 
-      setActionType(null);
-
+      setActionType(null)
     } catch (err) {
+      console.error("Failed to update finished goods:", err)
 
-      console.error(
-        "Failed to update finished goods:",
-        err
-      );
-
-      setError(
-        err.response?.data?.message ||
-        "Failed to update finished goods status."
-      );
-
+      setError(err.response?.data?.message || "Failed to update finished goods status.")
     } finally {
-
-      setActionLoading(false);
-
+      setActionLoading(false)
     }
-
-  };
-
+  }
 
   /*
   =======================================================
@@ -597,55 +369,30 @@ export default function FinishedGoods() {
   */
 
   const getActionDetails = () => {
-
-    if (
-      actionType === "DISPATCH"
-    ) {
-
+    if (actionType === "DISPATCH") {
       return {
+        title: "Mark as Dispatched",
 
-        title:
-          "Mark as Dispatched",
+        description: `Are you sure you want to mark ${selectedItem?.orderNumber || "this order"} as dispatched?`,
 
-        description:
-          `Are you sure you want to mark ${selectedItem?.orderNumber || "this order"} as dispatched?`,
-
-        confirmText:
-          "Mark Dispatched",
-
-      };
-
+        confirmText: "Mark Dispatched",
+      }
     }
 
-
-    if (
-      actionType === "COMPLETE"
-    ) {
-
+    if (actionType === "COMPLETE") {
       return {
+        title: "Mark as Completed",
 
-        title:
-          "Mark as Completed",
+        description: `Are you sure you want to mark ${selectedItem?.orderNumber || "this order"} as completed?`,
 
-        description:
-          `Are you sure you want to mark ${selectedItem?.orderNumber || "this order"} as completed?`,
-
-        confirmText:
-          "Mark Completed",
-
-      };
-
+        confirmText: "Mark Completed",
+      }
     }
 
+    return null
+  }
 
-    return null;
-
-  };
-
-
-  const actionDetails =
-    getActionDetails();
-
+  const actionDetails = getActionDetails()
 
   /*
   =======================================================
@@ -654,511 +401,198 @@ export default function FinishedGoods() {
   */
 
   return (
-    <div
-      className="
-        space-y-6
-        px-4
-        py-4
-        sm:px-6
-        lg:px-8
-      "
-    >
-
+    <div className="space-y-6 px-4 py-4 sm:px-6 lg:px-8">
       <PageHeader
         title="Finished Goods"
         description="Manage products that have passed quality control and are ready for packaging, dispatch, and completion."
       />
 
-
       {/* SUCCESS MESSAGE */}
 
       {message && (
-        <Notice
-          tone="success"
-          title="Success"
-        >
+        <Notice tone="success" title="Success">
           {message}
         </Notice>
       )}
 
-
       {/* ERROR MESSAGE */}
 
       {error && (
-        <Notice
-          tone="error"
-          title="Error"
-        >
+        <Notice tone="error" title="Error">
           {error}
         </Notice>
       )}
 
-
       {/* SUMMARY CARDS */}
 
-      <div
-        className="
-          grid
-          grid-cols-1
-          gap-4
-          sm:grid-cols-2
-          xl:grid-cols-4
-        "
-      >
-
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {/* TOTAL */}
 
         <Card>
-
-          <CardContent
-            className="
-              flex
-              items-center
-              gap-4
-              p-5
-            "
-          >
-
-            <div
-              className="
-                grid
-                size-11
-                shrink-0
-                place-items-center
-                rounded-lg
-                bg-muted
-              "
-            >
-
+          <CardContent className="flex items-center gap-4 p-5">
+            <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted">
               <PackageCheck className="size-5" />
-
             </div>
-
 
             <div>
+              <p className="text-sm text-muted-foreground">Total</p>
 
-              <p className="text-sm text-muted-foreground">
-                Total
-              </p>
-
-              <p className="text-2xl font-semibold">
-                {summary.total}
-              </p>
-
+              <p className="text-2xl font-semibold">{summary.total}</p>
             </div>
-
           </CardContent>
-
         </Card>
-
 
         {/* PACKAGING */}
 
         <Card>
-
-          <CardContent
-            className="
-              flex
-              items-center
-              gap-4
-              p-5
-            "
-          >
-
-            <div
-              className="
-                grid
-                size-11
-                shrink-0
-                place-items-center
-                rounded-lg
-                bg-muted
-              "
-            >
-
+          <CardContent className="flex items-center gap-4 p-5">
+            <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted">
               <PackageCheck className="size-5" />
-
             </div>
-
 
             <div>
+              <p className="text-sm text-muted-foreground">Packaging</p>
 
-              <p className="text-sm text-muted-foreground">
-                Packaging
-              </p>
-
-              <p className="text-2xl font-semibold">
-                {summary.packaging}
-              </p>
-
+              <p className="text-2xl font-semibold">{summary.packaging}</p>
             </div>
-
           </CardContent>
-
         </Card>
-
 
         {/* DISPATCHED */}
 
         <Card>
-
-          <CardContent
-            className="
-              flex
-              items-center
-              gap-4
-              p-5
-            "
-          >
-
-            <div
-              className="
-                grid
-                size-11
-                shrink-0
-                place-items-center
-                rounded-lg
-                bg-muted
-              "
-            >
-
+          <CardContent className="flex items-center gap-4 p-5">
+            <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted">
               <Truck className="size-5" />
-
             </div>
-
 
             <div>
+              <p className="text-sm text-muted-foreground">Dispatched</p>
 
-              <p className="text-sm text-muted-foreground">
-                Dispatched
-              </p>
-
-              <p className="text-2xl font-semibold">
-                {summary.dispatched}
-              </p>
-
+              <p className="text-2xl font-semibold">{summary.dispatched}</p>
             </div>
-
           </CardContent>
-
         </Card>
-
 
         {/* COMPLETED */}
 
         <Card>
-
-          <CardContent
-            className="
-              flex
-              items-center
-              gap-4
-              p-5
-            "
-          >
-
-            <div
-              className="
-                grid
-                size-11
-                shrink-0
-                place-items-center
-                rounded-lg
-                bg-muted
-              "
-            >
-
+          <CardContent className="flex items-center gap-4 p-5">
+            <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted">
               <CheckCircle2 className="size-5" />
-
             </div>
-
 
             <div>
+              <p className="text-sm text-muted-foreground">Completed</p>
 
-              <p className="text-sm text-muted-foreground">
-                Completed
-              </p>
-
-              <p className="text-2xl font-semibold">
-                {summary.completed}
-              </p>
-
+              <p className="text-2xl font-semibold">{summary.completed}</p>
             </div>
-
           </CardContent>
-
         </Card>
-
       </div>
-
 
       {/* MAIN TABLE */}
 
       <Card>
-
         <CardHeader>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <CardTitle>Finished Goods</CardTitle>
 
-          <div
-            className="
-              flex
-              flex-col
-              gap-4
-              lg:flex-row
-              lg:items-center
-              lg:justify-between
-            "
-          >
-
-            <CardTitle>
-              Finished Goods
-            </CardTitle>
-
-
-            <div
-              className="
-                flex
-                w-full
-                flex-col
-                gap-2
-                sm:flex-row
-                lg:w-auto
-              "
-            >
-
-              <div
-                className="
-                  min-w-0
-                  sm:min-w-[280px]
-                "
-              >
-
-                <SearchBar
-                  value={search}
-                  onChange={setSearch}
-                  placeholder="Search order, product, SKU..."
-                />
-
+            <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+              <div className="min-w-0 sm:min-w-[280px]">
+                <SearchBar value={search} onChange={setSearch} placeholder="Search order, product, SKU..." />
               </div>
 
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={fetchFinishedGoods}
-                disabled={loading}
-              >
-
+              <Button type="button" variant="outline" onClick={fetchFinishedGoods} disabled={loading}>
                 <RefreshCw className="mr-2 size-4" />
-
                 Refresh
-
               </Button>
-
             </div>
-
           </div>
-
         </CardHeader>
 
-
         <CardContent className="p-0">
-
           {loading ? (
-
             <TableSkeleton rows={6} />
-
           ) : filteredFinishedGoods.length === 0 ? (
-
-            <EmptyState
-              icon={PackageCheck}
-              title="No finished goods found"
-            >
+            <EmptyState icon={PackageCheck} title="No finished goods found">
               Products that pass quality control will appear here.
             </EmptyState>
-
           ) : (
-
             <div className="overflow-x-auto">
-
               <Table>
-
                 <TableHeader>
-
                   <TableRow>
+                    <TableHead>Order</TableHead>
 
-                    <TableHead>
-                      Order
-                    </TableHead>
+                    <TableHead>Product</TableHead>
 
-                    <TableHead>
-                      Product
-                    </TableHead>
+                    <TableHead>SKU</TableHead>
 
-                    <TableHead>
-                      SKU
-                    </TableHead>
+                    <TableHead>Quantity</TableHead>
 
-                    <TableHead>
-                      Quantity
-                    </TableHead>
+                    <TableHead>Status</TableHead>
 
-                    <TableHead>
-                      Status
-                    </TableHead>
-
-                    <TableHead className="text-right">
-                      Actions
-                    </TableHead>
-
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-
                 </TableHeader>
 
-
                 <TableBody>
+                  {filteredFinishedGoods.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.orderNumber || "-"}</TableCell>
 
-                  {filteredFinishedGoods.map(
-                    (item) => (
+                      <TableCell>{item.productName || "-"}</TableCell>
 
-                      <TableRow
-                        key={item.id}
-                      >
+                      <TableCell>{item.productSku || "-"}</TableCell>
 
-                        <TableCell className="font-medium">
-                          {item.orderNumber || "-"}
-                        </TableCell>
+                      <TableCell>{item.quantity ?? 0}</TableCell>
 
+                      <TableCell>
+                        <FinishedGoodsStatus status={item.status} />
+                      </TableCell>
 
-                        <TableCell>
-                          {item.productName || "-"}
-                        </TableCell>
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          {item.status === "PACKAGING" && (
+                            <Button type="button" size="sm" onClick={() => openAction(item, "DISPATCH")}>
+                              <Truck className="mr-2 size-4" />
+                              Mark Dispatched
+                            </Button>
+                          )}
 
+                          {item.status === "DISPATCHED" && (
+                            <Button type="button" size="sm" onClick={() => openAction(item, "COMPLETE")}>
+                              <CheckCircle2 className="mr-2 size-4" />
+                              Mark Completed
+                            </Button>
+                          )}
 
-                        <TableCell>
-                          {item.productSku || "-"}
-                        </TableCell>
-
-
-                        <TableCell>
-                          {item.quantity ?? 0}
-                        </TableCell>
-
-
-                        <TableCell>
-
-                          <FinishedGoodsStatus
-                            status={item.status}
-                          />
-
-                        </TableCell>
-
-
-                        <TableCell>
-
-                          <div
-                            className="
-                              flex
-                              justify-end
-                              gap-2
-                            "
-                          >
-
-                            {item.status === "PACKAGING" && (
-
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={() =>
-                                  openAction(
-                                    item,
-                                    "DISPATCH"
-                                  )
-                                }
-                              >
-
-                                <Truck className="mr-2 size-4" />
-
-                                Mark Dispatched
-
-                              </Button>
-
-                            )}
-
-
-                            {item.status === "DISPATCHED" && (
-
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={() =>
-                                  openAction(
-                                    item,
-                                    "COMPLETE"
-                                  )
-                                }
-                              >
-
-                                <CheckCircle2 className="mr-2 size-4" />
-
-                                Mark Completed
-
-                              </Button>
-
-                            )}
-
-
-                            {item.status === "COMPLETED" && (
-
-                              <span
-                                className="
-                                  text-sm
-                                  text-muted-foreground
-                                "
-                              >
-                                No action
-                              </span>
-
-                            )}
-
-                          </div>
-
-                        </TableCell>
-
-                      </TableRow>
-
-                    )
-                  )}
-
+                          {item.status === "COMPLETED" && (
+                            <span className="text-sm text-muted-foreground">No action</span>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
-
               </Table>
-
             </div>
-
           )}
-
         </CardContent>
-
       </Card>
-
 
       {/* CONFIRMATION MODAL */}
 
       <ConfirmationModal
         open={Boolean(selectedItem && actionType)}
         title={actionDetails?.title || ""}
-        description={
-          actionDetails?.description || ""
-        }
-        confirmText={
-          actionDetails?.confirmText ||
-          "Confirm"
-        }
+        description={actionDetails?.description || ""}
+        confirmText={actionDetails?.confirmText || "Confirm"}
         loading={actionLoading}
         onConfirm={handleAction}
         onClose={closeAction}
       />
-
     </div>
-  );
+  )
 }
