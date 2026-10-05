@@ -1,5 +1,9 @@
 const db = require("../config/db");
 
+const {
+    createFinishedGood
+} = require("./finishedGoodsService");
+
 
 /*
 =========================================================
@@ -807,6 +811,36 @@ async function saveQualityControlResult(
             );
 
 
+        /*
+            If QC passes, move the approved
+            quantity into Finished Goods.
+
+            We use the SAME database connection
+            so the QC record and Finished Goods
+            record are saved in the SAME transaction.
+        */
+        let finishedGoods = null;
+
+        if (
+            overallResult === "PASS" &&
+            quantityApproved > 0
+        ) {
+
+            finishedGoods =
+                await createFinishedGood(
+                    production.id,
+                    production.order_id,
+                    quantityApproved,
+                    connection
+                );
+
+        }
+
+
+        /*
+            Only commit after BOTH operations
+            have succeeded.
+        */
         await connection.commit();
 
 
@@ -828,8 +862,15 @@ async function saveQualityControlResult(
 
             overallResult,
 
+            finishedGoodsId:
+                finishedGoods
+                    ? finishedGoods.finishedGoodsId
+                    : null,
+
             message:
-                "Quality control result saved successfully"
+                overallResult === "PASS"
+                    ? "Quality control passed and finished goods created successfully"
+                    : "Quality control result saved successfully"
 
         };
 

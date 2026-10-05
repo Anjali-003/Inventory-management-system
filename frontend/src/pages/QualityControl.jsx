@@ -1130,7 +1130,7 @@ export default function QualityControl() {
   */
 
   const testingSummary =
-    detail?.testingSummary ||
+    detail?.testing ||
     {};
 
   const testingMax =
@@ -1147,7 +1147,7 @@ export default function QualityControl() {
   */
 
   const qcSummary =
-    detail?.qualityControlSummary ||
+    detail?.qualityControl ||
     {};
 
   const qcMax =

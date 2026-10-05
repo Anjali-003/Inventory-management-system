@@ -7,6 +7,7 @@ import {
   Boxes,
   ClipboardList,
   ClipboardCheck,
+  PackageCheck,
   Cpu,
   Factory,
   History,
@@ -70,6 +71,11 @@ const GROUPS = [
         to: "/quality-control",
         label: "Quality Control",
         icon: ClipboardCheck,
+      },
+      {
+        to: "/finished-goods",
+        label: "Finished Goods",
+        icon: PackageCheck,
       },
     ],
   },
@@ -200,7 +206,9 @@ export default function Layout() {
         </div>
 
         <div className="flex items-center gap-4">
-          <span className="hidden text-xs text-white/80 sm:block">{today}</span>
+          <span className="hidden text-xs text-white/80 sm:block">
+            {today}
+          </span>
 
           <span className="grid size-8 place-items-center rounded-full bg-white/15 text-xs font-semibold ring-1 ring-white/30">
             AD
