@@ -1,6 +1,7 @@
 const express = require("express");
 const db = require("../config/db");
 const svc = require("../services/inventoryService");
+const history = require("../services/inventoryHistoryService");
 
 const router = express.Router();
 
@@ -66,6 +67,17 @@ router.get("/components", handle(async (req, res) => {
 // Default SKU offered when a new component is created
 router.get("/components/next-sku", handle(async (req, res) => {
     res.json({ sku: await svc.nextSku() });
+}));
+
+// Cumulative inventory history: ONE aggregate total (baseline + received), carried across months.
+// Must stay above "/:id" so "history" is not read as an inventory id.
+router.get("/history", handle(async (req, res) => {
+    res.json(await history.getMonthlyHistory());
+}));
+
+// Day-by-day snapshots for one month: ?month=2026-09
+router.get("/history/daily", handle(async (req, res) => {
+    res.json(await history.getDailyHistory(req.query.month));
 }));
 
 router.get("/:id", handle(async (req, res) => {

@@ -6,6 +6,7 @@ import { ToastProvider } from "./components/toast";
 import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
 import Inventory from "./pages/Inventory";
+import InventoryHistory from "./pages/InventoryHistory";
 import Orders from "./pages/Orders";
 import Production from "./pages/Production";
 import Login from "./pages/Login";
@@ -43,6 +44,9 @@ function App() {
               element={<Dashboard />}
             />
 
+          <Route path="/inventory-history" element={<InventoryHistory />} />
+
+          <Route path="/orders" element={<Orders />} />
             <Route
               path="/products"
               element={<Products />}

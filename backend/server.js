@@ -9,7 +9,7 @@ const cookieParser = require("cookie-parser");
 const db = require("./src/config/db");
 
 const authMiddleware =
-    require("./middleware/authMiddleware");
+    require("./src/middleware/authMiddleware");
 
 
 /*
@@ -316,11 +316,8 @@ START SERVER
 */
 
 app.listen(
-    PORT,
-    () =>
-        console.log(
-            `Server running on port ${PORT}`
-        )
+    PORT,"0.0.0.0",
+    () => console.log(`Server running on port ${PORT}`)
 );
 
 
