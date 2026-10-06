@@ -9,14 +9,19 @@
 --
 -- 1) Parts that already exist (same name + size) are reused: 37 of 111 lines.
 -- 2) The 74 parts that do not exist yet are added as CMP-0081..CMP-0154 (minimum stock 50, like the others),
---    each with an inventory row of 0 on hand (no ledger entry, so stock stays in sync).
+--    each with 1000 on hand and a matching STOCK_IN ledger entry (same as the first 80 parts in 02_),
+--    so ledger and stock stay in sync and every component starts at 1000.
 -- 3) Lines with a blank quantity on the sheet (COATING, ADESIVE GLUE, OUTER BOX, SHOLDER) get NULL.
--- Stops with an error on a duplicate SKU if run twice.
+-- 4) SAFE TO RE-RUN, also on a database that was loaded with the older version of this file:
+--    parts that already exist are skipped, the BOM of PRD-002 is rebuilt, and every component that has
+--    0 on hand and no ledger history at all (the 74 parts the old version left at 0, or parts created by
+--    "Create missing components" in the BOM import) gets 1000 on hand + a STOCK_IN ledger entry.
+--    Components that already have stock or any ledger row are never touched.
 -- =====================================================================
 
 USE inventory_management;
 
-INSERT INTO components
+INSERT IGNORE INTO components
     (sku, name, description, unit, category, size, minimum_stock_level)
 VALUES
 ('CMP-0081', '470E', NULL, 'pcs', 'RESISTANCE', '1206(1%)', 50),
@@ -94,8 +99,34 @@ VALUES
 ('CMP-0153', 'RED PAINT', NULL, 'pcs', 'MISC', NULL, 50),
 ('CMP-0154', 'self screw (black)', NULL, 'pcs', 'MISC', '(4*9.5) mm', 50);
 
+-- Inventory row for every component that has none yet (starts at 0, raised to 1000 just below)
 INSERT INTO inventory (component_id, quantity_on_hand, quantity_reserved)
-SELECT id, 0, 0 FROM components WHERE sku >= 'CMP-0081' ORDER BY id;
+SELECT c.id, 0, 0 FROM components c
+WHERE NOT EXISTS (SELECT 1 FROM inventory i WHERE i.component_id = c.id)
+ORDER BY c.id;
+
+-- Components still at 0 with no ledger history at all
+CREATE TEMPORARY TABLE tmp_fix_stock AS
+SELECT i.component_id
+FROM inventory i
+WHERE i.quantity_on_hand = 0
+  AND NOT EXISTS (SELECT 1 FROM inventory_transactions t WHERE t.component_id = i.component_id);
+
+START TRANSACTION;
+
+INSERT INTO inventory_transactions
+    (component_id, transaction_type, direction, quantity, balance_after, reason, created_by)
+SELECT f.component_id, 'STOCK_IN', 'IN', 1000, 1000, 'Initial stock', (SELECT MIN(id) FROM users)
+FROM tmp_fix_stock f
+ORDER BY f.component_id;
+
+UPDATE inventory
+SET quantity_on_hand = 1000
+WHERE component_id IN (SELECT component_id FROM tmp_fix_stock);
+
+COMMIT;
+
+DROP TEMPORARY TABLE tmp_fix_stock;
 
 DELETE FROM product_bom WHERE product_id = (SELECT id FROM products WHERE sku = 'PRD-002');
 
@@ -213,7 +244,18 @@ VALUES
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0154'), 8, NULL),  -- self screw (black) (4*9.5) mm
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0078'), 3, NULL);  -- Jumper wire
 
--- Check (expect: 111 BOM rows for PRD-002, 154 components, 154 inventory rows)
+-- Check (expect: 111 BOM rows for PRD-002, 154 components, 154 inventory rows,
+--        154 with 1000 on hand, 154000 on hand, 154000 in the ledger)
 SELECT (SELECT COUNT(*) FROM product_bom WHERE product_id = (SELECT id FROM products WHERE sku = 'PRD-002')) AS prd002_bom_rows,
        (SELECT COUNT(*) FROM components) AS components,
-       (SELECT COUNT(*) FROM inventory)  AS inventory_rows;
+       (SELECT COUNT(*) FROM inventory)  AS inventory_rows,
+       (SELECT COUNT(*) FROM inventory WHERE quantity_on_hand = 1000)  AS at_1000,
+       (SELECT SUM(quantity_on_hand) FROM inventory)                   AS total_on_hand,
+       (SELECT SUM(quantity) FROM inventory_transactions)              AS ledger_total_in;
+
+-- Anything not at 1000 is listed here (expect: no rows)
+SELECT c.sku, c.name, i.quantity_on_hand, i.quantity_reserved
+FROM components c
+LEFT JOIN inventory i ON i.component_id = c.id
+WHERE COALESCE(i.quantity_on_hand, 0) <> 1000
+ORDER BY c.sku;
