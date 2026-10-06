@@ -56,23 +56,24 @@ router.get("/:id/bom", async (req, res) => {
                 c.id AS component_id,
                 c.sku AS component_sku,
                 c.name AS component_name,
+                c.category,
+                c.size,
                 c.unit,
-                pb.quantity_required
+                pb.quantity_required,
+                pb.location,
+                COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
             FROM product_bom pb
             JOIN components c
                 ON pb.component_id = c.id
+            LEFT JOIN inventory i
+                ON i.component_id = c.id
             WHERE pb.product_id = ?
             ORDER BY c.id
             `,
             [productId]
         );
 
-        if (rows.length === 0) {
-            return res.status(404).json({
-                message: "BOM not found for this product"
-            });
-        }
-
+        // A product with no BOM yet is not an error: return an empty list.
         res.json(rows);
     } catch (error) {
         console.error(error);

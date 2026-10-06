@@ -44,6 +44,11 @@ const GROUPS = [
         label: "Inventory",
         icon: Warehouse,
       },
+      {
+        to: "/inventory-history",
+        label: "Inventory History",
+        icon: History,
+      },
     ],
   },
 

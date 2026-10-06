@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react"
-import { AnimatePresence, motion } from "motion/react"
-import { Boxes, SearchX, X } from "lucide-react"
+import { Boxes, ClipboardList, SearchX } from "lucide-react"
 import api from "../api/api"
 import PageHeader from "../components/PageHeader"
 import SearchBar from "../components/SearchBar"
 import { EmptyState, Notice, TableSkeleton } from "../components/feedback"
 import { Button } from "../components/ui/button"
-import { Card, CardDescription, CardHeader, CardTitle } from "../components/ui/card"
+import { Card } from "../components/ui/card"
+import { Modal } from "../components/Modal"
+import { Badge } from "../components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
+import { errorMessage, fmtQty } from "../lib/stock"
 
 export default function Products() {
   const [products, setProducts] = useState([])
@@ -15,6 +17,8 @@ export default function Products() {
   const [error, setError] = useState("")
   const [selected, setSelected] = useState(null)
   const [bom, setBom] = useState([])
+  const [bomLoading, setBomLoading] = useState(false)
+  const [bomError, setBomError] = useState("")
   const [search, setSearch] = useState("")
 
   useEffect(() => {
@@ -40,15 +44,27 @@ export default function Products() {
   }, [products, search])
 
   const openBom = async (product) => {
+    setSelected(product)
+    setBom([])
+    setBomError("")
+    setBomLoading(true)
     try {
       const r = await api.get(`/products/${product.id}/bom`)
       setBom(r.data)
-      setSelected(product)
     } catch (err) {
       console.error(err)
-      setError("Could not load the bill of materials for this product.")
+      setBomError(errorMessage(err, "Could not load the bill of materials for this product."))
+    } finally {
+      setBomLoading(false)
     }
   }
+
+  const closeBom = () => setSelected(null)
+
+  const bomTotals = useMemo(() => {
+    const short = bom.filter((i) => Number(i.quantity_on_hand) < Number(i.quantity_required)).length
+    return { lines: bom.length, short }
+  }, [bom])
 
   return (
     <>
@@ -90,50 +106,67 @@ export default function Products() {
         )}
       </Card>
 
-      <AnimatePresence initial={false}>
-        {selected && (
-          <motion.div
-            key="bom"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="overflow-hidden"
-          >
-            <Card className="mt-6 overflow-hidden">
-              <CardHeader>
-                <div>
-                  <CardTitle>Bill of materials</CardTitle>
-                  <CardDescription>{selected.name} · {selected.sku}</CardDescription>
-                </div>
-                <Button variant="ghost" size="icon-sm" aria-label="Close bill of materials" onClick={() => setSelected(null)}>
-                  <X />
-                </Button>
-              </CardHeader>
+      <Modal
+        open={!!selected}
+        onClose={closeBom}
+        size="xl"
+        title={selected ? `Bill of materials · ${selected.name}` : "Bill of materials"}
+        description={selected ? `${selected.sku} · every component needed to build one unit, with its place on the PCB` : undefined}
+        footer={<Button variant="outline" size="lg" onClick={closeBom} data-autofocus>Close</Button>}
+      >
+        {bomLoading ? (
+          <TableSkeleton rows={8} />
+        ) : bomError ? (
+          <Notice title="Something went wrong">{bomError}</Notice>
+        ) : bom.length === 0 ? (
+          <EmptyState icon={ClipboardList} title="No BOM added yet">
+            This product has no components linked. Add its BOM and it will show up here.
+          </EmptyState>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Badge variant="info">{bomTotals.lines} components</Badge>
+              {bomTotals.short > 0 && <Badge variant="danger">{bomTotals.short} low on stock for 1 unit</Badge>}
+            </div>
+            <div className="overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Component</TableHead>
+                    <TableHead className="w-12">#</TableHead>
                     <TableHead>SKU</TableHead>
+                    <TableHead>Component</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Size</TableHead>
                     <TableHead className="text-right">Qty per unit</TableHead>
                     <TableHead>Unit</TableHead>
+                    <TableHead>PCB location</TableHead>
+                    <TableHead className="text-right">In stock</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {bom.map((item) => (
+                  {bom.map((item, idx) => (
                     <TableRow key={item.component_id}>
-                      <TableCell className="font-medium">{item.component_name}</TableCell>
+                      <TableCell className="tabular-nums text-muted-foreground">{idx + 1}</TableCell>
                       <TableCell className="tabular-nums text-muted-foreground">{item.component_sku}</TableCell>
-                      <TableCell className="text-right tabular-nums">{item.quantity_required}</TableCell>
+                      <TableCell className="font-medium">{item.component_name}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.category || "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.size || "—"}</TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">{item.quantity_required == null ? <span className="font-normal text-muted-foreground">—</span> : fmtQty(item.quantity_required)}</TableCell>
                       <TableCell className="text-muted-foreground">{item.unit}</TableCell>
+                      <TableCell className="min-w-40 whitespace-normal">{item.location || <span className="text-muted-foreground">—</span>}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <span className={Number(item.quantity_on_hand) < Number(item.quantity_required) ? "font-medium text-destructive" : ""}>
+                          {fmtQty(item.quantity_on_hand)}
+                        </span>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            </Card>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
+      </Modal>
     </>
   )
 }
