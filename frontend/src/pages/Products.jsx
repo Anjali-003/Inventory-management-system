@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Boxes, ClipboardList, SearchX } from "lucide-react"
+import { Boxes, ClipboardList, FileUp, Pencil, Plus, SearchX, Upload } from "lucide-react"
 import api from "../api/api"
 import PageHeader from "../components/PageHeader"
 import SearchBar from "../components/SearchBar"
@@ -10,6 +10,11 @@ import { Modal } from "../components/Modal"
 import { Badge } from "../components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
 import { errorMessage, fmtQty } from "../lib/stock"
+import { useToast } from "../components/toast"
+import AddProductModal from "../components/products/AddProductModal"
+import ImportProductsModal from "../components/products/ImportProductsModal"
+import ImportBomModal from "../components/products/ImportBomModal"
+import BomEditorModal from "../components/products/BomEditorModal"
 
 export default function Products() {
   const [products, setProducts] = useState([])
@@ -20,16 +25,27 @@ export default function Products() {
   const [bomLoading, setBomLoading] = useState(false)
   const [bomError, setBomError] = useState("")
   const [search, setSearch] = useState("")
+  const [adding, setAdding] = useState(false)
+  const [importingProducts, setImportingProducts] = useState(false)
+  const [editing, setEditing] = useState(null) // product whose BOM is being written by hand
+  const [importing, setImporting] = useState(null) // product whose BOM is being imported from a file
+  const toast = useToast()
 
-  useEffect(() => {
+  const loadProducts = () =>
     api
       .get("/products")
-      .then((r) => setProducts(r.data))
+      .then((r) => {
+        setProducts(r.data)
+        setError("")
+      })
       .catch((err) => {
         console.error(err)
         setError("Could not load products. Check that the server is running.")
       })
       .finally(() => setLoading(false))
+
+  useEffect(() => {
+    loadProducts()
   }, [])
 
   const filteredProducts = useMemo(() => {
@@ -61,6 +77,41 @@ export default function Products() {
 
   const closeBom = () => setSelected(null)
 
+  // The BOM editor / importer replace the BOM view while open and return to it afterwards.
+  const startEdit = () => {
+    setEditing(selected)
+    setSelected(null)
+  }
+  const startImport = () => {
+    setImporting(selected)
+    setSelected(null)
+  }
+  const backToBom = (product) => {
+    setEditing(null)
+    setImporting(null)
+    setSelected(product)
+  }
+  const bomSaved = (product, next, created, verb) => {
+    setBom(next)
+    toast.success(`BOM ${verb}: ${next.length} line${next.length === 1 ? "" : "s"}${created ? `, ${created} new component${created === 1 ? "" : "s"} added to Inventory` : ""}.`)
+    backToBom(product)
+  }
+
+  const productAdded = (product, openBomNext) => {
+    setAdding(false)
+    setProducts((xs) => [...xs, product])
+    toast.success(`Product ${product.sku} added.`)
+    if (openBomNext) {
+      setBom([])
+      setEditing(product)
+    }
+  }
+  const productsImported = (count) => {
+    setImportingProducts(false)
+    toast.success(`${count} product${count === 1 ? "" : "s"} added.`)
+    loadProducts()
+  }
+
   const bomTotals = useMemo(() => {
     const short = bom.filter((i) => Number(i.quantity_on_hand) < Number(i.quantity_required)).length
     return { lines: bom.length, short }
@@ -69,7 +120,17 @@ export default function Products() {
   return (
     <>
       <PageHeader title="Products" description="Finished products and the components each one needs.">
-        <SearchBar value={search} onChange={setSearch} placeholder="Search products" />
+        <div className="flex flex-wrap items-center gap-2">
+          <SearchBar value={search} onChange={setSearch} placeholder="Search products" />
+          <Button variant="outline" size="lg" onClick={() => setImportingProducts(true)}>
+            <Upload />
+            Import from Excel
+          </Button>
+          <Button size="lg" onClick={() => setAdding(true)}>
+            <Plus />
+            Add product
+          </Button>
+        </div>
       </PageHeader>
       {error && <div className="mb-6"><Notice title="Something went wrong">{error}</Notice></div>}
 
@@ -77,7 +138,7 @@ export default function Products() {
         {loading ? (
           <TableSkeleton />
         ) : products.length === 0 ? (
-          <EmptyState icon={Boxes} title="No products yet">Products added to the database will appear here.</EmptyState>
+          <EmptyState icon={Boxes} title="No products yet">Add a product by hand or import a list from Excel.</EmptyState>
         ) : filteredProducts.length === 0 ? (
           <EmptyState icon={SearchX} title="No matching products">Try a different name, SKU or description.</EmptyState>
         ) : (
@@ -112,7 +173,19 @@ export default function Products() {
         size="xl"
         title={selected ? `Bill of materials · ${selected.name}` : "Bill of materials"}
         description={selected ? `${selected.sku} · every component needed to build one unit, with its place on the PCB` : undefined}
-        footer={<Button variant="outline" size="lg" onClick={closeBom} data-autofocus>Close</Button>}
+        footer={
+          <>
+            <Button variant="outline" size="lg" onClick={startImport} disabled={bomLoading || !!bomError} className="sm:mr-auto">
+              <FileUp />
+              Import BOM from Excel
+            </Button>
+            <Button variant="secondary" size="lg" onClick={startEdit} disabled={bomLoading || !!bomError}>
+              <Pencil />
+              {bom.length === 0 ? "Add BOM manually" : "Edit BOM"}
+            </Button>
+            <Button variant="outline" size="lg" onClick={closeBom} data-autofocus>Close</Button>
+          </>
+        }
       >
         {bomLoading ? (
           <TableSkeleton rows={8} />
@@ -120,7 +193,7 @@ export default function Products() {
           <Notice title="Something went wrong">{bomError}</Notice>
         ) : bom.length === 0 ? (
           <EmptyState icon={ClipboardList} title="No BOM added yet">
-            This product has no components linked. Add its BOM and it will show up here.
+            This product has no components linked. Add them by hand or import the BOM from Excel.
           </EmptyState>
         ) : (
           <div className="space-y-4">
@@ -167,6 +240,22 @@ export default function Products() {
           </div>
         )}
       </Modal>
+
+      <AddProductModal open={adding} onClose={() => setAdding(false)} onCreated={productAdded} />
+      <ImportProductsModal open={importingProducts} onClose={() => setImportingProducts(false)} onImported={productsImported} />
+      <BomEditorModal
+        open={!!editing}
+        product={editing}
+        bom={bom}
+        onClose={() => backToBom(editing)}
+        onSaved={(next, created) => bomSaved(editing, next, created, "saved")}
+      />
+      <ImportBomModal
+        open={!!importing}
+        product={importing}
+        onClose={() => backToBom(importing)}
+        onImported={(next, created) => bomSaved(importing, next, created, "imported")}
+      />
     </>
   )
 }

@@ -149,7 +149,7 @@ const ComponentCombobox = forwardRef(function ComponentCombobox(
         <div className="min-w-0">
           <p className="truncate font-medium">{value.name}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {value.sku} · {stockHint(value)}
+            {value.sku}{value.size ? ` · ${value.size}` : ""} · {stockHint(value)}
             {value.is_active === 0 && " · will be reactivated"}
           </p>
         </div>
@@ -268,7 +268,7 @@ const ComponentCombobox = forwardRef(function ComponentCombobox(
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium"><Highlight text={c.name} tokens={tokens} /></p>
-                      <p className="truncate text-xs text-muted-foreground"><Highlight text={c.sku} tokens={tokens} /></p>
+                      <p className="truncate text-xs text-muted-foreground"><Highlight text={c.sku} tokens={tokens} />{c.size ? ` · ${c.size}` : ""}</p>
                     </div>
                     <div className="shrink-0 text-right text-xs text-muted-foreground">
                       {inListIds?.has(c.id) && <p className="font-medium text-primary">In list</p>}
