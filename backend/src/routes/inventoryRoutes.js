@@ -80,6 +80,11 @@ router.get("/history/daily", handle(async (req, res) => {
     res.json(await history.getDailyHistory(req.query.month));
 }));
 
+// Finished products: quantity produced x components in one unit = components used. Read-only.
+router.get("/history/products", handle(async (req, res) => {
+    res.json(await history.getFinishedProductsUsage());
+}));
+
 router.get("/:id", handle(async (req, res) => {
     res.json(await svc.getItem(req.params.id));
 }));

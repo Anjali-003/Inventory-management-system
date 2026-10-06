@@ -194,4 +194,50 @@ async function getDailyHistory(monthRaw) {
     };
 }
 
-module.exports = { getMonthlyHistory, getDailyHistory };
+/* ------------------------------------------------- finished products view */
+/*
+    One entry per finished product:
+        produced            = units of it in finished_goods (all statuses: packaging, dispatched, completed)
+        components_per_unit = sum of the BOM quantities for ONE unit of that product
+        components_used     = produced x components_per_unit
+    Read-only, derived from finished_goods / order_items / product_bom. Stock is never touched.
+*/
+async function getFinishedProductsUsage() {
+    const [rows] = await db.query(
+        `
+        SELECT p.id AS product_id, p.sku, p.name,
+               f.produced,
+               COALESCE(b.per_unit, 0) AS components_per_unit,
+               COALESCE(b.bom_lines, 0) AS bom_lines
+        FROM (
+            SELECT oi.product_id, SUM(fg.quantity) AS produced
+            FROM finished_goods fg
+            JOIN order_items oi ON oi.order_id = fg.order_id
+            GROUP BY oi.product_id
+        ) f
+        JOIN products p ON p.id = f.product_id
+        LEFT JOIN (
+            SELECT product_id, SUM(quantity_required) AS per_unit, COUNT(*) AS bom_lines
+            FROM product_bom
+            GROUP BY product_id
+        ) b ON b.product_id = p.id
+        ORDER BY p.name
+        `
+    );
+    const products = rows.map((r) => {
+        const produced = Number(r.produced);
+        const perUnit = cents(r.components_per_unit);
+        return {
+            product_id: r.product_id,
+            sku: r.sku,
+            name: r.name,
+            produced,
+            components_per_unit: num(perUnit),
+            bom_lines: Number(r.bom_lines),
+            components_used: num(produced * perUnit),
+        };
+    });
+    return { products };
+}
+
+module.exports = { getMonthlyHistory, getDailyHistory, getFinishedProductsUsage };
