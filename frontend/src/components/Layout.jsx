@@ -7,7 +7,8 @@ import {
   Boxes,
   ClipboardList,
   ClipboardCheck,
-  Cpu,
+  PackageCheck,
+  
   Factory,
   History,
   LayoutDashboard,
@@ -70,6 +71,11 @@ const GROUPS = [
         to: "/quality-control",
         label: "Quality Control",
         icon: ClipboardCheck,
+      },
+      {
+        to: "/finished-goods",
+        label: "Finished Goods",
+        icon: PackageCheck,
       },
     ],
   },
@@ -186,16 +192,18 @@ export default function Layout() {
             <Menu className="size-5" />
           </button>
 
-          <span className="grid size-8 place-items-center rounded-sm bg-white text-primary">
-            <Cpu className="size-[18px]" />
-          </span>
+          <img
+            src="/ss_logo.png"
+            alt="Sensation Systems"
+            className="size-8 rounded-sm bg-white object-contain"
+          />
 
           <div className="leading-none">
-            <p className="text-lg font-bold italic tracking-tight">EPIMS</p>
-
-            <p className="mt-0.5 text-[11px] font-medium text-[#ffe500]">
-              Production Suite
+            <p className="text-lg font-bold italic tracking-tight">
+              Sensation Systems
             </p>
+
+            <p className="mt-0.5 text-[11px] font-medium text-[#ffe500]"></p>
           </div>
         </div>
 
@@ -247,7 +255,7 @@ export default function Layout() {
                 }}
               >
                 <div className="flex h-14 items-center justify-between bg-primary px-4 text-primary-foreground">
-                  <p className="text-lg font-bold italic">EPIMS</p>
+                  <p className="text-lg font-bold italic">Sensation Systems</p>
 
                   <button
                     aria-label="Close menu"
