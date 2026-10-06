@@ -4,7 +4,9 @@ const db = require("../config/db");
 const router = express.Router();
 
 const COLUMNS = `id, employee_code, name, email, phone, department, designation,
-    DATE_FORMAT(joined_on, '%Y-%m-%d') AS joined_on, is_active`;
+    DATE_FORMAT(joined_on, '%Y-%m-%d') AS joined_on,
+    DATE_FORMAT(date_of_birth, '%Y-%m-%d') AS date_of_birth, gender, address,
+    emergency_contact_name, emergency_contact_relationship, emergency_contact_phone, is_active`;
 
 const clean = (v) => (typeof v === "string" && v.trim() !== "" ? v.trim() : null);
 
@@ -12,6 +14,8 @@ function validate(b) {
     if (!clean(b.name)) return "Name is required";
     if (b.email && !/^\S+@\S+\.\S+$/.test(b.email)) return "Email is not valid";
     if (b.joinedOn && !/^\d{4}-\d{2}-\d{2}$/.test(b.joinedOn)) return "Joined date is not valid";
+    if (b.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(b.dateOfBirth)) return "Date of birth is not valid";
+    if (b.emergencyContactPhone && !/^\+?[\d\s\-()]{7,20}$/.test(b.emergencyContactPhone)) return "Emergency contact phone is not valid";
     return null;
 }
 
@@ -47,9 +51,13 @@ router.post("/", async (req, res) => {
         }
 
         const [result] = await db.query(
-            `INSERT INTO employees (employee_code, name, email, phone, department, designation, joined_on)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [code, clean(b.name), clean(b.email), clean(b.phone), clean(b.department), clean(b.designation), clean(b.joinedOn)]
+            `INSERT INTO employees
+             (employee_code, name, email, phone, department, designation, joined_on, date_of_birth, gender, address,
+              emergency_contact_name, emergency_contact_relationship, emergency_contact_phone)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [code, clean(b.name), clean(b.email), clean(b.phone), clean(b.department), clean(b.designation), clean(b.joinedOn),
+             clean(b.dateOfBirth), clean(b.gender), clean(b.address), clean(b.emergencyContactName),
+             clean(b.emergencyContactRelationship), clean(b.emergencyContactPhone)]
         );
         res.status(201).json({ id: result.insertId, employeeCode: code });
     } catch (error) {
@@ -69,10 +77,13 @@ router.put("/:id", async (req, res) => {
     try {
         const [result] = await db.query(
             `UPDATE employees
-             SET name = ?, email = ?, phone = ?, department = ?, designation = ?, joined_on = ?, is_active = ?
+             SET name = ?, email = ?, phone = ?, department = ?, designation = ?, joined_on = ?,
+                 date_of_birth = ?, gender = ?, address = ?, emergency_contact_name = ?,
+                 emergency_contact_relationship = ?, emergency_contact_phone = ?, is_active = ?
              WHERE id = ?`,
-            [clean(b.name), clean(b.email), clean(b.phone), clean(b.department), clean(b.designation),
-             clean(b.joinedOn), b.isActive === false ? 0 : 1, id]
+            [clean(b.name), clean(b.email), clean(b.phone), clean(b.department), clean(b.designation), clean(b.joinedOn),
+             clean(b.dateOfBirth), clean(b.gender), clean(b.address), clean(b.emergencyContactName),
+             clean(b.emergencyContactRelationship), clean(b.emergencyContactPhone), b.isActive === false ? 0 : 1, id]
         );
         if (result.affectedRows === 0) return res.status(404).json({ message: "Employee not found" });
         res.json({ message: "Employee updated" });
