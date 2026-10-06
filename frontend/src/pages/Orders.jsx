@@ -48,7 +48,7 @@ export default function Orders() {
   }, [loadOrders])
 
   const counts = useMemo(() => {
-    const c = { all: orders.length, PENDING: 0, IN_PRODUCTION: 0, COMPLETED: 0 }
+    const c = { all: orders.length, PENDING: 0, IN_PRODUCTION: 0, TESTING: 0, PACKAGING: 0, COMPLETED: 0 }
     orders.forEach((o) => { if (o.status in c) c[o.status]++ })
     return c
   }, [orders])
@@ -67,9 +67,10 @@ export default function Orders() {
 
   const toggle = (key) => () => setFilterAndReset(filter === key ? "all" : key)
   const stats = [
-    { key: "all", label: "All orders", value: counts.all, tone: "info", active: filter === "all", onClick: () => setFilterAndReset("all") },
     { key: "PENDING", label: "Pending", value: counts.PENDING, tone: "warning", active: filter === "PENDING", onClick: toggle("PENDING") },
     { key: "IN_PRODUCTION", label: "In production", value: counts.IN_PRODUCTION, tone: "info", active: filter === "IN_PRODUCTION", onClick: toggle("IN_PRODUCTION") },
+    { key: "TESTING", label: "Testing", value: counts.TESTING, tone: "info", active: filter === "TESTING", onClick: toggle("TESTING") },
+    { key: "PACKAGING", label: "Packaging", value: counts.PACKAGING, tone: "warning", active: filter === "PACKAGING", onClick: toggle("PACKAGING") },
     { key: "COMPLETED", label: "Completed", value: counts.COMPLETED, tone: "success", active: filter === "COMPLETED", onClick: toggle("COMPLETED") },
   ]
 
@@ -86,7 +87,7 @@ export default function Orders() {
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
       <Card className="overflow-hidden">
-        <StatStrip layoutId="orders-filter" cols="grid-cols-2 lg:grid-cols-4" items={stats} />
+        <StatStrip layoutId="orders-filter" cols="grid-cols-2 md:grid-cols-3 xl:grid-cols-5" items={stats} />
 
         <div className="flex flex-wrap items-center gap-3 border-y px-4 py-3 sm:px-5">
           <SearchBar value={query} onChange={setQueryAndReset} placeholder="Search by order, product or status..." />

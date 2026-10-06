@@ -1,1067 +1,363 @@
-const db = require("../config/db");
+const db = require("../config/db")
+const { createFinishedGood } = require("./finishedGoodsService")
 
-const {
-    createFinishedGood
-} = require("./finishedGoodsService");
+const productionQuery = `
+  SELECT po.id, po.order_id, po.status, po.quantity_to_produce, po.quantity_completed,
+         o.order_number, oi.product_id, oi.quantity AS ordered_quantity,
+         p.sku AS product_sku, p.name AS product_name
+  FROM production_orders po
+  JOIN orders o ON o.id = po.order_id
+  JOIN order_items oi ON oi.order_id = o.id
+  JOIN products p ON p.id = oi.product_id
+  WHERE po.id = ? ORDER BY oi.id LIMIT 1
+`
 
-
-/*
-=========================================================
-GET PRODUCTION ORDER
-=========================================================
-*/
-async function getProductionOrder(
-    connection,
-    productionId
-) {
-
-    const [rows] =
-        await connection.query(
-            `
-            SELECT
-                po.id,
-                po.order_id,
-                po.status,
-                po.quantity_to_produce,
-                po.quantity_completed,
-
-                o.order_number,
-
-                oi.product_id,
-                oi.quantity AS ordered_quantity,
-
-                p.sku AS product_sku,
-                p.name AS product_name
-
-            FROM production_orders po
-
-            JOIN orders o
-                ON po.order_id = o.id
-
-            JOIN order_items oi
-                ON o.id = oi.order_id
-
-            JOIN products p
-                ON oi.product_id = p.id
-
-            WHERE po.id = ?
-
-            ORDER BY oi.id
-
-            LIMIT 1
-            `,
-            [productionId]
-        );
-
-
-    if (rows.length === 0) {
-
-        throw new Error(
-            "Production order not found"
-        );
-
-    }
-
-
-    return rows[0];
+async function getProductionOrder(connection, productionId) {
+  const [rows] = await connection.query(productionQuery, [productionId])
+  if (!rows.length) throw new Error("Production order not found")
+  return rows[0]
 }
 
+async function getTestingSummary(connection, productionId) {
+  const production = await getProductionOrder(connection, productionId)
+  const [rows] = await connection.query(`
+    SELECT COALESCE(SUM(quantity_tested),0) AS quantity_tested,
+           COALESCE(SUM(quantity_passed),0) AS quantity_passed,
+           COALESCE(SUM(quantity_failed),0) AS quantity_failed
+    FROM testing_records WHERE production_id = ?
+  `, [productionId])
 
-/*
-=========================================================
-GET TESTING SUMMARY
-=========================================================
-*/
-async function getTestingSummary(
-    connection,
-    productionId
-) {
+  const tested = Number(rows[0].quantity_tested)
 
-    const production =
-        await getProductionOrder(
-            connection,
-            productionId
-        );
+  return {
+    produced: Number(production.quantity_completed),
+    quantityTested: tested,
+    quantityPassed: Number(rows[0].quantity_passed),
+    quantityFailed: Number(rows[0].quantity_failed),
+    remainingToTest: Math.max(0, Number(production.quantity_completed) - tested),
+  }
+}
 
+async function getQualityControlSummary(connection, productionId) {
+  const [rows] = await connection.query(`
+    SELECT COALESCE(SUM(quantity_inspected),0) AS quantity_inspected,
+           COALESCE(SUM(quantity_approved),0) AS quantity_approved,
+           COALESCE(SUM(quantity_rejected),0) AS quantity_rejected
+    FROM quality_control_records WHERE production_id = ?
+  `, [productionId])
 
-    const [rows] =
-        await connection.query(
-            `
-            SELECT
+  const testing = await getTestingSummary(connection, productionId)
+  const inspected = Number(rows[0].quantity_inspected)
 
-                COALESCE(
-                    SUM(quantity_tested),
-                    0
-                ) AS quantity_tested,
+  return {
+    quantityInspected: inspected,
+    quantityApproved: Number(rows[0].quantity_approved),
+    quantityRejected: Number(rows[0].quantity_rejected),
+    availableForQC: Math.max(0, testing.quantityPassed - inspected),
+  }
+}
 
-                COALESCE(
-                    SUM(quantity_passed),
-                    0
-                ) AS quantity_passed,
+async function latest(connection, table, productionId) {
+  const [rows] = await connection.query(
+    `SELECT * FROM ${table} WHERE production_id = ? ORDER BY id DESC LIMIT 1`,
+    [productionId]
+  )
+  return rows[0] || null
+}
 
-                COALESCE(
-                    SUM(quantity_failed),
-                    0
-                ) AS quantity_failed
+async function getQualityControlInfo(productionId) {
+  const connection = await db.getConnection()
 
-            FROM testing_records
-
-            WHERE production_id = ?
-            `,
-            [productionId]
-        );
-
-
-    const quantityTested =
-        Number(
-            rows[0].quantity_tested
-        );
-
-
-    const quantityPassed =
-        Number(
-            rows[0].quantity_passed
-        );
-
-
-    const quantityFailed =
-        Number(
-            rows[0].quantity_failed
-        );
-
-
-    const produced =
-        Number(
-            production.quantity_completed
-        );
-
-
-    const remainingToTest =
-        Math.max(
-            0,
-            produced - quantityTested
-        );
-
+  try {
+    const production = await getProductionOrder(connection, productionId)
+    const testing = await getTestingSummary(connection, productionId)
+    const qualityControl = await getQualityControlSummary(connection, productionId)
 
     return {
-
-        produced,
-
-        quantityTested,
-
-        quantityPassed,
-
-        quantityFailed,
-
-        remainingToTest,
-
-    };
+      success: true,
+      production: {
+        id: production.id,
+        orderId: production.order_id,
+        orderNumber: production.order_number,
+        productId: production.product_id,
+        productSku: production.product_sku,
+        productName: production.product_name,
+        orderedQuantity: Number(production.ordered_quantity),
+        quantityCompleted: Number(production.quantity_completed),
+        status: production.status,
+      },
+      testing,
+      qualityControl,
+      latestTesting: await latest(connection, "testing_records", productionId),
+      latestQualityControl: await latest(connection, "quality_control_records", productionId),
+    }
+  } finally {
+    connection.release()
+  }
 }
 
+async function saveTestingResult(productionId, quantity, overallResult, remarks, userId = 1) {
+  const connection = await db.getConnection()
 
-/*
-=========================================================
-GET QUALITY CONTROL SUMMARY
-=========================================================
-*/
-async function getQualityControlSummary(
-    connection,
-    productionId
-) {
+  try {
+    await connection.beginTransaction()
 
-    const [rows] =
-        await connection.query(
-            `
-            SELECT
+    const production = await getProductionOrder(connection, productionId)
 
-                COALESCE(
-                    SUM(quantity_inspected),
-                    0
-                ) AS quantity_inspected,
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new Error("Testing quantity must be a positive integer")
+    }
 
-                COALESCE(
-                    SUM(quantity_approved),
-                    0
-                ) AS quantity_approved,
+    if (!["PASS", "FAIL"].includes(overallResult)) {
+      throw new Error("Overall testing result must be PASS or FAIL")
+    }
 
-                COALESCE(
-                    SUM(quantity_rejected),
-                    0
-                ) AS quantity_rejected
+    const summary = await getTestingSummary(connection, productionId)
 
-            FROM quality_control_records
+    if (quantity > summary.remainingToTest) {
+      throw new Error(
+        `Cannot test more than the remaining untested quantity. Remaining: ${summary.remainingToTest}`
+      )
+    }
 
-            WHERE production_id = ?
-            `,
-            [productionId]
-        );
+    const passed = overallResult === "PASS" ? quantity : 0
+    const failed = overallResult === "FAIL" ? quantity : 0
 
+    const [result] = await connection.query(`
+      INSERT INTO testing_records
+        (production_id, quantity_tested, quantity_passed, quantity_failed, overall_result, remarks, tested_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [production.id, quantity, passed, failed, overallResult, remarks || null, userId])
 
-    const quantityInspected =
-        Number(
-            rows[0].quantity_inspected
-        );
+    await connection.query(
+      `UPDATE orders SET status = 'TESTING' WHERE id = ?`,
+      [production.order_id]
+    )
 
-
-    const quantityApproved =
-        Number(
-            rows[0].quantity_approved
-        );
-
-
-    const quantityRejected =
-        Number(
-            rows[0].quantity_rejected
-        );
-
-
-    /*
-        Only products that passed testing
-        can move to QC.
-    */
-    const testingSummary =
-        await getTestingSummary(
-            connection,
-            productionId
-        );
-
-
-    const availableForQC =
-        Math.max(
-            0,
-            testingSummary.quantityPassed -
-            quantityInspected
-        );
-
+    await connection.commit()
 
     return {
-
-        quantityInspected,
-
-        quantityApproved,
-
-        quantityRejected,
-
-        availableForQC,
-
-    };
-}
-
-
-/*
-=========================================================
-GET QUALITY CONTROL INFORMATION
-=========================================================
-*/
-async function getQualityControlInfo(
-    productionId
-) {
-
-    const connection =
-        await db.getConnection();
-
-
-    try {
-
-        const production =
-            await getProductionOrder(
-                connection,
-                productionId
-            );
-
-
-        const testing =
-            await getTestingSummary(
-                connection,
-                productionId
-            );
-
-
-        const qualityControl =
-            await getQualityControlSummary(
-                connection,
-                productionId
-            );
-
-
-        /*
-            Get latest testing record.
-        */
-        const [
-            testingRows
-        ] =
-            await connection.query(
-                `
-                SELECT
-                    id,
-                    quantity_tested,
-                    quantity_passed,
-                    quantity_failed,
-                    overall_result,
-                    remarks,
-                    tested_by,
-                    tested_at
-
-                FROM testing_records
-
-                WHERE production_id = ?
-
-                ORDER BY id DESC
-
-                LIMIT 1
-                `,
-                [productionId]
-            );
-
-
-        /*
-            Get latest QC record.
-        */
-        const [
-            qcRows
-        ] =
-            await connection.query(
-                `
-                SELECT
-                    id,
-                    quantity_inspected,
-                    quantity_approved,
-                    quantity_rejected,
-                    overall_result,
-                    remarks,
-                    checked_by,
-                    checked_at
-
-                FROM quality_control_records
-
-                WHERE production_id = ?
-
-                ORDER BY id DESC
-
-                LIMIT 1
-                `,
-                [productionId]
-            );
-
-
-        return {
-
-            success: true,
-
-            production: {
-
-                id:
-                    production.id,
-
-                orderId:
-                    production.order_id,
-
-                orderNumber:
-                    production.order_number,
-
-                productId:
-                    production.product_id,
-
-                productSku:
-                    production.product_sku,
-
-                productName:
-                    production.product_name,
-
-                orderedQuantity:
-                    Number(
-                        production.ordered_quantity
-                    ),
-
-                quantityCompleted:
-                    Number(
-                        production.quantity_completed
-                    ),
-
-                status:
-                    production.status,
-
-            },
-
-            testing,
-
-            qualityControl,
-
-            latestTesting:
-                testingRows.length > 0
-                    ? testingRows[0]
-                    : null,
-
-            latestQualityControl:
-                qcRows.length > 0
-                    ? qcRows[0]
-                    : null,
-
-        };
-
-    } finally {
-
-        connection.release();
-
+      success: true,
+      testingId: result.insertId,
+      productionId,
+      quantityTested: quantity,
+      quantityPassed: passed,
+      quantityFailed: failed,
+      overallResult,
+      message: "Testing result saved successfully"
     }
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
 }
 
+async function redoTesting(productionId, redoPassed, userId = 1) {
+  const connection = await db.getConnection()
 
-/*
-=========================================================
-SAVE TESTING RESULT
-=========================================================
+  try {
+    await connection.beginTransaction()
 
-For V1:
+    await getProductionOrder(connection, productionId)
 
-PASS:
-    quantity_passed = quantity
-    quantity_failed = 0
-
-FAIL:
-    quantity_passed = 0
-    quantity_failed = quantity
-=========================================================
-*/
-async function saveTestingResult(
-    productionId,
-    quantity,
-    overallResult,
-    remarks,
-    userId = 1
-) {
-
-    const connection =
-        await db.getConnection();
-
-
-    try {
-
-        await connection.beginTransaction();
-
-
-        /*
-            Make sure production exists.
-        */
-        const production =
-            await getProductionOrder(
-                connection,
-                productionId
-            );
-
-
-        /*
-            Quantity validation.
-        */
-        if (
-            !Number.isInteger(
-                quantity
-            ) ||
-            quantity <= 0
-        ) {
-
-            throw new Error(
-                "Testing quantity must be a positive integer"
-            );
-
-        }
-
-
-        /*
-            Only PASS or FAIL for Testing.
-        */
-        if (
-            overallResult !== "PASS" &&
-            overallResult !== "FAIL"
-        ) {
-
-            throw new Error(
-                "Overall testing result must be PASS or FAIL"
-            );
-
-        }
-
-
-        /*
-            Find previously tested quantity.
-        */
-        const testingSummary =
-            await getTestingSummary(
-                connection,
-                productionId
-            );
-
-
-        /*
-            Cannot test more products than
-            have actually been produced.
-        */
-        if (
-            quantity >
-            testingSummary.remainingToTest
-        ) {
-
-            throw new Error(
-
-                `Cannot test more than the remaining untested quantity. Remaining: ${testingSummary.remainingToTest}`
-
-            );
-
-        }
-
-
-        let quantityPassed = 0;
-
-        let quantityFailed = 0;
-
-
-        if (
-            overallResult ===
-            "PASS"
-        ) {
-
-            quantityPassed =
-                quantity;
-
-        } else {
-
-            quantityFailed =
-                quantity;
-
-        }
-
-
-        /*
-            Save ONLY the final result
-            and quantity information.
-
-            Individual test checkboxes
-            are NOT saved yet.
-        */
-        const [result] =
-            await connection.query(
-                `
-                INSERT INTO testing_records
-                (
-                    production_id,
-                    quantity_tested,
-                    quantity_passed,
-                    quantity_failed,
-                    overall_result,
-                    remarks,
-                    tested_by
-                )
-
-                VALUES
-                (
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?
-                )
-                `,
-                [
-                    production.id,
-
-                    quantity,
-
-                    quantityPassed,
-
-                    quantityFailed,
-
-                    overallResult,
-
-                    remarks || null,
-
-                    userId
-                ]
-            );
-
-
-        await connection.commit();
-
-
-        return {
-
-            success: true,
-
-            testingId:
-                result.insertId,
-
-            productionId,
-
-            quantityTested:
-                quantity,
-
-            quantityPassed,
-
-            quantityFailed,
-
-            overallResult,
-
-            message:
-                "Testing result saved successfully"
-
-        };
-
-    } catch (error) {
-
-        await connection.rollback();
-
-        throw error;
-
-    } finally {
-
-        connection.release();
-
+    if (!Number.isInteger(redoPassed) || redoPassed < 0) {
+      throw new Error("Redo passed quantity must be a non-negative integer")
     }
-}
 
-
-/*
-=========================================================
-SAVE QUALITY CONTROL RESULT
-=========================================================
-
-PASS:
-    approved = quantity
-    rejected = 0
-
-FAIL:
-    approved = 0
-    rejected = quantity
-
-HOLD:
-    approved = 0
-    rejected = 0
-=========================================================
-*/
-async function saveQualityControlResult(
-    productionId,
-    quantity,
-    overallResult,
-    remarks,
-    userId = 1
-) {
-
-    const connection =
-        await db.getConnection();
-
-
-    try {
-
-        await connection.beginTransaction();
-
-
-        /*
-            Make sure production exists.
-        */
-        const production =
-            await getProductionOrder(
-                connection,
-                productionId
-            );
-
-
-        /*
-            Quantity validation.
-        */
-        if (
-            !Number.isInteger(
-                quantity
-            ) ||
-            quantity <= 0
-        ) {
-
-            throw new Error(
-                "QC quantity must be a positive integer"
-            );
-
-        }
-
-
-        /*
-            QC allows PASS, FAIL, HOLD.
-        */
-        if (
-            overallResult !== "PASS" &&
-            overallResult !== "FAIL" &&
-            overallResult !== "HOLD"
-        ) {
-
-            throw new Error(
-                "Overall QC result must be PASS, FAIL or HOLD"
-            );
-
-        }
-
-
-        /*
-            Get testing information.
-        */
-        const testingSummary =
-            await getTestingSummary(
-                connection,
-                productionId
-            );
-
-
-        /*
-            Get QC information.
-        */
-        const qcSummary =
-            await getQualityControlSummary(
-                connection,
-                productionId
-            );
-
-
-        /*
-            Only testing-passed products
-            can enter QC.
-        */
-        if (
-            quantity >
-            qcSummary.availableForQC
-        ) {
-
-            throw new Error(
-
-                `Cannot inspect more than the quantity available for QC. Available: ${qcSummary.availableForQC}`
-
-            );
-
-        }
-
-
-        let quantityApproved = 0;
-
-        let quantityRejected = 0;
-
-
-        if (
-            overallResult ===
-            "PASS"
-        ) {
-
-            quantityApproved =
-                quantity;
-
-        }
-
-
-        if (
-            overallResult ===
-            "FAIL"
-        ) {
-
-            quantityRejected =
-                quantity;
-
-        }
-
-
-        /*
-            HOLD:
-            neither approved nor rejected.
-        */
-        const [result] =
-            await connection.query(
-                `
-                INSERT INTO quality_control_records
-                (
-                    production_id,
-                    quantity_inspected,
-                    quantity_approved,
-                    quantity_rejected,
-                    overall_result,
-                    remarks,
-                    checked_by
-                )
-
-                VALUES
-                (
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?,
-                    ?
-                )
-                `,
-                [
-                    production.id,
-
-                    quantity,
-
-                    quantityApproved,
-
-                    quantityRejected,
-
-                    overallResult,
-
-                    remarks || null,
-
-                    userId
-                ]
-            );
-
-
-        /*
-            If QC passes, move the approved
-            quantity into Finished Goods.
-
-            We use the SAME database connection
-            so the QC record and Finished Goods
-            record are saved in the SAME transaction.
-        */
-        let finishedGoods = null;
-
-        if (
-            overallResult === "PASS" &&
-            quantityApproved > 0
-        ) {
-
-            finishedGoods =
-                await createFinishedGood(
-                    production.id,
-                    production.order_id,
-                    quantityApproved,
-                    connection
-                );
-
-        }
-
-
-        /*
-            Only commit after BOTH operations
-            have succeeded.
-        */
-        await connection.commit();
-
-
-        return {
-
-            success: true,
-
-            qualityControlId:
-                result.insertId,
-
-            productionId,
-
-            quantityInspected:
-                quantity,
-
-            quantityApproved,
-
-            quantityRejected,
-
-            overallResult,
-
-            finishedGoodsId:
-                finishedGoods
-                    ? finishedGoods.finishedGoodsId
-                    : null,
-
-            message:
-                overallResult === "PASS"
-                    ? "Quality control passed and finished goods created successfully"
-                    : "Quality control result saved successfully"
-
-        };
-
-    } catch (error) {
-
-        await connection.rollback();
-
-        throw error;
-
-    } finally {
-
-        connection.release();
-
+    const [rows] = await connection.query(`
+      SELECT id, quantity_tested, quantity_passed, quantity_failed
+      FROM testing_records
+      WHERE production_id = ? AND quantity_failed > 0
+      ORDER BY id DESC
+      FOR UPDATE
+    `, [productionId])
+
+    const totalFailed = rows.reduce(
+      (sum, row) => sum + Number(row.quantity_failed),
+      0
+    )
+
+    if (redoPassed > totalFailed) {
+      throw new Error(
+        `Redo passed quantity cannot exceed total failed quantity. Failed: ${totalFailed}`
+      )
     }
+
+    let remainingRedo = redoPassed
+
+    for (const row of rows) {
+      if (remainingRedo <= 0) break
+
+      const currentFailed = Number(row.quantity_failed)
+      const currentPassed = Number(row.quantity_passed)
+      const moved = Math.min(remainingRedo, currentFailed)
+      const quantityFailed = currentFailed - moved
+      const quantityPassed = currentPassed + moved
+      const overallResult = quantityFailed === 0 ? "PASS" : "FAIL"
+
+      await connection.query(`
+        UPDATE testing_records
+        SET quantity_passed = ?,
+            quantity_failed = ?,
+            overall_result = ?,
+            tested_by = ?
+        WHERE id = ?
+      `, [quantityPassed, quantityFailed, overallResult, userId, row.id])
+
+      remainingRedo -= moved
+    }
+
+    const summary = await getTestingSummary(connection, productionId)
+
+    await connection.commit()
+
+    return {
+      success: true,
+      productionId,
+      quantityTested: summary.quantityTested,
+      quantityPassed: summary.quantityPassed,
+      quantityFailed: summary.quantityFailed,
+      overallResult: summary.quantityFailed === 0 ? "PASS" : "FAIL",
+      message:
+        summary.quantityFailed === 0
+          ? "All failed units fixed. Testing now passes."
+          : "Redo testing result saved successfully"
+    }
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
 }
 
+async function saveQualityControlResult(productionId, quantity, overallResult, remarks, userId = 1) {
+  const connection = await db.getConnection()
 
-/*
-=========================================================
-GET ALL PRODUCTION ORDERS FOR QUALITY CONTROL
-=========================================================
-*/
+  try {
+    await connection.beginTransaction()
+
+    const production = await getProductionOrder(connection, productionId)
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new Error("QC quantity must be a positive integer")
+    }
+
+    if (!["PASS", "FAIL"].includes(overallResult)) {
+      throw new Error("Overall QC result must be PASS or FAIL")
+    }
+
+    const summary = await getQualityControlSummary(connection, productionId)
+
+    if (quantity > summary.availableForQC) {
+      throw new Error(
+        `Cannot inspect more than the quantity available for QC. Available: ${summary.availableForQC}`
+      )
+    }
+
+    const approved = overallResult === "PASS" ? quantity : 0
+    const rejected = overallResult === "FAIL" ? quantity : 0
+
+    const [result] = await connection.query(`
+      INSERT INTO quality_control_records
+        (production_id, quantity_inspected, quantity_approved, quantity_rejected, overall_result, remarks, checked_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [production.id, quantity, approved, rejected, overallResult, remarks || null, userId])
+
+    let finishedGoods = null
+
+    if (approved > 0) {
+      finishedGoods = await createFinishedGood(
+        production.id,
+        production.order_id,
+        approved,
+        connection
+      )
+    }
+
+    await connection.commit()
+
+    return {
+      success: true,
+      qualityControlId: result.insertId,
+      productionId,
+      quantityInspected: quantity,
+      quantityApproved: approved,
+      quantityRejected: rejected,
+      overallResult,
+      finishedGoodsId: finishedGoods?.finishedGoodsId || null,
+      message: approved > 0
+        ? "Quality control passed and finished goods created successfully"
+        : "Quality control result saved successfully",
+    }
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
 async function getQualityControlOrders() {
+  const connection = await db.getConnection()
 
-    const connection =
-        await db.getConnection();
+  try {
+    const [rows] = await connection.query(`
+      SELECT po.id, po.order_id, po.status, po.quantity_to_produce, po.quantity_completed,
+             po.started_at, po.completed_at, o.order_number, oi.quantity AS ordered_quantity,
+             p.name AS product_name, p.sku AS product_sku,
+             COALESCE((SELECT SUM(t.quantity_tested) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_tested,
+             COALESCE((SELECT SUM(t.quantity_passed) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_passed,
+             COALESCE((SELECT SUM(t.quantity_failed) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_failed,
+             COALESCE((SELECT SUM(q.quantity_inspected) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_inspected,
+             COALESCE((SELECT SUM(q.quantity_approved) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_approved,
+             COALESCE((SELECT SUM(q.quantity_rejected) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_rejected
+      FROM production_orders po
+      JOIN orders o ON o.id = po.order_id
+      JOIN order_items oi ON oi.order_id = o.id
+      JOIN products p ON p.id = oi.product_id
+      WHERE po.quantity_completed > 0
+      ORDER BY po.id DESC
+    `)
 
+    return rows.map((row) => {
+      const completed = Number(row.quantity_completed)
+      const tested = Number(row.quantity_tested)
+      const passed = Number(row.quantity_passed)
+      const inspected = Number(row.quantity_inspected)
 
-    try {
-
-        const [
-            productionRows
-        ] =
-            await connection.query(
-                `
-                SELECT
-
-                    po.id,
-
-                    po.order_id,
-
-                    po.status,
-
-                    po.quantity_to_produce,
-                    po.quantity_completed,
-
-                    po.started_at,
-                    po.completed_at,
-
-                    o.order_number,
-
-                    oi.quantity
-                        AS ordered_quantity,
-
-                    p.name
-                        AS product_name,
-
-                    p.sku
-                        AS product_sku
-
-                FROM production_orders po
-
-                JOIN orders o
-                    ON po.order_id = o.id
-
-                JOIN order_items oi
-                    ON o.id = oi.order_id
-
-                JOIN products p
-                    ON oi.product_id = p.id
-
-                WHERE
-                    po.quantity_completed > 0
-
-                ORDER BY
-                    po.id DESC
-                `
-            );
-
-
-        const result = [];
-
-
-        for (
-            const production
-            of productionRows
-        ) {
-
-            const testing =
-                await getTestingSummary(
-                    connection,
-                    production.id
-                );
-
-
-            const qualityControl =
-                await getQualityControlSummary(
-                    connection,
-                    production.id
-                );
-
-
-            result.push({
-
-                id:
-                    production.id,
-
-                orderId:
-                    production.order_id,
-
-                orderNumber:
-                    production.order_number,
-
-                productName:
-                    production.product_name,
-
-                productSku:
-                    production.product_sku,
-
-                orderedQuantity:
-                    Number(
-                        production.ordered_quantity
-                    ),
-
-                quantityCompleted:
-                    Number(
-                        production.quantity_completed
-                    ),
-
-                quantityTested:
-                    testing.quantityTested,
-
-                quantityPassed:
-                    testing.quantityPassed,
-
-                quantityFailed:
-                    testing.quantityFailed,
-
-                remainingToTest:
-                    testing.remainingToTest,
-
-                quantityInspected:
-                    qualityControl.quantityInspected,
-
-                quantityApproved:
-                    qualityControl.quantityApproved,
-
-                quantityRejected:
-                    qualityControl.quantityRejected,
-
-                availableForQC:
-                    qualityControl.availableForQC,
-
-                status:
-                    production.status,
-
-                startedAt:
-                    production.started_at,
-
-                completedAt:
-                    production.completed_at,
-
-            });
-
-        }
-
-
-        return result;
-
-    } finally {
-
-        connection.release();
-
-    }
+      return {
+        id: row.id,
+        orderId: row.order_id,
+        orderNumber: row.order_number,
+        productName: row.product_name,
+        productSku: row.product_sku,
+        orderedQuantity: Number(row.ordered_quantity),
+        quantityCompleted: completed,
+        quantityTested: tested,
+        quantityPassed: passed,
+        quantityFailed: Number(row.quantity_failed),
+        remainingToTest: Math.max(0, completed - tested),
+        quantityInspected: inspected,
+        quantityApproved: Number(row.quantity_approved),
+        quantityRejected: Number(row.quantity_rejected),
+        availableForQC: Math.max(0, passed - inspected),
+        status: row.status,
+        startedAt: row.started_at,
+        completedAt: row.completed_at,
+      }
+    })
+  } finally {
+    connection.release()
+  }
 }
-
-
-/*
-=========================================================
-EXPORTS
-=========================================================
-*/
 
 module.exports = {
-
-    getQualityControlOrders,
-
-    getQualityControlInfo,
-
-    saveTestingResult,
-
-    saveQualityControlResult,
-
-};
+  getQualityControlOrders,
+  getQualityControlInfo,
+  saveTestingResult,
+  redoTesting,
+  saveQualityControlResult
+}
