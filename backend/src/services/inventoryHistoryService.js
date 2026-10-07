@@ -256,7 +256,13 @@ async function getFinishedProductsUsage() {
         manual stock-out, by reason                   (STOCK_OUT: damaged, R&D, returned to supplier, ...)
         count adjustments                             (ADJUSTMENT_OUT minus ADJUSTMENT_IN)
 
-        unexplained = difference + in_production + explained_total      (0 = the shortfall is fully accounted for)
+        missing     = expected - actual                     (positive = short)
+        unexplained = missing - in_production - explained_total
+                      (0 = the shortfall is fully accounted for, > 0 = still unexplained,
+                       < 0 = more was taken out with a reason than the shortfall)
+
+    The same working is repeated per component (shortfall.components), so the shortfall can be read
+    as "component A is short by x, component B by y".
 
     Read-only; no stock is touched.
 */
@@ -355,6 +361,88 @@ async function getBalanceSheet() {
         `
     );
 
+    // Component by component: the same working as above, for every component that does not balance.
+    const [comps] = await db.query(`SELECT id, sku, name, unit FROM components`);
+    const [recvRows] = await db.query(
+        `SELECT t.component_id, SUM(${BASELINE_QTY} + ${RECEIVED_QTY}) AS qty
+           FROM inventory_transactions t
+          WHERE ${COUNTED}
+          GROUP BY t.component_id`
+    );
+    const [usedRows] = await db.query(
+        `SELECT bom.component_id, SUM(f.produced * bom.quantity_required) AS qty
+           FROM (
+                SELECT oi.product_id, SUM(fg.quantity) AS produced
+                  FROM finished_goods fg
+                  JOIN order_items oi ON oi.order_id = fg.order_id
+                 GROUP BY oi.product_id
+           ) f
+           JOIN product_bom bom ON bom.product_id = f.product_id
+          GROUP BY bom.component_id`
+    );
+    const [onHandRows] = await db.query(
+        `SELECT component_id, SUM(quantity_on_hand) AS qty FROM inventory GROUP BY component_id`
+    );
+    const [consumedRows] = await db.query(
+        `SELECT t.component_id, SUM(t.quantity) AS qty
+           FROM inventory_transactions t
+          WHERE t.transaction_type = 'CONSUMED' AND t.direction = 'OUT'
+          GROUP BY t.component_id`
+    );
+    const [leftRows] = await db.query(
+        `SELECT t.component_id, SUM(${LEAVING_QTY}) AS qty
+           FROM inventory_transactions t
+          WHERE ${LEAVING_TYPES}
+          GROUP BY t.component_id`
+    );
+    const toMap = (rs) => new Map(rs.map((r) => [r.component_id, cents(r.qty)]));
+    const recvM = toMap(recvRows);
+    const usedM = toMap(usedRows);
+    const onHandM = toMap(onHandRows);
+    const consumedM = toMap(consumedRows);
+    const leftM = toMap(leftRows);
+
+    const perComponent = comps.map((c) => {
+        const expected = (recvM.get(c.id) || 0) - (usedM.get(c.id) || 0);
+        const actual = onHandM.get(c.id) || 0;
+        const missing = expected - actual; // positive = short, negative = extra
+        const inProd = (consumedM.get(c.id) || 0) - (usedM.get(c.id) || 0);
+        const explained = leftM.get(c.id) || 0;
+        return { c, expected, actual, missing, inProd, explained };
+    });
+
+    // "Missing" per component leaves out what is simply waiting in unfinished products (see below):
+    // that stock was used by production, it is not lost.
+    const components = perComponent
+        .map((r) => ({ ...r, missingNet: r.missing - Math.max(r.inProd, 0) }))
+        .filter((r) => r.missingNet !== 0)
+        .sort((a, b) => b.missingNet - a.missingNet)
+        .map((r) => ({
+            component_id: r.c.id,
+            sku: r.c.sku,
+            name: r.c.name,
+            unit: r.c.unit,
+            expected: num(r.expected),
+            actual: num(r.actual),
+            missing: num(r.missingNet),
+            accounted: num(r.explained), // taken out with a reason (stock-out / count adjustment)
+            unexplained: num(r.missingNet - r.explained),
+        }));
+    const componentsMissingTotalC = components.reduce((sum, c) => (c.missing > 0 ? sum + cents(c.missing) : sum), 0);
+
+    // Components already used by production (taken out of stock when units were completed) for products that
+    // have not reached finished goods yet: they are waiting in testing / quality control, so they are not missing.
+    const unfinishedComponents = perComponent
+        .filter((r) => r.inProd > 0)
+        .sort((a, b) => b.inProd - a.inProd)
+        .map((r) => ({
+            component_id: r.c.id,
+            sku: r.c.sku,
+            name: r.c.name,
+            unit: r.c.unit,
+            quantity: num(r.inProd),
+        }));
+
     return {
         received_total: num(receivedC),
         components_used: num(usedC),
@@ -364,8 +452,11 @@ async function getBalanceSheet() {
         shortfall: {
             in_production: num(inProductionC),
             by_reason: byReason,
+            components,
+            components_missing_total: num(componentsMissingTotalC),
+            unfinished_components: unfinishedComponents,
             explained_total: num(explainedC),
-            unexplained: num(differenceC + inProductionC + explainedC),
+            unexplained: num(-differenceC - inProductionC - explainedC),
             movements: moves.map((m) => ({
                 id: m.id,
                 created_at: m.created_at,
