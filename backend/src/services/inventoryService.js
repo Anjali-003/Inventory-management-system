@@ -66,14 +66,31 @@ function parseQty(raw, field, { allowZero = false } = {}) {
 /* Structured stock-out reasons (the Inventory History balance sheet groups a shortfall by these). */
 const STOCK_OUT_REASON_CODES = [
     "ISSUED_TO_PRODUCTION",
+    "PRODUCTION_WASTAGE",
     "DAMAGED",
-    "RETURNED_TO_SUPPLIER",
+    "REPLACEMENT",
+    "QUALITY_CONTROL",
+    "TESTING",
     "RND",
-    "SAMPLE_TESTING",
+    "REWORK",
+    "CUSTOMER_SAMPLE",
+    "WARRANTY",
+    "LOST",
+    "WRONG_ISSUE",
+    "RETURNED_TO_SUPPLIER",
+    "SAMPLE_TESTING", // old code (kept so rows saved earlier stay valid); the UI now offers TESTING / CUSTOMER_SAMPLE
     "OTHER",
 ];
-// A worker must be named for these: someone has to answer for the pieces.
-const WORKER_REQUIRED = new Set(["DAMAGED", "RND"]);
+// A worker must be named for these: someone handled the pieces and has to answer for them.
+const WORKER_REQUIRED = new Set([
+    "PRODUCTION_WASTAGE",
+    "DAMAGED",
+    "REPLACEMENT",
+    "QUALITY_CONTROL",
+    "TESTING",
+    "RND",
+    "REWORK",
+]);
 
 function parseReasonCode(raw) {
     if (raw === undefined || raw === null || raw === "") return null;
