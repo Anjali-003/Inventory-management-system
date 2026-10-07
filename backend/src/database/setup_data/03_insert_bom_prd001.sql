@@ -10,8 +10,8 @@
 -- Components are matched by SKU (CMP-0001..CMP-0080 from 02_insert_components.sql).
 -- Sheet rows 1-58 -> CMP-0001..0058, rows 60-81 -> CMP-0059..0080 (the sheet has no row 59).
 --
--- Quantity is NULL (left blank on the sheet; needs migration 010 to allow NULL):
---   row 63 COATING (CMP-0062), row 66 ADESIVE GLUE (CMP-0065), row 71 SHOLDER (CMP-0070)
+-- Blank / decimal quantities set to 1 (sheet had them blank or 0.1):
+--   COATING (CMP-0062), ADESIVE GLUE (CMP-0065), SHOLDER (CMP-0070) were blank; OUTER BOX (CMP-0068) was 0.1
 -- =====================================================================
 
 USE inventory_management;
@@ -81,15 +81,15 @@ VALUES
 ((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0059'), 1, '(244)g'),  -- CABINET
 ((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0060'), 2, NULL),  -- SIDE PLATE (PLASTIC)
 ((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0061'), 1, NULL),  -- FAN
-((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0062'), NULL, NULL),  -- COATING
+((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0062'), 1, NULL),  -- COATING
 ((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0063'), 2, NULL),  -- PAINHEAD SCREW(BLACK)
 ((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0064'), 5, 'FRONT, TOP, WARRANTY, OK, DATE'),  -- STICKER
-((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0065'), NULL, NULL),  -- ADESIVE GLUE
+((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0065'), 1, NULL),  -- ADESIVE GLUE
 ((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0066'), 1, NULL),  -- EP SHEET
 ((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0067'), 1, NULL),  -- INNER BOX
-((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0068'), 0.1, NULL),  -- OUTER BOX
+((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0068'), 1, NULL),  -- OUTER BOX
 ((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0069'), 1, NULL),  -- CABLE TYE
-((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0070'), NULL, NULL),  -- SHOLDER
+((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0070'), 1, NULL),  -- SHOLDER
 ((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0071'), 1, NULL),  -- INSULATION SHEET
 ((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0072'), 1, NULL),  -- EARTHING WIRE
 ((SELECT id FROM products WHERE sku = 'PRD-001'), (SELECT id FROM components WHERE sku = 'CMP-0073'), 4, NULL),  -- GLASS SLEEVE

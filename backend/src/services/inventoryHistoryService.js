@@ -194,4 +194,293 @@ async function getDailyHistory(monthRaw) {
     };
 }
 
-module.exports = { getMonthlyHistory, getDailyHistory };
+/* ------------------------------------------------- finished products view */
+/*
+    One entry per finished product:
+        produced            = units of it in finished_goods (all statuses: packaging, dispatched, completed)
+        components_per_unit = sum of the BOM quantities for ONE unit of that product
+        components_used     = produced x components_per_unit
+    Read-only, derived from finished_goods / order_items / product_bom. Stock is never touched.
+*/
+async function getFinishedProductsUsage() {
+    const [rows] = await db.query(
+        `
+        SELECT p.id AS product_id, p.sku, p.name,
+               f.produced,
+               COALESCE(b.per_unit, 0) AS components_per_unit,
+               COALESCE(b.bom_lines, 0) AS bom_lines
+        FROM (
+            SELECT oi.product_id, SUM(fg.quantity) AS produced
+            FROM finished_goods fg
+            JOIN order_items oi ON oi.order_id = fg.order_id
+            GROUP BY oi.product_id
+        ) f
+        JOIN products p ON p.id = f.product_id
+        LEFT JOIN (
+            SELECT product_id, SUM(quantity_required) AS per_unit, COUNT(*) AS bom_lines
+            FROM product_bom
+            GROUP BY product_id
+        ) b ON b.product_id = p.id
+        ORDER BY p.name
+        `
+    );
+    const products = rows.map((r) => {
+        const produced = Number(r.produced);
+        const perUnit = cents(r.components_per_unit);
+        return {
+            product_id: r.product_id,
+            sku: r.sku,
+            name: r.name,
+            produced,
+            components_per_unit: num(perUnit),
+            bom_lines: Number(r.bom_lines),
+            components_used: num(produced * perUnit),
+        };
+    });
+    const totalUsedC = products.reduce((sum, p) => sum + cents(p.components_used), 0);
+    const totalProduced = products.reduce((sum, p) => sum + p.produced, 0);
+    return { products, total_produced: totalProduced, total_components_used: num(totalUsedC) };
+}
+
+/* ------------------------------------------------------------ balance sheet */
+/*
+    Received  (baseline + received, cumulative)
+  - Used      (sum of components_used over ALL finished products)
+  = Expected remaining
+    Actual on hand = SUM(inventory.quantity_on_hand)
+    Difference     = actual - expected  (0 = books match, < 0 = short, > 0 = extra)
+
+    When actual is short, the ledger says WHERE the pieces went. Everything that lowers on-hand stock
+    other than finished goods is listed with its reason, quantity and order:
+
+        consumed in production but not finished yet   (CONSUMED  - components_used)
+        manual stock-out, by reason                   (STOCK_OUT: damaged, R&D, returned to supplier, ...)
+        count adjustments                             (ADJUSTMENT_OUT minus ADJUSTMENT_IN)
+
+        missing     = expected - actual                     (positive = short)
+        unexplained = missing - in_production - explained_total
+                      (0 = the shortfall is fully accounted for, > 0 = still unexplained,
+                       < 0 = more was taken out with a reason than the shortfall)
+
+    The same working is repeated per component (shortfall.components), so the shortfall can be read
+    as "component A is short by x, component B by y".
+
+    Read-only; no stock is touched.
+*/
+const REASON_LABELS = {
+    ISSUED_TO_PRODUCTION: "Issued to production",
+    PRODUCTION_WASTAGE: "Production wastage / rejected",
+    DAMAGED: "Damaged / scrapped",
+    REPLACEMENT: "Replacement issued",
+    QUALITY_CONTROL: "Quality control / inspection",
+    TESTING: "Testing / trial",
+    RND: "R&D / experiment",
+    REWORK: "Rework / repair",
+    CUSTOMER_SAMPLE: "Customer sample / demo",
+    WARRANTY: "Warranty / customer replacement",
+    LOST: "Lost / missing",
+    WRONG_ISSUE: "Issued by mistake / excess",
+    RETURNED_TO_SUPPLIER: "Returned to supplier",
+    SAMPLE_TESTING: "Sample / testing",
+    OTHER: "Other",
+    ADJUSTMENT: "Stock count adjustment",
+};
+
+// New rows carry reason_code. Rows written before it existed are matched from their free-text reason.
+const REASON_CODE_SQL = `
+    CASE
+        WHEN t.transaction_type IN ('ADJUSTMENT_IN', 'ADJUSTMENT_OUT') THEN 'ADJUSTMENT'
+        WHEN t.reason_code IS NOT NULL THEN t.reason_code
+        WHEN t.reason LIKE 'Issued to production%' THEN 'ISSUED_TO_PRODUCTION'
+        WHEN t.reason LIKE 'Damaged%' THEN 'DAMAGED'
+        WHEN t.reason LIKE 'Returned to supplier%' THEN 'RETURNED_TO_SUPPLIER'
+        WHEN t.reason LIKE 'R&D%' THEN 'RND'
+        WHEN t.reason LIKE 'Sample%' THEN 'SAMPLE_TESTING'
+        ELSE 'OTHER'
+    END`;
+// Positive = stock that left; an ADJUSTMENT_IN (count found extra) is negative.
+const LEAVING_QTY = `CASE t.transaction_type WHEN 'ADJUSTMENT_IN' THEN -t.quantity ELSE t.quantity END`;
+const LEAVING_TYPES = `t.transaction_type IN ('STOCK_OUT', 'ADJUSTMENT_OUT', 'ADJUSTMENT_IN')`;
+
+async function getBalanceSheet() {
+    const monthly = await getMonthlyHistory();
+    const { products } = await getFinishedProductsUsage();
+
+    const receivedC = cents(monthly.cumulative_total);
+    const usedC = products.reduce((sum, p) => sum + cents(p.components_used), 0);
+    const expectedC = receivedC - usedC;
+
+    const [[row]] = await db.query(`SELECT COALESCE(SUM(quantity_on_hand), 0) AS on_hand FROM inventory`);
+    const actualC = cents(row.on_hand);
+    const differenceC = actualC - expectedC;
+
+    const [[cons]] = await db.query(
+        `SELECT COALESCE(SUM(quantity), 0) AS consumed
+           FROM inventory_transactions
+          WHERE transaction_type = 'CONSUMED' AND direction = 'OUT'`
+    );
+    const inProductionC = cents(cons.consumed) - usedC;
+
+    const [groups] = await db.query(
+        `
+        SELECT ${REASON_CODE_SQL} AS code,
+               SUM(${LEAVING_QTY}) AS quantity,
+               COUNT(*) AS movements
+          FROM inventory_transactions t
+         WHERE ${LEAVING_TYPES}
+         GROUP BY code
+         ORDER BY quantity DESC
+        `
+    );
+    const byReason = groups.map((g) => ({
+        code: g.code,
+        label: REASON_LABELS[g.code] || g.code,
+        quantity: num(cents(g.quantity)),
+        movements: Number(g.movements),
+    }));
+    const explainedC = groups.reduce((sum, g) => sum + cents(g.quantity), 0);
+
+    // Component-wise detail: newest 200 movements, with the order they were issued against and who recorded it.
+    // (worker_* is only filled for older rows that were saved before stock-outs were tied to orders.)
+    const [moves] = await db.query(
+        `
+        SELECT t.id,
+               DATE_FORMAT(t.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+               c.sku, c.name AS component_name, c.unit,
+               t.transaction_type,
+               ${REASON_CODE_SQL} AS code,
+               ${LEAVING_QTY} AS quantity,
+               t.reason, t.reference_no,
+               o.id AS order_id, o.order_number,
+               e.name AS worker_name, e.employee_code AS worker_code,
+               u.name AS recorded_by
+          FROM inventory_transactions t
+          JOIN components c ON c.id = t.component_id
+          LEFT JOIN orders o ON o.id = t.order_id
+          LEFT JOIN employees e ON e.id = t.employee_id
+          LEFT JOIN users u ON u.id = t.created_by
+         WHERE ${LEAVING_TYPES}
+         ORDER BY t.created_at DESC, t.id DESC
+         LIMIT 200
+        `
+    );
+
+    // Component by component: the same working as above, for every component that does not balance.
+    const [comps] = await db.query(`SELECT id, sku, name, unit FROM components`);
+    const [recvRows] = await db.query(
+        `SELECT t.component_id, SUM(${BASELINE_QTY} + ${RECEIVED_QTY}) AS qty
+           FROM inventory_transactions t
+          WHERE ${COUNTED}
+          GROUP BY t.component_id`
+    );
+    const [usedRows] = await db.query(
+        `SELECT bom.component_id, SUM(f.produced * bom.quantity_required) AS qty
+           FROM (
+                SELECT oi.product_id, SUM(fg.quantity) AS produced
+                  FROM finished_goods fg
+                  JOIN order_items oi ON oi.order_id = fg.order_id
+                 GROUP BY oi.product_id
+           ) f
+           JOIN product_bom bom ON bom.product_id = f.product_id
+          GROUP BY bom.component_id`
+    );
+    const [onHandRows] = await db.query(
+        `SELECT component_id, SUM(quantity_on_hand) AS qty FROM inventory GROUP BY component_id`
+    );
+    const [consumedRows] = await db.query(
+        `SELECT t.component_id, SUM(t.quantity) AS qty
+           FROM inventory_transactions t
+          WHERE t.transaction_type = 'CONSUMED' AND t.direction = 'OUT'
+          GROUP BY t.component_id`
+    );
+    const [leftRows] = await db.query(
+        `SELECT t.component_id, SUM(${LEAVING_QTY}) AS qty
+           FROM inventory_transactions t
+          WHERE ${LEAVING_TYPES}
+          GROUP BY t.component_id`
+    );
+    const toMap = (rs) => new Map(rs.map((r) => [r.component_id, cents(r.qty)]));
+    const recvM = toMap(recvRows);
+    const usedM = toMap(usedRows);
+    const onHandM = toMap(onHandRows);
+    const consumedM = toMap(consumedRows);
+    const leftM = toMap(leftRows);
+
+    const perComponent = comps.map((c) => {
+        const expected = (recvM.get(c.id) || 0) - (usedM.get(c.id) || 0);
+        const actual = onHandM.get(c.id) || 0;
+        const missing = expected - actual; // positive = short, negative = extra
+        const inProd = (consumedM.get(c.id) || 0) - (usedM.get(c.id) || 0);
+        const explained = leftM.get(c.id) || 0;
+        return { c, expected, actual, missing, inProd, explained };
+    });
+
+    // "Missing" per component leaves out what is simply waiting in unfinished products (see below):
+    // that stock was used by production, it is not lost.
+    const components = perComponent
+        .map((r) => ({ ...r, missingNet: r.missing - Math.max(r.inProd, 0) }))
+        .filter((r) => r.missingNet !== 0)
+        .sort((a, b) => b.missingNet - a.missingNet)
+        .map((r) => ({
+            component_id: r.c.id,
+            sku: r.c.sku,
+            name: r.c.name,
+            unit: r.c.unit,
+            expected: num(r.expected),
+            actual: num(r.actual),
+            missing: num(r.missingNet),
+            accounted: num(r.explained), // taken out with a reason (stock-out / count adjustment)
+            unexplained: num(r.missingNet - r.explained),
+        }));
+    const componentsMissingTotalC = components.reduce((sum, c) => (c.missing > 0 ? sum + cents(c.missing) : sum), 0);
+
+    // Components already used by production (taken out of stock when units were completed) for products that
+    // have not reached finished goods yet: they are waiting in testing / quality control, so they are not missing.
+    const unfinishedComponents = perComponent
+        .filter((r) => r.inProd > 0)
+        .sort((a, b) => b.inProd - a.inProd)
+        .map((r) => ({
+            component_id: r.c.id,
+            sku: r.c.sku,
+            name: r.c.name,
+            unit: r.c.unit,
+            quantity: num(r.inProd),
+        }));
+
+    return {
+        received_total: num(receivedC),
+        components_used: num(usedC),
+        expected_remaining: num(expectedC),
+        actual_on_hand: num(actualC),
+        difference: num(differenceC),
+        shortfall: {
+            in_production: num(inProductionC),
+            by_reason: byReason,
+            components,
+            components_missing_total: num(componentsMissingTotalC),
+            unfinished_components: unfinishedComponents,
+            explained_total: num(explainedC),
+            unexplained: num(-differenceC - inProductionC - explainedC),
+            movements: moves.map((m) => ({
+                id: m.id,
+                created_at: m.created_at,
+                sku: m.sku,
+                component_name: m.component_name,
+                unit: m.unit,
+                type: m.transaction_type,
+                code: m.code,
+                reason_label: REASON_LABELS[m.code] || m.code,
+                quantity: num(cents(m.quantity)),
+                reason: m.reason,
+                reference_no: m.reference_no,
+                order_id: m.order_id,
+                order_number: m.order_number,
+                worker_name: m.worker_name,
+                worker_code: m.worker_code,
+                recorded_by: m.recorded_by,
+            })),
+        },
+    };
+}
+
+module.exports = { getMonthlyHistory, getDailyHistory, getFinishedProductsUsage, getBalanceSheet };

@@ -63,6 +63,51 @@ function parseQty(raw, field, { allowZero = false } = {}) {
     return cents;
 }
 
+/* Structured stock-out reasons (the Inventory History balance sheet groups a shortfall by these). */
+const STOCK_OUT_REASON_CODES = [
+    "ISSUED_TO_PRODUCTION",
+    "PRODUCTION_WASTAGE",
+    "DAMAGED",
+    "REPLACEMENT",
+    "QUALITY_CONTROL",
+    "TESTING",
+    "RND",
+    "REWORK",
+    "CUSTOMER_SAMPLE",
+    "WARRANTY",
+    "LOST",
+    "WRONG_ISSUE",
+    "RETURNED_TO_SUPPLIER",
+    "SAMPLE_TESTING", // old code (kept so rows saved earlier stay valid); the UI now offers TESTING / CUSTOMER_SAMPLE
+    "OTHER",
+];
+// An order must be selected for these: the pieces were used for / taken because of that order.
+const ORDER_REQUIRED = new Set([
+    "PRODUCTION_WASTAGE",
+    "DAMAGED",
+    "REPLACEMENT",
+    "QUALITY_CONTROL",
+    "TESTING",
+    "RND",
+    "REWORK",
+]);
+
+function parseReasonCode(raw) {
+    if (raw === undefined || raw === null || raw === "") return null;
+    const code = String(raw).trim().toUpperCase();
+    if (!STOCK_OUT_REASON_CODES.includes(code)) {
+        throw new HttpError(422, "Unknown stock-out reason", "VALIDATION");
+    }
+    return code;
+}
+
+function parseOrderId(raw) {
+    if (raw === undefined || raw === null || raw === "") return null;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n <= 0) throw new HttpError(422, "Order is not valid", "VALIDATION");
+    return n;
+}
+
 function parseReason(raw, { required = true, min = 3 } = {}) {
     const text = typeof raw === "string" ? raw.trim().replace(/\s+/g, " ") : "";
     if (!text) {
@@ -394,8 +439,8 @@ async function insertLedger(conn, m) {
         `
         INSERT INTO inventory_transactions
             (component_id, transaction_type, direction, quantity, balance_after,
-             reason, reference_no, created_by, idempotency_key)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             reason, reason_code, reference_no, created_by, order_id, idempotency_key)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
             m.componentId,
@@ -404,8 +449,10 @@ async function insertLedger(conn, m) {
             fromCents(m.cents),
             fromCents(m.balanceAfterCents),
             m.reason,
+            m.reasonCode || null,
             m.referenceNo || null,
             m.userId,
+            m.orderId || null,
             m.key,
         ]
     );
@@ -781,8 +828,14 @@ async function stockOut(inventoryIdRaw, body, userId) {
     const inventoryId = parseId(inventoryIdRaw);
     const cents = parseQty(body.quantity, "Quantity");
     const reason = parseReason(body.reason);
+    const reasonCode = parseReasonCode(body.reason_code);
+    const orderId = parseOrderId(body.order_id);
     const referenceNo = parseRef(body.reference_no);
     const key = parseKey(body.idempotency_key);
+
+    if (reasonCode && ORDER_REQUIRED.has(reasonCode) && !orderId) {
+        throw new HttpError(422, "Select the order for this reason", "VALIDATION");
+    }
 
     const [preRows] = await db.query(`SELECT component_id FROM inventory WHERE id = ?`, [inventoryId]);
     if (preRows.length === 0) throw new HttpError(404, "Inventory item not found", "NOT_FOUND");
@@ -792,6 +845,11 @@ async function stockOut(inventoryIdRaw, body, userId) {
         const inv = await lockById(conn, inventoryId);
         if (!inv.is_active) {
             throw new HttpError(409, "This item is archived. Stock it in again to reactivate it.", "ARCHIVED");
+        }
+
+        if (orderId) {
+            const [ord] = await conn.query(`SELECT id FROM orders WHERE id = ?`, [orderId]);
+            if (ord.length === 0) throw new HttpError(422, "Order not found", "VALIDATION");
         }
 
         const onHand = toCents(inv.quantity_on_hand);
@@ -826,6 +884,8 @@ async function stockOut(inventoryIdRaw, body, userId) {
             cents,
             balanceAfterCents: after,
             reason,
+            reasonCode,
+            orderId,
             referenceNo,
             userId,
             key,
@@ -979,6 +1039,7 @@ module.exports = {
     stockInBatch,
     nextSku,
     stockOut,
+    STOCK_OUT_REASON_CODES,
     updateItem,
     archiveItem,
 };

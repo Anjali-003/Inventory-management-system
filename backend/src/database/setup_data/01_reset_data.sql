@@ -31,6 +31,10 @@
 
 USE inventory_management;
 
+-- 0) Stock ledger first: its rows point at orders (order_id), so it must be emptied before orders.
+--    This is also what the Inventory History page reads.
+TRUNCATE TABLE inventory_transactions;
+
 -- 1) Operations: everything that hangs off production orders and orders
 DELETE FROM finished_goods;
 ALTER TABLE finished_goods AUTO_INCREMENT = 1;
@@ -46,10 +50,6 @@ DELETE FROM orders;
 ALTER TABLE orders AUTO_INCREMENT = 1;
 ALTER TABLE order_items AUTO_INCREMENT = 1;
 ALTER TABLE production_orders AUTO_INCREMENT = 1;
-
--- 2) Catalog: whole stock ledger (opening balance, stock in, adjustments, reservations, ...)
---    This is also what the Inventory History page reads.
-TRUNCATE TABLE inventory_transactions;
 
 -- 3) Stock rows
 DELETE FROM inventory;

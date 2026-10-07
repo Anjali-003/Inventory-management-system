@@ -80,6 +80,16 @@ router.get("/history/daily", handle(async (req, res) => {
     res.json(await history.getDailyHistory(req.query.month));
 }));
 
+// Finished products: quantity produced x components in one unit = components used. Read-only.
+router.get("/history/products", handle(async (req, res) => {
+    res.json(await history.getFinishedProductsUsage());
+}));
+
+// Balance sheet: received - components used = expected remaining, compared with actual on hand. Read-only.
+router.get("/history/balance", handle(async (req, res) => {
+    res.json(await history.getBalanceSheet());
+}));
+
 router.get("/:id", handle(async (req, res) => {
     res.json(await svc.getItem(req.params.id));
 }));
