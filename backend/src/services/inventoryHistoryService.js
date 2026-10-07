@@ -237,7 +237,8 @@ async function getFinishedProductsUsage() {
             components_used: num(produced * perUnit),
         };
     });
-    return { products };
+    const totalUsedC = products.reduce((sum, p) => sum + cents(p.components_used), 0);
+    return { products, total_components_used: num(totalUsedC) };
 }
 
 /* ------------------------------------------------------------ balance sheet */
