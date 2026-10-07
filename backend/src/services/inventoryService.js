@@ -81,8 +81,8 @@ const STOCK_OUT_REASON_CODES = [
     "SAMPLE_TESTING", // old code (kept so rows saved earlier stay valid); the UI now offers TESTING / CUSTOMER_SAMPLE
     "OTHER",
 ];
-// A worker must be named for these: someone handled the pieces and has to answer for them.
-const WORKER_REQUIRED = new Set([
+// An order must be selected for these: the pieces were used for / taken because of that order.
+const ORDER_REQUIRED = new Set([
     "PRODUCTION_WASTAGE",
     "DAMAGED",
     "REPLACEMENT",
@@ -101,10 +101,10 @@ function parseReasonCode(raw) {
     return code;
 }
 
-function parseEmployeeId(raw) {
+function parseOrderId(raw) {
     if (raw === undefined || raw === null || raw === "") return null;
     const n = Number(raw);
-    if (!Number.isInteger(n) || n <= 0) throw new HttpError(422, "Worker is not valid", "VALIDATION");
+    if (!Number.isInteger(n) || n <= 0) throw new HttpError(422, "Order is not valid", "VALIDATION");
     return n;
 }
 
@@ -439,7 +439,7 @@ async function insertLedger(conn, m) {
         `
         INSERT INTO inventory_transactions
             (component_id, transaction_type, direction, quantity, balance_after,
-             reason, reason_code, reference_no, created_by, employee_id, idempotency_key)
+             reason, reason_code, reference_no, created_by, order_id, idempotency_key)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
@@ -452,7 +452,7 @@ async function insertLedger(conn, m) {
             m.reasonCode || null,
             m.referenceNo || null,
             m.userId,
-            m.employeeId || null,
+            m.orderId || null,
             m.key,
         ]
     );
@@ -829,12 +829,12 @@ async function stockOut(inventoryIdRaw, body, userId) {
     const cents = parseQty(body.quantity, "Quantity");
     const reason = parseReason(body.reason);
     const reasonCode = parseReasonCode(body.reason_code);
-    const employeeId = parseEmployeeId(body.employee_id);
+    const orderId = parseOrderId(body.order_id);
     const referenceNo = parseRef(body.reference_no);
     const key = parseKey(body.idempotency_key);
 
-    if (reasonCode && WORKER_REQUIRED.has(reasonCode) && !employeeId) {
-        throw new HttpError(422, "Select the worker for this reason", "VALIDATION");
+    if (reasonCode && ORDER_REQUIRED.has(reasonCode) && !orderId) {
+        throw new HttpError(422, "Select the order for this reason", "VALIDATION");
     }
 
     const [preRows] = await db.query(`SELECT component_id FROM inventory WHERE id = ?`, [inventoryId]);
@@ -847,9 +847,9 @@ async function stockOut(inventoryIdRaw, body, userId) {
             throw new HttpError(409, "This item is archived. Stock it in again to reactivate it.", "ARCHIVED");
         }
 
-        if (employeeId) {
-            const [emp] = await conn.query(`SELECT id FROM employees WHERE id = ?`, [employeeId]);
-            if (emp.length === 0) throw new HttpError(422, "Worker not found", "VALIDATION");
+        if (orderId) {
+            const [ord] = await conn.query(`SELECT id FROM orders WHERE id = ?`, [orderId]);
+            if (ord.length === 0) throw new HttpError(422, "Order not found", "VALIDATION");
         }
 
         const onHand = toCents(inv.quantity_on_hand);
@@ -885,7 +885,7 @@ async function stockOut(inventoryIdRaw, body, userId) {
             balanceAfterCents: after,
             reason,
             reasonCode,
-            employeeId,
+            orderId,
             referenceNo,
             userId,
             key,

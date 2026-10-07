@@ -238,7 +238,8 @@ async function getFinishedProductsUsage() {
         };
     });
     const totalUsedC = products.reduce((sum, p) => sum + cents(p.components_used), 0);
-    return { products, total_components_used: num(totalUsedC) };
+    const totalProduced = products.reduce((sum, p) => sum + p.produced, 0);
+    return { products, total_produced: totalProduced, total_components_used: num(totalUsedC) };
 }
 
 /* ------------------------------------------------------------ balance sheet */
@@ -250,7 +251,7 @@ async function getFinishedProductsUsage() {
     Difference     = actual - expected  (0 = books match, < 0 = short, > 0 = extra)
 
     When actual is short, the ledger says WHERE the pieces went. Everything that lowers on-hand stock
-    other than finished goods is listed with its reason, quantity and worker:
+    other than finished goods is listed with its reason, quantity and order:
 
         consumed in production but not finished yet   (CONSUMED  - components_used)
         manual stock-out, by reason                   (STOCK_OUT: damaged, R&D, returned to supplier, ...)
@@ -339,7 +340,8 @@ async function getBalanceSheet() {
     }));
     const explainedC = groups.reduce((sum, g) => sum + cents(g.quantity), 0);
 
-    // Component-wise detail: newest 200 movements, with the worker and who recorded it.
+    // Component-wise detail: newest 200 movements, with the order they were issued against and who recorded it.
+    // (worker_* is only filled for older rows that were saved before stock-outs were tied to orders.)
     const [moves] = await db.query(
         `
         SELECT t.id,
@@ -349,10 +351,12 @@ async function getBalanceSheet() {
                ${REASON_CODE_SQL} AS code,
                ${LEAVING_QTY} AS quantity,
                t.reason, t.reference_no,
+               o.id AS order_id, o.order_number,
                e.name AS worker_name, e.employee_code AS worker_code,
                u.name AS recorded_by
           FROM inventory_transactions t
           JOIN components c ON c.id = t.component_id
+          LEFT JOIN orders o ON o.id = t.order_id
           LEFT JOIN employees e ON e.id = t.employee_id
           LEFT JOIN users u ON u.id = t.created_by
          WHERE ${LEAVING_TYPES}
@@ -469,6 +473,8 @@ async function getBalanceSheet() {
                 quantity: num(cents(m.quantity)),
                 reason: m.reason,
                 reference_no: m.reference_no,
+                order_id: m.order_id,
+                order_number: m.order_number,
                 worker_name: m.worker_name,
                 worker_code: m.worker_code,
                 recorded_by: m.recorded_by,
