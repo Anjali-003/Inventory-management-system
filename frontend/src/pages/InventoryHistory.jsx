@@ -8,6 +8,7 @@ import ErrorBanner from "../components/ErrorBanner"
 import { Button } from "../components/ui/button"
 import { Card } from "../components/ui/card"
 import FinishedProductCards from "../components/inventory/FinishedProductCards"
+import BalanceSheetCard from "../components/inventory/BalanceSheetCard"
 import { selectClass } from "../components/FormField"
 import { cn } from "../lib/utils"
 import { errorMessage, fmtQty } from "../lib/stock"
@@ -126,6 +127,8 @@ export default function InventoryHistory() {
           </Card>
 
           <FinishedProductCards />
+
+          <BalanceSheetCard />
         </div>
       )}
     </div>

@@ -56,9 +56,21 @@ export const TYPE_META = {
 
 export const REASONS = {
   in: ["Purchase receipt", "Customer / production return", "Transfer in", "Other"],
-  out: ["Issued to production", "Damaged / scrapped", "Returned to supplier", "Sample / testing", "Other"],
+  out: ["Issued to production", "Damaged / scrapped", "R&D / experiment", "Returned to supplier", "Sample / testing", "Other"],
   adjust: ["Cycle count correction", "Damage found", "Data entry correction", "Other"],
 }
+
+// Stock-out preset -> code stored on the ledger row (the Inventory History balance sheet groups by it).
+export const STOCK_OUT_CODE = {
+  "Issued to production": "ISSUED_TO_PRODUCTION",
+  "Damaged / scrapped": "DAMAGED",
+  "R&D / experiment": "RND",
+  "Returned to supplier": "RETURNED_TO_SUPPLIER",
+  "Sample / testing": "SAMPLE_TESTING",
+  Other: "OTHER",
+}
+// For these a worker must be named.
+export const WORKER_REQUIRED_PRESETS = ["Damaged / scrapped", "R&D / experiment"]
 
 /** Combine the preset and the free-text note into the single reason string the ledger stores. */
 export const composeReason = (preset, note) => {

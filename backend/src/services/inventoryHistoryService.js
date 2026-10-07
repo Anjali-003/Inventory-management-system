@@ -240,4 +240,140 @@ async function getFinishedProductsUsage() {
     return { products };
 }
 
-module.exports = { getMonthlyHistory, getDailyHistory, getFinishedProductsUsage };
+/* ------------------------------------------------------------ balance sheet */
+/*
+    Received  (baseline + received, cumulative)
+  - Used      (sum of components_used over ALL finished products)
+  = Expected remaining
+    Actual on hand = SUM(inventory.quantity_on_hand)
+    Difference     = actual - expected  (0 = books match, < 0 = short, > 0 = extra)
+
+    When actual is short, the ledger says WHERE the pieces went. Everything that lowers on-hand stock
+    other than finished goods is listed with its reason, quantity and worker:
+
+        consumed in production but not finished yet   (CONSUMED  - components_used)
+        manual stock-out, by reason                   (STOCK_OUT: damaged, R&D, returned to supplier, ...)
+        count adjustments                             (ADJUSTMENT_OUT minus ADJUSTMENT_IN)
+
+        unexplained = difference + in_production + explained_total      (0 = the shortfall is fully accounted for)
+
+    Read-only; no stock is touched.
+*/
+const REASON_LABELS = {
+    ISSUED_TO_PRODUCTION: "Issued to production",
+    DAMAGED: "Damaged / scrapped",
+    RETURNED_TO_SUPPLIER: "Returned to supplier",
+    RND: "R&D / experiment",
+    SAMPLE_TESTING: "Sample / testing",
+    OTHER: "Other",
+    ADJUSTMENT: "Stock count adjustment",
+};
+
+// New rows carry reason_code. Rows written before it existed are matched from their free-text reason.
+const REASON_CODE_SQL = `
+    CASE
+        WHEN t.transaction_type IN ('ADJUSTMENT_IN', 'ADJUSTMENT_OUT') THEN 'ADJUSTMENT'
+        WHEN t.reason_code IS NOT NULL THEN t.reason_code
+        WHEN t.reason LIKE 'Issued to production%' THEN 'ISSUED_TO_PRODUCTION'
+        WHEN t.reason LIKE 'Damaged%' THEN 'DAMAGED'
+        WHEN t.reason LIKE 'Returned to supplier%' THEN 'RETURNED_TO_SUPPLIER'
+        WHEN t.reason LIKE 'R&D%' THEN 'RND'
+        WHEN t.reason LIKE 'Sample%' THEN 'SAMPLE_TESTING'
+        ELSE 'OTHER'
+    END`;
+// Positive = stock that left; an ADJUSTMENT_IN (count found extra) is negative.
+const LEAVING_QTY = `CASE t.transaction_type WHEN 'ADJUSTMENT_IN' THEN -t.quantity ELSE t.quantity END`;
+const LEAVING_TYPES = `t.transaction_type IN ('STOCK_OUT', 'ADJUSTMENT_OUT', 'ADJUSTMENT_IN')`;
+
+async function getBalanceSheet() {
+    const monthly = await getMonthlyHistory();
+    const { products } = await getFinishedProductsUsage();
+
+    const receivedC = cents(monthly.cumulative_total);
+    const usedC = products.reduce((sum, p) => sum + cents(p.components_used), 0);
+    const expectedC = receivedC - usedC;
+
+    const [[row]] = await db.query(`SELECT COALESCE(SUM(quantity_on_hand), 0) AS on_hand FROM inventory`);
+    const actualC = cents(row.on_hand);
+    const differenceC = actualC - expectedC;
+
+    const [[cons]] = await db.query(
+        `SELECT COALESCE(SUM(quantity), 0) AS consumed
+           FROM inventory_transactions
+          WHERE transaction_type = 'CONSUMED' AND direction = 'OUT'`
+    );
+    const inProductionC = cents(cons.consumed) - usedC;
+
+    const [groups] = await db.query(
+        `
+        SELECT ${REASON_CODE_SQL} AS code,
+               SUM(${LEAVING_QTY}) AS quantity,
+               COUNT(*) AS movements
+          FROM inventory_transactions t
+         WHERE ${LEAVING_TYPES}
+         GROUP BY code
+         ORDER BY quantity DESC
+        `
+    );
+    const byReason = groups.map((g) => ({
+        code: g.code,
+        label: REASON_LABELS[g.code] || g.code,
+        quantity: num(cents(g.quantity)),
+        movements: Number(g.movements),
+    }));
+    const explainedC = groups.reduce((sum, g) => sum + cents(g.quantity), 0);
+
+    // Component-wise detail: newest 200 movements, with the worker and who recorded it.
+    const [moves] = await db.query(
+        `
+        SELECT t.id,
+               DATE_FORMAT(t.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+               c.sku, c.name AS component_name, c.unit,
+               t.transaction_type,
+               ${REASON_CODE_SQL} AS code,
+               ${LEAVING_QTY} AS quantity,
+               t.reason, t.reference_no,
+               e.name AS worker_name, e.employee_code AS worker_code,
+               u.name AS recorded_by
+          FROM inventory_transactions t
+          JOIN components c ON c.id = t.component_id
+          LEFT JOIN employees e ON e.id = t.employee_id
+          LEFT JOIN users u ON u.id = t.created_by
+         WHERE ${LEAVING_TYPES}
+         ORDER BY t.created_at DESC, t.id DESC
+         LIMIT 200
+        `
+    );
+
+    return {
+        received_total: num(receivedC),
+        components_used: num(usedC),
+        expected_remaining: num(expectedC),
+        actual_on_hand: num(actualC),
+        difference: num(differenceC),
+        shortfall: {
+            in_production: num(inProductionC),
+            by_reason: byReason,
+            explained_total: num(explainedC),
+            unexplained: num(differenceC + inProductionC + explainedC),
+            movements: moves.map((m) => ({
+                id: m.id,
+                created_at: m.created_at,
+                sku: m.sku,
+                component_name: m.component_name,
+                unit: m.unit,
+                type: m.transaction_type,
+                code: m.code,
+                reason_label: REASON_LABELS[m.code] || m.code,
+                quantity: num(cents(m.quantity)),
+                reason: m.reason,
+                reference_no: m.reference_no,
+                worker_name: m.worker_name,
+                worker_code: m.worker_code,
+                recorded_by: m.recorded_by,
+            })),
+        },
+    };
+}
+
+module.exports = { getMonthlyHistory, getDailyHistory, getFinishedProductsUsage, getBalanceSheet };

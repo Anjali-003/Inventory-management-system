@@ -6,7 +6,7 @@ import { Button } from "../ui/button"
 import { Field, TextInput, selectClass } from "../FormField"
 import { Notice } from "../feedback"
 import { cn } from "../../lib/utils"
-import { REASONS, checkQty, composeReason, errorMessage, fmtQty, fromCents, newKey, toCents } from "../../lib/stock"
+import { REASONS, STOCK_OUT_CODE, WORKER_REQUIRED_PRESETS, checkQty, composeReason, errorMessage, fmtQty, fromCents, newKey, toCents } from "../../lib/stock"
 
 /* One idempotency key per opened dialog; every retry of the same submission reuses it. */
 export function useSubmission(open, onDone) {
@@ -79,12 +79,22 @@ export function StockOutModal({ open, item, onClose, onSaved, onConflict }) {
   const [reasonPreset, setReasonPreset] = useState(REASONS.out[0])
   const [note, setNote] = useState("")
   const [ref, setRef] = useState("")
+  const [worker, setWorker] = useState("")
+  const [workers, setWorkers] = useState([])
   const [errors, setErrors] = useState({})
   const sub = useSubmission(open, (data) => onSaved(data, "out"))
 
   useEffect(() => {
-    if (open) { setQty(""); setNote(""); setRef(""); setErrors({}); setReasonPreset(REASONS.out[0]) }
+    if (open) { setQty(""); setNote(""); setRef(""); setWorker(""); setErrors({}); setReasonPreset(REASONS.out[0]) }
   }, [open, item?.id])
+
+  // Workers for the "who" dropdown (active employees only).
+  useEffect(() => {
+    if (!open) return
+    api.get("/employees")
+      .then((r) => setWorkers((r.data || []).filter((e) => e.is_active)))
+      .catch(() => setWorkers([]))
+  }, [open])
 
   if (!item) return <Modal open={false} />
   const availableC = toCents(item.available)
@@ -98,10 +108,19 @@ export function StockOutModal({ open, item, onClose, onSaved, onConflict }) {
     else if (over) next.qty = `Only ${fmtQty(item.available)} ${item.unit} available`
     const reason = composeReason(reasonPreset, note)
     if (reason.length < 3) next.note = "Add a short description"
+    const workerNeeded = WORKER_REQUIRED_PRESETS.includes(reasonPreset)
+    if (workerNeeded && !worker) next.worker = "Select the worker"
     setErrors(next)
     if (Object.keys(next).length) return
     sub.run(
-      (key) => api.post(`/inventory/${item.id}/stock-out`, { quantity: q.value, reason, reference_no: ref, idempotency_key: key }),
+      (key) => api.post(`/inventory/${item.id}/stock-out`, {
+        quantity: q.value,
+        reason,
+        reason_code: STOCK_OUT_CODE[reasonPreset],
+        employee_id: worker || undefined,
+        reference_no: ref,
+        idempotency_key: key,
+      }),
       (err) => { if (err?.response?.status === 409) onConflict?.() }
     )
   }
@@ -145,6 +164,19 @@ export function StockOutModal({ open, item, onClose, onSaved, onConflict }) {
         </div>
 
         <ReasonFields kind="out" preset={reasonPreset} setPreset={setReasonPreset} note={note} setNote={setNote} error={errors.note} />
+
+        <Field
+          label="Worker"
+          htmlFor="mv-worker"
+          required={WORKER_REQUIRED_PRESETS.includes(reasonPreset)}
+          hint={WORKER_REQUIRED_PRESETS.includes(reasonPreset) ? undefined : "Who took / handled it (optional)"}
+          error={errors.worker}
+        >
+          <select id="mv-worker" className={cn(selectClass, "w-full")} value={worker} onChange={(e) => setWorker(e.target.value)}>
+            <option value="">Select worker…</option>
+            {workers.map((w) => <option key={w.id} value={w.id}>{w.name}{w.employee_code ? ` (${w.employee_code})` : ""}</option>)}
+          </select>
+        </Field>
 
         <Preview label="Balance after" tone={over ? "bad" : undefined}>
           {fmtQty(item.quantity_on_hand)}{" "}

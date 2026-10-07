@@ -85,6 +85,11 @@ router.get("/history/products", handle(async (req, res) => {
     res.json(await history.getFinishedProductsUsage());
 }));
 
+// Balance sheet: received - components used = expected remaining, compared with actual on hand. Read-only.
+router.get("/history/balance", handle(async (req, res) => {
+    res.json(await history.getBalanceSheet());
+}));
+
 router.get("/:id", handle(async (req, res) => {
     res.json(await svc.getItem(req.params.id));
 }));
