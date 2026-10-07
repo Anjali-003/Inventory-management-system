@@ -36,17 +36,7 @@ const whole = (v) =>
   Number(v) > 0;
 
 function Status({ item }) {
-  return (
-    <OrderStatus
-      status={
-        item.status === "PACKAGING"
-          ? "PACKAGING"
-          : item.status === "IN_PRODUCTION"
-            ? "IN_PRODUCTION"
-            : "TESTING"
-      }
-    />
-  );
+  return <OrderStatus status={item.status} />
 }
 
 function ProductionCard({ item, onOpen }) {
@@ -537,7 +527,7 @@ export default function QualityControl() {
                                 Testing
                               </Button>
                             )}
-                            {testing <= 0 && failed > 0 && (
+                            {failed > 0 && (
                               <Button
                                 size="sm"
                                 variant="outline"

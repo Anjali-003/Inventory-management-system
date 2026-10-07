@@ -83,7 +83,7 @@ async function transition(id, from, to, timestampColumn) {
     if (rows[0].status !== from) throw new Error(`Cannot ${to === "DISPATCHED" ? "dispatch" : "complete"} finished goods with status ${rows[0].status}`)
     await connection.query(`UPDATE finished_goods SET status = ?, ${timestampColumn} = CURRENT_TIMESTAMP WHERE id = ?`, [to, id])
     if (to === "DISPATCHED") {
-      await connection.query(`UPDATE orders SET status = 'PACKAGING', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [rows[0].order_id])
+      await connection.query(`UPDATE orders SET status = 'DISPATCHED', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [rows[0].order_id])
     } else {
       const [totals] = await connection.query(`
         SELECT COALESCE((SELECT SUM(quantity) FROM order_items WHERE order_id = ?),0) AS ordered,
