@@ -301,7 +301,7 @@ export default function Layout() {
               duration: 0.25,
               ease: "easeOut",
             }}
-            className="mx-auto max-w-6xl px-4 py-5 md:px-8 md:py-6"
+            className={`mx-auto px-4 py-5 md:px-8 md:py-6 ${pathname === "/inventory-history" ? "max-w-none" : "max-w-6xl"}`}
           >
             <Outlet />
           </motion.div>
