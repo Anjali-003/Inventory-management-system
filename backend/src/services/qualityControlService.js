@@ -129,10 +129,9 @@ async function saveTestingResult(productionId, quantity, overallResult, remarks,
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [production.id, quantity, passed, failed, overallResult, remarks || null, userId])
 
-    await connection.query(
-      `UPDATE orders SET status = 'TESTING' WHERE id = ?`,
-      [production.order_id]
-    )
+    const testing = await getTestingSummary(connection, productionId)
+    const qualityControl = await getQualityControlSummary(connection, productionId)
+    const finish = await finishOrderIfReady(connection, production, testing, qualityControl)
 
     await connection.commit()
 
@@ -144,6 +143,8 @@ async function saveTestingResult(productionId, quantity, overallResult, remarks,
       quantityPassed: passed,
       quantityFailed: failed,
       overallResult,
+      readyForFinishedGoods: !!finish?.readyForFinishedGoods,
+      finishedGoodsId: finish?.finishedGoodsId || null,
       message: "Testing result saved successfully"
     }
   } catch (error) {
@@ -210,6 +211,8 @@ async function redoTesting(productionId, redoPassed, userId = 1) {
     }
 
     const summary = await getTestingSummary(connection, productionId)
+    const qualityControl = await getQualityControlSummary(connection, productionId)
+    const finish = await finishOrderIfReady(connection, await getProductionOrder(connection, productionId), summary, qualityControl)
 
     await connection.commit()
 
@@ -220,10 +223,125 @@ async function redoTesting(productionId, redoPassed, userId = 1) {
       quantityPassed: summary.quantityPassed,
       quantityFailed: summary.quantityFailed,
       overallResult: summary.quantityFailed === 0 ? "PASS" : "FAIL",
+      readyForFinishedGoods: !!finish?.readyForFinishedGoods,
+      finishedGoodsId: finish?.finishedGoodsId || null,
       message:
         summary.quantityFailed === 0
           ? "All failed units fixed. Testing now passes."
           : "Redo testing result saved successfully"
+    }
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+async function finishOrderIfReady(connection, production, testing, qualityControl) {
+  const ordered = Number(production.ordered_quantity)
+  const ready =
+    Number(production.quantity_completed) >= ordered &&
+    Number(testing.remainingToTest) === 0 &&
+    Number(testing.quantityFailed) === 0 &&
+    Number(qualityControl.quantityInspected) >= ordered &&
+    Number(qualityControl.quantityApproved) >= ordered &&
+    Number(qualityControl.quantityRejected) === 0
+
+  if (!ready) {
+    const status = Number(production.quantity_completed) < ordered ? "IN_PRODUCTION" : "TESTING"
+    await connection.query(
+      `UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN ('COMPLETED')`,
+      [status, production.order_id]
+    )
+    return null
+  }
+
+  const [rows] = await connection.query(
+    `SELECT COALESCE(SUM(quantity), 0) AS quantity FROM finished_goods WHERE order_id = ?`,
+    [production.order_id]
+  )
+  const existing = Number(rows[0].quantity)
+  const missing = Math.max(0, ordered - existing)
+
+  let finishedGoods = null
+  if (missing > 0) {
+    finishedGoods = await createFinishedGood(production.id, production.order_id, missing, connection)
+  } else {
+    await connection.query(
+      `UPDATE orders SET status = 'PACKAGING', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN ('COMPLETED')`,
+      [production.order_id]
+    )
+  }
+
+  return { readyForFinishedGoods: true, finishedGoodsId: finishedGoods?.finishedGoodsId || null }
+}
+
+async function redoQualityControl(productionId, redoApproved, userId = 1) {
+  const connection = await db.getConnection()
+
+  try {
+    await connection.beginTransaction()
+
+    const production = await getProductionOrder(connection, productionId)
+
+    if (!Number.isInteger(redoApproved) || redoApproved < 0) {
+      throw new Error("Redo approved quantity must be a non-negative integer")
+    }
+
+    const [rows] = await connection.query(`
+      SELECT id, quantity_approved, quantity_rejected
+      FROM quality_control_records
+      WHERE production_id = ? AND quantity_rejected > 0
+      ORDER BY id DESC
+      FOR UPDATE
+    `, [productionId])
+
+    const totalRejected = rows.reduce((sum, row) => sum + Number(row.quantity_rejected), 0)
+
+    if (redoApproved > totalRejected) {
+      throw new Error(`Redo approved quantity cannot exceed total rejected quantity. Rejected: ${totalRejected}`)
+    }
+
+    let remainingRedo = redoApproved
+
+    for (const row of rows) {
+      if (remainingRedo <= 0) break
+
+      const rejected = Number(row.quantity_rejected)
+      const approved = Number(row.quantity_approved)
+      const moved = Math.min(remainingRedo, rejected)
+      const nextRejected = rejected - moved
+      const nextApproved = approved + moved
+      const overallResult = nextRejected === 0 ? "PASS" : "FAIL"
+
+      await connection.query(`
+        UPDATE quality_control_records
+        SET quantity_approved = ?, quantity_rejected = ?, overall_result = ?, checked_by = ?
+        WHERE id = ?
+      `, [nextApproved, nextRejected, overallResult, userId, row.id])
+
+      remainingRedo -= moved
+    }
+
+    const qualityControl = await getQualityControlSummary(connection, productionId)
+    const testing = await getTestingSummary(connection, productionId)
+    const finish = await finishOrderIfReady(connection, production, testing, qualityControl)
+
+    await connection.commit()
+
+    return {
+      success: true,
+      productionId,
+      quantityInspected: qualityControl.quantityInspected,
+      quantityApproved: qualityControl.quantityApproved,
+      quantityRejected: qualityControl.quantityRejected,
+      overallResult: qualityControl.quantityRejected === 0 ? "PASS" : "FAIL",
+      readyForFinishedGoods: !!finish?.readyForFinishedGoods,
+      finishedGoodsId: finish?.finishedGoodsId || null,
+      message: qualityControl.quantityRejected === 0
+        ? "All rejected units fixed. QC now passes."
+        : "QC edit result saved successfully"
     }
   } catch (error) {
     await connection.rollback()
@@ -266,16 +384,9 @@ async function saveQualityControlResult(productionId, quantity, overallResult, r
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [production.id, quantity, approved, rejected, overallResult, remarks || null, userId])
 
-    let finishedGoods = null
-
-    if (approved > 0) {
-      finishedGoods = await createFinishedGood(
-        production.id,
-        production.order_id,
-        approved,
-        connection
-      )
-    }
+    const testing = await getTestingSummary(connection, productionId)
+    const qualityControl = await getQualityControlSummary(connection, productionId)
+    const finish = await finishOrderIfReady(connection, production, testing, qualityControl)
 
     await connection.commit()
 
@@ -287,9 +398,10 @@ async function saveQualityControlResult(productionId, quantity, overallResult, r
       quantityApproved: approved,
       quantityRejected: rejected,
       overallResult,
-      finishedGoodsId: finishedGoods?.finishedGoodsId || null,
-      message: approved > 0
-        ? "Quality control passed and finished goods created successfully"
+      readyForFinishedGoods: !!finish?.readyForFinishedGoods,
+      finishedGoodsId: finish?.finishedGoodsId || null,
+      message: finish?.readyForFinishedGoods
+        ? "QC complete and finished goods created successfully"
         : "Quality control result saved successfully",
     }
   } catch (error) {
@@ -323,10 +435,23 @@ async function getQualityControlOrders() {
     `)
 
     return rows.map((row) => {
+      const ordered = Number(row.ordered_quantity)
       const completed = Number(row.quantity_completed)
       const tested = Number(row.quantity_tested)
       const passed = Number(row.quantity_passed)
+      const failed = Number(row.quantity_failed)
       const inspected = Number(row.quantity_inspected)
+      const approved = Number(row.quantity_approved)
+      const rejected = Number(row.quantity_rejected)
+      const remainingToTest = Math.max(0, completed - tested)
+      const availableForQC = Math.max(0, passed - inspected)
+      const readyForFinishedGoods =
+        completed >= ordered &&
+        remainingToTest === 0 &&
+        failed === 0 &&
+        inspected >= ordered &&
+        approved >= ordered &&
+        rejected === 0
 
       return {
         id: row.id,
@@ -334,17 +459,18 @@ async function getQualityControlOrders() {
         orderNumber: row.order_number,
         productName: row.product_name,
         productSku: row.product_sku,
-        orderedQuantity: Number(row.ordered_quantity),
+        orderedQuantity: ordered,
         quantityCompleted: completed,
         quantityTested: tested,
         quantityPassed: passed,
-        quantityFailed: Number(row.quantity_failed),
-        remainingToTest: Math.max(0, completed - tested),
+        quantityFailed: failed,
+        remainingToTest,
         quantityInspected: inspected,
-        quantityApproved: Number(row.quantity_approved),
-        quantityRejected: Number(row.quantity_rejected),
-        availableForQC: Math.max(0, passed - inspected),
-        status: row.status,
+        quantityApproved: approved,
+        quantityRejected: rejected,
+        availableForQC,
+        readyForFinishedGoods,
+        status: readyForFinishedGoods ? "PACKAGING" : completed < ordered ? "IN_PRODUCTION" : "TESTING",
         startedAt: row.started_at,
         completedAt: row.completed_at,
       }
@@ -359,5 +485,6 @@ module.exports = {
   getQualityControlInfo,
   saveTestingResult,
   redoTesting,
+  redoQualityControl,
   saveQualityControlResult
 }

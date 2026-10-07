@@ -67,21 +67,19 @@ router.get("/", async (req, res) => {
                     o.order_number,
                     o.status,
                     o.created_at,
-
                     oi.product_id,
-
                     p.name AS product_name,
-
-                    oi.quantity
-
+                    oi.quantity,
+                    COALESCE(po.quantity_to_produce, 0) AS quantity_to_produce,
+                    COALESCE(po.quantity_completed, 0) AS quantity_completed,
+                    GREATEST(0, oi.quantity - COALESCE(po.quantity_to_produce, 0)) AS remaining_to_start
                 FROM orders o
-
                 JOIN order_items oi
                     ON o.id = oi.order_id
-
                 JOIN products p
                     ON oi.product_id = p.id
-
+                LEFT JOIN production_orders po
+                    ON po.order_id = o.id
                 ORDER BY o.id DESC
                 `
             );
