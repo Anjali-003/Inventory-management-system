@@ -6,7 +6,7 @@ import { Button } from "../ui/button"
 import { Field, TextInput, selectClass } from "../FormField"
 import { Notice } from "../feedback"
 import { cn } from "../../lib/utils"
-import { REASONS, STOCK_OUT_CODE, WORKER_REQUIRED_PRESETS, checkQty, composeReason, errorMessage, fmtQty, fromCents, newKey, toCents } from "../../lib/stock"
+import { REASONS, ORDER_REQUIRED_PRESETS, STOCK_OUT_CODE, checkQty, composeReason, errorMessage, fmtQty, fromCents, newKey, toCents } from "../../lib/stock"
 
 /* One idempotency key per opened dialog; every retry of the same submission reuses it. */
 export function useSubmission(open, onDone) {
@@ -79,21 +79,29 @@ export function StockOutModal({ open, item, onClose, onSaved, onConflict }) {
   const [reasonPreset, setReasonPreset] = useState(REASONS.out[0])
   const [note, setNote] = useState("")
   const [ref, setRef] = useState("")
-  const [worker, setWorker] = useState("")
-  const [workers, setWorkers] = useState([])
+  const [orderId, setOrderId] = useState("")
+  const [orders, setOrders] = useState([])
   const [errors, setErrors] = useState({})
   const sub = useSubmission(open, (data) => onSaved(data, "out"))
 
   useEffect(() => {
-    if (open) { setQty(""); setNote(""); setRef(""); setWorker(""); setErrors({}); setReasonPreset(REASONS.out[0]) }
+    if (open) { setQty(""); setNote(""); setRef(""); setOrderId(""); setErrors({}); setReasonPreset(REASONS.out[0]) }
   }, [open, item?.id])
 
-  // Workers for the "who" dropdown (active employees only).
+  // Orders for the "which order" dropdown. /orders returns one row per order line, so de-duplicate by order id.
   useEffect(() => {
     if (!open) return
-    api.get("/employees")
-      .then((r) => setWorkers((r.data || []).filter((e) => e.is_active)))
-      .catch(() => setWorkers([]))
+    api.get("/orders")
+      .then((r) => {
+        const seen = new Map()
+        ;(r.data || []).forEach((o) => {
+          const prev = seen.get(o.id)
+          if (prev) prev.products.push(o.product_name)
+          else seen.set(o.id, { id: o.id, order_number: o.order_number, status: o.status, products: [o.product_name] })
+        })
+        setOrders([...seen.values()])
+      })
+      .catch(() => setOrders([]))
   }, [open])
 
   if (!item) return <Modal open={false} />
@@ -108,8 +116,8 @@ export function StockOutModal({ open, item, onClose, onSaved, onConflict }) {
     else if (over) next.qty = `Only ${fmtQty(item.available)} ${item.unit} available`
     const reason = composeReason(reasonPreset, note)
     if (reason.length < 3) next.note = "Add a short description"
-    const workerNeeded = WORKER_REQUIRED_PRESETS.includes(reasonPreset)
-    if (workerNeeded && !worker) next.worker = "Select the worker"
+    const orderNeeded = ORDER_REQUIRED_PRESETS.includes(reasonPreset)
+    if (orderNeeded && !orderId) next.order = "Select the order"
     setErrors(next)
     if (Object.keys(next).length) return
     sub.run(
@@ -117,7 +125,7 @@ export function StockOutModal({ open, item, onClose, onSaved, onConflict }) {
         quantity: q.value,
         reason,
         reason_code: STOCK_OUT_CODE[reasonPreset],
-        employee_id: worker || undefined,
+        order_id: orderId || undefined,
         reference_no: ref,
         idempotency_key: key,
       }),
@@ -166,15 +174,15 @@ export function StockOutModal({ open, item, onClose, onSaved, onConflict }) {
         <ReasonFields kind="out" preset={reasonPreset} setPreset={setReasonPreset} note={note} setNote={setNote} error={errors.note} />
 
         <Field
-          label="Worker"
-          htmlFor="mv-worker"
-          required={WORKER_REQUIRED_PRESETS.includes(reasonPreset)}
-          hint={WORKER_REQUIRED_PRESETS.includes(reasonPreset) ? undefined : "Who took / handled it (optional)"}
-          error={errors.worker}
+          label="Order"
+          htmlFor="mv-order"
+          required={ORDER_REQUIRED_PRESETS.includes(reasonPreset)}
+          hint={ORDER_REQUIRED_PRESETS.includes(reasonPreset) ? undefined : "Which order this stock was for (optional)"}
+          error={errors.order}
         >
-          <select id="mv-worker" className={cn(selectClass, "w-full")} value={worker} onChange={(e) => setWorker(e.target.value)}>
-            <option value="">Select worker…</option>
-            {workers.map((w) => <option key={w.id} value={w.id}>{w.name}{w.employee_code ? ` (${w.employee_code})` : ""}</option>)}
+          <select id="mv-order" className={cn(selectClass, "w-full")} value={orderId} onChange={(e) => setOrderId(e.target.value)}>
+            <option value="">Select order…</option>
+            {orders.map((o) => <option key={o.id} value={o.id}>{o.order_number} · {o.products.join(", ")}</option>)}
           </select>
         </Field>
 

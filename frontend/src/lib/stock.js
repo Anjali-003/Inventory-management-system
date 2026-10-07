@@ -92,8 +92,8 @@ export const STOCK_OUT_CODE = {
   "Returned to supplier": "RETURNED_TO_SUPPLIER",
   Other: "OTHER",
 }
-// For these a worker must be named (the server enforces the same list).
-export const WORKER_REQUIRED_PRESETS = [
+// For these an order must be selected (the server enforces the same list).
+export const ORDER_REQUIRED_PRESETS = [
   "Production wastage / rejected",
   "Damaged / scrapped",
   "Replacement issued",
