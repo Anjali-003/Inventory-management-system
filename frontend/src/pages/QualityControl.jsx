@@ -36,7 +36,7 @@ const whole = (v) =>
   Number(v) > 0;
 
 function Status({ item }) {
-  return <OrderStatus status={item.status} />
+  return <OrderStatus status={item.status} />;
 }
 
 function ProductionCard({ item, onOpen }) {
@@ -486,30 +486,34 @@ export default function QualityControl() {
 
                     return (
                       <TableRow key={item.id}>
-                        <TableCell className="font-medium tabular-nums">
+                        <TableCell className="min-w-0 whitespace-normal break-words font-medium tabular-nums">
                           {item.orderNumber}
                         </TableCell>
-                        <TableCell>
-                          <span className="block font-medium">
+                        <TableCell className="min-w-0 whitespace-normal break-words">
+                          <span className="block break-words font-medium">
                             {item.productName}
                           </span>
-                          <span className="text-xs text-muted-foreground">
+                          <span className="block break-words text-xs text-muted-foreground">
                             {item.productSku}
                           </span>
                         </TableCell>
                         <TableCell className="tabular-nums">
                           {n(item.quantityCompleted)}
                         </TableCell>
-                        <TableCell>
-                          <p>Tested {n(item.quantityTested)}</p>
-                          <p className="text-xs text-muted-foreground">
+                        <TableCell className="min-w-0 whitespace-normal break-words">
+                          <p className="break-words">
+                            Tested {n(item.quantityTested)}
+                          </p>
+                          <p className="break-words text-xs text-muted-foreground">
                             Passed {n(item.quantityPassed)} · Failed {failed} ·
                             Left {testing}
                           </p>
                         </TableCell>
-                        <TableCell>
-                          <p>Inspected {n(item.quantityInspected)}</p>
-                          <p className="text-xs text-muted-foreground">
+                        <TableCell className="min-w-0 whitespace-normal break-words">
+                          <p className="break-words">
+                            Inspected {n(item.quantityInspected)}
+                          </p>
+                          <p className="break-words text-xs text-muted-foreground">
                             Approved {n(item.quantityApproved)} · Ready {qc}
                           </p>
                         </TableCell>
