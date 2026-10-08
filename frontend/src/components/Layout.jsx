@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
+import { GiHamburgerMenu } from "react-icons/gi";
+import { TiPinOutline } from "react-icons/ti";
+import { VscUnpin } from "react-icons/vsc";
 import {
-  Menu,
   X,
   Boxes,
   ClipboardList,
@@ -157,16 +159,64 @@ function NavList({ id }) {
   );
 }
 
+function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
+  return (
+    <div className="flex min-h-full w-60 flex-col">
+      <div className="flex h-11 items-center justify-between border-b px-4">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Menu
+        </span>
+
+        <button
+          aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
+          aria-pressed={pinned}
+          title={pinned ? "Unpin sidebar" : "Pin sidebar"}
+          onClick={onTogglePin}
+          className="grid size-8 place-items-center rounded-sm text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          {pinned ? <VscUnpin className="size-5" /> : <TiPinOutline className="size-5" />}
+        </button>
+      </div>
+
+      <NavList id={id} />
+
+      <div className="mt-auto px-3 pb-4">
+        <button
+          onClick={onLogout}
+          className="w-full rounded-sm px-3 py-2.5 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          Logout
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Layout() {
   const { pathname } = useLocation();
 
   const navigate = useNavigate();
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false); // mobile drawer
+  const [pinned, setPinned] = useState(false); // desktop: fixed in the layout (default: unpinned)
+  const [floatOpen, setFloatOpen] = useState(false); // desktop: floating over the page while unpinned
 
   useEffect(() => {
     setOpen(false);
+    setFloatOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!floatOpen) return;
+    const onKey = (e) => e.key === "Escape" && setFloatOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [floatOpen]);
+
+  const togglePin = () => {
+    setPinned((p) => !p);
+    setFloatOpen(false);
+  };
 
   const handleLogout = async () => {
     try {
@@ -194,7 +244,19 @@ export default function Layout() {
             onClick={() => setOpen(true)}
             className="grid size-9 place-items-center rounded-sm hover:bg-white/10 md:hidden"
           >
-            <Menu className="size-5" />
+            <GiHamburgerMenu className="size-5" />
+          </button>
+
+          <button
+            aria-label="Toggle sidebar"
+            aria-expanded={pinned || floatOpen}
+            onClick={() => setFloatOpen((o) => !o)}
+            className={cn(
+              "hidden size-9 place-items-center rounded-sm hover:bg-white/10 md:grid",
+              pinned && "md:invisible",
+            )}
+          >
+            <GiHamburgerMenu className="size-5" />
           </button>
 
           <img
@@ -222,18 +284,47 @@ export default function Layout() {
       </header>
 
       <div className="md:flex">
-        <aside className="hidden bg-sidebar md:sticky md:top-14 md:block md:h-[calc(100vh-3.5rem)] md:w-60 md:shrink-0 md:overflow-y-auto md:border-r">
-          <NavList id="desktop" />
-
-          <div className="px-3 pb-4">
-            <button
-              onClick={handleLogout}
-              className="w-full rounded-sm px-3 py-2.5 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              Logout
-            </button>
+        {/* Desktop, pinned: sits in the layout, so the page shrinks to fit */}
+        <motion.aside
+          className="hidden shrink-0 overflow-hidden bg-sidebar md:sticky md:top-14 md:block md:h-[calc(100vh-3.5rem)]"
+          initial={false}
+          animate={{ width: pinned ? 240 : 0 }}
+          transition={{ type: "tween", duration: 0.25, ease: "easeOut" }}
+          style={{ borderRightWidth: pinned ? 1 : 0 }}
+          aria-hidden={!pinned}
+          inert={!pinned}
+        >
+          <div className="h-full w-60 overflow-y-auto">
+            <SidebarBody id="pinned" pinned onTogglePin={togglePin} onLogout={handleLogout} />
           </div>
-        </aside>
+        </motion.aside>
+
+        {/* Desktop, unpinned: floats over the page */}
+        <AnimatePresence>
+          {!pinned && floatOpen && (
+            <>
+              <motion.div
+                key="float-backdrop"
+                className="fixed inset-x-0 bottom-0 top-14 z-30 hidden md:block"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setFloatOpen(false)}
+              />
+
+              <motion.aside
+                key="float-panel"
+                className="fixed bottom-0 left-0 top-14 z-40 hidden w-60 overflow-y-auto border-r bg-sidebar shadow-xl md:block"
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
+              >
+                <SidebarBody id="float" pinned={false} onTogglePin={togglePin} onLogout={handleLogout} />
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {open && (
@@ -301,7 +392,7 @@ export default function Layout() {
               duration: 0.25,
               ease: "easeOut",
             }}
-            className={`mx-auto px-4 py-5 md:px-8 md:py-6 ${pathname === "/inventory-history" ? "max-w-none" : "max-w-6xl"}`}
+            className="w-full px-4 py-5 md:px-8 md:py-6"
           >
             <Outlet />
           </motion.div>

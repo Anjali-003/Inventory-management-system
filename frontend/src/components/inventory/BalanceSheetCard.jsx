@@ -53,25 +53,25 @@ const stepVariants = {
 function Step({ n, label, formula, caption, amount, op, tone, strong }) {
   const overlay = tone ? BG[tone] : strong ? "bg-cf-head" : ""
   return (
-    <motion.li variants={stepVariants} className="relative flex min-h-[68px] items-center gap-3.5 px-[18px] py-3 transition-colors hover:bg-cf-head">
+    <motion.li variants={stepVariants} className="relative flex min-h-[92px] items-center gap-4 px-[22px] py-4 transition-colors hover:bg-cf-head">
       {overlay && <span aria-hidden className={cn("pointer-events-none absolute inset-0", overlay)} />}
       <span
         aria-hidden
         className={cn(
-          "relative grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold ring-1",
+          "relative grid size-11 shrink-0 place-items-center rounded-full text-lg font-bold ring-1",
           tone ? `${CHIP[tone]} ring-current/25` : "bg-muted text-muted-foreground ring-border"
         )}
       >
         {n}
       </span>
       <div className="relative min-w-0 flex-1">
-        <p className={cn("text-[13px]", strong ? "font-bold" : "font-semibold")}>
+        <p className={cn("text-lg leading-snug", strong ? "font-bold" : "font-semibold")}>
           {label}
-          {formula && <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">({formula})</span>}
+          {formula && <span className="ml-2 text-sm font-normal text-muted-foreground">({formula})</span>}
         </p>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">{caption}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{caption}</p>
       </div>
-      <p className={cn("relative text-xl font-bold tabular-nums tracking-[-0.5px]", strong && "text-[22px]", tone && TEXT[tone])}>
+      <p className={cn("relative text-3xl font-bold tabular-nums tracking-[-0.5px]", strong && "text-[34px]", tone && TEXT[tone])}>
         {op && <span className="mr-1.5 font-normal text-muted-foreground">{op}</span>}
         <CountUp value={amount} format={fmtQty} />
       </p>
