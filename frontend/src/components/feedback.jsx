@@ -18,11 +18,11 @@ export function Notice({ tone = "error", title, children }) {
     <div
       role={ok ? "status" : "alert"}
       className={cn(
-        "flex gap-3 rounded-lg border px-4 py-3 text-sm",
+        "flex gap-3 rounded-xl border px-4 py-3 text-sm",
 
         ok
-          ? "border-success/25 bg-success/10 text-success"
-          : "border-destructive/25 bg-destructive/10 text-destructive"
+          ? "border-success/20 bg-cf-green-soft text-success"
+          : "border-destructive/20 bg-cf-red-soft text-destructive"
       )}
     >
       <Icon className="mt-0.5 size-4 shrink-0" />
@@ -46,7 +46,7 @@ export function EmptyState({ icon: Icon, title, children }) {
   return (
     <div className="flex flex-col items-center px-6 py-14 text-center">
       {Icon && (
-        <span className="mb-4 grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground">
+        <span className="mb-4 grid size-11 place-items-center rounded-xl bg-cf-green-soft text-primary ring-1 ring-primary/10">
           <Icon className="size-5" />
         </span>
       )}

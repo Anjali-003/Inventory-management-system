@@ -536,7 +536,7 @@ function MonthlyReport() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-muted/60 text-xs text-muted-foreground">
+                <tr className="border-b bg-cf-head text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">
                   <SortHeader label="Employee" k="name" sort={sort} onSort={onSort} />
                   <SortHeader label="Attendance" k="pct" sort={sort} onSort={onSort} className="w-56" />
                   <SortHeader label="Present" k="present" sort={sort} onSort={onSort} align="right" />
