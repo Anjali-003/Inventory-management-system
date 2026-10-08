@@ -143,7 +143,7 @@ async function startProduction(orderId, quantity, userId = 1) {
     const [orders] = await connection.query(`SELECT id, order_number, status FROM orders WHERE id = ? FOR UPDATE`, [orderId])
     if (!orders.length) throw new Error("Order not found")
     const order = orders[0]
-    if (!["PENDING", "IN_PRODUCTION"].includes(order.status)) throw new Error(`Order is currently ${order.status.toLowerCase().replace(/_/g, " ")}`)
+    if (!["PENDING", "IN_PRODUCTION", "TESTING"].includes(order.status)) throw new Error(`Order is currently ${order.status.toLowerCase().replace(/_/g, " ")}`)
     if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("Production quantity must be a positive integer")
 
     const item = await getSingleOrderItem(connection, orderId)

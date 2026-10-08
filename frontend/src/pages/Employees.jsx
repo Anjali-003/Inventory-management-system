@@ -38,6 +38,12 @@ const EMPTY = {
   department: "",
   designation: "",
   joinedOn: "",
+  dateOfBirth: "",
+  gender: "",
+  address: "",
+  emergencyContactName: "",
+  emergencyContactRelationship: "",
+  emergencyContactPhone: "",
   isActive: true,
 };
 
@@ -48,6 +54,10 @@ function validate(f) {
     e.email = "Enter a valid email, like name@company.com.";
   if (f.phone.trim() && !/^\+?[\d\s\-()]{7,20}$/.test(f.phone.trim()))
     e.phone = "Use digits only, with an optional + and spaces or dashes.";
+  if (f.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(f.dateOfBirth))
+    e.dateOfBirth = "Date of birth is not valid.";
+  if (f.emergencyContactPhone.trim() && !/^\+?[\d\s\-()]{7,20}$/.test(f.emergencyContactPhone.trim()))
+    e.emergencyContactPhone = "Use a valid emergency contact phone number.";
   return e;
 }
 
@@ -58,6 +68,12 @@ const toPayload = (e, patch = {}) => ({
   department: e.department || "",
   designation: e.designation || "",
   joinedOn: e.joined_on || "",
+  dateOfBirth: e.date_of_birth || "",
+  gender: e.gender || "",
+  address: e.address || "",
+  emergencyContactName: e.emergency_contact_name || "",
+  emergencyContactRelationship: e.emergency_contact_relationship || "",
+  emergencyContactPhone: e.emergency_contact_phone || "",
   isActive: !!e.is_active,
   ...patch,
 });
@@ -255,6 +271,12 @@ export default function Employees() {
       department: e.department || "",
       designation: e.designation || "",
       joinedOn: e.joined_on || "",
+      dateOfBirth: e.date_of_birth || "",
+      gender: e.gender || "",
+      address: e.address || "",
+      emergencyContactName: e.emergency_contact_name || "",
+      emergencyContactRelationship: e.emergency_contact_relationship || "",
+      emergencyContactPhone: e.emergency_contact_phone || "",
       isActive: !!e.is_active,
     });
     setErrors({});
@@ -348,6 +370,12 @@ export default function Employees() {
         "Designation",
         "Joined",
         "Status",
+        "Date of Birth",
+        "Gender",
+        "Address",
+        "Emergency Contact Name",
+        "Emergency Contact Relationship",
+        "Emergency Contact Phone",
       ],
       filtered.map((e) => [
         e.employee_code,
@@ -358,6 +386,12 @@ export default function Employees() {
         e.designation,
         e.joined_on,
         e.is_active ? "Active" : "Inactive",
+        e.date_of_birth,
+        e.gender,
+        e.address,
+        e.emergency_contact_name,
+        e.emergency_contact_relationship,
+        e.emergency_contact_phone,
       ]),
     );
 
@@ -852,6 +886,68 @@ export default function Employees() {
                 onChange={set("joinedOn")}
               />
             </Field>
+            <Field label="Date of birth" htmlFor="emp-dateOfBirth" error={errors.dateOfBirth}>
+              <TextInput
+                id="emp-dateOfBirth"
+                type="date"
+                value={form.dateOfBirth}
+                onChange={set("dateOfBirth")}
+                error={errors.dateOfBirth}
+              />
+            </Field>
+            <Field label="Gender" htmlFor="emp-gender">
+              <select
+                id="emp-gender"
+                value={form.gender}
+                onChange={set("gender")}
+                className={selectClass}
+              >
+                <option value="">Select gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </Field>
+            <Field className="sm:col-span-2" label="Address" htmlFor="emp-address">
+              <TextInput
+                id="emp-address"
+                value={form.address}
+                onChange={set("address")}
+                placeholder="e.g. Delhi, India"
+              />
+            </Field>
+          </div>
+
+          <div className="rounded-xl border p-4">
+            <p className="mb-3 text-sm font-semibold">Emergency contact</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Contact name" htmlFor="emp-emergencyContactName">
+                <TextInput
+                  id="emp-emergencyContactName"
+                  value={form.emergencyContactName}
+                  onChange={set("emergencyContactName")}
+                  placeholder="e.g. Rajesh Sharma"
+                />
+              </Field>
+              <Field label="Relationship" htmlFor="emp-emergencyContactRelationship">
+                <TextInput
+                  id="emp-emergencyContactRelationship"
+                  value={form.emergencyContactRelationship}
+                  onChange={set("emergencyContactRelationship")}
+                  placeholder="e.g. Father"
+                />
+              </Field>
+              <Field className="sm:col-span-2" label="Phone" htmlFor="emp-emergencyContactPhone" error={errors.emergencyContactPhone}>
+                <TextInput
+                  id="emp-emergencyContactPhone"
+                  type="tel"
+                  value={form.emergencyContactPhone}
+                  onChange={set("emergencyContactPhone")}
+                  error={errors.emergencyContactPhone}
+                  placeholder="+91 98765 43210"
+                />
+              </Field>
+            </div>
           </div>
 
           {!isNew && (
@@ -872,74 +968,65 @@ export default function Employees() {
         </div>
       </Modal>
 
-      {selectedEmployee && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50"
-          onMouseDown={(e) =>
-            e.target === e.currentTarget && setSelectedEmployee(null)
-          }
-        >
-          <aside className="ml-auto flex h-full w-full max-w-md flex-col bg-background shadow-2xl">
-            <div className="flex items-start justify-between gap-3 border-b px-5 py-4">
-              <div className="flex min-w-0 items-center gap-3">
-                <Avatar
-                  name={selectedEmployee.name}
-                  muted={!selectedEmployee.is_active}
-                />
-                <div className="min-w-0">
-                  <h2 className="truncate text-lg font-semibold">
-                    {selectedEmployee.name}
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedEmployee.employee_code}
-                  </p>
-                </div>
+      <Modal
+        open={!!selectedEmployee}
+        onClose={() => setSelectedEmployee(null)}
+        title="Employee Details"
+        description={selectedEmployee ? `${selectedEmployee.employee_code} · ${selectedEmployee.department || "Employee"}` : ""}
+        size="xl"
+        footer={
+          <Button type="button" variant="outline" size="lg" onClick={() => setSelectedEmployee(null)}>
+            Close
+          </Button>
+        }
+      >
+        {selectedEmployee && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-3">
+              <Avatar name={selectedEmployee.name} muted={!selectedEmployee.is_active} />
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold">{selectedEmployee.name}</h3>
+                <p className="text-sm text-muted-foreground">{selectedEmployee.email || "No email provided"}</p>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSelectedEmployee(null)}
-                aria-label="Close employee details"
-              >
-                <X />
-              </Button>
+              <Badge className="ml-auto" variant={selectedEmployee.is_active ? "success" : "neutral"}>
+                {selectedEmployee.is_active ? "Active" : "Inactive"}
+              </Badge>
             </div>
 
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
-              <DetailSection title="Personal details">
+            <DetailSection title="Personal details">
+              <div className="grid gap-x-8 sm:grid-cols-2">
                 <DetailRow label="Full Name" value={selectedEmployee.name} />
                 <DetailRow
                   label="Date of Birth"
-                  value={
-                    selectedEmployee.date_of_birth
-                      ? shortDate(selectedEmployee.date_of_birth)
-                      : "Not provided"
-                  }
+                  value={selectedEmployee.date_of_birth ? shortDate(selectedEmployee.date_of_birth) : "Not provided"}
                 />
                 <DetailRow label="Gender" value={selectedEmployee.gender} />
                 <DetailRow label="Email" value={selectedEmployee.email} />
                 <DetailRow label="Phone" value={selectedEmployee.phone} />
                 <DetailRow label="Address" value={selectedEmployee.address} />
-              </DetailSection>
+              </div>
+            </DetailSection>
 
-              <DetailSection title="Emergency contact">
-                <DetailRow
-                  label="Contact Name"
-                  value={selectedEmployee.emergency_contact_name}
-                />
-                <DetailRow
-                  label="Relationship"
-                  value={selectedEmployee.emergency_contact_relationship}
-                />
-                <DetailRow
-                  label="Phone"
-                  value={selectedEmployee.emergency_contact_phone}
-                />
-              </DetailSection>
-            </div>
-          </aside>
-        </div>
-      )}
+            <DetailSection title="Employment details">
+              <div className="grid gap-x-8 sm:grid-cols-2">
+                <DetailRow label="Department" value={selectedEmployee.department} />
+                <DetailRow label="Code" value={selectedEmployee.employee_code} />
+                <DetailRow label="Designation" value={selectedEmployee.designation} />
+                <DetailRow label="Joined" value={selectedEmployee.joined_on ? shortDate(selectedEmployee.joined_on) : "Not provided"} />
+                <DetailRow label="Status" value={selectedEmployee.is_active ? "Active" : "Inactive"} />
+              </div>
+            </DetailSection>
+
+            <DetailSection title="Emergency contact">
+              <div className="grid gap-x-8 sm:grid-cols-2">
+                <DetailRow label="Contact Name" value={selectedEmployee.emergency_contact_name} />
+                <DetailRow label="Relationship" value={selectedEmployee.emergency_contact_relationship} />
+                <DetailRow label="Phone" value={selectedEmployee.emergency_contact_phone} />
+              </div>
+            </DetailSection>
+          </div>
+        )}
+      </Modal>
 
       <ConfirmDialog
         open={!!toDelete}

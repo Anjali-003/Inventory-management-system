@@ -4,6 +4,7 @@ const {
   getQualityControlInfo,
   saveTestingResult,
   redoTesting,
+  redoQualityControl,
   saveQualityControlResult
 } = require("../services/qualityControlService")
 
@@ -107,6 +108,35 @@ router.patch("/:productionId/testing/redo", async (req, res) => {
     res.status(500).json({
       message: "Failed to save redo testing result"
     })
+  }
+})
+
+router.patch("/:productionId/qc/redo", async (req, res) => {
+  const productionId = idOf(req.params.productionId)
+  const redoApproved = Number(req.body?.redoApproved)
+
+  if (!Number.isInteger(productionId) || productionId <= 0) {
+    return res.status(400).json({ message: "Invalid production ID" })
+  }
+
+  if (!Number.isInteger(redoApproved) || redoApproved < 0) {
+    return res.status(400).json({ message: "Redo approved quantity must be a non-negative integer" })
+  }
+
+  try {
+    res.json(await redoQualityControl(productionId, redoApproved, 1))
+  } catch (error) {
+    console.error(error)
+
+    if (error.message === "Production order not found") {
+      return res.status(404).json({ message: error.message })
+    }
+
+    if (error.message.includes("non-negative integer") || error.message.includes("cannot exceed total rejected quantity")) {
+      return res.status(400).json({ message: error.message })
+    }
+
+    res.status(500).json({ message: "Failed to save QC edit result" })
   }
 })
 
