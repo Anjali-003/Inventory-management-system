@@ -19,13 +19,13 @@ export default function StatStrip({ items, cols = "grid-cols-2 lg:grid-cols-4", 
       {items.map((it) => {
         const inner = (
           <>
-            {it.active && <motion.span layoutId={layoutId} className="absolute inset-x-0 top-0 h-0.5 bg-primary" />}
-            <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            {it.active && <motion.span layoutId={layoutId} className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-400 to-primary" />}
+            <span className="flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
               <span className={cn("size-2 rounded-full", DOT[it.tone ?? "neutral"])} />
               {it.label}
             </span>
-            <span className="mt-1.5 block text-2xl font-semibold tabular-nums tracking-tight">{it.value}</span>
-            {it.hint && <span className="mt-0.5 block text-xs text-muted-foreground">{it.hint}</span>}
+            <span className="mt-1.5 block text-[24px] font-bold tabular-nums tracking-[-0.7px]">{it.value}</span>
+            {it.hint && <span className="mt-0.5 block text-[11px] text-cf-faint">{it.hint}</span>}
           </>
         )
         const cell = "relative block px-5 py-4 text-left"
@@ -35,7 +35,7 @@ export default function StatStrip({ items, cols = "grid-cols-2 lg:grid-cols-4", 
             type="button"
             aria-pressed={!!it.active}
             onClick={it.onClick}
-            className={cn(cell, "outline-none transition-colors focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60", it.active ? "bg-accent/60" : "bg-card hover:bg-muted/50")}
+            className={cn(cell, "outline-none transition-colors focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60", it.active ? "bg-cf-green-soft/70" : "bg-card hover:bg-cf-head")}
           >
             {inner}
           </button>

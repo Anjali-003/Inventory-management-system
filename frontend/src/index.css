@@ -8,7 +8,7 @@
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'DM Sans', 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -57,37 +57,38 @@
   --shadow-cf: 0 1px 2px rgba(22, 34, 30, 0.04), 0 8px 24px rgba(22, 34, 30, 0.035);
 }
 
-/* Navy / teal / amber kept from the original brand; surfaces cooled and neutral */
+/* CircuitFlow palette (green, soft grey, DM Sans) is the theme for the whole app.
+   The Inventory History page set the look; every page now shares these tokens. */
 :root {
-  --background: #E4F2EA;
-  --foreground: #212121;
+  --background: #f5f7f6;
+  --foreground: #18201f;
   --card: #ffffff;
-  --card-foreground: #212121;
+  --card-foreground: #18201f;
   --popover: #ffffff;
-  --popover-foreground: #212121;
-  --primary: #2874f0;
+  --popover-foreground: #18201f;
+  --primary: #0f6d55;
   --primary-foreground: #ffffff;
-  --secondary: #f5f7fa;
-  --secondary-foreground: #212121;
-  --muted: #f5f7fa;
-  --muted-foreground: #6b7280;
-  --accent: #e8f0fe;
-  --accent-foreground: #1a5fd0;
-  --destructive: #d32f2f;
-  --success: #2e7d32;
-  --warning: #b45309;
-  --border: #e3e6ea;
-  --input: #cfd4da;
-  --ring: #2874f0;
+  --secondary: #f5f7f6;
+  --secondary-foreground: #18201f;
+  --muted: #f5f7f6;
+  --muted-foreground: #697572;
+  --accent: #e8f3ef;
+  --accent-foreground: #0f6d55;
+  --destructive: #c33b3b;
+  --success: #0f6d55;
+  --warning: #a85b16;
+  --border: #e6ebe8;
+  --input: #d6ddda;
+  --ring: #0f6d55;
   --radius: 0.375rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #4b5563;
-  --sidebar-primary: #2874f0;
+  --sidebar-foreground: #4b5855;
+  --sidebar-primary: #0f6d55;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e8f0fe;
-  --sidebar-accent-foreground: #1a5fd0;
-  --sidebar-border: #e3e6ea;
-  --sidebar-ring: #2874f0;
+  --sidebar-accent: #e8f3ef;
+  --sidebar-accent-foreground: #0f6d55;
+  --sidebar-border: #e6ebe8;
+  --sidebar-ring: #0f6d55;
 }
 
 @layer base {
@@ -98,7 +99,7 @@
 
 @layer base {
   html { scroll-behavior: smooth; }
-  body { @apply min-h-screen; font-feature-settings: "cv11", "ss01"; }
+  body { @apply min-h-screen; font-feature-settings: normal; }
   ::selection { background: color-mix(in oklch, var(--ring) 35%, transparent); }
   select { @apply appearance-none bg-no-repeat; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 0.6rem center; }
 }
@@ -154,15 +155,18 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    background: #f5f7fa;
+    padding: 24px;
+    background: var(--background);
 }
 
 .login-card {
     width: 420px;
-    background: white;
+    max-width: 100%;
+    background: var(--card);
     padding: 32px;
-    border-radius: 14px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    border-radius: 16px;
+    border: 1px solid #dce5e0;
+    box-shadow: 0 1px 2px rgba(22, 34, 30, 0.035), 0 18px 44px rgba(22, 34, 30, 0.08);
 }
 
 .login-header {
@@ -171,45 +175,73 @@
 }
 
 .login-header h1 {
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
 }
 
 .login-header p {
     margin: 0;
-    color: #6b7280;
+    font-size: 14px;
+    color: var(--muted-foreground);
 }
 
 .login-card label {
     display: block;
     margin-top: 16px;
     margin-bottom: 6px;
+    font-size: 13px;
     font-weight: 600;
 }
 
 .login-card input {
     width: 100%;
-    padding: 12px 14px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    font-size: 15px;
+    height: 42px;
+    padding: 0 14px;
+    border: 1px solid var(--input);
+    border-radius: 9px;
+    background: var(--card);
+    font-size: 14px;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .login-card input:focus {
     outline: none;
-    border-color: #6b7280;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(15, 109, 85, 0.15);
 }
 
-.login-card>form> button {  
+.login-card>form> button {
     width: 100%;
+    height: 42px;
     margin-top: 24px;
+    border-radius: 9px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(15, 109, 85, 0.25);
+    transition: background-color 0.15s;
+    cursor: pointer;
+}
+
+.login-card>form> button:hover:not(:disabled) {
+    background: #0a5945;
+}
+
+.login-card>form> button:disabled {
+    opacity: 0.6;
+    cursor: default;
 }
 
 .login-error {
     margin-top: 16px;
     padding: 12px;
-    background: #fee2e2;
-    color: #991b1b;
-    border-radius: 8px;
+    background: var(--cf-red-soft);
+    color: var(--destructive);
+    border-radius: 9px;
+    font-size: 13px;
 }
 
 .password-eye {
@@ -236,4 +268,4 @@
 
 .password-eye:hover {
     color: #111827;
-}
+}

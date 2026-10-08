@@ -111,9 +111,9 @@ function NavItem({ to, label, icon: Icon, end, id }) {
       end={end}
       className={({ isActive }) =>
         cn(
-          "relative flex items-center gap-3 rounded-sm px-3 py-2.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          "relative flex items-center gap-3 rounded-[9px] px-3 py-2 text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring",
           isActive
-            ? "text-sidebar-accent-foreground"
+            ? "font-semibold text-sidebar-accent-foreground"
             : "text-sidebar-foreground hover:bg-muted hover:text-foreground",
         )
       }
@@ -123,7 +123,7 @@ function NavItem({ to, label, icon: Icon, end, id }) {
           {isActive && (
             <motion.span
               layoutId={`nav-active-${id}`}
-              className="absolute inset-0 rounded-sm border-l-[3px] border-primary bg-sidebar-accent"
+              className="absolute inset-0 rounded-[9px] bg-sidebar-accent ring-1 ring-inset ring-primary/15"
               transition={{
                 type: "spring",
                 stiffness: 500,
@@ -146,7 +146,7 @@ function NavList({ id }) {
     <nav className="flex flex-col gap-5 p-3 pt-4">
       {GROUPS.map((g) => (
         <div key={g.label} className="flex flex-col gap-1">
-          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.6px] text-cf-faint">
             {g.label}
           </p>
 
@@ -163,7 +163,7 @@ function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
   return (
     <div className="flex min-h-full w-60 flex-col">
       <div className="flex h-11 items-center justify-between border-b px-4">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="text-[10px] font-bold uppercase tracking-[0.6px] text-cf-faint">
           Menu
         </span>
 
@@ -172,7 +172,7 @@ function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
           aria-pressed={pinned}
           title={pinned ? "Unpin sidebar" : "Pin sidebar"}
           onClick={onTogglePin}
-          className="grid size-8 place-items-center rounded-sm text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="grid size-8 place-items-center rounded-lg text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           {pinned ? <VscUnpin className="size-5" /> : <TiPinOutline className="size-5" />}
         </button>
@@ -183,7 +183,7 @@ function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
       <div className="mt-auto px-3 pb-4">
         <button
           onClick={onLogout}
-          className="w-full rounded-sm px-3 py-2.5 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="w-full rounded-[9px] px-3 py-2 text-left text-[13px] font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           Logout
         </button>
@@ -237,12 +237,12 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-primary px-3 text-primary-foreground shadow-md md:px-6">
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white/85 px-3 text-foreground backdrop-blur-md md:px-6">
         <div className="flex items-center gap-2 md:gap-3">
           <button
             aria-label="Open menu"
             onClick={() => setOpen(true)}
-            className="grid size-9 place-items-center rounded-sm hover:bg-white/10 md:hidden"
+            className="grid size-9 place-items-center rounded-lg hover:bg-muted md:hidden"
           >
             <GiHamburgerMenu className="size-5" />
           </button>
@@ -252,7 +252,7 @@ export default function Layout() {
             aria-expanded={pinned || floatOpen}
             onClick={() => setFloatOpen((o) => !o)}
             className={cn(
-              "hidden size-9 place-items-center rounded-sm hover:bg-white/10 md:grid",
+              "hidden size-9 place-items-center rounded-lg hover:bg-muted md:grid",
               pinned && "md:invisible",
             )}
           >
@@ -262,22 +262,22 @@ export default function Layout() {
           <img
             src="/ss_logo.png"
             alt="Sensation Systems"
-            className="size-8 rounded-sm bg-white object-contain"
+            className="size-8 rounded-lg bg-white object-contain ring-1 ring-border"
           />
 
           <div className="leading-none">
-            <p className="text-lg font-bold italic tracking-tight">
+            <p className="text-lg font-bold italic tracking-tight text-primary">
               Sensation Systems
             </p>
 
-            <p className="mt-0.5 text-[11px] font-medium text-[#ffe500]"></p>
+            <p className="mt-0.5 text-[11px] font-medium text-primary"></p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <span className="hidden text-xs text-white/80 sm:block">{today}</span>
+          <span className="hidden text-xs text-muted-foreground sm:block">{today}</span>
 
-          <span className="grid size-8 place-items-center rounded-full bg-white/15 text-xs font-semibold ring-1 ring-white/30">
+          <span className="grid size-8 place-items-center rounded-full bg-cf-green-soft text-xs font-semibold text-primary ring-1 ring-primary/20">
             AD
           </span>
         </div>
@@ -331,7 +331,7 @@ export default function Layout() {
             <>
               <motion.div
                 key="backdrop"
-                className="fixed inset-0 z-40 bg-black/50 md:hidden"
+                className="fixed inset-0 z-40 bg-[#101a17]/45 md:hidden"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -350,13 +350,13 @@ export default function Layout() {
                   ease: "easeOut",
                 }}
               >
-                <div className="flex h-14 items-center justify-between bg-primary px-4 text-primary-foreground">
-                  <p className="text-lg font-bold italic">Sensation Systems</p>
+                <div className="flex h-14 items-center justify-between border-b bg-white px-4 text-foreground">
+                  <p className="text-lg font-bold italic text-primary">Sensation Systems</p>
 
                   <button
                     aria-label="Close menu"
                     onClick={() => setOpen(false)}
-                    className="grid size-9 place-items-center rounded-sm hover:bg-white/10"
+                    className="grid size-9 place-items-center rounded-lg hover:bg-muted"
                   >
                     <X className="size-5" />
                   </button>
@@ -367,7 +367,7 @@ export default function Layout() {
                 <div className="px-3 pb-4">
                   <button
                     onClick={handleLogout}
-                    className="w-full rounded-sm px-3 py-2.5 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="w-full rounded-[9px] px-3 py-2 text-left text-[13px] font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     Logout
                   </button>

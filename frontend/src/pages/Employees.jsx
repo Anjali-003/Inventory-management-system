@@ -544,7 +544,7 @@ export default function Employees() {
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b bg-muted/60 text-xs text-muted-foreground">
+                  <tr className="border-b bg-cf-head text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">
                     <SortHeader
                       label="Employee"
                       k="name"
@@ -560,13 +560,13 @@ export default function Employees() {
                     />
                     <th
                       scope="col"
-                      className="hidden px-5 py-2.5 text-left font-medium lg:table-cell"
+                      className="hidden px-5 py-2.5 text-left lg:table-cell"
                     >
                       Code
                     </th>
                     <th
                       scope="col"
-                      className="hidden px-5 py-2.5 text-left font-medium xl:table-cell"
+                      className="hidden px-5 py-2.5 text-left xl:table-cell"
                     >
                       Designation
                     </th>
@@ -579,7 +579,7 @@ export default function Employees() {
                     />
                     <th
                       scope="col"
-                      className="px-5 py-2.5 text-left font-medium"
+                      className="px-5 py-2.5 text-left"
                     >
                       Status
                     </th>
