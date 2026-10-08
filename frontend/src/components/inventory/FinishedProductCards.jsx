@@ -35,11 +35,11 @@ export default function FinishedProductCards({ data }) {
 
   return (
     <div>
-      <div className="grid border-b sm:grid-cols-3 sm:divide-x max-sm:divide-y">
+      <div className="grid border-b bg-gradient-to-r from-cf-head/65 via-white to-white sm:grid-cols-3 sm:divide-x max-sm:divide-y">
         {summary.map((c) => (
-          <div key={c.key} className="px-[18px] py-4">
-            <p className="text-[11px] font-medium text-muted-foreground">{c.label}</p>
-            <p className={cn("mt-1 text-xl font-bold leading-tight tracking-[-0.5px] tabular-nums", c.accent && "text-primary")}>{c.value}</p>
+          <div key={c.key} className="px-5 py-[18px]">
+            <p className="text-[11px] font-semibold text-muted-foreground">{c.label}</p>
+            <p className={cn("mt-1.5 text-[22px] font-bold leading-tight tracking-[-0.6px] tabular-nums", c.accent && "text-primary")}>{c.value}</p>
             <p className="mt-0.5 text-[10px] text-cf-faint">{c.hint}</p>
           </div>
         ))}
@@ -65,7 +65,7 @@ export default function FinishedProductCards({ data }) {
                   initial={{ opacity: 0, x: -14 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.08 + i * 0.07, duration: 0.3, ease: "easeOut" }}
-                  className="border-t transition-colors first:border-t-0 hover:bg-cf-head"
+                  className="border-t transition-colors first:border-t-0 hover:bg-emerald-50/60"
                 >
                   <td className="px-[18px] py-3">
                     <div className="flex items-center gap-3">
