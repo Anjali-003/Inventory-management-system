@@ -6,9 +6,9 @@ export default function Pagination({ page, pageSize, total, onPage, noun = "resu
   const from = (page - 1) * pageSize + 1
   const to = Math.min(total, page * pageSize)
   const btn =
-    "grid size-8 place-items-center rounded-md border bg-background text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40"
+    "grid size-8 place-items-center rounded-[7px] border border-cf-line-strong bg-card text-foreground outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40"
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-3 text-sm text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-cf-head px-5 py-3 text-xs text-muted-foreground">
       <p>
         Showing <span className="font-medium text-foreground tabular-nums">{from}-{to}</span> of <span className="font-medium text-foreground tabular-nums">{total}</span> {noun}
       </p>

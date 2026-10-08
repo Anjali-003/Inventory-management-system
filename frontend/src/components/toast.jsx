@@ -42,7 +42,7 @@ export function ToastProvider({ children }) {
                 exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.15 } }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
                 role={ok ? "status" : "alert"}
-                className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border bg-card p-3.5 text-sm shadow-lg"
+                className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-[#dce5e0] bg-card p-3.5 text-[13px] shadow-[0_12px_32px_-8px_rgba(22,34,30,0.22)]"
               >
                 <Icon className={`mt-0.5 size-4 shrink-0 ${ok ? "text-success" : "text-destructive"}`} />
                 <p className="flex-1 leading-snug">{t.text}</p>

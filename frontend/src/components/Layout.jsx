@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
+import { GiHamburgerMenu } from "react-icons/gi";
+import { TiPinOutline } from "react-icons/ti";
+import { VscUnpin } from "react-icons/vsc";
 import {
-  Menu,
   X,
   Boxes,
   ClipboardList,
@@ -109,9 +111,9 @@ function NavItem({ to, label, icon: Icon, end, id }) {
       end={end}
       className={({ isActive }) =>
         cn(
-          "relative flex items-center gap-3 rounded-sm px-3 py-2.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          "relative flex items-center gap-3 rounded-[9px] px-3 py-2 text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring",
           isActive
-            ? "text-sidebar-accent-foreground"
+            ? "font-semibold text-sidebar-accent-foreground"
             : "text-sidebar-foreground hover:bg-muted hover:text-foreground",
         )
       }
@@ -121,7 +123,7 @@ function NavItem({ to, label, icon: Icon, end, id }) {
           {isActive && (
             <motion.span
               layoutId={`nav-active-${id}`}
-              className="absolute inset-0 rounded-sm border-l-[3px] border-primary bg-sidebar-accent"
+              className="absolute inset-0 rounded-[9px] bg-sidebar-accent ring-1 ring-inset ring-primary/15"
               transition={{
                 type: "spring",
                 stiffness: 500,
@@ -144,7 +146,7 @@ function NavList({ id }) {
     <nav className="flex flex-col gap-5 p-3 pt-4">
       {GROUPS.map((g) => (
         <div key={g.label} className="flex flex-col gap-1">
-          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.6px] text-cf-faint">
             {g.label}
           </p>
 
@@ -157,16 +159,64 @@ function NavList({ id }) {
   );
 }
 
+function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
+  return (
+    <div className="flex min-h-full w-60 flex-col">
+      <div className="flex h-11 items-center justify-between border-b px-4">
+        <span className="text-[10px] font-bold uppercase tracking-[0.6px] text-cf-faint">
+          Menu
+        </span>
+
+        <button
+          aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
+          aria-pressed={pinned}
+          title={pinned ? "Unpin sidebar" : "Pin sidebar"}
+          onClick={onTogglePin}
+          className="grid size-8 place-items-center rounded-lg text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          {pinned ? <VscUnpin className="size-5" /> : <TiPinOutline className="size-5" />}
+        </button>
+      </div>
+
+      <NavList id={id} />
+
+      <div className="mt-auto px-3 pb-4">
+        <button
+          onClick={onLogout}
+          className="w-full rounded-[9px] px-3 py-2 text-left text-[13px] font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          Logout
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Layout() {
   const { pathname } = useLocation();
 
   const navigate = useNavigate();
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false); // mobile drawer
+  const [pinned, setPinned] = useState(false); // desktop: fixed in the layout (default: unpinned)
+  const [floatOpen, setFloatOpen] = useState(false); // desktop: floating over the page while unpinned
 
   useEffect(() => {
     setOpen(false);
+    setFloatOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!floatOpen) return;
+    const onKey = (e) => e.key === "Escape" && setFloatOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [floatOpen]);
+
+  const togglePin = () => {
+    setPinned((p) => !p);
+    setFloatOpen(false);
+  };
 
   const handleLogout = async () => {
     try {
@@ -187,60 +237,101 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between bg-primary px-3 text-primary-foreground shadow-md md:px-6">
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white/85 px-3 text-foreground backdrop-blur-md md:px-6">
         <div className="flex items-center gap-2 md:gap-3">
           <button
             aria-label="Open menu"
             onClick={() => setOpen(true)}
-            className="grid size-9 place-items-center rounded-sm hover:bg-white/10 md:hidden"
+            className="grid size-9 place-items-center rounded-lg hover:bg-muted md:hidden"
           >
-            <Menu className="size-5" />
+            <GiHamburgerMenu className="size-5" />
+          </button>
+
+          <button
+            aria-label="Toggle sidebar"
+            aria-expanded={pinned || floatOpen}
+            onClick={() => setFloatOpen((o) => !o)}
+            className={cn(
+              "hidden size-9 place-items-center rounded-lg hover:bg-muted md:grid",
+              pinned && "md:invisible",
+            )}
+          >
+            <GiHamburgerMenu className="size-5" />
           </button>
 
           <img
             src="/ss_logo.png"
             alt="Sensation Systems"
-            className="size-8 rounded-sm bg-white object-contain"
+            className="size-8 rounded-lg bg-white object-contain ring-1 ring-border"
           />
 
           <div className="leading-none">
-            <p className="text-lg font-bold italic tracking-tight">
+            <p className="text-lg font-bold italic tracking-tight text-primary">
               Sensation Systems
             </p>
 
-            <p className="mt-0.5 text-[11px] font-medium text-[#ffe500]"></p>
+            <p className="mt-0.5 text-[11px] font-medium text-primary"></p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <span className="hidden text-xs text-white/80 sm:block">{today}</span>
+          <span className="hidden text-xs text-muted-foreground sm:block">{today}</span>
 
-          <span className="grid size-8 place-items-center rounded-full bg-white/15 text-xs font-semibold ring-1 ring-white/30">
+          <span className="grid size-8 place-items-center rounded-full bg-cf-green-soft text-xs font-semibold text-primary ring-1 ring-primary/20">
             AD
           </span>
         </div>
       </header>
 
       <div className="md:flex">
-        <aside className="hidden bg-sidebar md:sticky md:top-14 md:block md:h-[calc(100vh-3.5rem)] md:w-60 md:shrink-0 md:overflow-y-auto md:border-r">
-          <NavList id="desktop" />
-
-          <div className="px-3 pb-4">
-            <button
-              onClick={handleLogout}
-              className="w-full rounded-sm px-3 py-2.5 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              Logout
-            </button>
+        {/* Desktop, pinned: sits in the layout, so the page shrinks to fit */}
+        <motion.aside
+          className="hidden shrink-0 overflow-hidden bg-sidebar md:sticky md:top-14 md:block md:h-[calc(100vh-3.5rem)]"
+          initial={false}
+          animate={{ width: pinned ? 240 : 0 }}
+          transition={{ type: "tween", duration: 0.25, ease: "easeOut" }}
+          style={{ borderRightWidth: pinned ? 1 : 0 }}
+          aria-hidden={!pinned}
+          inert={!pinned}
+        >
+          <div className="h-full w-60 overflow-y-auto">
+            <SidebarBody id="pinned" pinned onTogglePin={togglePin} onLogout={handleLogout} />
           </div>
-        </aside>
+        </motion.aside>
+
+        {/* Desktop, unpinned: floats over the page */}
+        <AnimatePresence>
+          {!pinned && floatOpen && (
+            <>
+              <motion.div
+                key="float-backdrop"
+                className="fixed inset-x-0 bottom-0 top-14 z-30 hidden md:block"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setFloatOpen(false)}
+              />
+
+              <motion.aside
+                key="float-panel"
+                className="fixed bottom-0 left-0 top-14 z-40 hidden w-60 overflow-y-auto border-r bg-sidebar shadow-xl md:block"
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ type: "tween", duration: 0.2, ease: "easeOut" }}
+              >
+                <SidebarBody id="float" pinned={false} onTogglePin={togglePin} onLogout={handleLogout} />
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {open && (
             <>
               <motion.div
                 key="backdrop"
-                className="fixed inset-0 z-40 bg-black/50 md:hidden"
+                className="fixed inset-0 z-40 bg-[#101a17]/45 md:hidden"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -259,13 +350,13 @@ export default function Layout() {
                   ease: "easeOut",
                 }}
               >
-                <div className="flex h-14 items-center justify-between bg-primary px-4 text-primary-foreground">
-                  <p className="text-lg font-bold italic">Sensation Systems</p>
+                <div className="flex h-14 items-center justify-between border-b bg-white px-4 text-foreground">
+                  <p className="text-lg font-bold italic text-primary">Sensation Systems</p>
 
                   <button
                     aria-label="Close menu"
                     onClick={() => setOpen(false)}
-                    className="grid size-9 place-items-center rounded-sm hover:bg-white/10"
+                    className="grid size-9 place-items-center rounded-lg hover:bg-muted"
                   >
                     <X className="size-5" />
                   </button>
@@ -276,7 +367,7 @@ export default function Layout() {
                 <div className="px-3 pb-4">
                   <button
                     onClick={handleLogout}
-                    className="w-full rounded-sm px-3 py-2.5 text-left text-sm font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="w-full rounded-[9px] px-3 py-2 text-left text-[13px] font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     Logout
                   </button>
@@ -301,7 +392,7 @@ export default function Layout() {
               duration: 0.25,
               ease: "easeOut",
             }}
-            className={`mx-auto px-4 py-5 md:px-8 md:py-6 ${pathname === "/inventory-history" ? "max-w-none" : "max-w-6xl"}`}
+            className="w-full px-4 py-5 md:px-8 md:py-6"
           >
             <Outlet />
           </motion.div>
