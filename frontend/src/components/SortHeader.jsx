@@ -9,13 +9,13 @@ export default function SortHeader({ label, k, sort, onSort, align = "left", cla
     <th
       scope="col"
       aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
-      className={cn("px-5 py-2.5 font-medium", align === "right" ? "text-right" : "text-left", className)}
+      className={cn("px-5 py-2.5", align === "right" ? "text-right" : "text-left", className)}
     >
       <button
         type="button"
         onClick={() => onSort(k)}
         className={cn(
-          "-mx-1.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
+          "-mx-1.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 uppercase outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
           active && "text-foreground"
         )}
       >

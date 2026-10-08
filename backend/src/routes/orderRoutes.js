@@ -20,9 +20,41 @@ const router = express.Router();
 
 /*
 =========================================================
+ORDER STATUSES
+=========================================================
+
+Main workflow:
+
+PENDING
+    ↓
+IN_PRODUCTION
+    ↓
+TESTING
+    ↓
+PACKAGING
+    ↓
+DISPATCHED
+    ↓
+COMPLETED
+=========================================================
+*/
+
+const ORDER_STATUSES = [
+    "PENDING",
+    "IN_PRODUCTION",
+    "TESTING",
+    "PACKAGING",
+    "DISPATCHED",
+    "COMPLETED"
+];
+
+
+/*
+=========================================================
 GET ALL ORDERS
 =========================================================
 */
+
 router.get("/", async (req, res) => {
 
     try {
@@ -35,21 +67,19 @@ router.get("/", async (req, res) => {
                     o.order_number,
                     o.status,
                     o.created_at,
-
                     oi.product_id,
-
                     p.name AS product_name,
-
-                    oi.quantity
-
+                    oi.quantity,
+                    COALESCE(po.quantity_to_produce, 0) AS quantity_to_produce,
+                    COALESCE(po.quantity_completed, 0) AS quantity_completed,
+                    GREATEST(0, oi.quantity - COALESCE(po.quantity_to_produce, 0)) AS remaining_to_start
                 FROM orders o
-
                 JOIN order_items oi
                     ON o.id = oi.order_id
-
                 JOIN products p
                     ON oi.product_id = p.id
-
+                LEFT JOIN production_orders po
+                    ON po.order_id = o.id
                 ORDER BY o.id DESC
                 `
             );
@@ -79,6 +109,7 @@ router.get("/", async (req, res) => {
 GET SINGLE ORDER
 =========================================================
 */
+
 router.get("/:id", async (req, res) => {
 
     try {
@@ -198,9 +229,211 @@ router.get("/:id", async (req, res) => {
 
 /*
 =========================================================
+UPDATE ORDER STATUS
+=========================================================
+
+PATCH /api/orders/:id/status
+
+Body:
+
+{
+    "status": "TESTING"
+}
+
+Allowed:
+
+PENDING
+IN_PRODUCTION
+TESTING
+PACKAGING
+DISPATCHED
+COMPLETED
+
+This endpoint is mainly being added now so the
+later Production / Testing / Finished Goods
+workflows have a clean way to update the main
+order status.
+
+We will connect the automatic transitions later.
+=========================================================
+*/
+
+router.patch(
+    "/:id/status",
+    async (req, res) => {
+
+        try {
+
+            const orderId =
+                Number(req.params.id);
+
+
+            /*
+            ---------------------------------------------
+            VALIDATE ORDER ID
+            ---------------------------------------------
+            */
+
+            if (
+                !Number.isInteger(orderId) ||
+                orderId <= 0
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        "Invalid order ID"
+
+                });
+
+            }
+
+
+            /*
+            ---------------------------------------------
+            GET STATUS FROM REQUEST
+            ---------------------------------------------
+            */
+
+            const status =
+                String(
+                    req.body?.status || ""
+                )
+                    .trim()
+                    .toUpperCase();
+
+
+            /*
+            ---------------------------------------------
+            VALIDATE STATUS
+            ---------------------------------------------
+            */
+
+            if (
+                !ORDER_STATUSES.includes(
+                    status
+                )
+            ) {
+
+                return res.status(400).json({
+
+                    message:
+                        "Invalid order status",
+
+                    allowedStatuses:
+                        ORDER_STATUSES
+
+                });
+
+            }
+
+
+            /*
+            ---------------------------------------------
+            CHECK ORDER EXISTS
+            ---------------------------------------------
+            */
+
+            const [orderRows] =
+                await db.query(
+                    `
+                    SELECT
+                        id,
+                        order_number,
+                        status
+
+                    FROM orders
+
+                    WHERE id = ?
+                    `,
+                    [orderId]
+                );
+
+
+            if (
+                orderRows.length === 0
+            ) {
+
+                return res.status(404).json({
+
+                    message:
+                        "Order not found"
+
+                });
+
+            }
+
+
+            /*
+            ---------------------------------------------
+            UPDATE STATUS
+            ---------------------------------------------
+            */
+
+            await db.query(
+                `
+                UPDATE orders
+
+                SET
+                    status = ?,
+                    updated_at = CURRENT_TIMESTAMP
+
+                WHERE id = ?
+                `,
+                [
+                    status,
+                    orderId
+                ]
+            );
+
+
+            /*
+            ---------------------------------------------
+            RETURN UPDATED ORDER
+            ---------------------------------------------
+            */
+
+            res.status(200).json({
+
+                message:
+                    "Order status updated successfully",
+
+                orderId,
+
+                orderNumber:
+                    orderRows[0].order_number,
+
+                previousStatus:
+                    orderRows[0].status,
+
+                status
+
+            });
+
+        } catch (error) {
+
+            console.error(error);
+
+
+            res.status(500).json({
+
+                message:
+                    "Failed to update order status"
+
+            });
+
+        }
+
+    }
+);
+
+
+/*
+=========================================================
 CREATE ORDER
 =========================================================
 */
+
 router.post("/", async (req, res) => {
 
     const connection =
@@ -228,6 +461,12 @@ router.post("/", async (req, res) => {
 
         }
 
+
+        /*
+        -------------------------------------------------
+        VALIDATE ORDER ITEMS
+        -------------------------------------------------
+        */
 
         for (
             const item
@@ -262,6 +501,7 @@ router.post("/", async (req, res) => {
             we need the MySQL-generated ID for
             the sequence number.
         */
+
         const temporaryOrderNumber =
             `TEMP-${Date.now()}`;
 
@@ -290,8 +530,11 @@ router.post("/", async (req, res) => {
 
 
         /*
-            Date
+        -------------------------------------------------
+        DATE
+        -------------------------------------------------
         */
+
         const now =
             new Date();
 
@@ -313,13 +556,16 @@ router.post("/", async (req, res) => {
 
 
         /*
-            Normal 24-hour format:
+        -------------------------------------------------
+        24-HOUR FORMAT
+        -------------------------------------------------
 
-            00 = midnight
-            01 = 1 AM
-            ...
-            23 = 11 PM
+        00 = midnight
+        01 = 1 AM
+        ...
+        23 = 11 PM
         */
+
         const hour =
             String(
                 now.getHours()
@@ -327,26 +573,43 @@ router.post("/", async (req, res) => {
 
 
         /*
-            Sequence:
+        -------------------------------------------------
+        SEQUENCE NUMBER
+        -------------------------------------------------
 
-            1   -> 001
-            2   -> 002
-            10  -> 010
-            100 -> 100
+        1   → 001
+        2   → 002
+        10  → 010
+        100 → 100
         */
+
         const sequenceNumber =
             String(orderId)
-                .padStart(3, "0");
+                .padStart(
+                    3,
+                    "0"
+                );
 
 
         /*
-            Final format:
+        -------------------------------------------------
+        FINAL ORDER NUMBER
+        -------------------------------------------------
 
-            ORD-20260929-15-001
+        Example:
+
+        ORD-20261003-16-001
         */
+
         const orderNumber =
             `ORD-${year}${month}${day}-${hour}-${sequenceNumber}`;
 
+
+        /*
+        -------------------------------------------------
+        SAVE FINAL ORDER NUMBER
+        -------------------------------------------------
+        */
 
         await connection.query(
             `
@@ -365,8 +628,11 @@ router.post("/", async (req, res) => {
 
 
         /*
-            Create order items.
+        -------------------------------------------------
+        CREATE ORDER ITEMS
+        -------------------------------------------------
         */
+
         for (
             const item
             of items
@@ -400,6 +666,12 @@ router.post("/", async (req, res) => {
 
         await connection.commit();
 
+
+        /*
+        -------------------------------------------------
+        RETURN CREATED ORDER
+        -------------------------------------------------
+        */
 
         res.status(201).json({
 
@@ -446,7 +718,9 @@ CHECK FULL ORDER MATERIAL AVAILABILITY
 This remains your old material check.
 
 It checks the complete order quantity.
+=========================================================
 */
+
 router.get(
     "/:id/material-check",
     async (req, res) => {
@@ -454,7 +728,9 @@ router.get(
         try {
 
             const orderId =
-                Number(req.params.id);
+                Number(
+                    req.params.id
+                );
 
 
             if (
@@ -478,7 +754,9 @@ router.get(
                 );
 
 
-            res.json(result);
+            res.json(
+                result
+            );
 
 
         } catch (error) {
@@ -546,7 +824,9 @@ Completed = 10
 In production = 20
 Remaining to start = 70
 Maximum from inventory = 55
+=========================================================
 */
+
 router.get(
     "/:id/production-info",
     async (req, res) => {
@@ -554,7 +834,9 @@ router.get(
         try {
 
             const orderId =
-                Number(req.params.id);
+                Number(
+                    req.params.id
+                );
 
 
             if (
@@ -578,7 +860,9 @@ router.get(
                 );
 
 
-            res.json(result);
+            res.json(
+                result
+            );
 
 
         } catch (error) {
@@ -640,7 +924,9 @@ CHECK MATERIALS FOR PARTIAL QUANTITY
 Example:
 
 GET /api/orders/15/production-check?quantity=20
+=========================================================
 */
+
 router.get(
     "/:id/production-check",
     async (req, res) => {
@@ -648,7 +934,9 @@ router.get(
         try {
 
             const orderId =
-                Number(req.params.id);
+                Number(
+                    req.params.id
+                );
 
 
             const quantity =
@@ -656,6 +944,12 @@ router.get(
                     req.query.quantity
                 );
 
+
+            /*
+            -------------------------------------------------
+            VALIDATE ORDER ID
+            -------------------------------------------------
+            */
 
             if (
                 !Number.isInteger(orderId) ||
@@ -671,6 +965,12 @@ router.get(
 
             }
 
+
+            /*
+            -------------------------------------------------
+            VALIDATE QUANTITY
+            -------------------------------------------------
+            */
 
             if (
                 !Number.isInteger(quantity) ||
@@ -694,13 +994,21 @@ router.get(
                 );
 
 
-            res.json(result);
+            res.json(
+                result
+            );
 
 
         } catch (error) {
 
             console.error(error);
 
+
+            /*
+            -------------------------------------------------
+            ORDER NOT FOUND
+            -------------------------------------------------
+            */
 
             if (
                 error.message ===
@@ -717,6 +1025,12 @@ router.get(
             }
 
 
+            /*
+            -------------------------------------------------
+            REQUESTED QUANTITY TOO HIGH
+            -------------------------------------------------
+            */
+
             if (
                 error.message.startsWith(
                     "Requested quantity exceeds"
@@ -732,6 +1046,12 @@ router.get(
 
             }
 
+
+            /*
+            -------------------------------------------------
+            PRODUCT / BOM ERRORS
+            -------------------------------------------------
+            */
 
             if (
                 error.message ===
@@ -774,7 +1094,9 @@ Body:
 {
     "quantity": 20
 }
+=========================================================
 */
+
 router.post(
     "/:id/start-production",
     async (req, res) => {
@@ -782,8 +1104,16 @@ router.post(
         try {
 
             const orderId =
-                Number(req.params.id);
+                Number(
+                    req.params.id
+                );
 
+
+            /*
+            -------------------------------------------------
+            VALIDATE ORDER ID
+            -------------------------------------------------
+            */
 
             if (
                 !Number.isInteger(orderId) ||
@@ -800,11 +1130,23 @@ router.post(
             }
 
 
+            /*
+            -------------------------------------------------
+            GET QUANTITY
+            -------------------------------------------------
+            */
+
             const quantity =
                 Number(
                     req.body?.quantity
                 );
 
+
+            /*
+            -------------------------------------------------
+            VALIDATE QUANTITY
+            -------------------------------------------------
+            */
 
             if (
                 !Number.isInteger(quantity) ||
@@ -822,10 +1164,21 @@ router.post(
 
 
             /*
-                Temporary single-admin setup.
+            -------------------------------------------------
+            TEMPORARY ADMIN USER
+            -------------------------------------------------
+
+            Later this will come from JWT.
             */
+
             const userId = 1;
 
+
+            /*
+            -------------------------------------------------
+            START PRODUCTION
+            -------------------------------------------------
+            */
 
             const result =
                 await startProduction(
@@ -836,10 +1189,14 @@ router.post(
 
 
             /*
-                Material shortage returns
-                success:false rather than throwing.
+            -------------------------------------------------
+            MATERIAL SHORTAGE
+            -------------------------------------------------
             */
-            if (!result.success) {
+
+            if (
+                !result.success
+            ) {
 
                 return res.status(409).json(
                     result
@@ -847,6 +1204,12 @@ router.post(
 
             }
 
+
+            /*
+            -------------------------------------------------
+            SUCCESS
+            -------------------------------------------------
+            */
 
             res.status(200).json(
                 result
@@ -857,6 +1220,12 @@ router.post(
 
             console.error(error);
 
+
+            /*
+            -------------------------------------------------
+            ORDER NOT FOUND
+            -------------------------------------------------
+            */
 
             if (
                 error.message ===
@@ -872,6 +1241,12 @@ router.post(
 
             }
 
+
+            /*
+            -------------------------------------------------
+            CONFLICTS
+            -------------------------------------------------
+            */
 
             if (
                 error.message ===
@@ -892,6 +1267,12 @@ router.post(
             }
 
 
+            /*
+            -------------------------------------------------
+            PRODUCT / BOM ERRORS
+            -------------------------------------------------
+            */
+
             if (
                 error.message ===
                     "Order has no products or BOM data" ||
@@ -909,6 +1290,12 @@ router.post(
 
             }
 
+
+            /*
+            -------------------------------------------------
+            GENERIC ERROR
+            -------------------------------------------------
+            */
 
             res.status(500).json({
 

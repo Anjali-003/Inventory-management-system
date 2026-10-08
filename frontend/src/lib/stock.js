@@ -56,9 +56,52 @@ export const TYPE_META = {
 
 export const REASONS = {
   in: ["Purchase receipt", "Customer / production return", "Transfer in", "Other"],
-  out: ["Issued to production", "Damaged / scrapped", "Returned to supplier", "Sample / testing", "Other"],
+  out: [
+    "Issued to production",
+    "Production wastage / rejected",
+    "Damaged / scrapped",
+    "Replacement issued",
+    "Quality control / inspection",
+    "Testing / trial",
+    "R&D / experiment",
+    "Rework / repair",
+    "Customer sample / demo",
+    "Warranty / customer replacement",
+    "Lost / missing",
+    "Issued by mistake / excess",
+    "Returned to supplier",
+    "Other",
+  ],
   adjust: ["Cycle count correction", "Damage found", "Data entry correction", "Other"],
 }
+
+// Stock-out preset -> code stored on the ledger row (the Inventory History balance sheet groups by it).
+export const STOCK_OUT_CODE = {
+  "Issued to production": "ISSUED_TO_PRODUCTION",
+  "Production wastage / rejected": "PRODUCTION_WASTAGE",
+  "Damaged / scrapped": "DAMAGED",
+  "Replacement issued": "REPLACEMENT",
+  "Quality control / inspection": "QUALITY_CONTROL",
+  "Testing / trial": "TESTING",
+  "R&D / experiment": "RND",
+  "Rework / repair": "REWORK",
+  "Customer sample / demo": "CUSTOMER_SAMPLE",
+  "Warranty / customer replacement": "WARRANTY",
+  "Lost / missing": "LOST",
+  "Issued by mistake / excess": "WRONG_ISSUE",
+  "Returned to supplier": "RETURNED_TO_SUPPLIER",
+  Other: "OTHER",
+}
+// For these an order must be selected (the server enforces the same list).
+export const ORDER_REQUIRED_PRESETS = [
+  "Production wastage / rejected",
+  "Damaged / scrapped",
+  "Replacement issued",
+  "Quality control / inspection",
+  "Testing / trial",
+  "R&D / experiment",
+  "Rework / repair",
+]
 
 /** Combine the preset and the free-text note into the single reason string the ledger stores. */
 export const composeReason = (preset, note) => {

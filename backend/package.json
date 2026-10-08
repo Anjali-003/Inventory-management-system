@@ -12,7 +12,9 @@
     "db:schema": "node src/database/run-sql.js schema.sql",
     "db:seed": "node src/database/run-sql.js seed.sql",
     "db:setup": "npm run db:schema && npm run migrate && npm run db:seed",
-    "db:shell": "mysql -u root -p inventory_management"
+    "db:shell": "mysql -u root -p inventory_management",
+    "seed": "node src/database/run-seeds.js",
+    "seed:reset": "node src/database/run-seeds.js --reset"
   },
   "keywords": [],
   "author": "",

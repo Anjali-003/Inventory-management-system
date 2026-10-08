@@ -5,7 +5,7 @@ import { Input } from "./ui/input"
 export default function SearchBar({ value, onChange, placeholder = "Search" }) {
   return (
     <div className="relative w-full sm:w-72">
-      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-cf-faint" />
       <Input
         className="px-9"
         placeholder={placeholder}
