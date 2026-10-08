@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react"
 import { animate, AnimatePresence, motion } from "motion/react"
-import { Card } from "../ui/card"
 import { Skeleton } from "../ui/skeleton"
 import { cn } from "../../lib/utils"
 import { fmtQty } from "../../lib/stock"
 
 /*
-    Building blocks for the Inventory History page (same palette as the Dashboard, just with life in it):
-    CountUp, Reveal, HistoryHero, HistoryStat, TabBar, Pill, Initials, MonthBars and the reason -> colour map.
+    Building blocks for the Inventory History page, in the CircuitFlow look (green, soft grey, compact type, DM Sans).
+    The look comes from the `.cf-scope` wrapper on the page (see index.css), so everything here is plain Tailwind.
+
+    Exports: CountUp, Reveal, Panel, PanelHeader, CfButton, StatCard, TabBar, TabPanel, Pill, Initials, MonthBars
+    and the reason -> colour map.
 
     Motion rules: everything is wrapped by <MotionConfig reducedMotion="user"> on the page, so people who
     ask their OS for less motion get the same layout without the movement. Only the drawing is computed
@@ -15,17 +17,6 @@ import { fmtQty } from "../../lib/stock"
 */
 
 const EASE = [0.22, 1, 0.36, 1]
-
-const ACCENT = {
-  primary: [
-    "border-primary/25 hover:border-primary/50",
-    "bg-primary/10 text-primary",
-    "from-primary/[0.07]",
-  ],
-  success: ["border-success/25 hover:border-success/50", "bg-success/10 text-success", "from-success/[0.07]"],
-  warning: ["border-warning/30 hover:border-warning/60", "bg-warning/10 text-warning", "from-warning/[0.08]"],
-  danger: ["border-destructive/25 hover:border-destructive/50", "bg-destructive/10 text-destructive", "from-destructive/[0.07]"],
-}
 
 /* ------------------------------------------------------------------ helpers */
 
@@ -65,116 +56,88 @@ export function Reveal({ delay = 0, className, children }) {
   )
 }
 
-/* --------------------------------------------------------------------- hero */
+/* ------------------------------------------------------------------- panels */
 
-// The banner at the top: the cumulative number on the left, a few chips on the right (stacked below on phones).
-export function HistoryHero({ label, value, hint, icon: Icon, chips = [] }) {
+// White card: thin border, 10px corners, very soft shadow.
+export function Panel({ className, children, ...p }) {
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 16, scale: 0.985 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.55, ease: EASE }}
-      className="relative overflow-hidden rounded-xl border border-primary/30 bg-gradient-to-br from-[#2f7bf5] via-[#1f63d6] to-[#173f9a] text-white shadow-lg shadow-primary/25"
-    >
-      {/* decoration: dotted grid + two soft glows (static, nothing keeps moving while you read) */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-70"
-        style={{
-          backgroundImage: "radial-gradient(rgba(255,255,255,0.20) 1px, transparent 1px)",
-          backgroundSize: "18px 18px",
-          maskImage: "linear-gradient(to bottom left, black, transparent 65%)",
-          WebkitMaskImage: "linear-gradient(to bottom left, black, transparent 65%)",
-        }}
-      />
-      <span aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-64 rounded-full bg-white/15 blur-3xl" />
-      <span aria-hidden className="pointer-events-none absolute -bottom-24 left-1/3 size-60 rounded-full bg-cyan-300/20 blur-3xl" />
-
-      <div className="relative flex flex-col gap-5 p-5 sm:p-7 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/75">
-            {Icon && (
-              <motion.span
-                initial={{ scale: 0, rotate: -40 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: "spring", stiffness: 260, damping: 16, delay: 0.2 }}
-                className="grid size-7 place-items-center rounded-full bg-white/15 ring-1 ring-white/25"
-              >
-                <Icon className="size-4" aria-hidden />
-              </motion.span>
-            )}
-            {label}
-          </p>
-          <p className="mt-3 text-5xl font-semibold leading-none tracking-tight tabular-nums sm:text-6xl">
-            {value === null || value === undefined ? "-" : <CountUp value={value} duration={1.1} />}
-          </p>
-          {hint && <p className="mt-2 text-sm text-white/75">{hint}</p>}
-        </div>
-
-        {chips.length > 0 && (
-          <div className="flex flex-wrap gap-2 lg:max-w-md lg:justify-end">
-            {chips.map((c, i) => (
-              <motion.span
-                key={c.key}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.35 + i * 0.1, duration: 0.35 }}
-                className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-medium ring-1 ring-inset ring-white/25 backdrop-blur-sm"
-              >
-                {c.icon && <c.icon className="size-3.5" aria-hidden />}
-                {c.label}
-              </motion.span>
-            ))}
-          </div>
-        )}
-      </div>
-    </motion.section>
+    <section className={cn("overflow-hidden rounded-[10px] border bg-card shadow-cf", className)} {...p}>
+      {children}
+    </section>
   )
+}
+
+// Title + small grey line on the left, anything (buttons, switchers) on the right.
+export function PanelHeader({ title, subtitle, className, children }) {
+  return (
+    <div className={cn("flex min-h-[67px] flex-wrap items-center justify-between gap-3 border-b px-[18px] py-3.5", className)}>
+      <div className="min-w-0">
+        <h2 className="text-sm font-bold tracking-[-0.15px]">{title}</h2>
+        {subtitle && <p className="mt-[3px] text-[11px] text-muted-foreground">{subtitle}</p>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/* ------------------------------------------------------------------ buttons */
+
+const BTN_BASE =
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] text-xs font-semibold select-none outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-45 [&_svg]:size-[15px] [&_svg]:shrink-0"
+const BTN = {
+  primary: "h-9 bg-primary px-3.5 text-primary-foreground shadow-[0_1px_2px_rgba(15,109,85,0.2)] hover:-translate-y-px hover:bg-cf-green-hover",
+  secondary: "h-9 border border-cf-line-strong bg-card px-3.5 text-foreground hover:bg-muted",
+  ghost: "h-[29px] border border-[#cde1da] bg-[#f8fcfa] px-2.5 text-primary hover:bg-cf-green-soft",
+}
+
+export function CfButton({ variant = "secondary", className, type = "button", ...p }) {
+  return <button type={type} className={cn(BTN_BASE, BTN[variant], className)} {...p} />
 }
 
 /* -------------------------------------------------------------------- stats */
 
-export function HistoryStat({ label, value, hint, icon: Icon, tone = "primary", loading, index = 0, format = fmtQty, badge }) {
-  const [border, chip, glow] = ACCENT[tone]
+const STAT_TONE = {
+  blue: ["bg-cf-blue-soft text-cf-blue", "text-muted-foreground"],
+  violet: ["bg-cf-violet-soft text-cf-violet", "text-muted-foreground"],
+  green: ["bg-cf-green-soft text-primary", "text-primary"],
+  red: ["bg-cf-red-soft text-destructive", "font-semibold text-destructive"],
+  amber: ["bg-cf-amber-soft text-warning", "font-semibold text-warning"],
+}
+
+// Icon tile on the left, label, big number, one small line underneath. (Icon sits on top on phones.)
+export function StatCard({ label, value, detail, icon: Icon, tone = "blue", loading, index = 0, format = fmtQty, badge }) {
+  const [tile, detailCls] = STAT_TONE[tone] || STAT_TONE.blue
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -3 }}
-      transition={{ delay: index * 0.08, duration: 0.4, ease: EASE }}
+      transition={{ delay: index * 0.07, duration: 0.4, ease: EASE }}
+      className="relative min-h-[113px] rounded-[10px] border bg-card py-[18px] pl-16 pr-[18px] shadow-cf max-sm:min-h-[142px] max-sm:pl-4 max-sm:pt-[59px]"
     >
-      <Card className={cn("relative flex items-center justify-between gap-3 overflow-hidden border bg-gradient-to-br to-card p-3.5 transition-shadow hover:shadow-md sm:p-4", glow, border)}>
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-          {loading ? (
-            <Skeleton className="mt-2 h-8 w-24" />
-          ) : (
-            <p className="mt-1 text-2xl font-semibold tabular-nums sm:text-3xl">
-              {value === null || value === undefined ? "-" : <CountUp value={value} format={format} />}
-            </p>
-          )}
-          {!loading && (hint || badge) && (
-            <div className="mt-1 flex items-center gap-2">
-              {badge}
-              {hint && <p className="truncate text-xs text-muted-foreground">{hint}</p>}
-            </div>
-          )}
+      <span className={cn("absolute left-4 top-[19px] grid size-9 place-items-center rounded-[9px]", tile)}>
+        <Icon className="size-[19px]" aria-hidden />
+      </span>
+      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+      {loading ? (
+        <Skeleton className="my-2 h-7 w-24" />
+      ) : (
+        <p className="my-1 text-[26px] font-bold leading-tight tracking-[-0.7px] tabular-nums">
+          {value === null || value === undefined ? "-" : <CountUp value={value} format={format} />}
+        </p>
+      )}
+      {!loading && (detail || badge) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {badge}
+          {detail && <p className={cn("text-[10px]", detailCls)}>{detail}</p>}
         </div>
-        <motion.span
-          initial={{ scale: 0, rotate: -30 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", stiffness: 260, damping: 16, delay: 0.15 + index * 0.08 }}
-          className={cn("hidden size-11 shrink-0 place-items-center rounded-xl sm:grid", chip)}
-        >
-          <Icon className="size-5" />
-        </motion.span>
-      </Card>
+      )}
     </motion.div>
   )
 }
 
 /* --------------------------------------------------------------------- tabs */
 
+// A grey pill with a white "selected" chip that slides between the options.
 export function TabBar({ tabs, value, onChange, label }) {
   const onKeyDown = (e) => {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return
@@ -185,7 +148,7 @@ export function TabBar({ tabs, value, onChange, label }) {
     document.getElementById(`history-tab-${next.key}`)?.focus()
   }
   return (
-    <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="flex gap-1 overflow-x-auto border-b bg-muted/30 px-3">
+    <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="inline-flex max-w-full gap-0.5 overflow-x-auto rounded-[7px] bg-muted p-[3px]">
       {tabs.map((t) => {
         const active = t.key === value
         return (
@@ -199,20 +162,21 @@ export function TabBar({ tabs, value, onChange, label }) {
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(t.key)}
             className={cn(
-              "relative inline-flex items-center gap-2 whitespace-nowrap px-3.5 py-3 text-sm font-medium outline-none transition-colors focus-visible:bg-accent/50",
-              active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              "relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-[5px] px-3 py-1.5 text-[11px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
+              active ? "font-semibold text-primary" : "font-medium text-muted-foreground hover:text-foreground"
             )}
           >
-            {t.icon && <t.icon className={cn("size-4 transition-colors", active ? "text-primary" : "")} aria-hidden />}
-            {t.label}
-            {t.badge}
             {active && (
               <motion.span
-                layoutId="history-tab-indicator"
-                className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-primary"
+                layoutId="history-tab-chip"
+                className="absolute inset-0 rounded-[5px] bg-card shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
                 transition={{ type: "spring", stiffness: 420, damping: 34 }}
               />
             )}
+            <span className="relative inline-flex items-center gap-1.5">
+              {t.label}
+              {t.badge}
+            </span>
           </button>
         )
       })}
@@ -243,23 +207,23 @@ export function TabPanel({ id, children }) {
 /* -------------------------------------------------------------------- pills */
 
 const PILL = {
-  success: "bg-success/10 text-success ring-success/20",
-  danger: "bg-destructive/10 text-destructive ring-destructive/20",
-  warning: "bg-warning/10 text-warning ring-warning/25",
-  info: "bg-accent text-accent-foreground ring-primary/20",
-  neutral: "bg-muted text-muted-foreground ring-border",
+  success: "bg-cf-green-soft text-primary",
+  danger: "bg-cf-red-soft text-destructive",
+  warning: "bg-cf-amber-soft text-warning",
+  info: "bg-cf-blue-soft text-cf-blue",
+  neutral: "bg-muted text-muted-foreground",
 }
 const DOT = {
-  success: "bg-success",
+  success: "bg-primary",
   danger: "bg-destructive",
   warning: "bg-warning",
-  info: "bg-primary",
+  info: "bg-cf-blue",
   neutral: "bg-muted-foreground/60",
 }
 
 export function Pill({ tone = "neutral", dot = false, pulse = false, className, children }) {
   return (
-    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset", PILL[tone], className)}>
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-[9px] py-1 text-[10px] font-semibold", PILL[tone], className)}>
       {dot && (
         <span className="relative grid size-1.5 place-items-center">
           {pulse && <span className={cn("absolute inline-flex size-full animate-ping rounded-full opacity-60", DOT[tone])} />}
@@ -295,7 +259,7 @@ export function Initials({ name, className }) {
     .map((w) => w[0].toUpperCase())
     .join("")
   return (
-    <span aria-hidden className={cn("grid size-8 shrink-0 place-items-center rounded-lg bg-accent text-[11px] font-semibold text-accent-foreground", className)}>
+    <span aria-hidden className={cn("grid size-8 shrink-0 place-items-center rounded-lg bg-cf-green-soft text-[11px] font-bold text-primary", className)}>
       {letters}
     </span>
   )
@@ -303,52 +267,50 @@ export function Initials({ name, className }) {
 
 /* ----------------------------------------------------------------- month bars */
 
-// One bar per month for a whole year, spread evenly across the full width (12 equal columns).
+// One bar per month for a whole year, spread evenly across the full width (12 equal columns), over faint guide lines.
 // rows: [{ key: "2026-03", value, disabled }]. A disabled month has no data yet (before the first
 // receipt or after the latest month): it shows a faint stub and can't be opened.
 export function MonthBars({ rows, activeKey, onSelect, formatValue, formatLabel, formatAria }) {
   if (!rows || rows.length === 0) return null
   const max = Math.max(...rows.map((r) => r.value), 0)
   return (
-    <div className="grid gap-1.5 sm:gap-2.5" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }} role="group" aria-label="Received per month">
-      {rows.map((r, i) => {
-        const active = r.key === activeKey
-        const empty = r.disabled || r.value <= 0
-        const pct = empty || max <= 0 ? 3 : Math.max(6, (r.value / max) * 100)
-        return (
-          <button
-            key={r.key}
-            type="button"
-            disabled={r.disabled}
-            onClick={() => onSelect?.(r.key)}
-            aria-label={r.disabled ? `${(formatAria || formatLabel)(r.key)}: no data` : `${(formatAria || formatLabel)(r.key)}: ${formatValue(r.value)} received`}
-            aria-current={active || undefined}
-            className="group flex min-w-0 flex-col items-center gap-1.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:cursor-default"
-          >
-            <span className={cn("h-4 whitespace-nowrap text-[11px] font-semibold tabular-nums transition-opacity", active ? "text-primary opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")}>
-              {r.disabled ? "" : formatValue(r.value)}
-            </span>
-            <span className="flex h-36 w-full items-end border-b">
-              <motion.span
-                initial={{ height: 0 }}
-                animate={{ height: `${pct}%` }}
-                transition={{ delay: 0.1 + i * 0.04, duration: 0.6, ease: EASE }}
-                className={cn(
-                  "w-full rounded-t-md transition-colors",
-                  r.disabled
-                    ? "bg-muted"
-                    : active
-                      ? "bg-gradient-to-t from-primary to-[#5b9bff] shadow-[0_0_0_3px_rgb(40_116_240/0.12)]"
-                      : empty
-                        ? "bg-primary/10 group-hover:bg-primary/25"
-                        : "bg-primary/25 group-hover:bg-primary/50"
-                )}
-              />
-            </span>
-            <span className={cn("truncate text-[11px] font-medium", active ? "text-foreground" : r.disabled ? "text-muted-foreground/50" : "text-muted-foreground")}>{formatLabel(r.key)}</span>
-          </button>
-        )
-      })}
+    <div className="relative" role="group" aria-label="Received per month">
+      {/* guide lines sit behind the bars: top = value row (16px) + gap (6px) */}
+      <div aria-hidden className="cf-guides pointer-events-none absolute inset-x-0 top-[22px] h-36 border-b" />
+      <div className="relative grid gap-1.5 sm:gap-2.5" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
+        {rows.map((r, i) => {
+          const active = r.key === activeKey
+          const empty = r.disabled || r.value <= 0
+          const pct = empty || max <= 0 ? 2 : Math.max(5, (r.value / max) * 100)
+          return (
+            <button
+              key={r.key}
+              type="button"
+              disabled={r.disabled}
+              onClick={() => onSelect?.(r.key)}
+              aria-label={r.disabled ? `${(formatAria || formatLabel)(r.key)}: no data` : `${(formatAria || formatLabel)(r.key)}: ${formatValue(r.value)} received`}
+              aria-current={active || undefined}
+              className="group flex min-w-0 flex-col items-center gap-1.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-default"
+            >
+              <span className={cn("h-4 whitespace-nowrap text-[10px] font-bold tabular-nums transition-opacity", active ? "text-primary opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100")}>
+                {r.disabled ? "" : formatValue(r.value)}
+              </span>
+              <span className="flex h-36 w-full items-end justify-center">
+                <motion.span
+                  initial={{ height: 0 }}
+                  animate={{ height: `${pct}%` }}
+                  transition={{ delay: 0.1 + i * 0.04, duration: 0.6, ease: EASE }}
+                  className={cn(
+                    "w-[58%] min-w-3 rounded-b-[1px] rounded-t-[4px] transition-colors",
+                    r.disabled ? "bg-border" : active ? "bg-primary" : empty ? "bg-primary/15 group-hover:bg-primary/30" : "bg-primary/30 group-hover:bg-primary/55"
+                  )}
+                />
+              </span>
+              <span className={cn("truncate text-[10px]", active ? "font-bold text-foreground" : r.disabled ? "font-medium text-cf-faint/70" : "font-medium text-cf-faint group-hover:text-muted-foreground")}>{formatLabel(r.key)}</span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

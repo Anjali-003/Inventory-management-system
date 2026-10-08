@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -40,6 +41,20 @@
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
+
+  /* CircuitFlow palette + shadow, used by the Inventory History page */
+  --color-cf-blue: var(--cf-blue);
+  --color-cf-blue-soft: var(--cf-blue-soft);
+  --color-cf-violet: var(--cf-violet);
+  --color-cf-violet-soft: var(--cf-violet-soft);
+  --color-cf-green-soft: var(--cf-green-soft);
+  --color-cf-green-hover: var(--cf-green-hover);
+  --color-cf-red-soft: var(--cf-red-soft);
+  --color-cf-amber-soft: var(--cf-amber-soft);
+  --color-cf-faint: var(--cf-faint);
+  --color-cf-line-strong: var(--cf-line-strong);
+  --color-cf-head: var(--cf-head);
+  --shadow-cf: 0 1px 2px rgba(22, 34, 30, 0.04), 0 8px 24px rgba(22, 34, 30, 0.035);
 }
 
 /* Navy / teal / amber kept from the original brand; surfaces cooled and neutral */
@@ -87,6 +102,53 @@
   ::selection { background: color-mix(in oklch, var(--ring) 35%, transparent); }
   select { @apply appearance-none bg-no-repeat; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 0.6rem center; }
 }
+/*
+    CircuitFlow look, scoped. Wrap a page in <div className="cf-scope"> and every shadcn-style token inside it
+    (bg-primary, text-muted-foreground, border, ring ...) switches to the green / soft-grey palette and DM Sans.
+    Nothing outside the wrapper changes.
+*/
+:root {
+  --cf-blue: #3772d0;
+  --cf-blue-soft: #eaf1fc;
+  --cf-violet: #7659c8;
+  --cf-violet-soft: #f0ecfb;
+  --cf-green-soft: #e8f3ef;
+  --cf-green-hover: #0a5945;
+  --cf-red-soft: #fceded;
+  --cf-amber-soft: #fff2df;
+  --cf-faint: #98a29f;
+  --cf-line-strong: #d6ddda;
+  --cf-head: #fbfcfb;
+}
+.cf-scope {
+  --background: #f5f7f6;
+  --foreground: #18201f;
+  --card: #ffffff;
+  --card-foreground: #18201f;
+  --popover: #ffffff;
+  --popover-foreground: #18201f;
+  --primary: #0f6d55;
+  --primary-foreground: #ffffff;
+  --secondary: #f5f7f6;
+  --secondary-foreground: #18201f;
+  --muted: #f5f7f6;
+  --muted-foreground: #697572;
+  --accent: #e8f3ef;
+  --accent-foreground: #0f6d55;
+  --destructive: #c33b3b;
+  --success: #0f6d55;
+  --warning: #a85b16;
+  --border: #e6ebe8;
+  --input: #d6ddda;
+  --ring: #0f6d55;
+  font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: normal;
+  color: var(--foreground);
+}
+.cf-scope select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23697572' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 0.7rem center; }
+/* the faint horizontal guide lines behind the month bars (same trick as CircuitFlow's chart) */
+.cf-guides { background: repeating-linear-gradient(to bottom, var(--border) 0 1px, transparent 1px 36px); }
+
 .login-page {
     min-height: 100vh;
     display: flex;

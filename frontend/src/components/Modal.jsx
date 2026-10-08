@@ -8,7 +8,7 @@ import { Button } from "./ui/button"
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
 const SIZES = { sm: "sm:max-w-md", md: "sm:max-w-xl", lg: "sm:max-w-2xl", xl: "sm:max-w-4xl" }
 
-function Panel({ onClose, title, description, size, busy, onSubmit, footer, children }) {
+function Panel({ onClose, title, description, size, busy, onSubmit, footer, children, className }) {
   const ref = useRef(null)
   const titleId = useId()
   const descId = useId()
@@ -72,7 +72,8 @@ function Panel({ onClose, title, description, size, busy, onSubmit, footer, chil
         tabIndex={-1}
         className={cn(
           "relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-t-2xl bg-card shadow-2xl outline-none ring-1 ring-black/5 sm:max-h-[calc(100dvh-3rem)] sm:rounded-xl",
-          SIZES[size]
+          SIZES[size],
+          className
         )}
         initial={{ opacity: 0, y: 18, scale: 0.985 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
