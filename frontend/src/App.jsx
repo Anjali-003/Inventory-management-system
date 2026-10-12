@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Layout from "./components/Layout";
 import { ToastProvider } from "./components/toast";
+import LiveSync from "@/realtime/LiveSync";
 
 import Dashboard from "@/features/dashboard/Dashboard";
 import Products from "@/features/products/Products";
@@ -34,6 +35,7 @@ function App() {
           <Route
             element={
               <ProtectedRoute>
+                <LiveSync />
                 <Layout />
               </ProtectedRoute>
             }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import useLiveRefresh from "@/realtime/useLiveRefresh"
 import { CheckCircle2, PackageCheck, RefreshCw, Truck } from "lucide-react"
 import api from "@/api/api"
 import PageHeader from "@/components/PageHeader"
@@ -71,9 +72,9 @@ export default function FinishedGoods() {
   const [action, setAction] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ quiet } = {}) => {
     try {
-      setLoading(true)
+      if (!quiet) setLoading(true)
       const { data } = await api.get("/finished-goods")
       setItems(Array.isArray(data) ? data : [])
       setError("")
@@ -86,6 +87,8 @@ export default function FinishedGoods() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useLiveRefresh(["finished-goods", "orders"], load)
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()

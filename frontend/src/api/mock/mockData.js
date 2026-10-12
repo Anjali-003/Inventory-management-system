@@ -26,7 +26,7 @@ function mulberry32(seed) {
 }
 
 export const USERS = [
-  { id: 1, name: "Admin", email: "admin@example.com", role: "admin" },
+  { id: 1, name: "Super Admin", email: "superadmin@example.com", role: "super_admin" },
   { id: 2, name: "Store Keeper", email: "store@example.com", role: "staff" },
   { id: 3, name: "Purchase Desk", email: "purchase@example.com", role: "staff" },
 ]

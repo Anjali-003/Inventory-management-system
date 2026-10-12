@@ -5,7 +5,7 @@ const db = require("../../config/db");
 const AppError = require("../../shared/AppError");
 
 /*
-    Checks the email/password of an ADMIN and returns a signed JWT plus the public user fields.
+    Checks the email/password of a SUPER_ADMIN and returns a signed JWT plus the public user fields.
     Throws AppError(401 | 403) when the login is not allowed.
 */
 async function login(email, password) {
@@ -16,7 +16,8 @@ async function login(email, password) {
             name,
             email,
             password_hash,
-            role
+            role,
+            is_active
 
         FROM users
 
@@ -33,15 +34,15 @@ async function login(email, password) {
 
     const user = users[0];
 
-    // Make sure this is an Admin
-    if (user.role !== "ADMIN") {
+    // Only active super admins can log in
+    if (user.role !== "SUPER_ADMIN" || !user.is_active) {
         throw new AppError(403, "Access denied");
     }
 
-    // TODO: remove these three debug logs, they print the plain-text password and the hash to the console.
-    console.log("EMAIL:", user.email);
-    console.log("PASSWORD ENTERED:", password);
-    console.log("HASH FROM DB:", user.password_hash);
+    // A user without a password hash cannot log in (create super admins with: npm run superadmin)
+    if (!user.password_hash) {
+        throw new AppError(401, "Invalid email or password");
+    }
 
     // Compare the password entered by the user with the bcrypt hash stored in MySQL.
     const passwordMatches = await bcrypt.compare(password, user.password_hash);
@@ -98,7 +99,7 @@ async function getCurrentUser(token) {
 
         FROM users
 
-        WHERE id = ?
+        WHERE id = ? AND is_active = TRUE
 
         LIMIT 1
         `,

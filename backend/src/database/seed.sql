@@ -1,26 +1,10 @@
 USE inventory_management;
 
-
--- =========================================
--- 1. ADMIN USER
--- =========================================
-
-INSERT INTO users (
-    name,
-    email,
-    password_hash,
-    role
-)
-VALUES (
-    'Admin',
-    'admin@company.com',
-    NULL,
-    'ADMIN'
-);
+-- No users are created here. Create super admins with: npm run superadmin
 
 
 -- =========================================
--- 2. PRODUCTS
+-- 1. PRODUCTS
 -- =========================================
 
 INSERT INTO products (
@@ -42,7 +26,7 @@ VALUES
 
 
 -- =========================================
--- 3. COMPONENTS
+-- 2. COMPONENTS
 -- =========================================
 
 INSERT INTO components (
@@ -92,7 +76,7 @@ VALUES
 
 
 -- =========================================
--- 4. LED DISPLAY BOM
+-- 3. LED DISPLAY BOM
 -- =========================================
 
 INSERT INTO product_bom (
@@ -115,7 +99,7 @@ VALUES
 
 
 -- =========================================
--- 5. CONTROL BOARD BOM
+-- 4. CONTROL BOARD BOM
 -- =========================================
 
 INSERT INTO product_bom (
@@ -141,7 +125,7 @@ VALUES
 
 
 -- =========================================
--- 6. INVENTORY
+-- 5. INVENTORY
 -- =========================================
 
 INSERT INTO inventory (

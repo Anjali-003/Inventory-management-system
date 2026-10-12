@@ -49,7 +49,7 @@ function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <h1>Admin Login</h1>
+          <h1>Super Admin Login</h1>
 
           <p>Inventory Management System</p>
         </div>
@@ -61,7 +61,7 @@ function Login() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter admin email"
+            placeholder="Enter super admin email"
           />
 
           <label>Password</label>

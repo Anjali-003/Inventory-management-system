@@ -1,5 +1,6 @@
 import { useToast } from "@/components/toast";
 import { useState, useCallback, useEffect, useMemo } from "react";
+import useLiveRefresh from "@/realtime/useLiveRefresh";
 import api from "@/api/api";
 import { n, whole } from "../qcUtils";
 
@@ -22,9 +23,9 @@ export default function useQualityControl() {
   const [redoApproved, setRedoApproved] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ quiet } = {}) => {
     try {
-      setLoading(true);
+      if (!quiet) setLoading(true);
       const { data } = await api.get("/quality-control");
       setItems(Array.isArray(data) ? data : []);
       setError("");
@@ -41,6 +42,8 @@ export default function useQualityControl() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useLiveRefresh(["quality-control", "production", "orders"], load);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();

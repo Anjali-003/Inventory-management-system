@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import useLiveRefresh from "@/realtime/useLiveRefresh"
 import { Factory, RefreshCw } from "lucide-react"
 import api from "@/api/api"
 import PageHeader from "@/components/PageHeader"
@@ -77,9 +78,9 @@ export default function Production() {
   const [quantity, setQuantity] = useState("1")
   const [saving, setSaving] = useState(false)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async ({ quiet } = {}) => {
     try {
-      setLoading(true)
+      if (!quiet) setLoading(true)
       const { data } = await api.get("/production")
       setItems(Array.isArray(data) ? data : [])
       setError("")
@@ -92,6 +93,8 @@ export default function Production() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useLiveRefresh(["production", "orders"], load)
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()

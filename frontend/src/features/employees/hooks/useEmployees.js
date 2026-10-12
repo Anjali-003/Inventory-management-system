@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import api from "@/api/api";
+import useLiveRefresh from "@/realtime/useLiveRefresh";
 
 /*
   Loads the employee list.
@@ -32,6 +33,8 @@ export default function useEmployees() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useLiveRefresh(["employees"], load);
 
   return { employees, loading, error, load, reload };
 }

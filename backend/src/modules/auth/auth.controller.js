@@ -13,7 +13,7 @@ const COOKIE_OPTIONS = {
     sameSite: "lax"
 };
 
-/* ADMIN LOGIN */
+/* SUPER ADMIN LOGIN */
 async function login(req, res) {
     try {
         const { email, password } = req.body;

@@ -48,6 +48,15 @@ const qualityControlRoutes =
 const finishedGoodsRoutes =
     require("./src/modules/finished-goods/finished-goods.routes");
 
+const superAdminRoutes =
+    require("./src/modules/super-admins/super-admin.routes");
+
+const eventsRoutes =
+    require("./src/realtime/events.routes");
+
+const broadcastChanges =
+    require("./src/middleware/broadcastChanges");
+
 
 /*
 =========================================================
@@ -175,6 +184,7 @@ PRODUCT ROUTES
 app.use(
     "/api/products",
     authMiddleware,
+    broadcastChanges("products"),
     productRoutes
 );
 
@@ -188,6 +198,7 @@ COMPONENT ROUTES
 app.use(
     "/api/components",
     authMiddleware,
+    broadcastChanges("components"),
     componentRoutes
 );
 
@@ -201,6 +212,7 @@ INVENTORY ROUTES
 app.use(
     "/api/inventory",
     authMiddleware,
+    broadcastChanges("inventory"),
     inventoryRoutes
 );
 
@@ -214,6 +226,7 @@ ORDER ROUTES
 app.use(
     "/api/orders",
     authMiddleware,
+    broadcastChanges("orders"),
     orderRoutes
 );
 
@@ -227,6 +240,7 @@ PRODUCTION ROUTES
 app.use(
     "/api/production",
     authMiddleware,
+    broadcastChanges("production"),
     productionRoutes
 );
 
@@ -240,6 +254,7 @@ QUALITY CONTROL ROUTES
 app.use(
     "/api/quality-control",
     authMiddleware,
+    broadcastChanges("quality-control"),
     qualityControlRoutes
 );
 
@@ -266,6 +281,7 @@ COMPLETED
 app.use(
     "/api/finished-goods",
     authMiddleware,
+    broadcastChanges("finished-goods"),
     finishedGoodsRoutes
 );
 
@@ -279,6 +295,7 @@ EMPLOYEE ROUTES
 app.use(
     "/api/employees",
     authMiddleware,
+    broadcastChanges("employees"),
     employeeRoutes
 );
 
@@ -292,9 +309,19 @@ ATTENDANCE ROUTES
 app.use(
     "/api/attendance",
     authMiddleware,
+    broadcastChanges("attendance"),
     attendanceRoutes
 );
 
+
+/*
+==========================================================
+SUPER ADMINS + LIVE EVENTS (SSE)
+==========================================================
+*/
+
+app.use("/api/super-admins", authMiddleware, broadcastChanges("super-admins"), superAdminRoutes);
+app.use("/api/events", authMiddleware, eventsRoutes);
 
 /*
 =========================================================
