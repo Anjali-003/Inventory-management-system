@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
 import { AnimatePresence, motion } from "motion/react";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { TiPinOutline } from "react-icons/ti";
@@ -21,6 +22,7 @@ import {
 
 import { cn } from "../lib/utils";
 import api from "../api/api";
+import { baseApi } from "../api/baseApi";
 
 const GROUPS = [
   {
@@ -196,6 +198,7 @@ export default function Layout() {
   const { pathname } = useLocation();
 
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   const [open, setOpen] = useState(false); // mobile drawer
   const [pinned, setPinned] = useState(false); // desktop: fixed in the layout (default: unpinned)
@@ -221,6 +224,7 @@ export default function Layout() {
   const handleLogout = async () => {
     try {
       await api.post("/auth/logout");
+      dispatch(baseApi.util.resetApiState()); // never show the previous user's cached data
 
       navigate("/login");
     } catch (error) {

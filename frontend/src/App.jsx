@@ -3,18 +3,18 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
 import { ToastProvider } from "./components/toast";
 
-import Dashboard from "./pages/Dashboard";
-import Products from "./pages/Products";
-import Inventory from "./pages/Inventory";
-import InventoryHistory from "./pages/InventoryHistory";
-import Orders from "./pages/Orders";
-import Production from "./pages/Production";
-import Login from "./pages/Login";
-import ProtectedRoute from "./components/ProtectedRoute";
-import Employees from "./pages/Employees";
-import Attendance from "./pages/Attendance";
-import QualityControl from "./pages/QualityControl";
-import FinishedGoods from "./pages/FinishedGoods";
+import Dashboard from "@/features/dashboard/Dashboard";
+import Products from "@/features/products/Products";
+import Inventory from "@/features/inventory/Inventory";
+import InventoryHistory from "@/features/inventory/InventoryHistory";
+import Orders from "@/features/orders/Orders";
+import Production from "@/features/production/Production";
+import Login from "@/features/auth/Login";
+import ProtectedRoute from "@/features/auth/ProtectedRoute";
+import Employees from "@/features/employees/Employees";
+import Attendance from "@/features/attendance/Attendance";
+import QualityControl from "@/features/quality-control/QualityControl";
+import FinishedGoods from "@/features/finished-goods/FinishedGoods";
 
 function App() {
   return (

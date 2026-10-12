@@ -68,7 +68,7 @@ const fakeDb = {
   }; },
 };
 require.cache[require.resolve(B + "/config/db.js")] = { id: "db", filename: "db", loaded: true, exports: fakeDb };
-const svc = require(B + "/services/inventoryService.js");
+const svc = require(B + "/modules/inventory/inventory.service.js");
 
 const K = () => "key-" + Math.random().toString(36).slice(2, 14);
 const base = { reason: "Purchase receipt", reference_no: "PO-1" };

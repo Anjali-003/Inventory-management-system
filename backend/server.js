@@ -19,34 +19,34 @@ ROUTES
 */
 
 const authRoutes =
-    require("./src/routes/authRoutes");
+    require("./src/modules/auth/auth.routes");
 
 const productRoutes =
-    require("./src/routes/productRoutes");
+    require("./src/modules/products/product.routes");
 
 const componentRoutes =
-    require("./src/routes/componentRoutes");
+    require("./src/modules/components/component.routes");
 
 const inventoryRoutes =
-    require("./src/routes/inventoryRoutes");
+    require("./src/modules/inventory/inventory.routes");
 
 const orderRoutes =
-    require("./src/routes/orderRoutes");
+    require("./src/modules/orders/order.routes");
 
 const productionRoutes =
-    require("./src/routes/productionRoutes");
+    require("./src/modules/production/production.routes");
 
 const employeeRoutes =
-    require("./src/routes/employeeRoutes");
+    require("./src/modules/employees/employee.routes");
 
 const attendanceRoutes =
-    require("./src/routes/attendanceRoutes");
+    require("./src/modules/attendance/attendance.routes");
 
 const qualityControlRoutes =
-    require("./src/routes/qualityControlRoutes");
+    require("./src/modules/quality-control/quality-control.routes");
 
 const finishedGoodsRoutes =
-    require("./src/routes/finishedGoodsRoutes");
+    require("./src/modules/finished-goods/finished-goods.routes");
 
 
 /*
