@@ -19,9 +19,14 @@ const create = handle(async (req, res) =>
     res.status(201).json(await service.create(req.body, req.user.userId))
 );
 
+const update = handle(async (req, res) => {
+    const { name, email, password } = req.body || {};
+    res.json(await service.update(Number(req.params.id), { name, email, password }));
+});
+
 const setActive = (active) =>
     handle(async (req, res) =>
         res.json(await service.setActive(Number(req.params.id), active, req.user.userId))
     );
 
-module.exports = { list, create, activate: setActive(true), deactivate: setActive(false) };
+module.exports = { list, create, update, activate: setActive(true), deactivate: setActive(false) };

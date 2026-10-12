@@ -9,8 +9,15 @@ import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import UserCell from "@/components/UserCell"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
+
+// the person behind the latest step of this batch (approved -> dispatched -> completed)
+const actorOf = (item) =>
+  item.status === "COMPLETED" && item.completedByName ? { name: item.completedByName, sub: "Completed" }
+  : item.dispatchedByName && item.status !== "PACKAGING" ? { name: item.dispatchedByName, sub: "Dispatched" }
+  : { name: item.createdByName, sub: item.createdByName ? "Added" : null }
 
 function Status({ value }) {
   const [variant, label] = value === "PACKAGING" ? ["warning", "Packaging"] : value === "DISPATCHED" ? ["info", "Dispatched"] : value === "COMPLETED" ? ["success", "Completed"] : ["neutral", value || "Unknown"]
@@ -54,6 +61,10 @@ function ItemCard({ item, onAction }) {
         <div className="bg-card py-2.5"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Quantity</p><p className="font-semibold tabular-nums">{item.quantity ?? 0}</p></div>
         <div className="bg-card py-2.5"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Batch</p><p className="font-semibold tabular-nums">#{item.id}</p></div>
       </div>
+      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <span>Last action</span>
+        <UserCell {...actorOf(item)} className="text-foreground" />
+      </div>
       <div className="mt-3 flex justify-end border-t pt-3">
         {item.status === "PACKAGING" && <Button size="sm" onClick={() => onAction(item, "DISPATCH")}><Truck /> Mark dispatched</Button>}
         {item.status === "DISPATCHED" && <Button size="sm" onClick={() => onAction(item, "COMPLETE")}><CheckCircle2 /> Mark completed</Button>}
@@ -92,7 +103,7 @@ export default function FinishedGoods() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return items.filter((item) => !q || `${item.orderNumber} ${item.productName} ${item.productSku} ${item.status}`.toLowerCase().includes(q))
+    return items.filter((item) => !q || `${item.orderNumber} ${item.productName} ${item.productSku} ${item.status} ${item.createdByName || ""} ${item.dispatchedByName || ""} ${item.completedByName || ""}`.toLowerCase().includes(q))
   }, [items, query])
 
   const counts = useMemo(() => ({
@@ -139,7 +150,7 @@ export default function FinishedGoods() {
             { key: "total", label: "Total batches", value: items.length, tone: "neutral" },
           ]}
         />
-        <div className="flex items-center gap-3 border-b px-4 py-3 sm:px-5"><SearchBar value={query} onChange={setQuery} placeholder="Search order, product or SKU..." /></div>
+        <div className="flex items-center gap-3 border-b px-4 py-3 sm:px-5"><SearchBar value={query} onChange={setQuery} placeholder="Search order, product, SKU or person..." /></div>
 
         {loading ? <TableSkeleton rows={6} /> : rows.length === 0 ? (
           <EmptyState icon={PackageCheck} title={query ? "No matching finished goods" : "No finished goods yet"}>
@@ -150,7 +161,7 @@ export default function FinishedGoods() {
             <div className="hidden md:block">
               <Table>
                 <TableHeader><TableRow>
-                  <TableHead>Order</TableHead><TableHead>Product</TableHead><TableHead>SKU</TableHead><TableHead>Qty</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Action</TableHead>
+                  <TableHead>Order</TableHead><TableHead>Product</TableHead><TableHead>SKU</TableHead><TableHead>Qty</TableHead><TableHead>Status</TableHead><TableHead>Last action by</TableHead><TableHead className="text-right">Action</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>{rows.map((item) => (
                   <TableRow key={item.id}>
@@ -159,6 +170,7 @@ export default function FinishedGoods() {
                     <TableCell className="text-sm text-muted-foreground">{item.productSku || "-"}</TableCell>
                     <TableCell className="tabular-nums">{item.quantity ?? 0}</TableCell>
                     <TableCell><Status value={item.status} /></TableCell>
+                    <TableCell className="min-w-40"><UserCell {...actorOf(item)} /></TableCell>
                     <TableCell className="text-right">
                       {item.status === "PACKAGING" && <Button size="sm" onClick={() => confirm(item, "DISPATCH")}><Truck /> Dispatched</Button>}
                       {item.status === "DISPATCHED" && <Button size="sm" onClick={() => confirm(item, "COMPLETE")}><CheckCircle2 /> Completed</Button>}

@@ -164,14 +164,14 @@ async function startProduction(orderId, quantity, userId) {
     if (existing) {
       await connection.query(`
         UPDATE production_orders
-        SET quantity_to_produce = quantity_to_produce + ?, status = 'IN_PRODUCTION', completed_at = NULL
+        SET quantity_to_produce = quantity_to_produce + ?, status = 'IN_PRODUCTION', completed_at = NULL, updated_by = ?
         WHERE id = ?
-      `, [quantity, productionId])
+      `, [quantity, userId, productionId])
     } else {
       const [result] = await connection.query(`
-        INSERT INTO production_orders (order_id, quantity_to_produce, quantity_completed, status, started_by, started_at)
-        VALUES (?, ?, 0, 'IN_PRODUCTION', ?, NOW())
-      `, [orderId, quantity, userId])
+        INSERT INTO production_orders (order_id, quantity_to_produce, quantity_completed, status, started_by, updated_by, started_at)
+        VALUES (?, ?, 0, 'IN_PRODUCTION', ?, ?, NOW())
+      `, [orderId, quantity, userId, userId])
       productionId = result.insertId
     }
 
@@ -205,9 +205,13 @@ async function getProductionOrders() {
     SELECT po.id, po.order_id, o.order_number, o.status AS order_status, po.status,
            po.quantity_to_produce, po.quantity_completed,
            (po.quantity_to_produce - po.quantity_completed) AS quantity_in_production,
-           oi.ordered_quantity, oi.product_name, po.started_at, po.completed_at
+           oi.ordered_quantity, oi.product_name, po.started_at, po.completed_at,
+           po.started_by, su.name AS started_by_name,
+           po.updated_by, uu.name AS updated_by_name
     FROM production_orders po
     JOIN orders o ON o.id = po.order_id
+    LEFT JOIN users su ON su.id = po.started_by
+    LEFT JOIN users uu ON uu.id = po.updated_by
     JOIN (
       SELECT oi.order_id, SUM(oi.quantity) AS ordered_quantity, MAX(p.name) AS product_name
       FROM order_items oi JOIN products p ON p.id = oi.product_id GROUP BY oi.order_id
@@ -259,8 +263,8 @@ async function updateProductionProgress(productionId, quantity, userId) {
     const newCompleted = completed + quantity
     const orderCompleted = newCompleted >= orderedQuantity
     await connection.query(`
-      UPDATE production_orders SET quantity_completed = ?, status = ?, completed_at = ? WHERE id = ?
-    `, [newCompleted, orderCompleted ? "COMPLETED" : "IN_PRODUCTION", orderCompleted ? new Date() : null, productionId])
+      UPDATE production_orders SET quantity_completed = ?, status = ?, completed_at = ?, updated_by = ? WHERE id = ?
+    `, [newCompleted, orderCompleted ? "COMPLETED" : "IN_PRODUCTION", orderCompleted ? new Date() : null, userId, productionId])
     await connection.query(`UPDATE orders SET status = ? WHERE id = ?`, [orderCompleted ? "TESTING" : "IN_PRODUCTION", production.order_id])
     await connection.commit()
 

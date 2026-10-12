@@ -1,5 +1,6 @@
 const service = require("./auth.service");
 const AppError = require("../../shared/AppError");
+const activity = require("../activity/activity.service");
 
 const COOKIE_NAME = "access_token";
 
@@ -29,6 +30,15 @@ async function login(req, res) {
         res.cookie(COOKIE_NAME, token, {
             ...COOKIE_OPTIONS,
             maxAge: 24 * 60 * 60 * 1000
+        });
+
+        // other super admins see "X logged in" (not awaited: never delays or fails the login)
+        activity.log({
+            userId: user.id,
+            userName: user.name,
+            resource: "auth",
+            action: "login",
+            summary: "Logged in"
         });
 
         res.json({

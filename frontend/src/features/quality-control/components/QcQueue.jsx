@@ -5,6 +5,7 @@ import { n } from "../qcUtils";
 import { Status } from "./QcStatus";
 import { Button } from "@/components/ui/button";
 import { ProductionCard } from "./ProductionCard";
+import UserCell from "@/components/UserCell";
 
 export default function QcQueue({
   loading,
@@ -71,12 +72,18 @@ export default function QcQueue({
                         Passed {n(item.quantityPassed)} · Failed {failed} ·
                         Left {testing}
                       </p>
+                      {item.lastTestedBy && (
+                        <UserCell className="mt-1.5" name={item.lastTestedBy} sub="Last tested by" />
+                      )}
                     </TableCell>
                     <TableCell>
                       <p>Inspected {n(item.quantityInspected)}</p>
                       <p className="text-xs text-muted-foreground">
                         Approved {n(item.quantityApproved)} · Ready {qc}
                       </p>
+                      {item.lastCheckedBy && (
+                        <UserCell className="mt-1.5" name={item.lastCheckedBy} sub="Last checked by" />
+                      )}
                     </TableCell>
                     <TableCell>
                       <Status item={item} />

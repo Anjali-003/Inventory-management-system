@@ -54,6 +54,12 @@ const superAdminRoutes =
 const eventsRoutes =
     require("./src/realtime/events.routes");
 
+const activityRoutes =
+    require("./src/modules/activity/activity.routes");
+
+const requireRole =
+    require("./src/middleware/requireRole");
+
 const broadcastChanges =
     require("./src/middleware/broadcastChanges");
 
@@ -322,6 +328,7 @@ SUPER ADMINS + LIVE EVENTS (SSE)
 
 app.use("/api/super-admins", authMiddleware, broadcastChanges("super-admins"), superAdminRoutes);
 app.use("/api/events", authMiddleware, eventsRoutes);
+app.use("/api/activity", authMiddleware, requireRole("SUPER_ADMIN"), activityRoutes);
 
 /*
 =========================================================

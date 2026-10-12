@@ -18,6 +18,7 @@ import {
   Warehouse,
   Users,
   CalendarCheck,
+  Activity,
 } from "lucide-react";
 
 import { cn } from "../lib/utils";
@@ -33,6 +34,11 @@ const GROUPS = [
         label: "Dashboard",
         icon: LayoutDashboard,
         end: true,
+      },
+      {
+        to: "/activity",
+        label: "Activity",
+        icon: Activity,
       },
     ],
   },

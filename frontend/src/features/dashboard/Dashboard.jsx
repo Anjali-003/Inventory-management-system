@@ -6,6 +6,8 @@ import { useGetOrdersQuery } from "@/features/orders/ordersApi"
 import { useGetProductsQuery } from "@/features/products/productsApi"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
 import { useGetAttendanceQuery } from "@/features/attendance/attendanceApi"
+import { useGetMeQuery } from "@/features/auth/authApi"
+import RecentActivity from "@/features/activity/RecentActivity"
 import PageHeader from "@/components/PageHeader"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -44,13 +46,15 @@ export default function Dashboard() {
   const { data: att = null } = useGetAttendanceQuery(today)
   const attCount = (s) => (att ? att.filter((e) => e.status === s).length : 0)
 
+  const { data: me } = useGetMeQuery()
+
   const lowStock = inventory.filter((i) => Number(i.available) <= Number(i.minimum_stock_level))
   const uniqueOrders = [...new Map(orders.map((o) => [o.id, o])).values()]
   const openOrders = new Set(orders.filter((o) => o.status !== "COMPLETED").map((o) => o.id)).size
 
   return (
     <>
-      <PageHeader title="Dashboard" description="Stock health and order load across production." />
+      <PageHeader title={me?.name ? `Hello, ${me.name}` : "Dashboard"} description="Stock health and order load across production." />
       {error && <div className="mb-6"><Notice title="Something went wrong">{error}</Notice></div>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -147,6 +151,8 @@ export default function Dashboard() {
         </div>
       </Card>
       </div>
+
+      <RecentActivity />
 
       {att && (
         <Card className="mt-4">

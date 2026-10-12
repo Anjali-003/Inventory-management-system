@@ -119,7 +119,8 @@ async function create(req, res) {
             }
         }
 
-        const order = await orderService.createOrder(items);
+        // req.user is set by authMiddleware + resolveUser (see order.routes.js)
+        const order = await orderService.createOrder(items, req.user.id);
 
         res.status(201).json({
             message: "Order created successfully",

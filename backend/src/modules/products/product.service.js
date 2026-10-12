@@ -282,13 +282,13 @@ function checkProduct(input) {
     return { sku, name, description: description || null };
 }
 
-async function createProduct(input) {
+async function createProduct(input, userId = null) {
     const p = checkProduct(input || {});
     if (p.error) throw new HttpError(422, p.error, "VALIDATION", { field: p.field });
     return inTransaction(async (conn) => {
         const sku = p.sku || (await nextProductSku(conn));
         try {
-            const [r] = await conn.query("INSERT INTO products (sku, name, description) VALUES (?, ?, ?)", [sku, p.name, p.description]);
+            const [r] = await conn.query("INSERT INTO products (sku, name, description, created_by) VALUES (?, ?, ?, ?)", [sku, p.name, p.description, userId]);
             const [[row]] = await conn.query("SELECT * FROM products WHERE id = ?", [r.insertId]);
             return row;
         } catch (error) {
@@ -302,7 +302,7 @@ async function createProduct(input) {
     Bulk add. rows: [{ line, sku, name, description }]. Rows with a problem or an SKU that already
     exists are reported and skipped; the rest are created. dryRun only reports.
 */
-async function importProducts({ rows, dryRun }) {
+async function importProducts({ rows, dryRun, userId = null }) {
     if (!Array.isArray(rows) || rows.length === 0) throw new HttpError(422, "No product rows to import", "VALIDATION");
     if (rows.length > MAX_PRODUCT_ROWS) throw new HttpError(422, `At most ${MAX_PRODUCT_ROWS} products can be imported at once`, "VALIDATION");
 
@@ -327,7 +327,7 @@ async function importProducts({ rows, dryRun }) {
             if (taken.has(row.sku)) { row.status = "exists"; row.message = "A product with this SKU already exists. It will be skipped."; continue; }
             taken.add(row.sku);
             if (!dryRun) {
-                await conn.query("INSERT INTO products (sku, name, description) VALUES (?, ?, ?)", [row.sku, p.name, p.description]);
+                await conn.query("INSERT INTO products (sku, name, description, created_by) VALUES (?, ?, ?, ?)", [row.sku, p.name, p.description, userId]);
             }
         }
         const count = (s) => out.filter((r) => r.status === s).length;
@@ -439,7 +439,12 @@ async function importBom(productId, input) {
 
 /* Plain reads used by the controller (previously queried straight from the route file). */
 async function listProducts() {
-    const [rows] = await db.query("SELECT * FROM products ORDER BY id");
+    const [rows] = await db.query(
+        `SELECT p.*, u.name AS created_by_name
+         FROM products p
+         LEFT JOIN users u ON u.id = p.created_by
+         ORDER BY p.id`
+    );
     return rows;
 }
 

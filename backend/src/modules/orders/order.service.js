@@ -40,6 +40,8 @@ async function listOrders() {
             o.order_number,
             o.status,
             o.created_at,
+            o.created_by,
+            cu.name AS created_by_name,
             oi.product_id,
             p.name AS product_name,
             oi.quantity,
@@ -53,6 +55,8 @@ async function listOrders() {
             ON oi.product_id = p.id
         LEFT JOIN production_orders po
             ON po.order_id = o.id
+        LEFT JOIN users cu
+            ON cu.id = o.created_by
         ORDER BY o.id DESC
         `
     );
@@ -70,6 +74,8 @@ async function getOrderById(orderId) {
             o.order_number,
             o.status,
             o.created_at,
+            o.created_by,
+            cu.name AS created_by_name,
 
             oi.product_id,
 
@@ -79,6 +85,9 @@ async function getOrderById(orderId) {
             oi.quantity
 
         FROM orders o
+
+        LEFT JOIN users cu
+            ON cu.id = o.created_by
 
         JOIN order_items oi
             ON o.id = oi.order_id
@@ -100,6 +109,8 @@ async function getOrderById(orderId) {
         orderNumber: rows[0].order_number,
         status: rows[0].status,
         createdAt: rows[0].created_at,
+        createdBy: rows[0].created_by,
+        createdByName: rows[0].created_by_name,
         items: rows.map((row) => ({
             productId: row.product_id,
             productSku: row.product_sku,
@@ -170,8 +181,8 @@ function buildOrderNumber(orderId, now = new Date()) {
 }
 
 
-/* CREATE ORDER (order row + its items, in one transaction) */
-async function createOrder(items) {
+/* CREATE ORDER (order row + its items, in one transaction). userId = the super admin creating it. */
+async function createOrder(items, userId = null) {
     const connection = await db.getConnection();
 
     try {
@@ -189,15 +200,17 @@ async function createOrder(items) {
             INSERT INTO orders
             (
                 order_number,
-                status
+                status,
+                created_by
             )
             VALUES
             (
                 ?,
-                'PENDING'
+                'PENDING',
+                ?
             )
             `,
-            [temporaryOrderNumber]
+            [temporaryOrderNumber, userId]
         );
 
         const orderId = orderResult.insertId;

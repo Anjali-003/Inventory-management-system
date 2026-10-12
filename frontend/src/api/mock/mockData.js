@@ -120,6 +120,7 @@ export function buildSeed(now = new Date()) {
   }))
   const orders = ORDERS.map(([id, order_number, status, product_id, quantity, d]) => ({
     id, order_number, status, product_id, quantity, created_at: fmtDT(at(d, 10)),
+    created_by: id % 2 ? 1 : 2,
     product_name: PRODUCTS.find((p) => p.id === product_id).name,
   }))
 

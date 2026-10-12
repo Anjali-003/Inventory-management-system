@@ -42,12 +42,12 @@ const nextSku = handle(async (req, res) => {
 
 // Add one product by hand: { sku?, name, description? }  (blank SKU -> next PRD-###)
 const create = handle(async (req, res) => {
-    res.status(201).json(await svc.createProduct(req.body));
+    res.status(201).json(await svc.createProduct(req.body, req.user.id));
 });
 
 // Add many products from a spreadsheet the browser has read: { rows: [{ line, sku, name, description }], dryRun }
 const importMany = handle(async (req, res) => {
-    res.json(await svc.importProducts({ rows: req.body && req.body.rows, dryRun: !!(req.body && req.body.dryRun) }));
+    res.json(await svc.importProducts({ rows: req.body && req.body.rows, dryRun: !!(req.body && req.body.dryRun), userId: req.user.id }));
 });
 
 async function getOne(req, res) {

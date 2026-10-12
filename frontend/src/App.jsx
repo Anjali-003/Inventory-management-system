@@ -16,6 +16,7 @@ import Employees from "@/features/employees/Employees";
 import Attendance from "@/features/attendance/Attendance";
 import QualityControl from "@/features/quality-control/QualityControl";
 import FinishedGoods from "@/features/finished-goods/FinishedGoods";
+import Activity from "@/features/activity/Activity";
 
 function App() {
   return (
@@ -47,6 +48,8 @@ function App() {
             />
 
           <Route path="/inventory-history" element={<InventoryHistory />} />
+
+          <Route path="/activity" element={<Activity />} />
 
           <Route path="/orders" element={<Orders />} />
             <Route

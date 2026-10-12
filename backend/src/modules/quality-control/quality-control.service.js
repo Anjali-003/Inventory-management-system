@@ -67,8 +67,13 @@ async function getQualityControlSummary(connection, productionId) {
 }
 
 async function latest(connection, table, productionId) {
+  // user_name = who recorded (or last edited) that row
+  const userColumn = table === "testing_records" ? "tested_by" : "checked_by";
   const [rows] = await connection.query(
-    `SELECT * FROM ${table} WHERE production_id = ? ORDER BY id DESC LIMIT 1`,
+    `SELECT r.*, u.name AS user_name
+     FROM ${table} r
+     LEFT JOIN users u ON u.id = r.${userColumn}
+     WHERE r.production_id = ? ORDER BY r.id DESC LIMIT 1`,
     [productionId],
   );
   return rows[0] || null;
@@ -172,6 +177,7 @@ async function saveTestingResult(
       production,
       testing,
       qualityControl,
+      userId,
     );
 
     await connection.commit();
@@ -267,6 +273,7 @@ async function redoTesting(productionId, redoPassed, userId) {
       await getProductionOrder(connection, productionId),
       summary,
       qualityControl,
+      userId,
     );
 
     await connection.commit();
@@ -298,6 +305,7 @@ async function finishOrderIfReady(
   production,
   testing,
   qualityControl,
+  userId = null,
 ) {
   const ordered = Number(production.ordered_quantity);
   const ready =
@@ -334,6 +342,7 @@ async function finishOrderIfReady(
       production.order_id,
       missing,
       connection,
+      userId,
     );
   } else {
     await connection.query(
@@ -416,6 +425,7 @@ async function redoQualityControl(productionId, redoApproved, userId) {
       production,
       testing,
       qualityControl,
+      userId,
     );
 
     await connection.commit();
@@ -502,6 +512,7 @@ async function saveQualityControlResult(
       production,
       testing,
       qualityControl,
+      userId,
     );
 
     await connection.commit();
@@ -546,7 +557,9 @@ async function getQualityControlOrders() {
              COALESCE((SELECT SUM(t.quantity_failed) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_failed,
              COALESCE((SELECT SUM(q.quantity_inspected) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_inspected,
              COALESCE((SELECT SUM(q.quantity_approved) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_approved,
-             COALESCE((SELECT SUM(q.quantity_rejected) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_rejected
+             COALESCE((SELECT SUM(q.quantity_rejected) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_rejected,
+             (SELECT u.name FROM testing_records t JOIN users u ON u.id = t.tested_by WHERE t.production_id = po.id ORDER BY t.id DESC LIMIT 1) AS last_tested_by,
+             (SELECT u.name FROM quality_control_records q JOIN users u ON u.id = q.checked_by WHERE q.production_id = po.id ORDER BY q.id DESC LIMIT 1) AS last_checked_by
       FROM production_orders po
       JOIN orders o ON o.id = po.order_id
       JOIN order_items oi ON oi.order_id = o.id
@@ -594,6 +607,8 @@ async function getQualityControlOrders() {
         status: row.order_status,
         startedAt: row.started_at,
         completedAt: row.completed_at,
+        lastTestedBy: row.last_tested_by,
+        lastCheckedBy: row.last_checked_by,
       };
     });
   } finally {

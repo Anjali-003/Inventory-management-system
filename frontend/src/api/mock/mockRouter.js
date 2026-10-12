@@ -471,13 +471,19 @@ function balanceSheet() {
 
 /* ------------------------------------------------------------ other lists */
 const orderRows = () => [...state().orders].sort((a, b) => b.id - a.id)
-  .map((o) => ({ id: o.id, order_number: o.order_number, status: o.status, created_at: o.created_at, product_id: o.product_id, product_name: o.product_name, quantity: o.quantity }))
+  .map((o) => ({ id: o.id, order_number: o.order_number, status: o.status, created_at: o.created_at, product_id: o.product_id, product_name: o.product_name, quantity: o.quantity,
+    created_by: o.created_by ?? null, created_by_name: o.created_by ? userName(o.created_by) : null }))
 
 /* ------------------------------------------------------------------ router */
 const ok = (data, status = 200) => ({ status, data })
 const ROUTES = [
   ["GET", /^\/auth\/me$/, () => (authed ? ok({ user: USERS[0] }) : ok({ message: "Not authenticated" }, 401))],
   ["POST", /^\/auth\/login$/, () => { setAuthed(true); return ok({ message: "Login successful (mock)", user: USERS[0] }) }],
+  ["GET", /^\/activity$/, () => ok([
+    { id: 3, user_id: 2, user_name: "Priya Verma", action: "created", resource: "orders", resource_id: null, summary: "Created order", created_at: new Date(Date.now() - 5 * 60000).toISOString() },
+    { id: 2, user_id: 1, user_name: "Super Admin", action: "update-progress", resource: "production", resource_id: 5, summary: "Update progress — production order #5", created_at: new Date(Date.now() - 3600000).toISOString() },
+    { id: 1, user_id: 2, user_name: "Priya Verma", action: "login", resource: "auth", resource_id: null, summary: "Logged in", created_at: new Date(Date.now() - 86400000).toISOString() },
+  ])],
   ["POST", /^\/auth\/logout$/, () => { setAuthed(false); return ok({ message: "Logged out" }) }],
 
   ["GET", /^\/inventory\/ledger$/, (m, q) => ok(getLedger(q))],

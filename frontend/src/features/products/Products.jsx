@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card"
 import { Modal } from "@/components/Modal"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import UserCell from "@/components/UserCell"
 import { errorMessage, fmtQty } from "@/lib/stock"
 import { useToast } from "@/components/toast"
 import AddProductModal from "./components/AddProductModal"
@@ -137,6 +138,7 @@ export default function Products() {
                 <TableHead>SKU</TableHead>
                 <TableHead>Product</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead>Added by</TableHead>
                 <TableHead className="text-right"><span className="sr-only">Actions</span></TableHead>
               </TableRow>
             </TableHeader>
@@ -146,6 +148,7 @@ export default function Products() {
                   <TableCell className="font-medium tabular-nums">{p.sku}</TableCell>
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="min-w-56 max-w-xs whitespace-normal text-muted-foreground">{p.description}</TableCell>
+                  <TableCell className="min-w-40"><UserCell name={p.created_by_name} /></TableCell>
                   <TableCell className="text-right">
                     <Button variant="outline" size="sm" onClick={() => openBom(p)}>View BOM</Button>
                   </TableCell>

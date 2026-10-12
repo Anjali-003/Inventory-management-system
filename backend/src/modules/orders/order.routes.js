@@ -5,7 +5,7 @@ const resolveUser = require("../../middleware/resolveUser");
 const router = express.Router();
 
 router.get("/", controller.list);
-router.post("/", controller.create);
+router.post("/", resolveUser, controller.create);
 
 router.get("/:id", controller.getOne);
 router.patch("/:id/status", controller.updateStatus);

@@ -3,11 +3,15 @@ const db = require("../../config/db")
 const selectSql = `
   SELECT fg.id, fg.production_id, fg.order_id, fg.quantity, fg.status,
          fg.created_at, fg.dispatched_at, fg.completed_at,
-         o.order_number, oi.product_id, p.sku AS product_sku, p.name AS product_name
+         o.order_number, oi.product_id, p.sku AS product_sku, p.name AS product_name,
+         cu.name AS created_by_name, du.name AS dispatched_by_name, xu.name AS completed_by_name
   FROM finished_goods fg
   JOIN orders o ON o.id = fg.order_id
   JOIN order_items oi ON oi.order_id = o.id
   JOIN products p ON p.id = oi.product_id
+  LEFT JOIN users cu ON cu.id = fg.created_by
+  LEFT JOIN users du ON du.id = fg.dispatched_by
+  LEFT JOIN users xu ON xu.id = fg.completed_by
 `
 
 const mapRow = (r) => ({
@@ -15,6 +19,7 @@ const mapRow = (r) => ({
   productId: r.product_id, productSku: r.product_sku, productName: r.product_name,
   quantity: Number(r.quantity), status: r.status, createdAt: r.created_at,
   dispatchedAt: r.dispatched_at, completedAt: r.completed_at,
+  createdByName: r.created_by_name, dispatchedByName: r.dispatched_by_name, completedByName: r.completed_by_name,
 })
 
 async function getFinishedGoods() {
@@ -28,7 +33,7 @@ async function getFinishedGood(id) {
   return mapRow(rows[0])
 }
 
-async function createFinishedGood(productionId, orderId, quantity, connection = null) {
+async function createFinishedGood(productionId, orderId, quantity, connection = null, userId = null) {
   const own = !connection
   connection ??= await db.getConnection()
   try {
@@ -66,7 +71,7 @@ async function createFinishedGood(productionId, orderId, quantity, connection = 
     const [existing] = await connection.query(`SELECT id FROM finished_goods WHERE order_id = ? LIMIT 1`, [orderId])
     if (existing.length) return { success: true, finishedGoodsId: existing[0].id, productionId, orderId, quantity, status: "PACKAGING", message: "Finished goods already exist for this order" }
 
-    const [result] = await connection.query(`INSERT INTO finished_goods (production_id, order_id, quantity, status) VALUES (?, ?, ?, 'PACKAGING')`, [productionId, orderId, quantity])
+    const [result] = await connection.query(`INSERT INTO finished_goods (production_id, order_id, quantity, status, created_by) VALUES (?, ?, ?, 'PACKAGING', ?)`, [productionId, orderId, quantity, userId])
     await connection.query(`UPDATE orders SET status = 'PACKAGING', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN ('COMPLETED')`, [orderId])
     return { success: true, finishedGoodsId: result.insertId, productionId, orderId, quantity, status: "PACKAGING", message: "Finished goods created successfully" }
   } finally {
@@ -74,14 +79,14 @@ async function createFinishedGood(productionId, orderId, quantity, connection = 
   }
 }
 
-async function transition(id, from, to, timestampColumn) {
+async function transition(id, from, to, timestampColumn, userColumn, userId) {
   const connection = await db.getConnection()
   try {
     await connection.beginTransaction()
     const [rows] = await connection.query(`SELECT id, order_id, status FROM finished_goods WHERE id = ? FOR UPDATE`, [id])
     if (!rows.length) throw new Error("Finished goods record not found")
     if (rows[0].status !== from) throw new Error(`Cannot ${to === "DISPATCHED" ? "dispatch" : "complete"} finished goods with status ${rows[0].status}`)
-    await connection.query(`UPDATE finished_goods SET status = ?, ${timestampColumn} = CURRENT_TIMESTAMP WHERE id = ?`, [to, id])
+    await connection.query(`UPDATE finished_goods SET status = ?, ${timestampColumn} = CURRENT_TIMESTAMP, ${userColumn} = ? WHERE id = ?`, [to, userId, id])
     if (to === "DISPATCHED") {
       await connection.query(`UPDATE orders SET status = 'DISPATCHED', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [rows[0].order_id])
     } else {
@@ -101,7 +106,7 @@ async function transition(id, from, to, timestampColumn) {
   }
 }
 
-const markDispatched = (id) => transition(id, "PACKAGING", "DISPATCHED", "dispatched_at")
-const markCompleted = (id) => transition(id, "DISPATCHED", "COMPLETED", "completed_at")
+const markDispatched = (id, userId = null) => transition(id, "PACKAGING", "DISPATCHED", "dispatched_at", "dispatched_by", userId)
+const markCompleted = (id, userId = null) => transition(id, "DISPATCHED", "COMPLETED", "completed_at", "completed_by", userId)
 
 module.exports = { getFinishedGoods, getFinishedGood, createFinishedGood, markDispatched, markCompleted }

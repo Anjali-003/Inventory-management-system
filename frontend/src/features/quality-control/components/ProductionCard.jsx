@@ -2,6 +2,7 @@ import { n } from "../qcUtils";
 import { Status } from "./QcStatus";
 import { Button } from "@/components/ui/button";
 import { FlaskConical, ClipboardCheck } from "lucide-react";
+import UserCell from "@/components/UserCell";
 
 export function ProductionCard({ item, onOpen }) {
   const produced = n(item.quantityCompleted);
@@ -45,6 +46,12 @@ export function ProductionCard({ item, onOpen }) {
           : `${tested} unit(s) tested.`}
         {failed > 0 && ` ${failed} failed unit(s) need a redo.`}
       </p>
+      {(item.lastTestedBy || item.lastCheckedBy) && (
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
+          {item.lastTestedBy && <UserCell name={item.lastTestedBy} sub="Last tested by" />}
+          {item.lastCheckedBy && <UserCell name={item.lastCheckedBy} sub="Last checked by" />}
+        </div>
+      )}
 
       <div className="mt-3 flex flex-wrap gap-2 border-t pt-3">
         {(remaining > 0 || failed > 0) && (

@@ -7,11 +7,21 @@ import SearchBar from "@/components/SearchBar"
 import { EmptyState, Notice, OrderStatus, TableSkeleton } from "@/components/feedback"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import UserCell from "@/components/UserCell"
 import { Input, Label } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 const num = (v) => Number(v || 0)
 const date = (v) => (v ? new Date(v).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "-")
+
+// who started the run, plus who touched it last when that is somebody else
+const actorOf = (item) =>
+  item.started_by_name
+    ? {
+        name: item.started_by_name,
+        sub: item.updated_by_name && item.updated_by_name !== item.started_by_name ? `Last update: ${item.updated_by_name}` : null,
+      }
+    : { name: item.updated_by_name, sub: item.updated_by_name ? "Last update" : null }
 
 function Progress({ done, total }) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0
@@ -58,7 +68,10 @@ function ProductionCard({ item, onUpdate }) {
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3 border-t pt-3">
-        <p className="text-xs text-muted-foreground">Started {date(item.started_at)}</p>
+        <div className="min-w-0 space-y-1">
+          <p className="text-xs text-muted-foreground">Started {date(item.started_at)}</p>
+          <UserCell {...actorOf(item)} />
+        </div>
         {item.status === "IN_PRODUCTION" && inProduction > 0 ? (
           <Button size="sm" onClick={() => onUpdate(item)}>Update</Button>
         ) : (
@@ -98,7 +111,7 @@ export default function Production() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return items.filter((item) => !q || `${item.order_number} ${item.product_name} ${item.status}`.toLowerCase().includes(q))
+    return items.filter((item) => !q || `${item.order_number} ${item.product_name} ${item.status} ${item.started_by_name || ""} ${item.updated_by_name || ""}`.toLowerCase().includes(q))
   }, [items, query])
 
   const openUpdate = (item) => {
@@ -147,7 +160,7 @@ export default function Production() {
 
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3 sm:px-5">
-          <SearchBar value={query} onChange={setQuery} placeholder="Search order, product or status..." />
+          <SearchBar value={query} onChange={setQuery} placeholder="Search order, product, status or person..." />
         </div>
 
         {loading ? <TableSkeleton rows={7} /> : rows.length === 0 ? (
@@ -164,6 +177,7 @@ export default function Production() {
                   <TableHead>Progress</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Started</TableHead>
+                  <TableHead>Started by</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
@@ -179,6 +193,7 @@ export default function Production() {
                         <TableCell className="min-w-52"><Progress done={completed} total={ordered} /><p className="mt-1 text-xs text-muted-foreground">{inProduction} currently in production</p></TableCell>
                         <TableCell><OrderStatus status={item.order_status || item.status} /></TableCell>
                         <TableCell className="whitespace-nowrap text-sm text-muted-foreground">{date(item.started_at)}</TableCell>
+                        <TableCell className="min-w-44"><UserCell {...actorOf(item)} /></TableCell>
                         <TableCell className="text-right">
                           {item.status === "IN_PRODUCTION" && inProduction > 0 ? <Button size="sm" onClick={() => openUpdate(item)}>Update production</Button> : <span className="text-sm text-muted-foreground">{item.status === "COMPLETED" ? "Completed" : "Waiting"}</span>}
                         </TableCell>

@@ -15,7 +15,7 @@
     "db:shell": "mysql -u root -p inventory_management",
     "seed": "node src/database/run-seeds.js",
     "seed:reset": "node src/database/run-seeds.js --reset",
-    "superadmin": "node src/scripts/create-super-admin.js"
+    "superadmin": "node src/scripts/create-super-admin.js",
   },
   "keywords": [],
   "author": "",

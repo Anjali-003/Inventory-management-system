@@ -4,6 +4,7 @@ import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
 import StatStrip from "@/components/StatStrip"
 import Pagination from "@/components/Pagination"
+import UserCell from "@/components/UserCell"
 import { EmptyState, Notice, OrderStatus, TableSkeleton } from "@/components/feedback"
 import { useToast } from "@/components/toast"
 import { Button } from "@/components/ui/button"
@@ -19,6 +20,8 @@ import { useGetProductsQuery } from "@/features/products/productsApi"
 
 const PAGE_SIZE = 20
 const EMPTY = []
+
+const when = (v) => (v ? new Date(v).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : null)
 
 export default function Orders() {
   const toast = useToast()
@@ -50,7 +53,7 @@ export default function Orders() {
     const q = query.trim().toLowerCase()
     return orders.filter((o) => {
       if (filter !== "all" && o.status !== filter) return false
-      return !q || `${o.order_number} ${o.product_name} ${o.status}`.toLowerCase().includes(q)
+      return !q || `${o.order_number} ${o.product_name} ${o.status} ${o.created_by_name || ""}`.toLowerCase().includes(q)
     })
   }, [orders, query, filter])
 
@@ -83,7 +86,7 @@ export default function Orders() {
         <StatStrip layoutId="orders-filter" cols="grid-cols-2 md:grid-cols-3 xl:grid-cols-5" items={stats} />
 
         <div className="flex flex-wrap items-center gap-3 border-y px-4 py-3 sm:px-5">
-          <SearchBar value={query} onChange={setQueryAndReset} placeholder="Search by order, product or status..." />
+          <SearchBar value={query} onChange={setQueryAndReset} placeholder="Search by order, product, status or creator..." />
         </div>
 
         {loading ? (
@@ -103,6 +106,7 @@ export default function Orders() {
                     <TableHead>Product</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Created by</TableHead>
                     <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -113,6 +117,7 @@ export default function Orders() {
                       <TableCell>{o.product_name}</TableCell>
                       <TableCell className="text-right tabular-nums">{Number(o.quantity)}</TableCell>
                       <TableCell><OrderStatus status={o.status} /></TableCell>
+                      <TableCell className="min-w-44"><UserCell name={o.created_by_name} sub={when(o.created_at)} /></TableCell>
                       <TableCell><OrderActions order={o} onCheck={setCheckFor} onStart={setStartFor} /></TableCell>
                     </TableRow>
                   ))}
@@ -130,6 +135,10 @@ export default function Orders() {
                       <p className="text-sm text-muted-foreground">{o.product_name} · Qty {Number(o.quantity)}</p>
                     </div>
                     <OrderStatus status={o.status} />
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                    <span>Created by</span>
+                    <UserCell name={o.created_by_name} sub={when(o.created_at)} className="text-foreground" />
                   </div>
                   <OrderActions order={o} onCheck={setCheckFor} onStart={setStartFor} className="flex flex-wrap gap-2 border-t pt-3" />
                 </li>

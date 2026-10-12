@@ -32,13 +32,13 @@ async function transition(res, fn, fallback) {
 async function dispatch(req, res) {
   const id = idOf(req.params.id)
   if (!validId(id)) return res.status(400).json({ message: "Invalid finished goods ID" })
-  return transition(res, () => markDispatched(id), "Failed to mark finished goods as dispatched")
+  return transition(res, () => markDispatched(id, req.user.id), "Failed to mark finished goods as dispatched")
 }
 
 async function complete(req, res) {
   const id = idOf(req.params.id)
   if (!validId(id)) return res.status(400).json({ message: "Invalid finished goods ID" })
-  return transition(res, () => markCompleted(id), "Failed to mark finished goods as completed")
+  return transition(res, () => markCompleted(id, req.user.id), "Failed to mark finished goods as completed")
 }
 
 module.exports = { list, getOne, dispatch, complete }

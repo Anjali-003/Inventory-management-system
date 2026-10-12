@@ -8,6 +8,7 @@ router.use(requireRole("SUPER_ADMIN"));
 
 router.get("/", controller.list);
 router.post("/", controller.create);
+router.patch("/:id", controller.update);
 router.post("/:id/deactivate", controller.deactivate);
 router.post("/:id/activate", controller.activate);
 
