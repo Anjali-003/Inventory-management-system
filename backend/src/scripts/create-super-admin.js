@@ -1,25 +1,34 @@
-/*
-    Usage:
-      npm run superadmin
-        -> asks name, email and password (password is not echoed)
-
-      npm run superadmin -- --name "Rahul" --email rahul@company.com [--password ...]
-        -> skips the questions you already answered (handy for scripts/CI)
-*/
 const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "../../.env") });
+
+require("dotenv").config({
+    path: path.join(__dirname, "../../.env")
+});
+
+const { input, password } = require("@inquirer/prompts");
 
 const superAdminService = require("../modules/super-admins/super-admin.service");
 const db = require("../config/db");
-const { ask, askHidden, arg } = require("./prompt");
 
-(async () => {
+async function main() {
     try {
-        const name = arg("name") || (await ask("Name: "));
-        const email = arg("email") || (await ask("Email: "));
-        const password = arg("password") || (await askHidden("Password (min 8 chars): "));
+        const name = await input({
+            message: "Enter name:"
+        });
 
-        const user = await superAdminService.create({ name, email, password });
+        const email = await input({
+            message: "Enter email:"
+        });
+
+        const pass = await password({
+            message: "Enter password (min 8 chars):"
+        });
+
+        const user = await superAdminService.create({
+            name,
+            email,
+            password: pass
+        });
+
         console.log(`Super admin created: #${user.id} ${user.email}`);
     } catch (err) {
         console.error("Failed:", err.message);
@@ -27,4 +36,6 @@ const { ask, askHidden, arg } = require("./prompt");
     } finally {
         await db.end();
     }
-})();
+}
+
+main();

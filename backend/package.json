@@ -15,13 +15,14 @@
     "db:shell": "mysql -u root -p inventory_management",
     "seed": "node src/database/run-seeds.js",
     "seed:reset": "node src/database/run-seeds.js --reset",
-    "superadmin": "node src/scripts/create-super-admin.js",
+    "superadmin": "node src/scripts/create-super-admin.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@inquirer/prompts": "^8.7.3",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
