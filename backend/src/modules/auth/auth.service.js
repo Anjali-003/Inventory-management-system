@@ -2,13 +2,15 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const db = require("../../config/db");
+const env = require("../../config/env");
 const AppError = require("../../shared/AppError");
+const { ROLE_NAMES } = require("../../middleware/permissions");
 
 /*
-    Checks the email/password of a SUPER_ADMIN and returns a signed JWT plus the public user fields.
+    Checks the email/password of an active user (SUPER_ADMIN, STORE_MANAGER ... see middleware/permissions.js) and returns a signed JWT plus the public user fields.
     Throws AppError(401 | 403) when the login is not allowed.
 */
-async function login(email, password) {
+async function login(email, password, role = "SUPER_ADMIN") {
     const [users] = await db.query(
         `
         SELECT
@@ -34,12 +36,12 @@ async function login(email, password) {
 
     const user = users[0];
 
-    // Only active super admins can log in
-    if (user.role !== "SUPER_ADMIN" || !user.is_active) {
+    // Only active users with a known role can log in
+    if (!ROLE_NAMES.includes(user.role) || !user.is_active) {
         throw new AppError(403, "Access denied");
     }
 
-    // A user without a password hash cannot log in (create super admins with: npm run superadmin)
+    // A user without a password hash cannot log in (create users with: npm run createuser)
     if (!user.password_hash) {
         throw new AppError(401, "Invalid email or password");
     }
@@ -51,6 +53,12 @@ async function login(email, password) {
         throw new AppError(401, "Invalid email or password");
     }
 
+    // Right password, but this account belongs to another login page (checked after the password so
+    // nobody can probe which emails exist).
+    if (user.role !== role) {
+        throw new AppError(403, "This account cannot log in on this page. Please use your own login page.");
+    }
+
     const token = jwt.sign(
         {
             userId: user.id,
@@ -58,10 +66,10 @@ async function login(email, password) {
             role: user.role
         },
 
-        process.env.JWT_SECRET,
+        env.jwt.secret,
 
         {
-            expiresIn: process.env.JWT_EXPIRES_IN || "1d"
+            expiresIn: env.jwt.expiresIn
         }
     );
 
@@ -79,15 +87,19 @@ async function login(email, password) {
 
 /*
     Verifies the JWT from the cookie and returns the matching user.
-    Throws AppError(401) when there is no token or the user no longer exists.
-    jwt.verify() itself throws if the token is invalid or expired.
+    Throws AppError(401) when there is no token, the token is invalid/expired, or the user no longer exists.
 */
 async function getCurrentUser(token) {
     if (!token) {
         throw new AppError(401, "Not authenticated");
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    let decoded;
+    try {
+        decoded = jwt.verify(token, env.jwt.secret);
+    } catch {
+        throw new AppError(401, "Not authenticated");
+    }
 
     const [users] = await db.query(
         `

@@ -1,0 +1,74 @@
+/**
+ * The API route table: ONE place that lists every module, where it is mounted and who may use it.
+ *
+ *   { path, router, resource?, guards? }
+ *     path      mount point below the API prefix            ("/orders" -> /api/v1/orders)
+ *     router    the module's routes (modules/<name>/<name>.routes.js)
+ *     resource  name used by the activity feed + live refresh; omit to skip activity logging
+ *     guards    extra middleware that runs after login, in order (permit(...), requireRole(...))
+ *     public    true = no login needed (only /auth)
+ *
+ * To add a module: create modules/<name>/{controller,service,routes}.js and add ONE entry below.
+ */
+const express = require("express");
+
+const authMiddleware = require("../middleware/authMiddleware");
+const requireRole = require("../middleware/requireRole");
+const broadcastChanges = require("../middleware/broadcastChanges");
+const { permit } = require("../middleware/permissions");
+
+const authRoutes = require("../modules/auth/auth.routes");
+const productRoutes = require("../modules/products/product.routes");
+const componentRoutes = require("../modules/components/component.routes");
+const inventoryRoutes = require("../modules/inventory/inventory.routes");
+const orderRoutes = require("../modules/orders/order.routes");
+const productionRoutes = require("../modules/production/production.routes");
+const qualityControlRoutes = require("../modules/quality-control/quality-control.routes");
+const finishedGoodsRoutes = require("../modules/finished-goods/finished-goods.routes");
+const employeeRoutes = require("../modules/employees/employee.routes");
+const attendanceRoutes = require("../modules/attendance/attendance.routes");
+const superAdminRoutes = require("../modules/super-admins/super-admin.routes");
+const activityRoutes = require("../modules/activity/activity.routes");
+const eventsRoutes = require("../realtime/events.routes");
+
+const MODULES = [
+    // Public: users must be able to log in before authentication exists.
+    { path: "/auth", router: authRoutes, public: true },
+
+    { path: "/products", router: productRoutes, resource: "products", guards: [permit("products")] },
+    { path: "/components", router: componentRoutes, resource: "components", guards: [permit("products")] },
+
+    // permit() is applied per route inside inventory.routes.js (stock screens vs history screen)
+    { path: "/inventory", router: inventoryRoutes, resource: "inventory" },
+
+    { path: "/orders", router: orderRoutes, resource: "orders", guards: [permit("orders")] },
+    { path: "/production", router: productionRoutes, resource: "production", guards: [permit("production")] },
+    { path: "/quality-control", router: qualityControlRoutes, resource: "quality-control", guards: [permit("qualityControl")] },
+
+    // QC PASS -> Finished goods -> Packaging -> Dispatched -> Completed
+    { path: "/finished-goods", router: finishedGoodsRoutes, resource: "finished-goods", guards: [permit("finishedGoods")] },
+
+    { path: "/employees", router: employeeRoutes, resource: "employees", guards: [permit("employees")] },
+    { path: "/attendance", router: attendanceRoutes, resource: "attendance", guards: [permit("attendance")] },
+
+    // super admins only (requireRole is also applied inside super-admin.routes.js)
+    { path: "/super-admins", router: superAdminRoutes, resource: "super-admins" },
+    { path: "/activity", router: activityRoutes, guards: [requireRole("SUPER_ADMIN")] },
+
+    // live updates (Server-Sent Events)
+    { path: "/events", router: eventsRoutes },
+];
+
+function buildApiRouter() {
+    const api = express.Router();
+
+    for (const { path, router, resource, guards = [], public: isPublic = false } of MODULES) {
+        const chain = isPublic ? [] : [authMiddleware, ...guards];
+        if (resource) chain.push(broadcastChanges(resource));
+        api.use(path, ...chain, router);
+    }
+
+    return api;
+}
+
+module.exports = { buildApiRouter, MODULES };

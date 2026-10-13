@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const db = require("../../config/db");
+const AppError = require("../../shared/AppError");
 
 /*
     Single place where stock changes.
@@ -16,15 +17,6 @@ const db = require("../../config/db");
     All quantities are handled as integer "hundredths" (DECIMAL(12,2)) so there is no float drift.
 */
 
-class HttpError extends Error {
-    constructor(status, message, code, extra) {
-        super(message);
-        this.status = status;
-        this.code = code;
-        this.extra = extra;
-    }
-}
-
 const DB_MAX_CENTS = 999999999999; // DECIMAL(12,2) upper bound: 9,999,999,999.99
 const QTY_RE = /^\d{1,10}(\.\d{1,2})?$/;
 
@@ -40,14 +32,14 @@ const show = (c) => Number(fromCents(c)).toLocaleString("en-US", { maximumFracti
 
 function parseQty(raw, field, { allowZero = false } = {}) {
     if (raw === undefined || raw === null || raw === "") {
-        throw new HttpError(422, `${field} is required`, "VALIDATION");
+        throw new AppError(422, `${field} is required`, "VALIDATION");
     }
     if (typeof raw !== "string" && typeof raw !== "number") {
-        throw new HttpError(422, `${field} must be a number`, "VALIDATION");
+        throw new AppError(422, `${field} must be a number`, "VALIDATION");
     }
     const text = String(raw).trim();
     if (!QTY_RE.test(text)) {
-        throw new HttpError(
+        throw new AppError(
             422,
             `${field} must be a positive number with at most 2 decimal places`,
             "VALIDATION"
@@ -55,10 +47,10 @@ function parseQty(raw, field, { allowZero = false } = {}) {
     }
     const cents = toCents(text);
     if (cents > DB_MAX_CENTS) {
-        throw new HttpError(422, `${field} is too large`, "VALIDATION");
+        throw new AppError(422, `${field} is too large`, "VALIDATION");
     }
     if (!allowZero && cents <= 0) {
-        throw new HttpError(422, `${field} must be greater than zero`, "VALIDATION");
+        throw new AppError(422, `${field} must be greater than zero`, "VALIDATION");
     }
     return cents;
 }
@@ -96,7 +88,7 @@ function parseReasonCode(raw) {
     if (raw === undefined || raw === null || raw === "") return null;
     const code = String(raw).trim().toUpperCase();
     if (!STOCK_OUT_REASON_CODES.includes(code)) {
-        throw new HttpError(422, "Unknown stock-out reason", "VALIDATION");
+        throw new AppError(422, "Unknown stock-out reason", "VALIDATION");
     }
     return code;
 }
@@ -104,21 +96,21 @@ function parseReasonCode(raw) {
 function parseOrderId(raw) {
     if (raw === undefined || raw === null || raw === "") return null;
     const n = Number(raw);
-    if (!Number.isInteger(n) || n <= 0) throw new HttpError(422, "Order is not valid", "VALIDATION");
+    if (!Number.isInteger(n) || n <= 0) throw new AppError(422, "Order is not valid", "VALIDATION");
     return n;
 }
 
 function parseReason(raw, { required = true, min = 3 } = {}) {
     const text = typeof raw === "string" ? raw.trim().replace(/\s+/g, " ") : "";
     if (!text) {
-        if (required) throw new HttpError(422, "A reason is required", "VALIDATION");
+        if (required) throw new AppError(422, "A reason is required", "VALIDATION");
         return null;
     }
     if (text.length < min) {
-        throw new HttpError(422, `Reason must be at least ${min} characters`, "VALIDATION");
+        throw new AppError(422, `Reason must be at least ${min} characters`, "VALIDATION");
     }
     if (text.length > 255) {
-        throw new HttpError(422, "Reason must be 255 characters or fewer", "VALIDATION");
+        throw new AppError(422, "Reason must be 255 characters or fewer", "VALIDATION");
     }
     return text;
 }
@@ -128,7 +120,7 @@ function parseAttr(raw, field, label) {
     if (raw === undefined || raw === null) return undefined;
     const text = typeof raw === "string" ? raw.trim().replace(/\s+/g, " ") : "";
     if (!text) return undefined;
-    if (text.length > 100) throw new HttpError(422, `${label} must be 100 characters or fewer`, "VALIDATION", { field });
+    if (text.length > 100) throw new AppError(422, `${label} must be 100 characters or fewer`, "VALIDATION", { field });
     return text;
 }
 
@@ -136,7 +128,7 @@ function parseLocation(raw) {
     if (raw === undefined || raw === null) return undefined;
     const text = typeof raw === "string" ? raw.trim().replace(/\s+/g, " ") : "";
     if (!text) return undefined;
-    if (text.length > 100) throw new HttpError(422, "Location must be 100 characters or fewer", "VALIDATION", { field: "location" });
+    if (text.length > 100) throw new AppError(422, "Location must be 100 characters or fewer", "VALIDATION", { field: "location" });
     return text;
 }
 
@@ -144,14 +136,14 @@ function parseRef(raw) {
     const text = typeof raw === "string" ? raw.trim() : "";
     if (!text) return null;
     if (text.length > 60) {
-        throw new HttpError(422, "Reference must be 60 characters or fewer", "VALIDATION");
+        throw new AppError(422, "Reference must be 60 characters or fewer", "VALIDATION");
     }
     return text;
 }
 
 function parseKey(raw) {
     if (typeof raw !== "string" || !/^[A-Za-z0-9_-]{8,64}$/.test(raw.trim())) {
-        throw new HttpError(
+        throw new AppError(
             400,
             "Missing or invalid idempotency_key (8-64 letters, digits, - or _)",
             "IDEMPOTENCY_KEY_REQUIRED"
@@ -163,7 +155,7 @@ function parseKey(raw) {
 function parseId(raw, name = "id") {
     const n = Number(raw);
     if (!Number.isInteger(n) || n <= 0) {
-        throw new HttpError(400, `Invalid ${name}`, "VALIDATION");
+        throw new AppError(400, `Invalid ${name}`, "VALIDATION");
     }
     return n;
 }
@@ -263,7 +255,7 @@ async function listInventory({ status = "active" } = {}) {
 async function getItem(inventoryId) {
     const id = parseId(inventoryId);
     const item = await fetchItem(db, id);
-    if (!item) throw new HttpError(404, "Inventory item not found", "NOT_FOUND");
+    if (!item) throw new AppError(404, "Inventory item not found", "NOT_FOUND");
 
     const [recent] = await db.query(
         `${LEDGER_SELECT} WHERE t.component_id = ? AND t.transaction_type <> 'OPENING_BALANCE' ORDER BY t.created_at DESC, t.id DESC LIMIT 15`,
@@ -329,26 +321,26 @@ async function getLedger(query = {}) {
     }
     if (query.direction) {
         if (!["IN", "OUT", "RESERVE", "RELEASE", "NONE"].includes(query.direction)) {
-            throw new HttpError(400, "Invalid direction", "VALIDATION");
+            throw new AppError(400, "Invalid direction", "VALIDATION");
         }
         where.push("t.direction = ?");
         params.push(query.direction);
     }
     if (query.type) {
         if (!/^[A-Z_]{2,30}$/.test(query.type)) {
-            throw new HttpError(400, "Invalid type", "VALIDATION");
+            throw new AppError(400, "Invalid type", "VALIDATION");
         }
         where.push("t.transaction_type = ?");
         params.push(query.type);
     }
     const dateRe = /^\d{4}-\d{2}-\d{2}$/;
     if (query.from) {
-        if (!dateRe.test(query.from)) throw new HttpError(400, "Invalid from date", "VALIDATION");
+        if (!dateRe.test(query.from)) throw new AppError(400, "Invalid from date", "VALIDATION");
         where.push("t.created_at >= ?");
         params.push(query.from);
     }
     if (query.to) {
-        if (!dateRe.test(query.to)) throw new HttpError(400, "Invalid to date", "VALIDATION");
+        if (!dateRe.test(query.to)) throw new AppError(400, "Invalid to date", "VALIDATION");
         where.push("t.created_at < DATE_ADD(?, INTERVAL 1 DAY)");
         params.push(query.to);
     }
@@ -408,7 +400,7 @@ async function findReplay(key, expected) {
         (expected.cents === undefined || toCents(row.quantity) === expected.cents);
 
     if (!same) {
-        throw new HttpError(
+        throw new AppError(
             409,
             "This request id was already used for a different stock movement. Refresh and try again.",
             "IDEMPOTENCY_CONFLICT"
@@ -461,7 +453,7 @@ async function insertLedger(conn, m) {
 
 async function lockById(conn, inventoryId) {
     const [rows] = await conn.query(`SELECT * FROM inventory WHERE id = ? FOR UPDATE`, [inventoryId]);
-    if (rows.length === 0) throw new HttpError(404, "Inventory item not found", "NOT_FOUND");
+    if (rows.length === 0) throw new AppError(404, "Inventory item not found", "NOT_FOUND");
     return rows[0];
 }
 
@@ -480,7 +472,7 @@ async function stockIn(body, userId) {
 
     return withReplayGuard(key, { componentId, direction: "IN", cents }, async (conn) => {
         const [comp] = await conn.query(`SELECT id FROM components WHERE id = ?`, [componentId]);
-        if (comp.length === 0) throw new HttpError(404, "Component not found", "NOT_FOUND");
+        if (comp.length === 0) throw new AppError(404, "Component not found", "NOT_FOUND");
 
         // First stock-in for a component creates its inventory row; concurrent creators collapse here.
         await conn.query(
@@ -497,7 +489,7 @@ async function stockIn(body, userId) {
 
         const after = toCents(inv.quantity_on_hand) + cents;
         if (after > DB_MAX_CENTS) {
-            throw new HttpError(422, "Resulting stock would exceed the maximum allowed", "VALIDATION");
+            throw new AppError(422, "Resulting stock would exceed the maximum allowed", "VALIDATION");
         }
 
         await conn.query(
@@ -536,19 +528,19 @@ const SKU_RE = /^[A-Z0-9][A-Z0-9._-]{1,49}$/;
 const UNIT_RE = /^[A-Za-z][A-Za-z0-9 ./-]{0,19}$/;
 
 const lineError = (line, field, message, status = 422, code = "VALIDATION") =>
-    new HttpError(status, message, code, { line, field });
+    new AppError(status, message, code, { line, field });
 
-/* Tags any HttpError thrown by fn with the index of the line that caused it. */
+/* Tags any AppError thrown by fn with the index of the line that caused it. */
 const atLine = (line, fn) => {
     try {
         return fn();
     } catch (error) {
-        if (error instanceof HttpError) error.extra = { line, ...(error.extra || {}) };
+        if (error instanceof AppError) error.extra = { line, ...(error.extra || {}) };
         throw error;
     }
 };
 
-const fieldErr = (field, message) => new HttpError(422, message, "VALIDATION", { field });
+const fieldErr = (field, message) => new AppError(422, message, "VALIDATION", { field });
 
 function parseNewComponent(raw) {
     const sku = String(raw.sku ?? "").trim().toUpperCase();
@@ -582,10 +574,10 @@ function parseNewComponent(raw) {
 
 function parseBatchItems(rawItems) {
     if (!Array.isArray(rawItems) || rawItems.length === 0) {
-        throw new HttpError(422, "Add at least one item to the list", "VALIDATION");
+        throw new AppError(422, "Add at least one item to the list", "VALIDATION");
     }
     if (rawItems.length > MAX_BATCH) {
-        throw new HttpError(422, `One receipt can hold at most ${MAX_BATCH} items`, "VALIDATION");
+        throw new AppError(422, `One receipt can hold at most ${MAX_BATCH} items`, "VALIDATION");
     }
 
     const seenIds = new Set();
@@ -594,12 +586,12 @@ function parseBatchItems(rawItems) {
 
     return rawItems.map((raw, i) =>
         atLine(i, () => {
-            if (!raw || typeof raw !== "object") throw new HttpError(422, "Invalid line", "VALIDATION");
+            if (!raw || typeof raw !== "object") throw new AppError(422, "Invalid line", "VALIDATION");
 
             const hasId = raw.component_id !== undefined && raw.component_id !== null && raw.component_id !== "";
             const hasNew = !!raw.new_component && typeof raw.new_component === "object";
             if (hasId === hasNew) {
-                throw new HttpError(
+                throw new AppError(
                     422,
                     "Each line needs either an existing component or a new component",
                     "VALIDATION"
@@ -619,7 +611,7 @@ function parseBatchItems(rawItems) {
             if (hasId) {
                 const id = parseId(raw.component_id, "component_id");
                 if (seenIds.has(id)) {
-                    throw new HttpError(422, "This component appears more than once in the list", "VALIDATION", {
+                    throw new AppError(422, "This component appears more than once in the list", "VALIDATION", {
                         field: "component",
                     });
                 }
@@ -666,7 +658,7 @@ async function stockInBatch(body, userId) {
                 return r && toCents(r.quantity) === it.cents && (it.componentId === undefined || r.component_id === it.componentId);
             });
         if (!same) {
-            throw new HttpError(
+            throw new AppError(
                 409,
                 "This request id was already used for a different receipt. Refresh and try again.",
                 "IDEMPOTENCY_CONFLICT"
@@ -834,29 +826,29 @@ async function stockOut(inventoryIdRaw, body, userId) {
     const key = parseKey(body.idempotency_key);
 
     if (reasonCode && ORDER_REQUIRED.has(reasonCode) && !orderId) {
-        throw new HttpError(422, "Select the order for this reason", "VALIDATION");
+        throw new AppError(422, "Select the order for this reason", "VALIDATION");
     }
 
     const [preRows] = await db.query(`SELECT component_id FROM inventory WHERE id = ?`, [inventoryId]);
-    if (preRows.length === 0) throw new HttpError(404, "Inventory item not found", "NOT_FOUND");
+    if (preRows.length === 0) throw new AppError(404, "Inventory item not found", "NOT_FOUND");
     const pre = preRows[0];
 
     return withReplayGuard(key, { componentId: pre.component_id, direction: "OUT", cents }, async (conn) => {
         const inv = await lockById(conn, inventoryId);
         if (!inv.is_active) {
-            throw new HttpError(409, "This item is archived. Stock it in again to reactivate it.", "ARCHIVED");
+            throw new AppError(409, "This item is archived. Stock it in again to reactivate it.", "ARCHIVED");
         }
 
         if (orderId) {
             const [ord] = await conn.query(`SELECT id FROM orders WHERE id = ?`, [orderId]);
-            if (ord.length === 0) throw new HttpError(422, "Order not found", "VALIDATION");
+            if (ord.length === 0) throw new AppError(422, "Order not found", "VALIDATION");
         }
 
         const onHand = toCents(inv.quantity_on_hand);
         const available = onHand - toCents(inv.quantity_reserved);
 
         if (cents > available) {
-            throw new HttpError(
+            throw new AppError(
                 409,
                 `Insufficient stock: only ${show(Math.max(available, 0))} available to issue` +
                     (onHand !== available ? ` (${show(onHand - available)} is reserved for production)` : ""),
@@ -874,7 +866,7 @@ async function stockOut(inventoryIdRaw, body, userId) {
             [fromCents(after), inventoryId, fromCents(cents)]
         );
         if (upd.affectedRows !== 1) {
-            throw new HttpError(409, "Insufficient stock", "INSUFFICIENT_STOCK");
+            throw new AppError(409, "Insufficient stock", "INSUFFICIENT_STOCK");
         }
 
         const movementId = await insertLedger(conn, {
@@ -903,7 +895,7 @@ async function updateItem(inventoryIdRaw, body, userId) {
         body.minimum_stock_level !== undefined && body.minimum_stock_level !== null && body.minimum_stock_level !== "";
 
     if (!changesQty && !changesMin) {
-        throw new HttpError(422, "Nothing to change", "VALIDATION");
+        throw new AppError(422, "Nothing to change", "VALIDATION");
     }
 
     const newCents = changesQty ? parseQty(body.new_quantity, "Counted quantity", { allowZero: true }) : null;
@@ -914,7 +906,7 @@ async function updateItem(inventoryIdRaw, body, userId) {
     let key = null;
     if (changesQty) {
         if (body.expected_on_hand === undefined || body.expected_on_hand === null || body.expected_on_hand === "") {
-            throw new HttpError(422, "expected_on_hand is required when changing quantity", "VALIDATION");
+            throw new AppError(422, "expected_on_hand is required when changing quantity", "VALIDATION");
         }
         expectedCents = parseQty(body.expected_on_hand, "expected_on_hand", { allowZero: true });
         reason = parseReason(body.reason);
@@ -922,13 +914,13 @@ async function updateItem(inventoryIdRaw, body, userId) {
     }
 
     const [preRows] = await db.query(`SELECT component_id FROM inventory WHERE id = ?`, [inventoryId]);
-    if (preRows.length === 0) throw new HttpError(404, "Inventory item not found", "NOT_FOUND");
+    if (preRows.length === 0) throw new AppError(404, "Inventory item not found", "NOT_FOUND");
     const componentId = preRows[0].component_id;
 
     const work = async (conn) => {
         const inv = await lockById(conn, inventoryId);
         if (!inv.is_active) {
-            throw new HttpError(409, "This item is archived. Stock it in again to reactivate it.", "ARCHIVED");
+            throw new AppError(409, "This item is archived. Stock it in again to reactivate it.", "ARCHIVED");
         }
 
         let movementId = null;
@@ -937,7 +929,7 @@ async function updateItem(inventoryIdRaw, body, userId) {
             const onHand = toCents(inv.quantity_on_hand);
 
             if (onHand !== expectedCents) {
-                throw new HttpError(
+                throw new AppError(
                     409,
                     `Stock changed while you were editing (now ${show(onHand)}). Review the new balance and try again.`,
                     "STALE",
@@ -946,7 +938,7 @@ async function updateItem(inventoryIdRaw, body, userId) {
             }
             const reserved = toCents(inv.quantity_reserved);
             if (newCents < reserved) {
-                throw new HttpError(
+                throw new AppError(
                     409,
                     `Cannot set stock below the ${show(reserved)} reserved for production`,
                     "BELOW_RESERVED"
@@ -998,17 +990,17 @@ async function archiveItem(inventoryIdRaw, body, userId) {
         const inv = await lockById(conn, inventoryId);
 
         if (!inv.is_active) {
-            throw new HttpError(409, "This item is already archived", "ALREADY_ARCHIVED");
+            throw new AppError(409, "This item is already archived", "ALREADY_ARCHIVED");
         }
         if (toCents(inv.quantity_reserved) > 0) {
-            throw new HttpError(
+            throw new AppError(
                 409,
                 `Cannot archive: ${show(toCents(inv.quantity_reserved))} is reserved for production`,
                 "HAS_RESERVED"
             );
         }
         if (toCents(inv.quantity_on_hand) > 0) {
-            throw new HttpError(
+            throw new AppError(
                 409,
                 `Cannot archive while ${show(toCents(inv.quantity_on_hand))} is still on hand. Stock it out or adjust it to zero first.`,
                 "HAS_STOCK"
@@ -1030,7 +1022,6 @@ async function archiveItem(inventoryIdRaw, body, userId) {
 }
 
 module.exports = {
-    HttpError,
     listInventory,
     getItem,
     getLedger,

@@ -1,5 +1,6 @@
 const service = require("./attendance.service");
 const AppError = require("../../shared/AppError");
+const asyncHandler = require("../../middleware/asyncHandler");
 
 const STATUSES = ["PRESENT", "ABSENT", "HALF_DAY", "LEAVE"];
 // Statuses an operator can set directly with a button before check-in.
@@ -24,26 +25,19 @@ function parseEntry(body) {
     return { employeeId: Number(employeeId), date, time: time || null };
 }
 
-function handleError(res, error, fallback) {
-    if (error instanceof AppError) {
-        return res.status(error.status).json({ message: error.message });
-    }
-    console.error(error);
-    if (error.code === "ER_DUP_ENTRY") return res.status(409).json({ message: ALREADY_MARKED });
-    if (error.code === "ER_NO_REFERENCED_ROW_2") return res.status(400).json({ message: "Employee does not exist" });
-    res.status(500).json({ message: fallback });
-}
+// MySQL errors that have a friendlier meaning for attendance (see middleware/errorHandler.js for the defaults)
+const DB_ERRORS = {
+    ER_DUP_ENTRY: [409, ALREADY_MARKED],
+    ER_NO_REFERENCED_ROW_2: [400, "Employee does not exist"],
+};
+const handler = (fn, message, db = DB_ERRORS) => asyncHandler(fn, { message, db });
 
-/* GET /api/attendance?date=YYYY-MM-DD */
+/* GET /api/v1/attendance?date=YYYY-MM-DD */
 async function list(req, res) {
-    try {
-        const { date } = req.query;
-        if (!DATE_RE.test(date || "")) throw badRequest("A valid date (YYYY-MM-DD) is required");
+    const { date } = req.query;
+    if (!DATE_RE.test(date || "")) throw badRequest("A valid date (YYYY-MM-DD) is required");
 
-        res.json(await service.listByDate(date));
-    } catch (error) {
-        handleError(res, error, "Failed to fetch attendance");
-    }
+    res.json(await service.listByDate(date));
 }
 
 /*
@@ -51,48 +45,32 @@ async function list(req, res) {
     { employeeId, date, status }   status: ABSENT | LEAVE
 */
 async function mark(req, res) {
-    try {
-        const entry = parseEntry(req.body);
-        const { status } = req.body;
-        if (!MANUAL_STATUSES.includes(status)) {
-            throw badRequest(`Status ${status} cannot be marked directly. Use Check In / Check Out / Half Day.`);
-        }
-
-        const saved = await service.markStatus(entry, status);
-        res.status(201).json({ message: "Attendance marked", ...saved });
-    } catch (error) {
-        handleError(res, error, "Failed to mark attendance");
+    const entry = parseEntry(req.body);
+    const { status } = req.body;
+    if (!MANUAL_STATUSES.includes(status)) {
+        throw badRequest(`Status ${status} cannot be marked directly. Use Check In / Check Out / Half Day.`);
     }
+
+    const saved = await service.markStatus(entry, status);
+    res.status(201).json({ message: "Attendance marked", ...saved });
 }
 
 /* POST /api/attendance/check-in   { employeeId, date, time? } */
 async function checkIn(req, res) {
-    try {
-        const saved = await service.checkIn(parseEntry(req.body));
-        res.status(201).json({ message: "Checked in", ...saved });
-    } catch (error) {
-        handleError(res, error, "Failed to check in");
-    }
+    const saved = await service.checkIn(parseEntry(req.body));
+    res.status(201).json({ message: "Checked in", ...saved });
 }
 
 /* POST /api/attendance/check-out   { employeeId, date, time? } */
 async function checkOut(req, res) {
-    try {
-        const saved = await service.checkOut(parseEntry(req.body));
-        res.json({ message: "Checked out", ...saved });
-    } catch (error) {
-        handleError(res, error, "Failed to check out");
-    }
+    const saved = await service.checkOut(parseEntry(req.body));
+    res.json({ message: "Checked out", ...saved });
 }
 
 /* POST /api/attendance/half-day   { employeeId, date } */
 async function halfDay(req, res) {
-    try {
-        const saved = await service.markHalfDay(parseEntry(req.body));
-        res.json({ message: "Marked as half day", ...saved });
-    } catch (error) {
-        handleError(res, error, "Failed to mark half day");
-    }
+    const saved = await service.markHalfDay(parseEntry(req.body));
+    res.json({ message: "Marked as half day", ...saved });
 }
 
 /*
@@ -100,40 +78,35 @@ async function halfDay(req, res) {
     { date, records: [{ employeeId, status, checkIn? }] }
 */
 async function bulk(req, res) {
-    try {
-        const { date, records } = req.body || {};
+    const { date, records } = req.body || {};
 
-        if (!DATE_RE.test(date || "")) throw badRequest("A valid date (YYYY-MM-DD) is required");
-        if (!Array.isArray(records) || records.length === 0) throw badRequest("No attendance records to save");
+    if (!DATE_RE.test(date || "")) throw badRequest("A valid date (YYYY-MM-DD) is required");
+    if (!Array.isArray(records) || records.length === 0) throw badRequest("No attendance records to save");
 
-        for (const r of records) {
-            if (!validEmployeeId(r.employeeId)) throw badRequest("Invalid employee ID");
-            if (!STATUSES.includes(r.status)) throw badRequest(`Invalid status: ${r.status}`);
-            if (r.checkIn && !TIME_RE.test(r.checkIn)) throw badRequest("Times must be HH:MM");
-        }
-
-        const { saved, skipped } = await service.saveBulk(date, records);
-        res.json({ message: "Attendance saved", saved, skipped });
-    } catch (error) {
-        if (error instanceof AppError) {
-            return res.status(error.status).json({ message: error.message });
-        }
-        console.error(error);
-        if (error.code === "ER_NO_REFERENCED_ROW_2") return res.status(400).json({ message: "One or more employees do not exist" });
-        res.status(500).json({ message: "Failed to save attendance" });
+    for (const r of records) {
+        if (!validEmployeeId(r.employeeId)) throw badRequest("Invalid employee ID");
+        if (!STATUSES.includes(r.status)) throw badRequest(`Invalid status: ${r.status}`);
+        if (r.checkIn && !TIME_RE.test(r.checkIn)) throw badRequest("Times must be HH:MM");
     }
+
+    const { saved, skipped } = await service.saveBulk(date, records);
+    res.json({ message: "Attendance saved", saved, skipped });
 }
 
 /* GET /api/attendance/summary?month=YYYY-MM */
 async function summary(req, res) {
-    try {
-        const { month } = req.query;
-        if (!MONTH_RE.test(month || "")) throw badRequest("A valid month (YYYY-MM) is required");
+    const { month } = req.query;
+    if (!MONTH_RE.test(month || "")) throw badRequest("A valid month (YYYY-MM) is required");
 
-        res.json(await service.monthlySummary(month));
-    } catch (error) {
-        handleError(res, error, "Failed to fetch attendance summary");
-    }
+    res.json(await service.monthlySummary(month));
 }
 
-module.exports = { list, mark, checkIn, checkOut, halfDay, bulk, summary };
+module.exports = {
+    list: handler(list, "Failed to fetch attendance"),
+    mark: handler(mark, "Failed to mark attendance"),
+    checkIn: handler(checkIn, "Failed to check in"),
+    checkOut: handler(checkOut, "Failed to check out"),
+    halfDay: handler(halfDay, "Failed to mark half day"),
+    bulk: handler(bulk, "Failed to save attendance", { ER_NO_REFERENCED_ROW_2: [400, "One or more employees do not exist"] }),
+    summary: handler(summary, "Failed to fetch attendance summary"),
+};

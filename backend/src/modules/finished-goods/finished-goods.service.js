@@ -1,4 +1,5 @@
 const db = require("../../config/db")
+const AppError = require("../../shared/AppError")
 
 const selectSql = `
   SELECT fg.id, fg.production_id, fg.order_id, fg.quantity, fg.status,
@@ -29,7 +30,7 @@ async function getFinishedGoods() {
 
 async function getFinishedGood(id) {
   const [rows] = await db.query(`${selectSql} WHERE fg.id = ? LIMIT 1`, [id])
-  if (!rows.length) throw new Error("Finished goods record not found")
+  if (!rows.length) throw new AppError(404, "Finished goods record not found")
   return mapRow(rows[0])
 }
 
@@ -37,7 +38,7 @@ async function createFinishedGood(productionId, orderId, quantity, connection = 
   const own = !connection
   connection ??= await db.getConnection()
   try {
-    if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new Error("Finished goods quantity must be a positive integer")
+    if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new AppError(400, "Finished goods quantity must be a positive integer")
     const [production] = await connection.query(`
       SELECT po.id, po.order_id, po.quantity_completed, oi.quantity AS ordered_quantity
       FROM production_orders po
@@ -45,11 +46,11 @@ async function createFinishedGood(productionId, orderId, quantity, connection = 
       WHERE po.id = ?
       LIMIT 1
     `, [productionId])
-    if (!production.length) throw new Error("Production order not found")
-    if (Number(production[0].order_id) !== Number(orderId)) throw new Error("Production order does not belong to the specified order")
+    if (!production.length) throw new AppError(404, "Production order not found")
+    if (Number(production[0].order_id) !== Number(orderId)) throw new AppError(400, "Production order does not belong to the specified order")
 
     const [order] = await connection.query(`SELECT id, status FROM orders WHERE id = ? LIMIT 1`, [orderId])
-    if (!order.length) throw new Error("Order not found")
+    if (!order.length) throw new AppError(404, "Order not found")
 
     const [testing] = await connection.query(`
       SELECT COALESCE(SUM(quantity_tested), 0) AS tested,
@@ -64,9 +65,9 @@ async function createFinishedGood(productionId, orderId, quantity, connection = 
     `, [productionId])
 
     const ordered = Number(production[0].ordered_quantity)
-    if (Number(production[0].quantity_completed) < ordered) throw new Error("Finished goods can only be created after full production is completed")
-    if (Number(testing[0].tested) < ordered || Number(testing[0].failed) > 0) throw new Error("Finished goods require all units to pass testing")
-    if (Number(qc[0].inspected) < ordered || Number(qc[0].approved) < ordered) throw new Error("Finished goods require full QC approval")
+    if (Number(production[0].quantity_completed) < ordered) throw new AppError(409, "Finished goods can only be created after full production is completed")
+    if (Number(testing[0].tested) < ordered || Number(testing[0].failed) > 0) throw new AppError(409, "Finished goods require all units to pass testing")
+    if (Number(qc[0].inspected) < ordered || Number(qc[0].approved) < ordered) throw new AppError(409, "Finished goods require full QC approval")
 
     const [existing] = await connection.query(`SELECT id FROM finished_goods WHERE order_id = ? LIMIT 1`, [orderId])
     if (existing.length) return { success: true, finishedGoodsId: existing[0].id, productionId, orderId, quantity, status: "PACKAGING", message: "Finished goods already exist for this order" }
@@ -84,8 +85,8 @@ async function transition(id, from, to, timestampColumn, userColumn, userId) {
   try {
     await connection.beginTransaction()
     const [rows] = await connection.query(`SELECT id, order_id, status FROM finished_goods WHERE id = ? FOR UPDATE`, [id])
-    if (!rows.length) throw new Error("Finished goods record not found")
-    if (rows[0].status !== from) throw new Error(`Cannot ${to === "DISPATCHED" ? "dispatch" : "complete"} finished goods with status ${rows[0].status}`)
+    if (!rows.length) throw new AppError(404, "Finished goods record not found")
+    if (rows[0].status !== from) throw new AppError(409, `Cannot ${to === "DISPATCHED" ? "dispatch" : "complete"} finished goods with status ${rows[0].status}`)
     await connection.query(`UPDATE finished_goods SET status = ?, ${timestampColumn} = CURRENT_TIMESTAMP, ${userColumn} = ? WHERE id = ?`, [to, userId, id])
     if (to === "DISPATCHED") {
       await connection.query(`UPDATE orders SET status = 'DISPATCHED', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [rows[0].order_id])

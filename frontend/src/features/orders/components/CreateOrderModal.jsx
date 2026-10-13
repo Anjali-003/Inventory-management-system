@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Loader2 } from "lucide-react"
-import api from "@/api/api"
+import { ordersService } from "@/features/orders/ordersService"
 import { Modal } from "@/components/Modal"
 import { Field, TextInput, selectClass } from "@/components/FormField"
 import { Notice } from "@/components/feedback"
@@ -29,9 +29,7 @@ export default function CreateOrderModal({ onClose, onCreated }) {
     setSaving(true)
     setError("")
     try {
-      const { data } = await api.post("/orders", {
-        items: [{ productId: Number(product), quantity: toInt(qty) }],
-      })
+      const { data } = await ordersService.create([{ productId: Number(product), quantity: toInt(qty) }])
       onCreated(data.orderNumber)
     } catch (err) {
       setError(errorMessage(err, "Failed to create order"))

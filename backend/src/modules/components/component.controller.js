@@ -1,15 +1,10 @@
 const service = require("./component.service");
+const asyncHandler = require("../../middleware/asyncHandler");
 
 async function list(req, res) {
-    try {
-        res.json(await service.listComponents());
-    } catch (error) {
-        console.error(error);
-
-        res.status(500).json({
-            message: "Failed to fetch components"
-        });
-    }
+    res.json(await service.listComponents());
 }
 
-module.exports = { list };
+module.exports = {
+    list: asyncHandler(list, { message: "Failed to fetch components" }),
+};

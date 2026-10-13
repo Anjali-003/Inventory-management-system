@@ -1,5 +1,5 @@
 const db = require("../../config/db");
-const { HttpError } = require("./inventory.service");
+const AppError = require("../../shared/AppError");
 
 /*
     Cumulative Inventory History (read-only).
@@ -131,7 +131,7 @@ async function getMonthlyHistory() {
 async function getDailyHistory(monthRaw) {
     const month = String(monthRaw || "");
     if (!MONTH_RE.test(month)) {
-        throw new HttpError(400, "month must be in YYYY-MM format", "VALIDATION");
+        throw new AppError(400, "month must be in YYYY-MM format", "VALIDATION");
     }
     const today = await dbToday();
     const start = `${month}-01`;

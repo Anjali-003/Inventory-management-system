@@ -17,6 +17,7 @@ import StockInModal from "./components/StockInModal"
 import { cn } from "@/lib/utils"
 import { errorMessage, fmtQty } from "@/lib/stock"
 import { useGetInventoryQuery } from "./inventoryApi"
+import { usePermissions } from "@/features/auth/usePermissions"
 
 const TOAST = {
   in: "Stock added and recorded in the ledger",
@@ -61,6 +62,8 @@ const EMPTY = []
 
 export default function Inventory() {
   const toast = useToast()
+  const { canEdit } = usePermissions()
+  const editable = canEdit("inventory") // false = read-only role: no stock in / out / archive
   const [tab, setTab] = useState("stock")
   const [query, setQuery] = useState("")
   const [view, setView] = useState("active")
@@ -121,9 +124,13 @@ export default function Inventory() {
     return (
       <div className="flex items-center justify-end gap-1">
         <Button variant="ghost" size="icon" className={b} aria-label={`View ${item.component_name}`} onClick={() => open("view", item)}><Eye /></Button>
-        <Button variant="ghost" size="icon" className={b} aria-label="Stock in" onClick={() => open("in", item)}><ArrowDownToLine /></Button>
-        <Button variant="ghost" size="icon" className={b} aria-label="Stock out" disabled={!active} onClick={() => open("out", item)}><ArrowUpFromLine /></Button>
-        <Button variant="ghost" size="icon" className={cn(b, "hover:text-destructive")} aria-label="Archive" disabled={!active} onClick={() => open("archive", item)}><Archive /></Button>
+        {editable && (
+          <>
+            <Button variant="ghost" size="icon" className={b} aria-label="Stock in" onClick={() => open("in", item)}><ArrowDownToLine /></Button>
+            <Button variant="ghost" size="icon" className={b} aria-label="Stock out" disabled={!active} onClick={() => open("out", item)}><ArrowUpFromLine /></Button>
+            <Button variant="ghost" size="icon" className={cn(b, "hover:text-destructive")} aria-label="Archive" disabled={!active} onClick={() => open("archive", item)}><Archive /></Button>
+          </>
+        )}
       </div>
     )
   }
@@ -133,7 +140,7 @@ export default function Inventory() {
   return (
     <>
       <PageHeader title="Inventory" description="Stock on hand, reserved and available, backed by an append-only movement ledger.">
-        <Button size="lg" onClick={() => open("in")}><Plus /> Stock in</Button>
+        {editable && <Button size="lg" onClick={() => open("in")}><Plus /> Stock in</Button>}
       </PageHeader>
 
       <div role="tablist" className="mb-4 inline-flex rounded-lg border bg-card p-1 text-sm">
@@ -237,11 +244,15 @@ export default function Inventory() {
 
       <ItemDetailModal
         open={dlg.kind === "view"} itemId={dlg.item?.id} refreshToken={token} onClose={close}
-        onIn={(it) => open("in", it)} onOut={(it) => open("out", it)} onLedger={showLedger}
+        onIn={editable ? (it) => open("in", it) : undefined} onOut={editable ? (it) => open("out", it) : undefined} onLedger={showLedger}
       />
-      <StockInModal open={dlg.kind === "in"} preset={dlg.item} onClose={close} onSaved={saved} />
-      <StockOutModal open={dlg.kind === "out"} item={dlg.item} onClose={close} onSaved={saved} onConflict={conflict} />
-      <ArchiveDialog open={dlg.kind === "archive"} item={dlg.item} onClose={close} onSaved={saved} onConflict={conflict} />
+      {editable && (
+        <>
+          <StockInModal open={dlg.kind === "in"} preset={dlg.item} onClose={close} onSaved={saved} />
+          <StockOutModal open={dlg.kind === "out"} item={dlg.item} onClose={close} onSaved={saved} onConflict={conflict} />
+          <ArchiveDialog open={dlg.kind === "archive"} item={dlg.item} onClose={close} onSaved={saved} onConflict={conflict} />
+        </>
+      )}
     </>
   )
 }

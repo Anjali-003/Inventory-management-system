@@ -1,8 +1,8 @@
 const service = require("./auth.service");
 const AppError = require("../../shared/AppError");
 const activity = require("../activity/activity.service");
-
-const COOKIE_NAME = "access_token";
+const asyncHandler = require("../../middleware/asyncHandler");
+const env = require("../../config/env");
 
 /*
     The JWT lives in an HttpOnly cookie.
@@ -10,80 +10,48 @@ const COOKIE_NAME = "access_token";
 */
 const COOKIE_OPTIONS = {
     httpOnly: true,
-    secure: false,
-    sameSite: "lax"
+    secure: env.cookie.secure,
+    sameSite: "lax",
 };
 
-/* SUPER ADMIN LOGIN */
+/* LOGIN (req.loginRole is set by auth.routes.js: each role has its own endpoint) */
 async function login(req, res) {
-    try {
-        const { email, password } = req.body;
+    const { email, password } = req.body || {};
 
-        if (!email || !password) {
-            return res.status(400).json({
-                message: "Email and password are required"
-            });
-        }
-
-        const { token, user } = await service.login(email, password);
-
-        res.cookie(COOKIE_NAME, token, {
-            ...COOKIE_OPTIONS,
-            maxAge: 24 * 60 * 60 * 1000
-        });
-
-        // other super admins see "X logged in" (not awaited: never delays or fails the login)
-        activity.log({
-            userId: user.id,
-            userName: user.name,
-            resource: "auth",
-            action: "login",
-            summary: "Logged in"
-        });
-
-        res.json({
-            message: "Login successful",
-            user
-        });
-    } catch (error) {
-        if (error instanceof AppError) {
-            return res.status(error.status).json({ message: error.message });
-        }
-
-        console.error(error);
-
-        res.status(500).json({
-            message: "Login failed"
-        });
+    if (!email || !password) {
+        throw AppError.badRequest("Email and password are required");
     }
+
+    const { token, user } = await service.login(email, password, req.loginRole);
+
+    res.cookie(env.cookie.name, token, { ...COOKIE_OPTIONS, maxAge: env.cookie.maxAgeMs });
+
+    // other super admins see "X logged in" (not awaited: never delays or fails the login)
+    activity.log({
+        userId: user.id,
+        userName: user.name,
+        resource: "auth",
+        action: "login",
+        summary: "Logged in",
+    });
+
+    res.json({ message: "Login successful", user });
 }
 
 /* CHECK CURRENT LOGIN */
 async function me(req, res) {
-    try {
-        const user = await service.getCurrentUser(req.cookies.access_token);
-
-        res.json({ user });
-    } catch (error) {
-        if (error instanceof AppError) {
-            return res.status(error.status).json({ message: error.message });
-        }
-
-        console.error(error);
-
-        return res.status(401).json({
-            message: "Not authenticated"
-        });
-    }
+    const user = await service.getCurrentUser(req.cookies[env.cookie.name]);
+    res.json({ user });
 }
 
 /* LOGOUT */
 function logout(req, res) {
-    res.clearCookie(COOKIE_NAME, COOKIE_OPTIONS);
-
-    res.json({
-        message: "Logout successful"
-    });
+    res.clearCookie(env.cookie.name, COOKIE_OPTIONS);
+    res.json({ message: "Logout successful" });
 }
 
-module.exports = { login, me, logout };
+module.exports = {
+    login: asyncHandler(login, { message: "Login failed" }),
+    me: asyncHandler(me, { message: "Could not check the login" }),
+    logout: asyncHandler(logout),
+};

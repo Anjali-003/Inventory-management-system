@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Loader2, Plus, Save, Trash2, Undo2 } from "lucide-react"
-import api from "@/api/api"
+import { productsService } from "@/features/products/productsService"
 import { Modal } from "@/components/Modal"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -104,7 +104,7 @@ export default function BomEditorModal({ open, product, bom, onClose, onSaved })
     lock.current = true
     setBusy(true)
     try {
-      const { data } = await api.put(`/products/${product.id}/bom`, { lines: payload })
+      const { data } = await productsService.saveBom(product.id, payload)
       onSaved(data.bom, data.createdComponents)
     } catch (err) {
       setFormError(errorMessage(err))

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import useLiveRefresh from "@/realtime/useLiveRefresh"
+import { useCallback, useMemo, useState } from "react"
 import { Factory, RefreshCw } from "lucide-react"
-import api from "@/api/api"
+import { productionService } from "@/features/production/productionService"
+import { useGetProductionQuery } from "@/features/production/productionApi"
+import { errorMessage } from "@/lib/stock"
 import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
 import { EmptyState, Notice, OrderStatus, TableSkeleton } from "@/components/feedback"
@@ -83,31 +84,19 @@ function ProductionCard({ item, onUpdate }) {
 }
 
 export default function Production() {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
+  // the list is cached by RTK Query and refetched live (see realtime/LiveSync.jsx)
+  const { data: items = [], isLoading: loading, error: loadError, refetch } = useGetProductionQuery()
+  const [actionError, setError] = useState("")
+  const error = actionError || (loadError ? errorMessage(loadError, "Failed to load production orders.") : "")
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(null)
   const [quantity, setQuantity] = useState("1")
   const [saving, setSaving] = useState(false)
 
-  const load = useCallback(async ({ quiet } = {}) => {
-    try {
-      if (!quiet) setLoading(true)
-      const { data } = await api.get("/production")
-      setItems(Array.isArray(data) ? data : [])
-      setError("")
-    } catch (err) {
-      console.error(err)
-      setError(err.response?.data?.message || "Failed to load production orders.")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  useLiveRefresh(["production", "orders"], load)
+  const load = useCallback(async () => {
+    setError("")
+    await refetch()
+  }, [refetch])
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -138,7 +127,7 @@ export default function Production() {
     try {
       setSaving(true)
       setError("")
-      await api.post(`/production/${selected.id}/update-progress`, { quantity: value })
+      await productionService.updateProgress(selected.id, value)
       setSelected(null)
       setQuantity("1")
       await load()

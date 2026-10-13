@@ -1,12 +1,10 @@
 const service = require("./activity.service");
+const asyncHandler = require("../../middleware/asyncHandler");
 
 async function list(req, res) {
-    try {
-        res.json(await service.list({ limit: req.query.limit }));
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Could not load activity" });
-    }
+    res.json(await service.list({ limit: req.query.limit }));
 }
 
-module.exports = { list };
+module.exports = {
+    list: asyncHandler(list, { message: "Could not load activity" }),
+};

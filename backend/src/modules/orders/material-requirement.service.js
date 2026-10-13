@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const AppError = require("../../shared/AppError");
 
 async function checkMaterialAvailability(orderId) {
     // 1. Get the order
@@ -16,7 +17,7 @@ async function checkMaterialAvailability(orderId) {
 
     // 2. Make sure the order exists
     if (orders.length === 0) {
-        throw new Error("Order not found");
+        throw new AppError(404, "Order not found");
     }
 
     const order = orders[0];
@@ -63,7 +64,7 @@ async function checkMaterialAvailability(orderId) {
 
     // 4. Check if the order actually has products/BOM
     if (rows.length === 0) {
-        throw new Error("Order has no products or BOM data");
+        throw new AppError(400, "Order has no products or BOM data");
     }
 
     // 5. Object where we will combine

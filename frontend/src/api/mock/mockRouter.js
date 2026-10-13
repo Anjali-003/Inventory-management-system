@@ -36,6 +36,9 @@ export const resetMock = () => { S = null }
 
 let authed = true
 try { authed = sessionStorage.getItem("mock_auth") !== "0" } catch { /* not in a browser */ }
+let currentUserId = 1
+try { currentUserId = Number(sessionStorage.getItem("mock_user")) || 1 } catch { /* not in a browser */ }
+const currentUser = () => USERS.find((u) => u.id === currentUserId) || USERS[0]
 const setAuthed = (v) => { authed = v; try { sessionStorage.setItem("mock_auth", v ? "1" : "0") } catch { /* ignore */ } }
 
 const todayStr = () => fmtD(new Date())
@@ -477,8 +480,17 @@ const orderRows = () => [...state().orders].sort((a, b) => b.id - a.id)
 /* ------------------------------------------------------------------ router */
 const ok = (data, status = 200) => ({ status, data })
 const ROUTES = [
-  ["GET", /^\/auth\/me$/, () => (authed ? ok({ user: USERS[0] }) : ok({ message: "Not authenticated" }, 401))],
-  ["POST", /^\/auth\/login$/, () => { setAuthed(true); return ok({ message: "Login successful (mock)", user: USERS[0] }) }],
+  ["GET", /^\/auth\/me$/, () => (authed ? ok({ user: currentUser() }) : ok({ message: "Not authenticated" }, 401))],
+  ["POST", /^\/auth\/(?:store-manager\/)?login$/, (m, q, body) => {
+    // mock only: log in as whichever USERS email is typed (default: super admin); each page only accepts its own role
+    const portalRole = m[0].includes("store-manager") ? "STORE_MANAGER" : "SUPER_ADMIN"
+    const u = USERS.find((x) => x.email === body?.email) || USERS.find((x) => x.role === portalRole)
+    if (u.role !== portalRole) return ok({ message: "This account cannot log in on this page. Please use your own login page." }, 403)
+    currentUserId = u.id
+    try { sessionStorage.setItem("mock_user", String(u.id)) } catch { /* ignore */ }
+    setAuthed(true)
+    return ok({ message: "Login successful (mock)", user: u })
+  }],
   ["GET", /^\/activity$/, () => ok([
     { id: 3, user_id: 2, user_name: "Priya Verma", action: "created", resource: "orders", resource_id: null, summary: "Created order", created_at: new Date(Date.now() - 5 * 60000).toISOString() },
     { id: 2, user_id: 1, user_name: "Super Admin", action: "update-progress", resource: "production", resource_id: 5, summary: "Update progress — production order #5", created_at: new Date(Date.now() - 3600000).toISOString() },

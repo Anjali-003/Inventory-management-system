@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, Plus } from "lucide-react";
-import api from "@/api/api";
+import { employeesService } from "@/features/employees/employeesService"
 import PageHeader from "@/components/PageHeader";
 import ErrorBanner from "@/components/ErrorBanner";
 import Pagination from "@/components/Pagination";
@@ -166,8 +166,8 @@ export default function Employees() {
     setSaving(true);
     setFormError("");
     try {
-      if (isNew) await api.post("/employees", form);
-      else await api.put(`/employees/${modal.employee.id}`, form);
+      if (isNew) await employeesService.create(form);
+      else await employeesService.update(modal.employee.id, form);
       toast.success(isNew ? "Employee added" : "Changes saved");
       setModal(null);
       await load();
@@ -185,7 +185,7 @@ export default function Employees() {
   const setActive = async (e, isActive) => {
     setBusyId(e.id);
     try {
-      await api.put(`/employees/${e.id}`, toPayload(e, { isActive }));
+      await employeesService.update(e.id, toPayload(e, { isActive }));
       toast.success(isActive ? `${e.name} activated` : `${e.name} deactivated`);
       await load();
     } catch (err) {
@@ -202,7 +202,7 @@ export default function Employees() {
     const target = toDelete;
     setDeleting(true);
     try {
-      await api.delete(`/employees/${target.id}`);
+      await employeesService.remove(target.id);
       toast.success(`${target.name} deleted`);
       setToDelete(null);
       await load();

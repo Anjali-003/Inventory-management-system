@@ -1,4 +1,5 @@
 const db = require("../../config/db")
+const AppError = require("../../shared/AppError")
 
 async function getSingleOrderItem(connection, orderId) {
   const [rows] = await connection.query(`
@@ -10,13 +11,13 @@ async function getSingleOrderItem(connection, orderId) {
     ORDER BY oi.id
   `, [orderId])
 
-  if (!rows.length) throw new Error("Order has no products or BOM data")
-  if (rows.length > 1) throw new Error("Partial production currently supports one product per order")
+  if (!rows.length) throw new AppError(400, "Order has no products or BOM data")
+  if (rows.length > 1) throw new AppError(400, "Partial production currently supports one product per order")
   return rows[0]
 }
 
 async function getRequiredMaterialsForQuantity(connection, orderId, quantity) {
-  if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("Production quantity must be a positive integer")
+  if (!Number.isInteger(quantity) || quantity <= 0) throw new AppError(400, "Production quantity must be a positive integer")
   const item = await getSingleOrderItem(connection, orderId)
   const [rows] = await connection.query(`
     SELECT pb.component_id, c.sku AS component_sku, c.name AS component_name,
@@ -26,7 +27,7 @@ async function getRequiredMaterialsForQuantity(connection, orderId, quantity) {
     WHERE pb.product_id = ?
     ORDER BY c.id
   `, [item.product_id])
-  if (!rows.length) throw new Error("Order has no products or BOM data")
+  if (!rows.length) throw new AppError(400, "Order has no products or BOM data")
 
   const map = {}
   for (const row of rows) {
@@ -57,7 +58,7 @@ async function getProductionInfo(orderId) {
   const connection = await db.getConnection()
   try {
     const [orders] = await connection.query(`SELECT id, order_number, status FROM orders WHERE id = ?`, [orderId])
-    if (!orders.length) throw new Error("Order not found")
+    if (!orders.length) throw new AppError(404, "Order not found")
     const order = orders[0]
     const item = await getSingleOrderItem(connection, orderId)
     const [runs] = await connection.query(`
@@ -115,14 +116,14 @@ async function getOrderProgress(connection, orderId) {
 async function checkProductionMaterials(orderId, quantity) {
   const connection = await db.getConnection()
   try {
-    if (!Number.isInteger(orderId) || orderId <= 0) throw new Error("Invalid order ID")
-    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("Quantity must be a positive integer")
+    if (!Number.isInteger(orderId) || orderId <= 0) throw new AppError(400, "Invalid order ID")
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new AppError(400, "Quantity must be a positive integer")
     const [orders] = await connection.query(`SELECT id, order_number, status FROM orders WHERE id = ?`, [orderId])
-    if (!orders.length) throw new Error("Order not found")
+    if (!orders.length) throw new AppError(404, "Order not found")
     const item = await getSingleOrderItem(connection, orderId)
     const existing = await getOrderProgress(connection, orderId)
     const remainingToStart = Math.max(0, Number(item.ordered_quantity) - Number(existing?.quantity_to_produce || 0))
-    if (quantity > remainingToStart) throw new Error(`Requested quantity exceeds remaining quantity to start. Remaining: ${remainingToStart}`)
+    if (quantity > remainingToStart) throw new AppError(409, `Requested quantity exceeds remaining quantity to start. Remaining: ${remainingToStart}`)
     const checked = await inspectMaterials(connection, orderId, quantity)
     return {
       success: checked.shortages.length === 0,
@@ -141,10 +142,10 @@ async function startProduction(orderId, quantity, userId) {
   try {
     await connection.beginTransaction()
     const [orders] = await connection.query(`SELECT id, order_number, status FROM orders WHERE id = ? FOR UPDATE`, [orderId])
-    if (!orders.length) throw new Error("Order not found")
+    if (!orders.length) throw new AppError(404, "Order not found")
     const order = orders[0]
-    if (!["PENDING", "IN_PRODUCTION", "TESTING"].includes(order.status)) throw new Error(`Order is currently ${order.status.toLowerCase().replace(/_/g, " ")}`)
-    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("Production quantity must be a positive integer")
+    if (!["PENDING", "IN_PRODUCTION", "TESTING"].includes(order.status)) throw new AppError(409, `Order is currently ${order.status.toLowerCase().replace(/_/g, " ")}`)
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new AppError(400, "Production quantity must be a positive integer")
 
     const item = await getSingleOrderItem(connection, orderId)
     const ordered = Number(item.ordered_quantity)
@@ -152,7 +153,7 @@ async function startProduction(orderId, quantity, userId) {
     const started = Number(existing?.quantity_to_produce || 0)
     const completed = Number(existing?.quantity_completed || 0)
     const remaining = Math.max(0, ordered - started)
-    if (quantity > remaining) throw new Error(`Requested quantity exceeds remaining quantity to start. Remaining: ${remaining}`)
+    if (quantity > remaining) throw new AppError(409, `Requested quantity exceeds remaining quantity to start. Remaining: ${remaining}`)
 
     const { materials, shortages } = await inspectMaterials(connection, orderId, quantity)
     if (shortages.length) {
@@ -225,7 +226,7 @@ async function updateProductionProgress(productionId, quantity, userId) {
   const connection = await db.getConnection()
   try {
     await connection.beginTransaction()
-    if (!Number.isInteger(quantity) || quantity <= 0) throw new Error("Completed quantity must be a positive integer")
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new AppError(400, "Completed quantity must be a positive integer")
     const [rows] = await connection.query(`
       SELECT po.id, po.order_id, po.status, po.quantity_to_produce, po.quantity_completed,
              o.order_number, oi.quantity AS ordered_quantity
@@ -234,24 +235,24 @@ async function updateProductionProgress(productionId, quantity, userId) {
       JOIN order_items oi ON oi.order_id = o.id
       WHERE po.id = ? ORDER BY oi.id LIMIT 1 FOR UPDATE
     `, [productionId])
-    if (!rows.length) throw new Error("Production order not found")
+    if (!rows.length) throw new AppError(404, "Production order not found")
     const production = rows[0]
-    if (production.status !== "IN_PRODUCTION") throw new Error("Production is not currently in progress")
+    if (production.status !== "IN_PRODUCTION") throw new AppError(409, "Production is not currently in progress")
 
     const orderedQuantity = Number(production.ordered_quantity)
     const started = Number(production.quantity_to_produce)
     const completed = Number(production.quantity_completed)
     const inProduction = Math.max(0, started - completed)
-    if (quantity > inProduction) throw new Error(`Cannot complete more than the currently started quantity. Currently in production: ${inProduction}`)
+    if (quantity > inProduction) throw new AppError(409, `Cannot complete more than the currently started quantity. Currently in production: ${inProduction}`)
 
     const materials = await getRequiredMaterialsForQuantity(connection, production.order_id, quantity)
     for (const material of materials) {
       const [inventoryRows] = await connection.query(`SELECT quantity_on_hand, quantity_reserved FROM inventory WHERE component_id = ? FOR UPDATE`, [material.componentId])
-      if (!inventoryRows.length) throw new Error(`Inventory not found for ${material.name}`)
+      if (!inventoryRows.length) throw new AppError(409, `Inventory not found for ${material.name}`)
       const onHand = Number(inventoryRows[0].quantity_on_hand)
       const reserved = Number(inventoryRows[0].quantity_reserved)
-      if (reserved < material.required) throw new Error(`Reserved inventory is insufficient for ${material.name}`)
-      if (onHand < material.required) throw new Error(`On-hand inventory is insufficient for ${material.name}`)
+      if (reserved < material.required) throw new AppError(409, `Reserved inventory is insufficient for ${material.name}`)
+      if (onHand < material.required) throw new AppError(409, `On-hand inventory is insufficient for ${material.name}`)
       await connection.query(`UPDATE inventory SET quantity_on_hand = quantity_on_hand - ?, quantity_reserved = quantity_reserved - ? WHERE component_id = ?`, [material.required, material.required, material.componentId])
       await connection.query(`
         INSERT INTO inventory_transactions
@@ -284,9 +285,9 @@ async function updateProductionProgress(productionId, quantity, userId) {
 
 async function completeProduction(productionId, userId) {
   const [rows] = await db.query(`SELECT quantity_to_produce, quantity_completed FROM production_orders WHERE id = ?`, [productionId])
-  if (!rows.length) throw new Error("Production order not found")
+  if (!rows.length) throw new AppError(404, "Production order not found")
   const remaining = Number(rows[0].quantity_to_produce) - Number(rows[0].quantity_completed)
-  if (remaining <= 0) throw new Error("No products are currently waiting to be completed")
+  if (remaining <= 0) throw new AppError(409, "No products are currently waiting to be completed")
   return updateProductionProgress(productionId, remaining, userId)
 }
 

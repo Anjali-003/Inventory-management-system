@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { useDispatch } from "react-redux"
 import { Boxes, ClipboardList, FileUp, Pencil, Plus, SearchX, Upload } from "lucide-react"
-import api from "@/api/api"
+import { productsService } from "@/features/products/productsService"
 import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
@@ -54,7 +54,7 @@ export default function Products() {
     setBomError("")
     setBomLoading(true)
     try {
-      const r = await api.get(`/products/${product.id}/bom`)
+      const r = await productsService.getBom(product.id)
       setBom(r.data)
     } catch (err) {
       console.error(err)

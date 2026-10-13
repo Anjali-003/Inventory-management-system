@@ -1,6 +1,6 @@
 import { localDate, shiftMonth, monthLabel } from "@/lib/format"
 import { useState, useRef, useCallback, useEffect, useMemo } from "react"
-import api from "@/api/api"
+import { attendanceService } from "@/features/attendance/attendanceService"
 import { downloadCsv } from "@/lib/csv"
 import ErrorBanner from "@/components/ErrorBanner"
 import { Button } from "@/components/ui/button"
@@ -36,7 +36,7 @@ export function MonthlyReport() {
     const id = ++req.current
     setLoading(true)
     try {
-      const { data } = await api.get("/attendance/summary", { params: { month } })
+      const { data } = await attendanceService.monthlySummary(month)
       if (id !== req.current) return
       setRaw(data)
       setError("")

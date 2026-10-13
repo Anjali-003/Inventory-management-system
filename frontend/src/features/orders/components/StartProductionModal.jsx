@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
-import api from "@/api/api"
+import { ordersService } from "@/features/orders/ordersService"
 import { Modal } from "@/components/Modal"
 import { Field, TextInput } from "@/components/FormField"
 import { Notice } from "@/components/feedback"
@@ -21,7 +21,7 @@ export default function StartProductionModal({ order, onClose, onStarted }) {
 
   useEffect(() => {
     let stale = false
-    api.get(`/orders/${order.id}/production-info`)
+    ordersService.productionInfo(order.id)
       .then((r) => {
         if (stale) return
         setInfo(r.data)
@@ -45,7 +45,7 @@ export default function StartProductionModal({ order, onClose, onStarted }) {
     setSaving(true)
     setError("")
     try {
-      const { data } = await api.post(`/orders/${order.id}/start-production`, { quantity: n })
+      const { data } = await ordersService.startProduction(order.id, n)
       onStarted(n, data.orderNumber)
     } catch (err) {
       const shortages = err.response?.data?.shortages

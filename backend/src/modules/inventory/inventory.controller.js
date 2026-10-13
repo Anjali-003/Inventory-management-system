@@ -1,29 +1,9 @@
 const svc = require("./inventory.service");
 const history = require("./inventory-history.service");
+const asyncHandler = require("../../middleware/asyncHandler");
 
-/* Wraps a handler so thrown errors become clean JSON responses. */
-const handle = (fn) => async (req, res) => {
-    try {
-        await fn(req, res);
-    } catch (error) {
-        if (error instanceof svc.HttpError) {
-            return res.status(error.status).json({
-                message: error.message,
-                code: error.code,
-                ...(error.extra || {}),
-            });
-        }
-        if (error.errno === 1264 || error.errno === 1690) {
-            return res.status(422).json({ message: "Quantity is out of the allowed range", code: "VALIDATION" });
-        }
-        if (error.sqlState === "45000") {
-            // append-only trigger: someone tried to rewrite history
-            return res.status(403).json({ message: error.message, code: "LEDGER_IMMUTABLE" });
-        }
-        console.error(error);
-        res.status(500).json({ message: "Inventory operation failed", code: "SERVER_ERROR" });
-    }
-};
+/* Thrown AppErrors and MySQL errors are turned into JSON by middleware/errorHandler.js */
+const handle = (fn) => asyncHandler(fn, { message: "Inventory operation failed" });
 
 // READ -------------------------------------------------------------------
 const list = handle(async (req, res) => {

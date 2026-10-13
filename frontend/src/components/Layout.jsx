@@ -22,8 +22,10 @@ import {
 } from "lucide-react";
 
 import { cn } from "../lib/utils";
-import api from "../api/api";
+import { authService } from "@/features/auth/authService"
 import { baseApi } from "../api/baseApi";
+import { usePermissions } from "@/features/auth/usePermissions";
+import { loginPathFor } from "@/lib/permissions";
 
 const GROUPS = [
   {
@@ -33,12 +35,14 @@ const GROUPS = [
         to: "/",
         label: "Dashboard",
         icon: LayoutDashboard,
+        module: "dashboard",
         end: true,
       },
       {
         to: "/activity",
         label: "Activity",
         icon: Activity,
+        module: "activity",
       },
     ],
   },
@@ -50,16 +54,19 @@ const GROUPS = [
         to: "/products",
         label: "Products",
         icon: Boxes,
+        module: "products",
       },
       {
         to: "/inventory",
         label: "Inventory",
         icon: Warehouse,
+        module: "inventory",
       },
       {
         to: "/inventory-history",
         label: "Inventory History",
         icon: History,
+        module: "inventoryHistory",
       },
     ],
   },
@@ -71,6 +78,7 @@ const GROUPS = [
         to: "/orders",
         label: "Orders",
         icon: ClipboardList,
+        module: "orders",
       },
       // {
       //   to: "/existing-orders",
@@ -81,16 +89,19 @@ const GROUPS = [
         to: "/production",
         label: "Production",
         icon: Factory,
+        module: "production",
       },
       {
         to: "/quality-control",
         label: "Quality Control",
         icon: ClipboardCheck,
+        module: "qualityControl",
       },
       {
         to: "/finished-goods",
         label: "Finished Goods",
         icon: PackageCheck,
+        module: "finishedGoods",
       },
     ],
   },
@@ -102,11 +113,13 @@ const GROUPS = [
         to: "/employees",
         label: "Employees",
         icon: Users,
+        module: "employees",
       },
       {
         to: "/attendance",
         label: "Attendance",
         icon: CalendarCheck,
+        module: "attendance",
       },
     ],
   },
@@ -150,15 +163,24 @@ function NavItem({ to, label, icon: Icon, end, id }) {
 }
 
 function NavList({ id }) {
+  const { canView } = usePermissions();
+
+  // only the pages this role may open; a group with no visible page is hidden completely
+  const groups = GROUPS.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => canView(i.module)),
+  })).filter((g) => g.items.length > 0);
+
   return (
     <nav className="flex flex-col gap-5 p-3 pt-4">
-      {GROUPS.map((g) => (
+      {groups.map((g) => (
         <div key={g.label} className="flex flex-col gap-1">
           <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.6px] text-cf-faint">
             {g.label}
           </p>
 
-          {g.items.map((i) => (
+          {/* eslint-disable-next-line no-unused-vars */}
+          {g.items.map(({ module, ...i }) => (
             <NavItem key={i.to} id={id} {...i} />
           ))}
         </div>
@@ -202,6 +224,14 @@ function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
 
 export default function Layout() {
   const { pathname } = useLocation();
+  const { user, roleLabel } = usePermissions();
+  const initials =
+    (user?.name || "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0].toUpperCase())
+      .join("") || "--";
 
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -229,10 +259,10 @@ export default function Layout() {
 
   const handleLogout = async () => {
     try {
-      await api.post("/auth/logout");
+      await authService.logout();
       dispatch(baseApi.util.resetApiState()); // never show the previous user's cached data
 
-      navigate("/login");
+      navigate(loginPathFor(user?.role)); // back to the login page of THIS role
     } catch (error) {
       console.error(error);
     }
@@ -287,8 +317,18 @@ export default function Layout() {
         <div className="flex items-center gap-4">
           <span className="hidden text-xs text-muted-foreground sm:block">{today}</span>
 
-          <span className="grid size-8 place-items-center rounded-full bg-cf-green-soft text-xs font-semibold text-primary ring-1 ring-primary/20">
-            AD
+          {user && (
+            <div className="hidden text-right leading-tight sm:block">
+              <p className="text-xs font-semibold">{user.name}</p>
+              <p className="text-[11px] text-muted-foreground">{roleLabel}</p>
+            </div>
+          )}
+
+          <span
+            title={user ? `${user.name} · ${roleLabel}` : undefined}
+            className="grid size-8 place-items-center rounded-full bg-cf-green-soft text-xs font-semibold text-primary ring-1 ring-primary/20"
+          >
+            {initials}
           </span>
         </div>
       </header>

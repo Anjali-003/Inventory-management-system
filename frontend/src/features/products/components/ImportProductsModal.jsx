@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { ArrowLeft, Loader2, Upload } from "lucide-react"
-import api from "@/api/api"
+import { productsService } from "@/features/products/productsService"
 import { Modal } from "@/components/Modal"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -51,7 +51,7 @@ export default function ImportProductsModal({ open, onClose, onImported }) {
     try {
       const sheets = await readSpreadsheet(file)
       const { sheet, result } = pickSheet(sheets, "products")
-      const { data } = await api.post("/products/import", { rows: payload(result.rows), dryRun: true })
+      const { data } = await productsService.importMany(payload(result.rows), true)
       setRows(result.rows)
       setFileName(file.name)
       setSheetName(sheets.length > 1 ? sheet.name : "")
@@ -71,7 +71,7 @@ export default function ImportProductsModal({ open, onClose, onImported }) {
     setBusy(true)
     setError("")
     try {
-      const { data } = await api.post("/products/import", { rows: payload(rows), dryRun: false })
+      const { data } = await productsService.importMany(payload(rows), false)
       onImported(data.summary.new)
     } catch (err) {
       setError(errorMessage(err))

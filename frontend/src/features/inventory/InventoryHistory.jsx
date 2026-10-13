@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { MotionConfig, motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
-import api from "@/api/api";
+import { inventoryService } from "@/features/inventory/inventoryService"
 import ErrorBanner from "@/components/ErrorBanner";
 import { EmptyState, TableSkeleton } from "@/components/feedback";
 import BalanceSheetCard from "./components/BalanceSheetCard";
@@ -92,8 +92,7 @@ export default function InventoryHistory() {
 
   const loadSummary = useCallback(() => {
     setLoading(true);
-    return api
-      .get("/inventory/history")
+    return inventoryService.history.monthly()
       .then((r) => {
         setSummary(r.data);
         setError("");
@@ -113,8 +112,8 @@ export default function InventoryHistory() {
   const loadDetail = useCallback(() => {
     setDetailError("");
     return Promise.all([
-      api.get("/inventory/history/balance"),
-      api.get("/inventory/history/products"),
+      inventoryService.history.balance(),
+      inventoryService.history.products(),
     ])
       .then(([b, p]) => {
         setBalance(b.data);

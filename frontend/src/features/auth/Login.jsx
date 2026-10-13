@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "@/api/api";
+import { authService } from "@/features/auth/authService"
 import { Eye, EyeOff } from "lucide-react";
+import { LOGIN_PORTALS, rememberPortal } from "@/lib/permissions";
 
-function Login() {
+// portal = which role this page logs in (see LOGIN_PORTALS); /login is the super admin page
+function Login({ portal = LOGIN_PORTALS.SUPER_ADMIN }) {
   const [showPassword, setShowPassword] = useState(false);
 
   const navigate = useNavigate();
@@ -30,12 +32,11 @@ function Login() {
     try {
       setLoading(true);
 
-      await api.post("/auth/login", {
-        email,
-        password,
-      });
+      await authService.login(portal.api, { email, password });
 
-      navigate("/");
+      rememberPortal(portal);
+
+      navigate("/"); // "/" redirects to the first page this role may open
     } catch (error) {
       console.error(error);
 
@@ -49,7 +50,7 @@ function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <h1>Super Admin Login</h1>
+          <h1>{portal.title}</h1>
 
           <p>Inventory Management System</p>
         </div>
@@ -61,7 +62,7 @@ function Login() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Enter super admin email"
+            placeholder="Enter your email"
           />
 
           <label>Password</label>

@@ -1,7 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const mysql = require("mysql2/promise");
-require("dotenv").config({ path: path.join(__dirname, "../../.env") });
+const { connect } = require("./lib/connection");
 
 const file = process.argv[2];
 if (!file) {
@@ -10,11 +9,8 @@ if (!file) {
 }
 
 (async () => {
-  // Database ka naam yahan nahi diya, kyunki schema.sql khud database banata hai (CREATE DATABASE + USE)
-  const db = await mysql.createConnection({
-    host: process.env.DB_HOST, user: process.env.DB_USER, password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT, multipleStatements: true,
-  });
+  // No database name here: schema.sql creates the database itself (CREATE DATABASE + USE).
+  const db = await connect({ withDatabase: false, multipleStatements: true });
   try {
     await db.query(fs.readFileSync(path.join(__dirname, file), "utf8"));
     console.log(`Ran ${file}`);

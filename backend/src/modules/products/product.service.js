@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const AppError = require("../../shared/AppError");
 
 /*
     Products and their BOM (bill of materials).
@@ -12,15 +13,6 @@ const db = require("../../config/db");
 
     The planning/validation functions are pure (no database) so they can be tested on their own.
 */
-
-class HttpError extends Error {
-    constructor(status, message, code, extra) {
-        super(message);
-        this.status = status;
-        this.code = code;
-        this.extra = extra;
-    }
-}
 
 const SKU_RE = /^[A-Z0-9][A-Z0-9._-]{1,49}$/;
 const QTY_RE = /^\d{1,10}(\.\d{1,2})?$/;
@@ -195,7 +187,7 @@ async function inTransaction(fn) {
 
 async function lockProduct(conn, productId) {
     const [rows] = await conn.query("SELECT id FROM products WHERE id = ? FOR UPDATE", [productId]);
-    if (rows.length === 0) throw new HttpError(404, "Product not found", "NOT_FOUND");
+    if (rows.length === 0) throw new AppError(404, "Product not found", "NOT_FOUND");
 }
 
 async function loadComponents(conn) {
@@ -231,7 +223,7 @@ async function createComponents(conn, lines) {
             made.set(l.newKey, { id: r.insertId, sku });
         } catch (error) {
             if (error.errno === 1062) {
-                throw new HttpError(409, "Someone else added components at the same moment. Please try again.", "CONFLICT");
+                throw new AppError(409, "Someone else added components at the same moment. Please try again.", "CONFLICT");
             }
             throw error;
         }
@@ -249,7 +241,7 @@ async function replaceBom(conn, productId, lines) {
     }));
     const ids = new Set();
     for (const l of resolved) {
-        if (ids.has(l.component_id)) throw new HttpError(422, "The same component appears twice in this BOM", "VALIDATION");
+        if (ids.has(l.component_id)) throw new AppError(422, "The same component appears twice in this BOM", "VALIDATION");
         ids.add(l.component_id);
     }
     await conn.query("DELETE FROM product_bom WHERE product_id = ?", [productId]);
@@ -284,7 +276,7 @@ function checkProduct(input) {
 
 async function createProduct(input, userId = null) {
     const p = checkProduct(input || {});
-    if (p.error) throw new HttpError(422, p.error, "VALIDATION", { field: p.field });
+    if (p.error) throw new AppError(422, p.error, "VALIDATION", { field: p.field });
     return inTransaction(async (conn) => {
         const sku = p.sku || (await nextProductSku(conn));
         try {
@@ -292,7 +284,7 @@ async function createProduct(input, userId = null) {
             const [[row]] = await conn.query("SELECT * FROM products WHERE id = ?", [r.insertId]);
             return row;
         } catch (error) {
-            if (error.errno === 1062) throw new HttpError(409, `SKU ${sku} is already used by another product`, "DUPLICATE_SKU", { field: "sku" });
+            if (error.errno === 1062) throw new AppError(409, `SKU ${sku} is already used by another product`, "DUPLICATE_SKU", { field: "sku" });
             throw error;
         }
     });
@@ -303,8 +295,8 @@ async function createProduct(input, userId = null) {
     exists are reported and skipped; the rest are created. dryRun only reports.
 */
 async function importProducts({ rows, dryRun, userId = null }) {
-    if (!Array.isArray(rows) || rows.length === 0) throw new HttpError(422, "No product rows to import", "VALIDATION");
-    if (rows.length > MAX_PRODUCT_ROWS) throw new HttpError(422, `At most ${MAX_PRODUCT_ROWS} products can be imported at once`, "VALIDATION");
+    if (!Array.isArray(rows) || rows.length === 0) throw new AppError(422, "No product rows to import", "VALIDATION");
+    if (rows.length > MAX_PRODUCT_ROWS) throw new AppError(422, `At most ${MAX_PRODUCT_ROWS} products can be imported at once`, "VALIDATION");
 
     const run = async (conn) => {
         const [existing] = await conn.query("SELECT sku FROM products");
@@ -338,7 +330,7 @@ async function importProducts({ rows, dryRun, userId = null }) {
     try {
         return await inTransaction(run);
     } catch (error) {
-        if (error.errno === 1062) throw new HttpError(409, "Another product with one of these SKUs was added just now. Please try again.", "CONFLICT");
+        if (error.errno === 1062) throw new AppError(409, "Another product with one of these SKUs was added just now. Please try again.", "CONFLICT");
         throw error;
     }
 }
@@ -351,8 +343,8 @@ async function importProducts({ rows, dryRun, userId = null }) {
 */
 async function saveBom(productId, input) {
     const lines = input && input.lines;
-    if (!Array.isArray(lines)) throw new HttpError(422, "BOM lines are missing", "VALIDATION");
-    if (lines.length > MAX_BOM_LINES) throw new HttpError(422, `A BOM can have at most ${MAX_BOM_LINES} lines`, "VALIDATION");
+    if (!Array.isArray(lines)) throw new AppError(422, "BOM lines are missing", "VALIDATION");
+    if (lines.length > MAX_BOM_LINES) throw new AppError(422, `A BOM can have at most ${MAX_BOM_LINES} lines`, "VALIDATION");
 
     return inTransaction(async (conn) => {
         await lockProduct(conn, productId);
@@ -364,7 +356,7 @@ async function saveBom(productId, input) {
         const seen = new Map();
         const final = [];
         lines.forEach((raw, i) => {
-            const fail = (message, field) => { throw new HttpError(422, `Line ${i + 1}: ${message}`, "VALIDATION", { line: i, field }); };
+            const fail = (message, field) => { throw new AppError(422, `Line ${i + 1}: ${message}`, "VALIDATION", { line: i, field }); };
             const q = parseQty(raw && raw.quantity_required);
             if (q.error) fail(q.error, "quantity_required");
             const location = clean(raw && raw.location);
@@ -401,8 +393,8 @@ async function importBom(productId, input) {
     const { rows, dryRun } = input || {};
     const mode = input && input.mode === "merge" ? "merge" : "replace";
     const createMissing = !!(input && input.createMissing);
-    if (!Array.isArray(rows) || rows.length === 0) throw new HttpError(422, "No BOM rows to import", "VALIDATION");
-    if (rows.length > MAX_BOM_LINES) throw new HttpError(422, `A BOM can have at most ${MAX_BOM_LINES} lines`, "VALIDATION");
+    if (!Array.isArray(rows) || rows.length === 0) throw new AppError(422, "No BOM rows to import", "VALIDATION");
+    if (rows.length > MAX_BOM_LINES) throw new AppError(422, `A BOM can have at most ${MAX_BOM_LINES} lines`, "VALIDATION");
 
     const plan = async (conn) => {
         const [existing] = await conn.query(
@@ -421,7 +413,7 @@ async function importBom(productId, input) {
 
     if (dryRun) {
         const [p] = await db.query("SELECT id FROM products WHERE id = ?", [productId]);
-        if (p.length === 0) throw new HttpError(404, "Product not found", "NOT_FOUND");
+        if (p.length === 0) throw new AppError(404, "Product not found", "NOT_FOUND");
         const { rows: planned, summary } = await plan(db);
         return { rows: planned, summary, mode, dryRun: true };
     }
@@ -429,9 +421,9 @@ async function importBom(productId, input) {
     return inTransaction(async (conn) => {
         await lockProduct(conn, productId);
         const { rows: planned, lines, summary } = await plan(conn);
-        if (summary.invalid > 0) throw new HttpError(422, "Fix the rows marked invalid first", "VALIDATION", { summary });
-        if (summary.missing > 0) throw new HttpError(422, "Some parts do not exist yet. Allow creating missing components or remove those rows.", "VALIDATION", { summary });
-        if (lines.length === 0) throw new HttpError(422, "Nothing to import", "VALIDATION");
+        if (summary.invalid > 0) throw new AppError(422, "Fix the rows marked invalid first", "VALIDATION", { summary });
+        if (summary.missing > 0) throw new AppError(422, "Some parts do not exist yet. Allow creating missing components or remove those rows.", "VALIDATION", { summary });
+        if (lines.length === 0) throw new AppError(422, "Nothing to import", "VALIDATION");
         const { createdComponents } = await replaceBom(conn, productId, lines);
         return { rows: planned, summary, mode, dryRun: false, createdComponents, bom: await getBom(conn, productId) };
     });
@@ -460,7 +452,6 @@ function fetchBom(productId) {
 }
 
 module.exports = {
-    HttpError,
     // pure, for tests
     normKey, parseQty, checkLineText, planBomImport, checkProduct,
     // database

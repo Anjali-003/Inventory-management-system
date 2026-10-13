@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
-import api from "@/api/api"
+import { ordersService } from "@/features/orders/ordersService"
 import { Modal } from "@/components/Modal"
 import { Notice } from "@/components/feedback"
 import { Badge } from "@/components/ui/badge"
@@ -86,7 +86,7 @@ export default function MaterialCheckModal({ order, onClose, onStart }) {
 
   useEffect(() => {
     let stale = false
-    api.get(`/orders/${order.id}/material-check`)
+    ordersService.materialCheck(order.id)
       .then((r) => !stale && setResult(r.data))
       .catch((e) => !stale && setError(errorMessage(e, "Failed to check materials")))
       .finally(() => !stale && setLoading(false))

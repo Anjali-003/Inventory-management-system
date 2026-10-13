@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { History, ArrowDownLeft, ArrowUpRight } from "lucide-react"
-import api from "@/api/api"
+import { inventoryService } from "@/features/inventory/inventoryService"
 import Pagination from "@/components/Pagination"
 import SearchBar from "@/components/SearchBar"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
@@ -76,15 +76,12 @@ export function LedgerPanel({ componentFilter, onClearComponent, refreshToken })
   useEffect(() => {
     let stale = false
     setLoading(true)
-    api
-      .get("/inventory/ledger", {
-        params: {
+    inventoryService.getLedger({
           page, page_size: PAGE, q: dq || undefined,
           direction: kind && !BY_TYPE.includes(kind) ? kind : undefined,
           type: BY_TYPE.includes(kind) ? kind : undefined,
           from: from || undefined, to: to || undefined, component_id: componentFilter?.component_id || undefined,
-        },
-      })
+        })
       .then((r) => { if (!stale) { setData(r.data); setError("") } })
       .catch((e) => { if (!stale) setError(errorMessage(e, "Could not load the stock ledger.")) })
       .finally(() => { if (!stale) setLoading(false) })

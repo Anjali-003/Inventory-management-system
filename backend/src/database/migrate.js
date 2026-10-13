@@ -1,16 +1,12 @@
 const fs = require("fs");
 const path = require("path");
-const mysql = require("mysql2/promise");
-require("dotenv").config({ path: path.join(__dirname, "../../.env") });
+const { connect } = require("./lib/connection");
 
 const DIR = path.join(__dirname, "migrations");
 const baseline = process.argv.includes("--baseline");
 
 (async () => {
-  const db = await mysql.createConnection({
-    host: process.env.DB_HOST, user: process.env.DB_USER, password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME, port: process.env.DB_PORT, multipleStatements: true,
-  });
+  const db = await connect({ multipleStatements: true });
 
   await db.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
     name VARCHAR(255) PRIMARY KEY,

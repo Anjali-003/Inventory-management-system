@@ -1,14 +1,16 @@
 import { useToast } from "@/components/toast";
-import { useState, useCallback, useEffect, useMemo } from "react";
-import useLiveRefresh from "@/realtime/useLiveRefresh";
-import api from "@/api/api";
+import { useState, useCallback, useMemo } from "react";
+import { qualityControlService } from "@/features/quality-control/qualityControlService";
+import { useGetQualityControlQuery } from "@/features/quality-control/qualityControlApi";
+import { errorMessage } from "@/lib/stock";
 import { n, whole } from "../qcUtils";
 
 export default function useQualityControl() {
   const toast = useToast();
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  // the queue is cached by RTK Query and refetched live (see realtime/LiveSync.jsx)
+  const { data: items = [], isLoading: loading, error: loadError, refetch } = useGetQualityControlQuery();
+  const [actionError, setError] = useState("");
+  const error = actionError || (loadError ? errorMessage(loadError, "Failed to load quality control.") : "");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -23,27 +25,10 @@ export default function useQualityControl() {
   const [redoApproved, setRedoApproved] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async ({ quiet } = {}) => {
-    try {
-      if (!quiet) setLoading(true);
-      const { data } = await api.get("/quality-control");
-      setItems(Array.isArray(data) ? data : []);
-      setError("");
-    } catch (err) {
-      console.error(err);
-      setError(
-        err.response?.data?.message || "Failed to load quality control.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useLiveRefresh(["quality-control", "production", "orders"], load);
+  const load = useCallback(async () => {
+    setError("");
+    await refetch();
+  }, [refetch]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -86,7 +71,7 @@ export default function useQualityControl() {
     setError("");
 
     try {
-      const { data } = await api.get(`/quality-control/${item.id}`);
+      const { data } = await qualityControlService.getOne(item.id);
       setDetail(data);
       setTestingResult(data.latestTesting?.overall_result || "");
       setQcResult(data.latestQualityControl?.overall_result || "");
@@ -133,7 +118,7 @@ export default function useQualityControl() {
       setSaving(true);
       setError("");
 
-      await api.post(`/quality-control/${selected.id}/testing`, {
+      await qualityControlService.saveTesting(selected.id, {
         quantity,
         overallResult: testingResult,
         remarks: testingRemarks,
@@ -165,7 +150,7 @@ export default function useQualityControl() {
       setSaving(true);
       setError("");
 
-      await api.patch(`/quality-control/${selected.id}/testing/redo`, {
+      await qualityControlService.redoTesting(selected.id, {
         redoPassed: passedAfterRedo,
       });
 
@@ -204,10 +189,7 @@ export default function useQualityControl() {
       setSaving(true);
       setError("");
 
-      const { data } = await api.patch(
-        `/quality-control/${selected.id}/qc/redo`,
-        { redoApproved: approvedAfterRedo },
-      );
+      const { data } = await qualityControlService.redoQc(selected.id, { redoApproved: approvedAfterRedo });
 
       close();
       toast.success(
@@ -240,7 +222,7 @@ export default function useQualityControl() {
       setSaving(true);
       setError("");
 
-      const { data } = await api.post(`/quality-control/${selected.id}/qc`, {
+      const { data } = await qualityControlService.saveQc(selected.id, {
         quantity,
         overallResult: qcResult,
         remarks: qcRemarks,

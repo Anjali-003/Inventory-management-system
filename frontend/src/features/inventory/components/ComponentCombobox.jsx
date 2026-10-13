@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Loader2, Plus, Search, X } from "lucide-react"
-import api from "@/api/api"
+import { inventoryService } from "@/features/inventory/inventoryService"
 import { cn } from "@/lib/utils"
 import { fmtQty } from "@/lib/stock"
 
@@ -63,8 +63,7 @@ const ComponentCombobox = forwardRef(function ComponentCombobox(
     setLoading(true)
     const timer = setTimeout(
       () => {
-        api
-          .get("/inventory/components", { params: { q: query.trim() || undefined, limit: LIMIT } })
+        inventoryService.searchComponents({ q: query.trim() || undefined, limit: LIMIT })
           .then((r) => {
             if (stale) return
             setRows(r.data.rows)

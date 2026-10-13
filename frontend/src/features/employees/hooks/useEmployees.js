@@ -1,40 +1,23 @@
-import { useCallback, useEffect, useState } from "react";
-import api from "@/api/api";
-import useLiveRefresh from "@/realtime/useLiveRefresh";
+import { useCallback } from "react";
+import { useGetEmployeesQuery } from "@/features/employees/employeesApi";
 
 /*
-  Loads the employee list.
+  The employee list (cached by RTK Query, refetched live when employees change).
   load()   -> refetch quietly (used after a save / delete)
-  reload() -> show the loading skeleton first (used by the error banner's Retry button)
+  reload() -> same, used by the error banner's Retry button
 */
 export default function useEmployees() {
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { data, isLoading, isFetching, isError, refetch } = useGetEmployeesQuery();
 
   const load = useCallback(async () => {
-    try {
-      const { data } = await api.get("/employees");
-      setEmployees(data);
-      setError("");
-    } catch (err) {
-      console.error(err);
-      setError("Could not load employees. Check that the server is running.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    await refetch();
+  }, [refetch]);
 
-  const reload = useCallback(() => {
-    setLoading(true);
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  useLiveRefresh(["employees"], load);
-
-  return { employees, loading, error, load, reload };
+  return {
+    employees: data ?? [],
+    loading: isLoading || (isFetching && !data),
+    error: isError ? "Could not load employees. Check that the server is running." : "",
+    load,
+    reload: load,
+  };
 }

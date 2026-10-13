@@ -1,39 +1,18 @@
 const svc = require("./product.service");
-
-/* Wraps a handler so thrown errors become clean JSON responses. */
-const handle = (fn) => async (req, res) => {
-    try {
-        await fn(req, res);
-    } catch (error) {
-        if (error instanceof svc.HttpError) {
-            return res.status(error.status).json({
-                message: error.message,
-                code: error.code,
-                ...(error.extra || {})
-            });
-        }
-        console.error(error);
-        res.status(500).json({ message: "Product operation failed", code: "SERVER_ERROR" });
-    }
-};
+const AppError = require("../../shared/AppError");
+const asyncHandler = require("../../middleware/asyncHandler");
 
 const productId = (req) => {
     const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id < 1) throw new svc.HttpError(404, "Product not found", "NOT_FOUND");
+    if (!Number.isInteger(id) || id < 1) throw new AppError(404, "Product not found", "NOT_FOUND");
     return id;
 };
 
-async function list(req, res) {
-    try {
-        res.json(await svc.listProducts());
-    } catch (error) {
-        console.error(error);
+const handle = (fn, message = "Product operation failed") => asyncHandler(fn, { message });
 
-        res.status(500).json({
-            message: "Failed to fetch products"
-        });
-    }
-}
+const list = handle(async (req, res) => {
+    res.json(await svc.listProducts());
+}, "Failed to fetch products");
 
 // Default SKU offered in the "Add product" form.
 const nextSku = handle(async (req, res) => {
@@ -50,38 +29,17 @@ const importMany = handle(async (req, res) => {
     res.json(await svc.importProducts({ rows: req.body && req.body.rows, dryRun: !!(req.body && req.body.dryRun), userId: req.user.id }));
 });
 
-async function getOne(req, res) {
-    try {
-        const product = await svc.getProductById(Number(req.params.id));
+const getOne = handle(async (req, res) => {
+    const product = await svc.getProductById(Number(req.params.id));
+    if (!product) throw AppError.notFound("Product not found");
 
-        if (!product) {
-            return res.status(404).json({
-                message: "Product not found"
-            });
-        }
+    res.json(product);
+}, "Failed to fetch product");
 
-        res.json(product);
-    } catch (error) {
-        console.error(error);
-
-        res.status(500).json({
-            message: "Failed to fetch product"
-        });
-    }
-}
-
-async function getBom(req, res) {
-    try {
-        // A product with no BOM yet is not an error: this returns an empty list.
-        res.json(await svc.fetchBom(Number(req.params.id)));
-    } catch (error) {
-        console.error(error);
-
-        res.status(500).json({
-            message: "Failed to fetch BOM"
-        });
-    }
-}
+// A product with no BOM yet is not an error: this returns an empty list.
+const getBom = handle(async (req, res) => {
+    res.json(await svc.fetchBom(Number(req.params.id)));
+}, "Failed to fetch BOM");
 
 // Replace the whole BOM from the editor: { lines: [{ component_id | newComponent, quantity_required, location }] }
 const saveBom = handle(async (req, res) => {

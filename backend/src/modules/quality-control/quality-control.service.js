@@ -1,4 +1,5 @@
 const db = require("../../config/db");
+const AppError = require("../../shared/AppError");
 const { createFinishedGood } = require("../finished-goods/finished-goods.service");
 
 const productionQuery = `
@@ -14,7 +15,7 @@ const productionQuery = `
 
 async function getProductionOrder(connection, productionId) {
   const [rows] = await connection.query(productionQuery, [productionId]);
-  if (!rows.length) throw new Error("Production order not found");
+  if (!rows.length) throw new AppError(404, "Production order not found");
   return rows[0];
 }
 
@@ -132,17 +133,17 @@ async function saveTestingResult(
     const production = await getProductionOrder(connection, productionId);
 
     if (!Number.isInteger(quantity) || quantity <= 0) {
-      throw new Error("Testing quantity must be a positive integer");
+      throw new AppError(400, "Testing quantity must be a positive integer");
     }
 
     if (!["PASS", "FAIL"].includes(overallResult)) {
-      throw new Error("Overall testing result must be PASS or FAIL");
+      throw new AppError(400, "Overall testing result must be PASS or FAIL");
     }
 
     const summary = await getTestingSummary(connection, productionId);
 
     if (quantity > summary.remainingToTest) {
-      throw new Error(
+      throw new AppError(409,
         `Cannot test more than the remaining untested quantity. Remaining: ${summary.remainingToTest}`,
       );
     }
@@ -211,7 +212,7 @@ async function redoTesting(productionId, redoPassed, userId) {
     await getProductionOrder(connection, productionId);
 
     if (!Number.isInteger(redoPassed) || redoPassed < 0) {
-      throw new Error("Redo passed quantity must be a non-negative integer");
+      throw new AppError(400, "Redo passed quantity must be a non-negative integer");
     }
 
     const [rows] = await connection.query(
@@ -231,7 +232,7 @@ async function redoTesting(productionId, redoPassed, userId) {
     );
 
     if (redoPassed > totalFailed) {
-      throw new Error(
+      throw new AppError(400,
         `Redo passed quantity cannot exceed total failed quantity. Failed: ${totalFailed}`,
       );
     }
@@ -366,7 +367,7 @@ async function redoQualityControl(productionId, redoApproved, userId) {
     const production = await getProductionOrder(connection, productionId);
 
     if (!Number.isInteger(redoApproved) || redoApproved < 0) {
-      throw new Error("Redo approved quantity must be a non-negative integer");
+      throw new AppError(400, "Redo approved quantity must be a non-negative integer");
     }
 
     const [rows] = await connection.query(
@@ -386,7 +387,7 @@ async function redoQualityControl(productionId, redoApproved, userId) {
     );
 
     if (redoApproved > totalRejected) {
-      throw new Error(
+      throw new AppError(400,
         `Redo approved quantity cannot exceed total rejected quantity. Rejected: ${totalRejected}`,
       );
     }
@@ -467,17 +468,17 @@ async function saveQualityControlResult(
     const production = await getProductionOrder(connection, productionId);
 
     if (!Number.isInteger(quantity) || quantity <= 0) {
-      throw new Error("QC quantity must be a positive integer");
+      throw new AppError(400, "QC quantity must be a positive integer");
     }
 
     if (!["PASS", "FAIL"].includes(overallResult)) {
-      throw new Error("Overall QC result must be PASS or FAIL");
+      throw new AppError(400, "Overall QC result must be PASS or FAIL");
     }
 
     const summary = await getQualityControlSummary(connection, productionId);
 
     if (quantity > summary.availableForQC) {
-      throw new Error(
+      throw new AppError(409,
         `Cannot inspect more than the quantity available for QC. Available: ${summary.availableForQC}`,
       );
     }

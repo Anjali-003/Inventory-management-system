@@ -6,26 +6,26 @@ import { useGetMeQuery } from "@/features/auth/authApi";
 import { useToast } from "@/components/toast";
 
 /*
-  One SSE connection per logged-in browser tab (GET /api/events).
-  When any super admin changes something, the backend sends { resource, actorId, activity }.
-    1) RTK Query screens (Dashboard, Orders, Products, Inventory, Attendance, Activity): matching tags are
-       invalidated, so only the queries currently on screen refetch.
-    2) Screens that use plain axios (Production, QC, Finished goods, Employees) listen through useLiveRefresh().
-    3) If ANOTHER super admin did it, a small toast tells you who did what.
+  One SSE connection per logged-in browser tab (GET /api/v1/events).
+  When anyone changes something, the backend sends { resource, actorId, activity }.
+    1) The cache tags that resource affects are invalidated, so only the RTK Query lists currently on
+       screen refetch (every list screen uses RTK Query, see features/<name>/<name>Api.js).
+    2) If ANOTHER user did it, a small toast tells you who did what.
+
+  TAGS: backend resource name -> RTK Query tags to refetch. Add a line here when a new screen should
+  refresh live.
 */
 const TAGS = {
   products: ["Products"],
   components: ["Products", "Inventory"],
   inventory: ["Inventory"],
-  orders: ["Orders", "Inventory"],
-  production: ["Orders", "Inventory"],
-  "quality-control": ["Orders", "Inventory"],
-  "finished-goods": ["Orders"],
-  employees: ["Attendance"],
+  orders: ["Orders", "Inventory", "Production", "FinishedGoods", "QualityControl"],
+  production: ["Orders", "Inventory", "Production", "QualityControl"],
+  "quality-control": ["Orders", "Inventory", "QualityControl"],
+  "finished-goods": ["Orders", "FinishedGoods"],
+  employees: ["Attendance", "Employees"],
   attendance: ["Attendance"],
 };
-
-export const LIVE_EVENT = "ims:change";
 
 export default function LiveSync() {
   const dispatch = useDispatch();
@@ -54,7 +54,6 @@ export default function LiveSync() {
       if (sawActivity) tags.add("Activity");
       sawActivity = false;
       if (tags.size) dispatch(baseApi.util.invalidateTags([...tags]));
-      window.dispatchEvent(new CustomEvent(LIVE_EVENT, { detail: { resources } }));
     };
 
     const es = new EventSource(`${api.defaults.baseURL}/events`, { withCredentials: true });

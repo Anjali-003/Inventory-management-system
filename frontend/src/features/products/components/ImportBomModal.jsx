@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { ArrowLeft, Loader2, Upload } from "lucide-react"
-import api from "@/api/api"
+import { productsService } from "@/features/products/productsService"
 import { Modal } from "@/components/Modal"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -51,7 +51,7 @@ export default function ImportBomModal({ open, product, onClose, onImported }) {
     list.map((r) => ({ line: r.line, name: r.name, size: r.size, category: r.category, quantity: r.quantity, location: r.location }))
 
   const request = (list, nextMode, nextCreate, dryRun) =>
-    api.post(`/products/${product.id}/bom/import`, { rows: payload(list), mode: nextMode, createMissing: nextCreate, dryRun })
+    productsService.importBom(product.id, { rows: payload(list), mode: nextMode, createMissing: nextCreate, dryRun })
 
   const onFile = async (file) => {
     if (lock.current) return

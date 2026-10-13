@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, History } from "lucide-react"
-import api from "@/api/api"
+import { inventoryService } from "@/features/inventory/inventoryService"
 import { Modal } from "@/components/Modal"
 import { Button } from "@/components/ui/button"
 import { Notice, TableSkeleton } from "@/components/feedback"
@@ -24,7 +24,7 @@ export default function ItemDetailModal({ open, itemId, refreshToken, onClose, o
     if (!open || !itemId) return
     let stale = false
     setError("")
-    api.get(`/inventory/${itemId}`).then((r) => !stale && setItem(r.data)).catch((e) => !stale && setError(errorMessage(e, "Could not load this item.")))
+    inventoryService.getItem(itemId).then((r) => !stale && setItem(r.data)).catch((e) => !stale && setError(errorMessage(e, "Could not load this item.")))
     return () => { stale = true }
   }, [open, itemId, refreshToken])
 
@@ -40,8 +40,8 @@ export default function ItemDetailModal({ open, itemId, refreshToken, onClose, o
         item && (
           <>
             <Button variant="outline" size="lg" onClick={() => onLedger(item)}><History /> Full ledger</Button>
-            <Button variant="outline" size="lg" onClick={() => onOut(item)} disabled={!active}><ArrowUpFromLine /> Stock out</Button>
-            <Button size="lg" onClick={() => onIn(item)}><ArrowDownToLine /> Stock in</Button>
+            {onOut && <Button variant="outline" size="lg" onClick={() => onOut(item)} disabled={!active}><ArrowUpFromLine /> Stock out</Button>}
+            {onIn && <Button size="lg" onClick={() => onIn(item)}><ArrowDownToLine /> Stock in</Button>}
           </>
         )
       }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { ArrowUpFromLine, Loader2, PencilLine } from "lucide-react"
-import api from "@/api/api"
+import { inventoryService } from "@/features/inventory/inventoryService"
 import { Modal, ConfirmDialog } from "@/components/Modal"
 import { Button } from "@/components/ui/button"
 import { Field, TextInput, selectClass } from "@/components/FormField"
@@ -118,7 +118,7 @@ export function StockOutModal({ open, item, onClose, onSaved, onConflict }) {
     setErrors(next)
     if (Object.keys(next).length) return
     sub.run(
-      (key) => api.post(`/inventory/${item.id}/stock-out`, {
+      (key) => inventoryService.stockOut(item.id, {
         quantity: q.value,
         reason,
         reason_code: STOCK_OUT_CODE[reasonPreset],
@@ -235,7 +235,7 @@ export function EditModal({ open, item, onClose, onSaved, onConflict }) {
     if (delta !== 0) Object.assign(body, { new_quantity: c.value, expected_on_hand: item.quantity_on_hand, reason })
     if (minChanged) body.minimum_stock_level = m.value
     sub.run(
-      (key) => api.put(`/inventory/${item.id}`, { ...body, idempotency_key: key }),
+      (key) => inventoryService.update(item.id, { ...body, idempotency_key: key }),
       (err) => { if (err?.response?.status === 409) onConflict?.() }
     )
   }
@@ -304,7 +304,7 @@ export function ArchiveDialog({ open, item, onClose, onSaved, onConflict }) {
       onConfirm={() => {
         if (blocked) return onClose()
         sub.run(
-          () => api.delete(`/inventory/${item.id}`, { data: { reason: reason.trim() || undefined } }),
+          () => inventoryService.archive(item.id, reason.trim() || undefined),
           (err) => { if (err?.response?.status === 409) onConflict?.() }
         )
       }}

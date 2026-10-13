@@ -1,9 +1,3 @@
-const path = require("path");
-
-require("dotenv").config({
-    path: path.join(__dirname, "../../.env")
-});
-
 const { input, password } = require("@inquirer/prompts");
 
 const superAdminService = require("../modules/super-admins/super-admin.service");

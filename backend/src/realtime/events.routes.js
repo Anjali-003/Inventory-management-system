@@ -14,7 +14,7 @@ router.get("/", (req, res) => {
     res.flushHeaders();
     res.write("retry: 3000\n\n");
 
-    const remove = hub.addClient(res, req.user.userId);
+    const remove = hub.addClient(res, req.user.userId, req.user.role);
     req.on("close", remove);
 });
 

@@ -1,9 +1,10 @@
 /*
-    Turns a request like  POST /api/production/5/update-progress  into a readable line:
+    Turns a request like  POST /api/v1/production/5/update-progress  into a readable line:
         { resource: "production", resourceId: 5, action: "update-progress",
           summary: "Update progress — production order #5" }
 
-    Only the method and URL are used. Request bodies are never stored (they can contain passwords).
+    Only the method, the module name and the path AFTER the module are used (so the API prefix, /api or
+    /api/v1, never matters). Request bodies are never stored (they can contain passwords).
 */
 const LABELS = {
     products: "product",
@@ -25,11 +26,13 @@ const titleCase = (s) => {
     return t.charAt(0).toUpperCase() + t.slice(1);
 };
 
-function describe(method, originalUrl) {
-    const path = String(originalUrl).split("?")[0];
-    const parts = path.split("/").filter(Boolean); // ["api", "orders", "12", "start"]
-    const resource = parts[1] || "unknown";
-    const rest = parts.slice(2);
+/**
+ * @param {string} method    HTTP method
+ * @param {string} resource  module name the route group is mounted as, e.g. "orders"
+ * @param {string} subPath   request path below that module, e.g. "/12/start-production"
+ */
+function describe(method, resource, subPath = "") {
+    const rest = String(subPath).split("?")[0].split("/").filter(Boolean); // ["12", "start-production"]
 
     const idPart = rest.find((p) => /^\d+$/.test(p));
     const actionPart = rest.find((p) => !/^\d+$/.test(p));

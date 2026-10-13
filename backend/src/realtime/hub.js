@@ -6,10 +6,12 @@
     NOTE: this lives in ONE Node process. If you ever run several backend instances,
     replace broadcast() with Redis pub/sub (each instance forwards to its own clients).
 */
-const clients = new Set(); // { res, userId }
+const { eventAccess } = require("../middleware/permissions");
 
-function addClient(res, userId) {
-    const client = { res, userId };
+const clients = new Set(); // { res, userId, role }
+
+function addClient(res, userId, role) {
+    const client = { res, userId, role };
     clients.add(client);
     return () => clients.delete(client);
 }
@@ -23,7 +25,12 @@ function send(client, event, data) {
 }
 
 function broadcast(data) {
-    for (const c of clients) send(c, "change", data);
+    for (const c of clients) {
+        // each role only hears about what it may open (see middleware/permissions.js)
+        const access = eventAccess(c.role, data.resource);
+        if (access === "full") send(c, "change", data);
+        else if (access === "refresh") send(c, "change", { ...data, activity: null });
+    }
 }
 
 /* Used when a super admin is deactivated: tell their open tabs to log out, then close. */

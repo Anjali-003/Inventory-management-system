@@ -11,8 +11,8 @@
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const { connectionConfig, env } = require("./lib/connection");
 const mysql = require("mysql2/promise");
-require("dotenv").config({ path: path.join(__dirname, "../../.env") });
 
 const DIR = path.join(__dirname, "setup_data");
 const resetMode = process.argv.includes("--reset");
@@ -36,7 +36,7 @@ const ask = (q) =>
     process.exit(1);
   }
 
-  console.log(`Database: ${process.env.DB_NAME || "inventory_management"} @ ${process.env.DB_HOST}`);
+  console.log(`Database: ${env.db.database} @ ${env.db.host}`);
   console.log("Will run, in this order:");
   files.forEach((f) => console.log(`  - ${f}`));
 
@@ -54,8 +54,7 @@ const ask = (q) =>
 
   // No database in the connection: the files select it themselves (USE inventory_management).
   const db = await mysql.createConnection({
-    host: process.env.DB_HOST, user: process.env.DB_USER, password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT, multipleStatements: true,
+    ...connectionConfig({ withDatabase: false, multipleStatements: true }),
     charset: "utf8mb4", // keeps symbols such as the degree sign in "105°C"
   });
 

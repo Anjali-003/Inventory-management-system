@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const db = require("../../config/db");
 const AppError = require("../../shared/AppError");
 const hub = require("../../realtime/hub");
+const { ROLE_NAMES } = require("../../middleware/permissions");
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -15,8 +16,16 @@ async function list() {
     return rows;
 }
 
-/* Shared by the API and the CLI script. */
-async function create({ name, email, password }, createdBy = null) {
+/*
+    Create a user with ANY known role (SUPER_ADMIN, STORE_MANAGER ... see middleware/permissions.js).
+    Used by the TERMINAL SCRIPT (npm run createuser). Not exposed over the API.
+*/
+async function createUser({ name, email, password, role }, createdBy = null) {
+    role = String(role || "").trim().toUpperCase();
+    if (!ROLE_NAMES.includes(role)) {
+        throw new AppError(400, `Role must be one of: ${ROLE_NAMES.join(", ")}`);
+    }
+
     name = String(name || "").trim();
     email = String(email || "").trim().toLowerCase();
 
@@ -31,15 +40,18 @@ async function create({ name, email, password }, createdBy = null) {
     try {
         const [result] = await db.query(
             `INSERT INTO users (name, email, password_hash, role, created_by)
-             VALUES (?, ?, ?, 'SUPER_ADMIN', ?)`,
-            [name, email, hash, createdBy]
+             VALUES (?, ?, ?, ?, ?)`,
+            [name, email, hash, role, createdBy]
         );
-        return { id: result.insertId, name, email, role: "SUPER_ADMIN", is_active: 1 };
+        return { id: result.insertId, name, email, role, is_active: 1 };
     } catch (err) {
         if (err.code === "ER_DUP_ENTRY") throw new AppError(409, "A user with this email already exists");
         throw err;
     }
 }
+
+/* Shared by the API (POST /api/super-admins) and `npm run superadmin`: always creates a SUPER_ADMIN. */
+const create = (data, createdBy = null) => createUser({ ...data, role: "SUPER_ADMIN" }, createdBy);
 
 async function findByEmail(email) {
     const [rows] = await db.query(
@@ -112,4 +124,4 @@ async function setActive(id, active, actorId) {
     return { id, is_active: active };
 }
 
-module.exports = { list, create, update, findByEmail, setActive };
+module.exports = { list, create, createUser, update, findByEmail, setActive };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import api from "@/api/api";
+import { authService } from "@/features/auth/authService"
+import { savedLoginPath } from "@/lib/permissions";
 
 function ProtectedRoute({ children }) {
 
@@ -18,9 +19,7 @@ function ProtectedRoute({ children }) {
 
                 try {
 
-                    await api.get(
-                        "/auth/me"
-                    );
+                    await authService.checkSession();
 
                     setAuthenticated(true);
 
@@ -57,7 +56,7 @@ function ProtectedRoute({ children }) {
 
         return (
             <Navigate
-                to="/login"
+                to={savedLoginPath()}
                 replace
             />
         );

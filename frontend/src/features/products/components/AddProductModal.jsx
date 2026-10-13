@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { ClipboardList, Loader2, Plus } from "lucide-react"
-import api from "@/api/api"
+import { productsService } from "@/features/products/productsService"
 import { Modal } from "@/components/Modal"
 import { Button } from "@/components/ui/button"
 import { Field, TextInput } from "@/components/FormField"
@@ -30,8 +30,7 @@ export default function AddProductModal({ open, onClose, onCreated }) {
     setBusy(false)
     lock.current = false
     let stale = false
-    api
-      .get("/products/next-sku")
+    productsService.nextSku()
       .then((r) => !stale && setSku((cur) => cur || r.data.sku))
       .catch(() => {}) // the SKU can still be typed by hand
     return () => {
@@ -62,7 +61,7 @@ export default function AddProductModal({ open, onClose, onCreated }) {
     lock.current = true
     setBusy(true)
     try {
-      const { data } = await api.post("/products", { sku: sku.trim().toUpperCase(), name: name.trim(), description: description.trim() })
+      const { data } = await productsService.create({ sku: sku.trim().toUpperCase(), name: name.trim(), description: description.trim() })
       onCreated(data, openBomNext)
     } catch (err) {
       const field = err?.response?.data?.field

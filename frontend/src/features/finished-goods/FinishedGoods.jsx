@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
-import useLiveRefresh from "@/realtime/useLiveRefresh"
+import { useCallback, useMemo, useState } from "react"
 import { CheckCircle2, PackageCheck, RefreshCw, Truck } from "lucide-react"
-import api from "@/api/api"
+import { finishedGoodsService } from "@/features/finished-goods/finishedGoodsService"
+import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
+import { errorMessage } from "@/lib/stock"
 import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
 import StatStrip from "@/components/StatStrip"
@@ -11,6 +12,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import UserCell from "@/components/UserCell"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { usePermissions } from "@/features/auth/usePermissions"
 
 
 // the person behind the latest step of this batch (approved -> dispatched -> completed)
@@ -46,7 +48,7 @@ function Confirm({ item, action, busy, onClose, onConfirm }) {
   )
 }
 
-function ItemCard({ item, onAction }) {
+function ItemCard({ item, onAction, editable }) {
   return (
     <div className="rounded-xl border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
@@ -66,40 +68,30 @@ function ItemCard({ item, onAction }) {
         <UserCell {...actorOf(item)} className="text-foreground" />
       </div>
       <div className="mt-3 flex justify-end border-t pt-3">
-        {item.status === "PACKAGING" && <Button size="sm" onClick={() => onAction(item, "DISPATCH")}><Truck /> Mark dispatched</Button>}
-        {item.status === "DISPATCHED" && <Button size="sm" onClick={() => onAction(item, "COMPLETE")}><CheckCircle2 /> Mark completed</Button>}
-        {item.status === "COMPLETED" && <span className="text-xs text-muted-foreground">No action</span>}
+        {editable && item.status === "PACKAGING" && <Button size="sm" onClick={() => onAction(item, "DISPATCH")}><Truck /> Mark dispatched</Button>}
+        {editable && item.status === "DISPATCHED" && <Button size="sm" onClick={() => onAction(item, "COMPLETE")}><CheckCircle2 /> Mark completed</Button>}
+        {(!editable || item.status === "COMPLETED") && <span className="text-xs text-muted-foreground">{editable ? "No action" : "View only"}</span>}
       </div>
     </div>
   )
 }
 
 export default function FinishedGoods() {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
+  const { canEdit } = usePermissions()
+  const editable = canEdit("finishedGoods") // false = read-only role: no dispatch / complete
+  // the list is cached by RTK Query and refetched live (see realtime/LiveSync.jsx)
+  const { data: items = [], isLoading: loading, error: loadError, refetch } = useGetFinishedGoodsQuery()
+  const [actionError, setError] = useState("")
+  const error = actionError || (loadError ? errorMessage(loadError, "Failed to load finished goods.") : "")
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(null)
   const [action, setAction] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  const load = useCallback(async ({ quiet } = {}) => {
-    try {
-      if (!quiet) setLoading(true)
-      const { data } = await api.get("/finished-goods")
-      setItems(Array.isArray(data) ? data : [])
-      setError("")
-    } catch (err) {
-      console.error(err)
-      setError(err.response?.data?.message || "Failed to load finished goods.")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  useLiveRefresh(["finished-goods", "orders"], load)
+  const load = useCallback(async () => {
+    setError("")
+    await refetch()
+  }, [refetch])
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -119,7 +111,7 @@ export default function FinishedGoods() {
     if (!selected || !action) return
     try {
       setBusy(true)
-      await api.post(`/finished-goods/${selected.id}/${action === "DISPATCH" ? "dispatch" : "complete"}`)
+      await (action === "DISPATCH" ? finishedGoodsService.dispatch(selected.id) : finishedGoodsService.complete(selected.id))
       setSelected(null)
       setAction(null)
       await load()
@@ -172,20 +164,21 @@ export default function FinishedGoods() {
                     <TableCell><Status value={item.status} /></TableCell>
                     <TableCell className="min-w-40"><UserCell {...actorOf(item)} /></TableCell>
                     <TableCell className="text-right">
-                      {item.status === "PACKAGING" && <Button size="sm" onClick={() => confirm(item, "DISPATCH")}><Truck /> Dispatched</Button>}
-                      {item.status === "DISPATCHED" && <Button size="sm" onClick={() => confirm(item, "COMPLETE")}><CheckCircle2 /> Completed</Button>}
+                      {editable && item.status === "PACKAGING" && <Button size="sm" onClick={() => confirm(item, "DISPATCH")}><Truck /> Dispatched</Button>}
+                      {editable && item.status === "DISPATCHED" && <Button size="sm" onClick={() => confirm(item, "COMPLETE")}><CheckCircle2 /> Completed</Button>}
                       {item.status === "COMPLETED" && <span className="text-sm text-muted-foreground">Done</span>}
+                      {!editable && item.status !== "COMPLETED" && <span className="text-sm text-muted-foreground">View only</span>}
                     </TableCell>
                   </TableRow>
                 ))}</TableBody>
               </Table>
             </div>
-            <div className="grid gap-3 p-3 md:hidden">{rows.map((item) => <ItemCard key={item.id} item={item} onAction={confirm} />)}</div>
+            <div className="grid gap-3 p-3 md:hidden">{rows.map((item) => <ItemCard key={item.id} item={item} onAction={confirm} editable={editable} />)}</div>
           </>
         )}
       </Card>
 
-      <Confirm item={selected} action={action} busy={busy} onClose={close} onConfirm={submit} />
+      {editable && <Confirm item={selected} action={action} busy={busy} onClose={close} onConfirm={submit} />}
     </>
   )
 }

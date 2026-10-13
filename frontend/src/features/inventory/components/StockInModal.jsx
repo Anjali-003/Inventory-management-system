@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { ArrowDownToLine, ArrowLeft, ListPlus, Loader2, PackagePlus, Trash2 } from "lucide-react"
-import api from "@/api/api"
+import { inventoryService } from "@/features/inventory/inventoryService"
 import { Modal } from "@/components/Modal"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -143,7 +143,7 @@ export default function StockInModal({ open, onClose, onSaved, preset }) {
     setNc({ ...EMPTY_NC, name: text, sku: first })
     focusSoon(text ? "si-qty" : "nc-name")
     try {
-      const { data } = await api.get("/inventory/components/next-sku")
+      const { data } = await inventoryService.nextSku()
       setBaseSku(data.sku)
       const better = suggestSku(data.sku, newSkusInList)
       // only replace the suggestion if the user has not already typed their own SKU
@@ -208,8 +208,8 @@ export default function StockInModal({ open, onClose, onSaved, preset }) {
     setChecking(true)
     try {
       const [bySku, byName] = await Promise.all([
-        api.get("/inventory/components", { params: { q: sku, limit: 10 } }),
-        api.get("/inventory/components", { params: { q: name, limit: 25 } }),
+        inventoryService.searchComponents({ q: sku, limit: 10 }),
+        inventoryService.searchComponents({ q: name, limit: 25 }),
       ])
       const skuHit = bySku.data.rows.find((r) => r.sku.toUpperCase() === sku)
       const nameHit = byName.data.rows.find((r) => r.name.toLowerCase() === name.toLowerCase())
@@ -239,7 +239,7 @@ export default function StockInModal({ open, onClose, onSaved, preset }) {
     if (reason.length < 3) return setFormErrors({ note: "Add a short description" })
     setErrors({}); setFormErrors({})
     const items = [{ component_id: picked.id, quantity: q.value, reason, reference_no: refNo.trim() }]
-    sub.run((key) => api.post("/inventory/stock-in/batch", { idempotency_key: key, items }))
+    sub.run((key) => inventoryService.stockInBatch({ idempotency_key: key, items }))
   }
 
   const submit = (e) => {
@@ -264,7 +264,7 @@ export default function StockInModal({ open, onClose, onSaved, preset }) {
     })
 
     sub.run(
-      (key) => api.post("/inventory/stock-in/batch", { idempotency_key: key, items }),
+      (key) => inventoryService.stockInBatch({ idempotency_key: key, items }),
       (err) => {
         const d = err?.response?.data
         // the server names the offending line, so point at it

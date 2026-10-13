@@ -1,15 +1,16 @@
 const mysql = require("mysql2/promise");
-require("dotenv").config();
+const env = require("./env");
 
+/** Shared MySQL connection pool. */
 const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  port: process.env.DB_PORT,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+    host: env.db.host,
+    user: env.db.user,
+    password: env.db.password,
+    database: env.db.database,
+    port: env.db.port,
+    waitForConnections: true,
+    connectionLimit: env.db.connectionLimit,
+    queueLimit: 0,
 });
 
 module.exports = pool;
