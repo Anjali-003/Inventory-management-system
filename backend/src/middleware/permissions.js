@@ -35,6 +35,12 @@ const ACCESS = {
     // Purchase department manager: owns the purchase module only
     PURCHASE_MANAGER: {
         purchase: "edit"
+    },
+
+    // Production can update production runs and view inventory without changing stock.
+    PRODUCTION_MANAGER: {
+        production: "edit",
+        inventory: "view"
     }
 };
 
@@ -50,7 +56,8 @@ const LOGIN_ROUTES = {
     SUPER_ADMIN: "/login",
     STORE_MANAGER: "/store-manager/login",
     IQC_MANAGER: "/iqc-manager/login",
-    PURCHASE_MANAGER: "/purchase-manager/login"
+    PURCHASE_MANAGER: "/purchase-manager/login",
+    PRODUCTION_MANAGER: "/production-manager/login"
 };
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);

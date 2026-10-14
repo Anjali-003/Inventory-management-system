@@ -39,7 +39,7 @@ export default function ItemDetailModal({ open, itemId, refreshToken, onClose, o
       footer={
         item && (
           <>
-            <Button variant="outline" size="lg" onClick={() => onLedger(item)}><History /> Full ledger</Button>
+            {onLedger && <Button variant="outline" size="lg" onClick={() => onLedger(item)}><History /> Full ledger</Button>}
             {onOut && <Button variant="outline" size="lg" onClick={() => onOut(item)} disabled={!active}><ArrowUpFromLine /> Stock out</Button>}
             {onIn && <Button size="lg" onClick={() => onIn(item)}><ArrowDownToLine /> Stock in</Button>}
           </>

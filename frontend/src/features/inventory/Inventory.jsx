@@ -62,8 +62,9 @@ const EMPTY = []
 
 export default function Inventory() {
   const toast = useToast()
-  const { canEdit } = usePermissions()
+  const { canEdit, canView } = usePermissions()
   const editable = canEdit("inventory") // false = read-only role: no stock in / out / archive
+  const canViewHistory = canView("inventoryHistory")
   const [tab, setTab] = useState("stock")
   const [query, setQuery] = useState("")
   const [view, setView] = useState("active")
@@ -136,6 +137,7 @@ export default function Inventory() {
   }
 
   const showLedger = (item) => { setLedgerFor(item); setTab("ledger"); close() }
+  const showLedgerTab = canViewHistory && tab === "ledger"
 
   return (
     <>
@@ -144,7 +146,7 @@ export default function Inventory() {
       </PageHeader>
 
       <div role="tablist" className="mb-4 inline-flex rounded-lg border bg-card p-1 text-sm">
-        {[["stock", "Stock", Warehouse], ["ledger", "Stock ledger", History]].map(([k, l, Icon]) => (
+        {[["stock", "Stock", Warehouse], ...(canViewHistory ? [["ledger", "Stock ledger", History]] : [])].map(([k, l, Icon]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
             className={cn("inline-flex h-8 items-center gap-2 rounded-md px-3.5 font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
               tab === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
@@ -156,7 +158,7 @@ export default function Inventory() {
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
       <Card className="overflow-hidden">
-        {tab === "ledger" ? (
+        {showLedgerTab ? (
           <LedgerPanel componentFilter={ledgerFor} onClearComponent={() => setLedgerFor(null)} refreshToken={token} />
         ) : (
           <>
@@ -244,7 +246,7 @@ export default function Inventory() {
 
       <ItemDetailModal
         open={dlg.kind === "view"} itemId={dlg.item?.id} refreshToken={token} onClose={close}
-        onIn={editable ? (it) => open("in", it) : undefined} onOut={editable ? (it) => open("out", it) : undefined} onLedger={showLedger}
+        onIn={editable ? (it) => open("in", it) : undefined} onOut={editable ? (it) => open("out", it) : undefined} onLedger={canViewHistory ? showLedger : undefined}
       />
       {editable && (
         <>

@@ -44,7 +44,17 @@ const PORTAL_CARDS = [
     note: "Raise and track purchases",
     icon: ShoppingCart,
   },
+  {
+    portal: LOGIN_PORTALS.PRODUCTION_MANAGER,
+    label: "Production",
+    note: "Update production runs and view inventory",
+    icon: Factory,
+  },
 ];
+
+// Keep the landing page renderable if a local permissions.js is out of sync.
+// The matching LOGIN_PORTALS entry is still required for that role's login route.
+const AVAILABLE_PORTAL_CARDS = PORTAL_CARDS.filter(({ portal }) => portal?.role && portal?.path);
 
 const MODULES = [
   { icon: Boxes, name: "Products and BOM", text: "Import a bill of materials from a sheet and keep every revision in one place." },
@@ -71,6 +81,7 @@ const ACCESS_ROWS = [
   { role: "Store Manager", edit: "Inventory, inventory history, finished goods, incoming stock", view: "IQC, purchase" },
   { role: "IQC Manager", edit: "IQC", view: "None" },
   { role: "Purchase Manager", edit: "Purchase", view: "None" },
+  { role: "Production", edit: "Production", view: "Inventory" },
 ];
 
 /* ---------- shared Tailwind class sets ---------- */
@@ -179,11 +190,11 @@ export default function Landing() {
               Log in to your workspace
             </h2>
             <p className="mt-1 text-[0.95rem] text-lp-muted">
-              Choose the role you work in. All four roles can be logged in at once, one per browser tab.
+              Choose the role you work in. Different roles can stay logged in at once, one per browser tab.
             </p>
 
             <div className="mt-5 grid gap-2.5">
-              {PORTAL_CARDS.map(({ portal, label, note, icon: Icon }) => {
+              {AVAILABLE_PORTAL_CARDS.map(({ portal, label, note, icon: Icon }) => {
                 const session = sessions[portal.role];
                 return (
                   <Link
@@ -316,7 +327,7 @@ export default function Landing() {
         <div className={`${wrap} flex flex-wrap items-center justify-between gap-8`}>
           <h2 className={`${heading} text-[clamp(1.5rem,2.6vw,2rem)] text-white`}>Ready to get back to work?</h2>
           <div className="flex flex-wrap gap-3 max-sm:w-full">
-            {PORTAL_CARDS.map(({ portal, label }) => {
+            {AVAILABLE_PORTAL_CARDS.map(({ portal, label }) => {
               const session = sessions[portal.role];
               return (
                 <Link

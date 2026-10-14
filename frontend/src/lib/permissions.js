@@ -26,6 +26,7 @@ export const ROLES = {
   STORE_MANAGER: "STORE_MANAGER",
   IQC_MANAGER: "IQC_MANAGER",
   PURCHASE_MANAGER: "PURCHASE_MANAGER",
+  PRODUCTION_MANAGER: "PRODUCTION_MANAGER",
 }
 
 export const ROLE_LABELS = {
@@ -33,6 +34,7 @@ export const ROLE_LABELS = {
   STORE_MANAGER: "Store Manager",
   IQC_MANAGER: "IQC Manager",
   PURCHASE_MANAGER: "Purchase Manager",
+  PRODUCTION_MANAGER: "Production Manager",
 }
 
 const norm = (role) => String(role || "").toUpperCase()
@@ -46,13 +48,14 @@ export const LOGIN_PORTALS = {
   STORE_MANAGER: { role: "STORE_MANAGER", path: "/store-manager/login", api: "/auth/store-manager/login", title: "Store Manager Login" },
   IQC_MANAGER: { role: "IQC_MANAGER", path: "/iqc-manager/login", api: "/auth/iqc-manager/login", title: "IQC Manager Login" },
   PURCHASE_MANAGER: { role: "PURCHASE_MANAGER", path: "/purchase-manager/login", api: "/auth/purchase-manager/login", title: "Purchase Manager Login" },
+  PRODUCTION_MANAGER: { role: "PRODUCTION_MANAGER", path: "/production-manager/login", api: "/auth/production-manager/login", title: "Production Login" },
 }
 
 export const loginPathFor = (role) => LOGIN_PORTALS[norm(role)]?.path || "/login"
 
 /*
   WHICH ROLE IS THIS TAB WORKING AS?
-  Every role has its own login cookie on the server, so all four roles can be logged in at once.
+  Every role has its own login cookie on the server, so multiple roles can be logged in at once.
   The role of a tab is kept in sessionStorage (private to the tab), and api.js sends it with every
   request as the X-Login-Role header. Result: tab 1 = Super Admin, tab 2 = Store Manager, and so on.
   A brand new tab has no role yet: the landing page lets the user continue as one of the logged-in roles.
@@ -81,10 +84,10 @@ export const MODULE_PATHS = {
   dashboard: "/dashboard",
   activity: "/activity",
   products: "/products",
+  production: "/production",
   inventory: "/inventory",
   inventoryHistory: "/inventory-history",
   orders: "/orders",
-  production: "/production",
   qualityControl: "/quality-control",
   finishedGoods: "/finished-goods",
   incomingStock: "/incoming-stock", // IQC-approved purchases the store manager accepts into stock
@@ -110,6 +113,11 @@ const ACCESS = {
 
   IQC_MANAGER: { iqc: "edit" },
   PURCHASE_MANAGER: { purchase: "edit" },
+
+  PRODUCTION_MANAGER: {
+    production: "edit",
+    inventory: "view",
+  },
 }
 
 const levelOf = (role, module) => {
