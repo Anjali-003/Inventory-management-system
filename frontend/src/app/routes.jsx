@@ -19,6 +19,7 @@ import Purchase from "@/features/purchase/Purchase";
 import IncomingStock from "@/features/incoming-stock/IncomingStock";
 
 /** { path, module (see MODULE_PATHS in lib/permissions.js), Page } */
+//Page batata hai kya render karna hai, module batata hai kis permission ko check karna hai, aur path batata hai kis URL par route match karna hai.
 export const PAGES = [
   { path: "/dashboard", module: "dashboard", Page: Dashboard },
   { path: "/inventory-history", module: "inventoryHistory", Page: InventoryHistory },

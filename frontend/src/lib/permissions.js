@@ -15,12 +15,15 @@
   TO ADD A NEW PAGE LATER: add the module key to MODULE_PATHS, put the page in
   Layout.jsx GROUPS with `module: "iqc"`, wrap its <Route> in <RequireAccess module="iqc"> in App.jsx,
   and use usePermissions().canEdit("iqc") inside the page to hide edit buttons.
-  IQC_MANAGER owns "iqc", PURCHASE_MANAGER owns "purchase"; Store Manager has "iqc: view" and "purchase: view" below, so those pages will be read-only for them automatically.
+  IQC_MANAGER owns "iqc", PURCHASE_MANAGER owns "purchase", STORE_MANAGER owns the store pages (inventory, inventory history, finished goods, incoming stock).
+  Every one of these 3 roles has "view" on the other two departments' pages, so those pages open read-only for them automatically.
 
   NOTE: this only controls what the UI shows. The backend enforces the same rules in backend/src/middleware/permissions.js (keep both in sync).
 */
 
 // Same strings as users.role in the database (uppercase). Keep in sync with backend/src/middleware/permissions.js
+//program mein comparison aur logic ke liye.
+// code aur role checks ke liye ek consistent identifier.
 export const ROLES = {
   SUPER_ADMIN: "SUPER_ADMIN",
   STORE_MANAGER: "STORE_MANAGER",
@@ -28,6 +31,7 @@ export const ROLES = {
   PURCHASE_MANAGER: "PURCHASE_MANAGER",
 }
 
+//user ko readable naam dikhane ke liye.
 export const ROLE_LABELS = {
   SUPER_ADMIN: "Super Admin",
   STORE_MANAGER: "Store Manager",
@@ -108,8 +112,25 @@ const ACCESS = {
     purchase: "view",
   },
 
-  IQC_MANAGER: { iqc: "edit" },
-  PURCHASE_MANAGER: { purchase: "edit" },
+  // edits IQC; views purchase + the store pages
+  IQC_MANAGER: {
+    iqc: "edit",
+    purchase: "view",
+    inventory: "view",
+    inventoryHistory: "view",
+    finishedGoods: "view",
+    incomingStock: "view",
+  },
+
+  // edits purchase; views IQC + the store pages
+  PURCHASE_MANAGER: {
+    purchase: "edit",
+    iqc: "view",
+    inventory: "view",
+    inventoryHistory: "view",
+    finishedGoods: "view",
+    incomingStock: "view",
+  },
 }
 
 const levelOf = (role, module) => {
@@ -122,8 +143,11 @@ const levelOf = (role, module) => {
 export const canView = (role, module) => levelOf(role, module) !== null
 export const canEdit = (role, module) => levelOf(role, module) === "edit"
 
-// first page this role is allowed to open (null when the role has no module at all)
+// first page this role lands on (null when the role has no module at all).
+// A page the role can EDIT wins over a view-only one, so the IQC manager lands on /iqc (not on /inventory,
+// which comes earlier in MODULE_PATHS but is read-only for them).
 export const homePathFor = (role) => {
-  const m = Object.keys(MODULE_PATHS).find((k) => canView(role, k))
+  const keys = Object.keys(MODULE_PATHS)
+  const m = keys.find((k) => canEdit(role, k)) || keys.find((k) => canView(role, k))
   return m ? MODULE_PATHS[m] : null
 }

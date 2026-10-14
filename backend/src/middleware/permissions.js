@@ -16,6 +16,7 @@ const AppError = require("../shared/AppError");
 const ACCESS = {
     SUPER_ADMIN: "*",
 
+    // Each of the 3 department roles EDITS its own module(s) and can only VIEW the other two.
     STORE_MANAGER: {
         inventory: "edit",
         inventoryHistory: "edit",
@@ -27,14 +28,24 @@ const ACCESS = {
         purchase: "view"
     },
 
-    // Incoming Quality Control manager: owns the IQC module only
+    // Incoming Quality Control manager: edits IQC, views purchase + the store pages
     IQC_MANAGER: {
-        iqc: "edit"
+        iqc: "edit",
+        purchase: "view",
+        inventory: "view",
+        inventoryHistory: "view",
+        finishedGoods: "view",
+        incomingStock: "view"
     },
 
-    // Purchase department manager: owns the purchase module only
+    // Purchase department manager: edits purchase, views IQC + the store pages
     PURCHASE_MANAGER: {
-        purchase: "edit"
+        purchase: "edit",
+        iqc: "view",
+        inventory: "view",
+        inventoryHistory: "view",
+        finishedGoods: "view",
+        incomingStock: "view"
     }
 };
 

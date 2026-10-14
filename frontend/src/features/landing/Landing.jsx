@@ -69,8 +69,8 @@ const FLOW = [
 const ACCESS_ROWS = [
   { role: "Super Admin", edit: "All modules", view: "None" },
   { role: "Store Manager", edit: "Inventory, inventory history, finished goods, incoming stock", view: "IQC, purchase" },
-  { role: "IQC Manager", edit: "IQC", view: "None" },
-  { role: "Purchase Manager", edit: "Purchase", view: "None" },
+  { role: "IQC Manager", edit: "IQC", view: "Purchase, inventory, inventory history, finished goods, incoming stock" },
+  { role: "Purchase Manager", edit: "Purchase", view: "IQC, inventory, inventory history, finished goods, incoming stock" },
 ];
 
 /* ---------- shared Tailwind class sets ---------- */

@@ -1,3 +1,4 @@
+//LiveSync.jsx doosre users ke changes ka pata lagata hai aur data refresh karwata hai.
 import { useEffect, useRef } from "react";
 import { useDispatch } from "react-redux";
 import api, { isMock } from "@/api/api";

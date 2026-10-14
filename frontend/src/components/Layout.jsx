@@ -1,3 +1,5 @@
+// website ka common UI banata hai, jaise header, sidebar, navigation aur page display.
+
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
@@ -234,6 +236,8 @@ function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
   );
 }
 
+// pathname isi liye use ho raha hai, taaki page badalne par sidebar band ho aur naya page animation ke saath dikhe.
+//usePermissions() ek object return kar raha hai, jisme user, role, roleLabel, loading, canView, canEdit aur homePath properties hain.
 export default function Layout() {
   const { pathname } = useLocation();
   const { user, roleLabel } = usePermissions();
