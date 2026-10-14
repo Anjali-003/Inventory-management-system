@@ -19,7 +19,7 @@
 --     components (ids 1..18). Those ids are now different parts, so inserting
 --     it would link the products to the wrong components. Add the real BOM
 --     once it is defined for the new components.
---   * Admin user and employees: reset_inventory.sql does not touch them.
+--   * Super admin user and employees: reset_inventory.sql does not touch them.
 -- =====================================================================
 
 USE inventory_management;

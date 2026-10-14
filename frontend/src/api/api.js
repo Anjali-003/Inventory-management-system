@@ -1,43 +1,30 @@
-// Frontend jis URL se open hua hai, us URL ko dekhkar automatically backend ka URL banana.
-// Isliye .env mein baar-baar VITE_API_URL change/comment nahi karna padega.
-//
-// DATA MODE (frontend/.env):
-//   VITE_DATA_MODE=mysql   -> normal: real backend + MySQL (default when the variable is missing)
-//   VITE_DATA_MODE=mock    -> mock: every request is answered in the browser from src/api/mock/*,
-//                             the backend and the database are not touched at all.
-// Vite sirf VITE_ se shuru hone wale variables browser tak pahunchata hai, isliye naam VITE_DATA_MODE hai.
-// .env badalne ke baad dev server (npm run dev) restart karna zaroori hai.
+/*
+  The one axios instance every request goes through (cookies, base URL, mock mode).
 
+  Do not import this in components. Use a feature service (features/<name>/<name>Service.js)
+  for one-off requests, or an RTK Query endpoint (features/<name>/<name>Api.js) for data shown on screens.
+*/
 import axios from "axios";
+import { isMock, resolveApiUrl } from "@/config/env";
+import { getActiveRole } from "@/lib/permissions";
 
-export const DATA_MODE = String(import.meta.env.VITE_DATA_MODE || "mysql").trim().toLowerCase();
-export const isMock = DATA_MODE === "mock";
-
-const getApiUrl = () => {
-  const { hostname, protocol } = window.location;
-
-  // Production: VITE_API_URL provided
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
-  }
-
-  //for port forwarding
-  if (hostname.endsWith(".devtunnels.ms")) {
-    const backendHost = hostname.replace("-5173.", "-5000.");
-    return `${protocol}//${backendHost}/api`;
-  }
-
-  //for local development
-  return `${protocol}//${hostname}:5000/api`;
-};
+export { DATA_MODE, isMock } from "@/config/env";
 
 const api = axios.create({
-  baseURL: getApiUrl(),
+  baseURL: resolveApiUrl(),
   withCredentials: true,
   // mock mode: swap the HTTP transport for the in-browser mock (loaded lazily, only in mock mode)
   ...(isMock && {
     adapter: (config) => import("./mock/mockAdapter.js").then((m) => m.mockAdapter(config)),
   }),
+});
+
+// tell the server which role (= which login cookie) this tab is working as; a caller may set its own header
+export const ROLE_HEADER = "X-Login-Role";
+api.interceptors.request.use((config) => {
+  const role = getActiveRole();
+  if (role && !config.headers.get(ROLE_HEADER)) config.headers.set(ROLE_HEADER, role);
+  return config;
 });
 
 export default api;

@@ -12,7 +12,7 @@ const TONES = [
   "bg-indigo-100 text-indigo-700",
 ]
 
-const SIZES = { sm: "size-8 text-xs", md: "size-9 text-xs", lg: "size-11 text-sm" }
+const SIZES = { xs: "size-6 text-[10px]", sm: "size-8 text-xs", md: "size-9 text-xs", lg: "size-11 text-sm" }
 
 const toneFor = (name = "") => {
   let h = 0

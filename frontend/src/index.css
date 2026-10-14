@@ -1,10 +1,28 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
+
+/* Landing page tokens: gives Tailwind classes like bg-lp-green, text-lp-ink, font-lp-head */
+@theme {
+  --font-lp-head: "Bricolage Grotesque", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-lp-ink: #10211c;
+  --color-lp-text: #3d4b47;
+  --color-lp-muted: #66736f;
+  --color-lp-line: #dfe7e4;
+  --color-lp-rule: #c9d8d2;
+  --color-lp-bg: #f7f9f8;
+  --color-lp-tint: #eaf1ee;
+  --color-lp-soft: #f3f9f7;
+  --color-lp-portal-on: #9fcdbf;
+  --color-lp-green: #0f6d55;
+  --color-lp-green-dark: #0a5945;
+  --color-lp-deep: #0c2a22;
+}
+
 
 @theme inline {
   --font-heading: var(--font-sans);
@@ -268,4 +286,4 @@
 
 .password-eye:hover {
     color: #111827;
-}
+}

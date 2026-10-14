@@ -3,16 +3,13 @@
 // Needs CREATE/DROP DATABASE permission. Exit code 1 when they differ (usable in CI).
 const fs = require("fs");
 const path = require("path");
-const mysql = require("mysql2/promise");
-require("dotenv").config({ path: path.join(__dirname, "../../.env") });
+const { connect, env } = require("./lib/connection");
 const { dumpSchema } = require("./lib/dumpSchema");
 
-const conf = { host: process.env.DB_HOST, user: process.env.DB_USER, password: process.env.DB_PASSWORD, port: process.env.DB_PORT };
-
 (async () => {
-  const tmpName = `${process.env.DB_NAME}_schema_check`;
-  const admin = await mysql.createConnection({ ...conf, multipleStatements: true });
-  const live = await mysql.createConnection({ ...conf, database: process.env.DB_NAME });
+  const tmpName = `${env.db.database}_schema_check`;
+  const admin = await connect({ withDatabase: false, multipleStatements: true });
+  const live = await connect();
   try {
     await admin.query(`DROP DATABASE IF EXISTS \`${tmpName}\`; CREATE DATABASE \`${tmpName}\`; USE \`${tmpName}\`;`);
     // schema.sql starts with CREATE DATABASE / USE <real db>. Strip them, otherwise the file would

@@ -1,15 +1,11 @@
 // npm run schema:dump  ->  rewrites schema.sql from the live (fully migrated) database.
 const fs = require("fs");
 const path = require("path");
-const mysql = require("mysql2/promise");
-require("dotenv").config({ path: path.join(__dirname, "../../.env") });
+const { connect, env } = require("./lib/connection");
 const { dumpSchema, HEADER, FOOTER } = require("./lib/dumpSchema");
 
 (async () => {
-  const db = await mysql.createConnection({
-    host: process.env.DB_HOST, user: process.env.DB_USER, password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME, port: process.env.DB_PORT,
-  });
+  const db = await connect();
   try {
     const [pending] = await db.query("SELECT name FROM schema_migrations").catch(() => [[]]);
     const done = new Set(pending.map((r) => r.name));
@@ -21,10 +17,10 @@ const { dumpSchema, HEADER, FOOTER } = require("./lib/dumpSchema");
       return;
     }
     const target = path.join(__dirname, "schema.sql");
-    const dbName = process.env.DB_NAME.replace(/`/g, "``");
+    const dbName = env.db.database.replace(/`/g, "``");
     const dbLines = `CREATE DATABASE IF NOT EXISTS \`${dbName}\`;\nUSE \`${dbName}\`;\n\n`;
     fs.writeFileSync(target, HEADER + dbLines + (await dumpSchema(db, { idempotent: true })) + FOOTER);
-    console.log(`schema.sql updated from database "${process.env.DB_NAME}".`);
+    console.log(`schema.sql updated from database "${env.db.database}".`);
   } finally {
     await db.end();
   }

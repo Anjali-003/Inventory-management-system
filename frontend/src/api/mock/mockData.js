@@ -26,9 +26,10 @@ function mulberry32(seed) {
 }
 
 export const USERS = [
-  { id: 1, name: "Admin", email: "admin@example.com", role: "admin" },
-  { id: 2, name: "Store Keeper", email: "store@example.com", role: "staff" },
-  { id: 3, name: "Purchase Desk", email: "purchase@example.com", role: "staff" },
+  { id: 1, name: "Super Admin", email: "superadmin@example.com", role: "SUPER_ADMIN" },
+  { id: 2, name: "Store Keeper", email: "store@example.com", role: "STORE_MANAGER" },
+  { id: 3, name: "Purchase Desk", email: "purchase@example.com", role: "PURCHASE_MANAGER" },
+  { id: 4, name: "IQC Desk", email: "iqc@example.com", role: "IQC_MANAGER" },
 ]
 
 // [id, sku, name, unit, category, size, location]
@@ -120,6 +121,7 @@ export function buildSeed(now = new Date()) {
   }))
   const orders = ORDERS.map(([id, order_number, status, product_id, quantity, d]) => ({
     id, order_number, status, product_id, quantity, created_at: fmtDT(at(d, 10)),
+    created_by: id % 2 ? 1 : 2,
     product_name: PRODUCTS.find((p) => p.id === product_id).name,
   }))
 
