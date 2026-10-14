@@ -11,9 +11,13 @@ require("dotenv").config({ path: path.join(__dirname, "../../.env"), quiet: true
 
 const hint = "Copy backend/.env.example to backend/.env and fill them in.";
 
+//check karta hai ki required environment variables available hain ya nahi.
 function assertPresent(keys) {
+    //let key represent environment the variable
+    //Required environment variables ki list mein se un keys ko nikaal do jinki values missing ya empty hain."
     const missing = keys.filter((key) => !process.env[key]);
     if (missing.length > 0) {
+        //missing.join(", ") Array ke elements ko comma-separated string banata hai.
         throw new Error(`Missing required environment variable(s): ${missing.join(", ")}. ${hint}`);
     }
 }
@@ -21,6 +25,7 @@ function assertPresent(keys) {
 // Database scripts (migrate, seed...) only need the database settings.
 assertPresent(["DB_HOST", "DB_USER", "DB_NAME"]);
 
+// Converts a string from .env into an integer.
 const toInt = (value, fallback) => {
     const n = Number.parseInt(value, 10);
     return Number.isFinite(n) ? n : fallback;
@@ -29,10 +34,12 @@ const toInt = (value, fallback) => {
 const nodeEnv = process.env.NODE_ENV || "development";
 
 const env = {
+    //object property shorthand is used instead of {nodeEnv: nodeEnv}
     nodeEnv,
     isProduction: nodeEnv === "production",
     port: toInt(process.env.PORT, 5000),
-
+    // Object.freeze() configuration ko accidentally modify hone se 
+    // bachata hai. Ye object ko read-only jaisa bana deta hai, lekin har nested object ko automatically freeze nahi karta.
     db: Object.freeze({
         host: process.env.DB_HOST,
         user: process.env.DB_USER,

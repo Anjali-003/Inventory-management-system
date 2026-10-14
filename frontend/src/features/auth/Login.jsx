@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService } from "@/features/auth/authService"
 import { Eye, EyeOff } from "lucide-react";
+import { useDispatch } from "react-redux";
+import { baseApi } from "@/api/baseApi";
 import { LOGIN_PORTALS, rememberPortal } from "@/lib/permissions";
 
 // portal = which role this page logs in (see LOGIN_PORTALS); /login is the super admin page
@@ -9,6 +11,8 @@ function Login({ portal = LOGIN_PORTALS.SUPER_ADMIN }) {
   const [showPassword, setShowPassword] = useState(false);
 
   const navigate = useNavigate();
+
+  const dispatch = useDispatch();
 
   const [email, setEmail] = useState("");
 
@@ -34,9 +38,11 @@ function Login({ portal = LOGIN_PORTALS.SUPER_ADMIN }) {
 
       await authService.login(portal.api, { email, password });
 
-      rememberPortal(portal);
+      rememberPortal(portal); // this tab now works as this role
 
-      navigate("/"); // "/" redirects to the first page this role may open
+      dispatch(baseApi.util.resetApiState()); // drop anything cached for a previous role in this tab
+
+      navigate("/dashboard"); // redirects to the first page this role may open
     } catch (error) {
       console.error(error);
 

@@ -28,7 +28,8 @@ function mulberry32(seed) {
 export const USERS = [
   { id: 1, name: "Super Admin", email: "superadmin@example.com", role: "SUPER_ADMIN" },
   { id: 2, name: "Store Keeper", email: "store@example.com", role: "STORE_MANAGER" },
-  { id: 3, name: "Purchase Desk", email: "purchase@example.com", role: "staff" },
+  { id: 3, name: "Purchase Desk", email: "purchase@example.com", role: "PURCHASE_MANAGER" },
+  { id: 4, name: "IQC Desk", email: "iqc@example.com", role: "IQC_MANAGER" },
 ]
 
 // [id, sku, name, unit, category, size, location]

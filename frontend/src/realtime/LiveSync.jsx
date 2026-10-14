@@ -4,6 +4,7 @@ import api, { isMock } from "@/api/api";
 import { baseApi } from "@/api/baseApi";
 import { useGetMeQuery } from "@/features/auth/authApi";
 import { useToast } from "@/components/toast";
+import { getActiveRole, loginPathFor } from "@/lib/permissions";
 
 /*
   One SSE connection per logged-in browser tab (GET /api/v1/events).
@@ -25,6 +26,10 @@ const TAGS = {
   "finished-goods": ["Orders", "FinishedGoods"],
   employees: ["Attendance", "Employees"],
   attendance: ["Attendance"],
+  // incoming goods: purchase -> IQC -> store. Accepting also changes stock.
+  purchase: ["Purchases"],
+  iqc: ["Purchases"],
+  "incoming-stock": ["Purchases", "Inventory"],
 };
 
 export default function LiveSync() {
@@ -56,7 +61,9 @@ export default function LiveSync() {
       if (tags.size) dispatch(baseApi.util.invalidateTags([...tags]));
     };
 
-    const es = new EventSource(`${api.defaults.baseURL}/events`, { withCredentials: true });
+    // EventSource cannot send headers, so the tab's role travels in the query string
+    const role = getActiveRole();
+    const es = new EventSource(`${api.defaults.baseURL}/events?role=${encodeURIComponent(role || "")}`, { withCredentials: true });
 
     es.addEventListener("change", (e) => {
       try {
@@ -78,7 +85,7 @@ export default function LiveSync() {
     // this account was deactivated by another super admin
     es.addEventListener("logout", () => {
       es.close();
-      window.location.href = "/login";
+      window.location.href = loginPathFor(role);
     });
 
     return () => {

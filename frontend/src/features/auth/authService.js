@@ -1,4 +1,4 @@
-import api from "@/api/api";
+import api, { ROLE_HEADER } from "@/api/api";
 
 /* One-off auth requests. The cached "who am I" lives in authApi.js (useGetMeQuery). */
 export const authService = {
@@ -6,5 +6,7 @@ export const authService = {
   login: (loginPath, { email, password }) => api.post(loginPath, { email, password }),
   logout: () => api.post("/auth/logout"),
   /** Resolves when the login cookie is valid, rejects with 401 otherwise. */
-  checkSession: () => api.get("/auth/me"),
+  checkSession: (role) => api.get("/auth/me", role ? { headers: { [ROLE_HEADER]: role } } : undefined),
+  /** Which roles are logged in on this browser: [{ role, name, email }]. Public, used by the landing page. */
+  sessions: () => api.get("/auth/sessions").then((res) => res.data?.sessions || []),
 };

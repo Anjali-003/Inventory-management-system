@@ -9,6 +9,7 @@ Object.entries(LOGIN_ROUTES).forEach(([role, path]) => {
     router.post(path, (req, res, next) => { req.loginRole = role; next(); }, controller.login);
 });
 router.get("/me", controller.me);
+router.get("/sessions", controller.sessions);
 router.post("/logout", controller.logout);
 
 module.exports = router;

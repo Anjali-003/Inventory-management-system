@@ -12,10 +12,10 @@
       (absent) -> page is hidden from the sidebar and the route redirects away
 
   TO ADD A NEW ROLE LATER: add one entry in ACCESS below (and its label in ROLE_LABELS). Nothing else.
-  TO ADD A NEW PAGE LATER (e.g. IQC, Purchase): add the module key to MODULE_PATHS, put the page in
+  TO ADD A NEW PAGE LATER: add the module key to MODULE_PATHS, put the page in
   Layout.jsx GROUPS with `module: "iqc"`, wrap its <Route> in <RequireAccess module="iqc"> in App.jsx,
   and use usePermissions().canEdit("iqc") inside the page to hide edit buttons.
-  Store Manager already has "iqc: view" and "purchase: view" below, so those pages will be read-only for them automatically.
+  IQC_MANAGER owns "iqc", PURCHASE_MANAGER owns "purchase"; Store Manager has "iqc: view" and "purchase: view" below, so those pages will be read-only for them automatically.
 
   NOTE: this only controls what the UI shows. The backend enforces the same rules in backend/src/middleware/permissions.js (keep both in sync).
 */
@@ -24,11 +24,15 @@
 export const ROLES = {
   SUPER_ADMIN: "SUPER_ADMIN",
   STORE_MANAGER: "STORE_MANAGER",
+  IQC_MANAGER: "IQC_MANAGER",
+  PURCHASE_MANAGER: "PURCHASE_MANAGER",
 }
 
 export const ROLE_LABELS = {
   SUPER_ADMIN: "Super Admin",
   STORE_MANAGER: "Store Manager",
+  IQC_MANAGER: "IQC Manager",
+  PURCHASE_MANAGER: "Purchase Manager",
 }
 
 const norm = (role) => String(role || "").toUpperCase()
@@ -40,23 +44,41 @@ const norm = (role) => String(role || "").toUpperCase()
 export const LOGIN_PORTALS = {
   SUPER_ADMIN: { role: "SUPER_ADMIN", path: "/login", api: "/auth/login", title: "Super Admin Login" },
   STORE_MANAGER: { role: "STORE_MANAGER", path: "/store-manager/login", api: "/auth/store-manager/login", title: "Store Manager Login" },
+  IQC_MANAGER: { role: "IQC_MANAGER", path: "/iqc-manager/login", api: "/auth/iqc-manager/login", title: "IQC Manager Login" },
+  PURCHASE_MANAGER: { role: "PURCHASE_MANAGER", path: "/purchase-manager/login", api: "/auth/purchase-manager/login", title: "Purchase Manager Login" },
 }
 
 export const loginPathFor = (role) => LOGIN_PORTALS[norm(role)]?.path || "/login"
 
-// remembers which login page this browser used, so "session expired" sends the user back to THEIR page
-const PORTAL_KEY = "ims_login_portal"
-export const rememberPortal = (portal) => { try { localStorage.setItem(PORTAL_KEY, portal.path) } catch { /* ignore */ } }
-export const savedLoginPath = () => {
+/*
+  WHICH ROLE IS THIS TAB WORKING AS?
+  Every role has its own login cookie on the server, so all four roles can be logged in at once.
+  The role of a tab is kept in sessionStorage (private to the tab), and api.js sends it with every
+  request as the X-Login-Role header. Result: tab 1 = Super Admin, tab 2 = Store Manager, and so on.
+  A brand new tab has no role yet: the landing page lets the user continue as one of the logged-in roles.
+*/
+const ROLE_KEY = "ims_active_role"
+export const getActiveRole = () => {
   try {
-    const p = localStorage.getItem(PORTAL_KEY)
-    return Object.values(LOGIN_PORTALS).some((x) => x.path === p) ? p : "/login"
-  } catch { return "/login" }
+    const r = sessionStorage.getItem(ROLE_KEY)
+    return LOGIN_PORTALS[norm(r)] ? norm(r) : null
+  } catch { return null }
+}
+export const setActiveRole = (role) => { try { sessionStorage.setItem(ROLE_KEY, norm(role)) } catch { /* ignore */ } }
+export const clearActiveRole = () => { try { sessionStorage.removeItem(ROLE_KEY) } catch { /* ignore */ } }
+
+// called after a successful login on a portal page
+export const rememberPortal = (portal) => setActiveRole(portal.role)
+
+// where "session expired" sends this tab: its own login page, or the landing page when the tab has no role yet
+export const savedLoginPath = () => {
+  const role = getActiveRole()
+  return role ? loginPathFor(role) : "/"
 }
 
 // module key -> route path. The ORDER here decides which page a user lands on first (see homePathFor).
 export const MODULE_PATHS = {
-  dashboard: "/",
+  dashboard: "/dashboard",
   activity: "/activity",
   products: "/products",
   inventory: "/inventory",
@@ -65,9 +87,10 @@ export const MODULE_PATHS = {
   production: "/production",
   qualityControl: "/quality-control",
   finishedGoods: "/finished-goods",
+  incomingStock: "/incoming-stock", // IQC-approved purchases the store manager accepts into stock
   employees: "/employees",
   attendance: "/attendance",
-  // future pages (not built yet)
+  // IQC dashboard and Purchase page (see features/iqc and features/purchase)
   iqc: "/iqc",
   purchase: "/purchase",
 }
@@ -79,10 +102,14 @@ const ACCESS = {
     inventory: "edit",
     inventoryHistory: "edit",
     finishedGoods: "edit",
-    // future: can look at these but never change anything
+    incomingStock: "edit", // accepts IQC-approved purchases into inventory
+    // can look at these but never change anything
     iqc: "view",
     purchase: "view",
   },
+
+  IQC_MANAGER: { iqc: "edit" },
+  PURCHASE_MANAGER: { purchase: "edit" },
 }
 
 const levelOf = (role, module) => {

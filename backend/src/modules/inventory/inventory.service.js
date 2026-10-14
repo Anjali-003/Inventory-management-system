@@ -1021,7 +1021,61 @@ async function archiveItem(inventoryIdRaw, body, userId) {
     });
 }
 
+/* RECEIPT LINES INSIDE A CALLER'S TRANSACTION ------------------------------
+   Used by the incoming-stock module: when the store manager accepts an IQC-approved purchase,
+   the PO status change and every stock-in must commit (or roll back) together, so the posting
+   runs on the caller's connection instead of opening its own transaction.
+   lines: [{ componentId, cents, reason, referenceNo, key }]  (key = idempotency key, unique per line) */
+async function postReceiptLines(conn, lines, userId) {
+    const ids = [...new Set(lines.map((l) => l.componentId))].sort((a, b) => a - b);
+    for (const id of ids) {
+        await conn.query(
+            `INSERT INTO inventory (component_id, quantity_on_hand, quantity_reserved)
+             VALUES (?, 0, 0)
+             ON DUPLICATE KEY UPDATE component_id = component_id`,
+            [id]
+        );
+    }
+    const [locked] = await conn.query(
+        `SELECT * FROM inventory WHERE component_id IN (?) ORDER BY component_id FOR UPDATE`,
+        [ids]
+    );
+    const inv = new Map(locked.map((r) => [r.component_id, r]));
+
+    const results = [];
+    for (const line of lines) {
+        const row = inv.get(line.componentId);
+        const after = toCents(row.quantity_on_hand) + line.cents;
+        if (after > DB_MAX_CENTS) {
+            throw new AppError(422, "Resulting stock would exceed the maximum allowed", "VALIDATION");
+        }
+        await conn.query(
+            `UPDATE inventory SET quantity_on_hand = ?, is_active = 1, archived_at = NULL WHERE id = ?`,
+            [fromCents(after), row.id]
+        );
+        const movementId = await insertLedger(conn, {
+            componentId: line.componentId,
+            type: "STOCK_IN",
+            direction: "IN",
+            cents: line.cents,
+            balanceAfterCents: after,
+            reason: line.reason,
+            referenceNo: line.referenceNo,
+            userId,
+            key: line.key,
+        });
+        row.quantity_on_hand = fromCents(after);
+        results.push({ component_id: line.componentId, quantity: fromCents(line.cents), balance_after: fromCents(after), movement_id: movementId });
+    }
+    return results;
+}
+
 module.exports = {
+    postReceiptLines,
+    inTransaction,
+    parseQty,
+    toCents,
+    fromCents,
     listInventory,
     getItem,
     getLedger,

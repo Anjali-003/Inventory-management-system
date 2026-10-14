@@ -14,6 +14,9 @@ const LABELS = {
     production: "production order",
     "quality-control": "QC inspection",
     "finished-goods": "finished goods",
+    purchase: "purchase",
+    iqc: "purchase",
+    "incoming-stock": "purchase",
     employees: "employee",
     attendance: "attendance",
     "super-admins": "super admin"

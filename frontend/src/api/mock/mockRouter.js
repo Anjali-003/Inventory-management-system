@@ -32,7 +32,7 @@ const bad = (m, extra) => new Http(422, m, "VALIDATION", extra)
 
 let S = null
 const state = () => (S ||= buildSeed(new Date()))
-export const resetMock = () => { S = null }
+export const resetMock = () => { S = null; PUR = null }
 
 let authed = true
 try { authed = sessionStorage.getItem("mock_auth") !== "0" } catch { /* not in a browser */ }
@@ -477,14 +477,159 @@ const orderRows = () => [...state().orders].sort((a, b) => b.id - a.id)
   .map((o) => ({ id: o.id, order_number: o.order_number, status: o.status, created_at: o.created_at, product_id: o.product_id, product_name: o.product_name, quantity: o.quantity,
     created_by: o.created_by ?? null, created_by_name: o.created_by ? userName(o.created_by) : null }))
 
+
+/* ------------------------------------------- incoming goods: purchase -> IQC -> store */
+let PUR = null
+const purState = () => (PUR ||= seedPurchases())
+
+function seedPurchases() {
+  const hoursAgo = (h) => fmtDT(new Date(Date.now() - h * 3600000))
+  // items: [component_id, ordered, received, defective, "REJECTED"?]  (received null = not inspected yet)
+  const mk = (id, supplier, status, h, items, extra = {}) => ({
+    id, po_number: `PO-${String(id).padStart(4, "0")}`, supplier, notes: null, status,
+    created_by: 3, created_at: hoursAgo(h), received_by: null, received_at: null, sent_to_iqc_by: null, sent_to_iqc_at: null, iqc_by: null, iqc_at: null, iqc_remarks: null, accepted_by: null, accepted_at: null,
+    ...extra,
+    items: items.map(([cid, ord, rec, def = 0, dec], k) => {
+      const rejected = dec === "REJECTED"
+      const good = rec == null ? null : toC(rec) - toC(def)
+      return {
+        id: id * 100 + k, component_id: cid, ordered: toC(ord),
+        received: rec == null ? null : toC(rec), defective: toC(def), approved: rec == null ? null : rejected ? 0 : good,
+        decision: rec == null ? null : rejected || good <= 0 ? "REJECTED" : "APPROVED", remarks: null,
+      }
+    }),
+  })
+  return {
+    next: 8,
+    list: [
+      mk(7, "Kapoor Traders", "PENDING_STORE", 30, [[1, 1000, 1000, 0], [2, 400, 400, 0, "REJECTED"], [3, 600, 600, 10]], { iqc_by: 4, iqc_at: hoursAgo(5), iqc_remarks: "Component 2 failed the sample test" }),
+      mk(5, "Kapoor Traders", "ORDER_PLACED", 2, [[2, 800]]),
+      mk(6, "Sharma Electronics", "RECEIVED", 8, [[1, 1500]], { received_by: 3, received_at: hoursAgo(1) }),
+      mk(1, "Sharma Electronics", "PENDING_IQC", 3, [[1, 5000], [3, 10000]]),
+      mk(2, "Delhi Components Co.", "PENDING_IQC", 1, [[2, 2000]]),
+      mk(3, "Sharma Electronics", "PENDING_STORE", 26, [[4, 500, 500, 20]], { iqc_by: 4, iqc_at: hoursAgo(20), iqc_remarks: "20 capacitors damaged in transit" }),
+      mk(4, "Delhi Components Co.", "STORED", 120, [[1, 3000, 3000, 0]], { iqc_by: 4, iqc_at: hoursAgo(100), accepted_by: 2, accepted_at: hoursAgo(96), status: "STORED" }),
+    ],
+  }
+}
+
+function purView(p) {
+  const items = p.items.map((i) => {
+    const c = comp(i.component_id)
+    return {
+      id: i.id, purchase_order_id: p.id, component_id: i.component_id, sku: c?.sku, name: c?.name, unit: c?.unit,
+      quantity_ordered: fromC(i.ordered), quantity_received: i.received == null ? null : fromC(i.received),
+      quantity_defective: fromC(i.defective), quantity_approved: i.approved == null ? null : fromC(i.approved), iqc_decision: i.decision ?? null, remarks: i.remarks,
+    }
+  })
+  const sum = (f) => items.reduce((t, i) => t + (f(i) ?? 0), 0)
+  return {
+    id: p.id, po_number: p.po_number, supplier: p.supplier, notes: p.notes, status: p.status, iqc_remarks: p.iqc_remarks,
+    created_by_name: userName(p.created_by), received_by_name: p.received_by ? userName(p.received_by) : null, sent_to_iqc_by_name: p.sent_to_iqc_by ? userName(p.sent_to_iqc_by) : null, iqc_by_name: p.iqc_by ? userName(p.iqc_by) : null, accepted_by_name: p.accepted_by ? userName(p.accepted_by) : null,
+    created_at: p.created_at, received_at: p.received_at, sent_to_iqc_at: p.sent_to_iqc_at, iqc_at: p.iqc_at, accepted_at: p.accepted_at,
+    items,
+    totals: {
+      lines: items.length, rejected_lines: items.filter((i) => i.iqc_decision === "REJECTED").length,
+      ordered: sum((i) => Number(i.quantity_ordered)), received: sum((i) => (i.quantity_received == null ? 0 : Number(i.quantity_received))),
+      defective: sum((i) => Number(i.quantity_defective)), approved: sum((i) => (i.quantity_approved == null ? 0 : Number(i.quantity_approved))),
+    },
+  }
+}
+
+const purList = (statuses) => {
+  const want = String(statuses || "").split(",").map((x) => x.trim().toUpperCase()).filter(Boolean)
+  return [...purState().list].filter((p) => !want.length || want.includes(p.status)).sort((a, b) => b.id - a.id).map(purView)
+}
+const purGet = (id) => {
+  const p = purState().list.find((x) => x.id === Number(id))
+  if (!p) throw new Http(404, "Purchase not found", "NOT_FOUND")
+  return p
+}
+
+function createPurchase(body) {
+  const supplier = String(body.supplier ?? "").trim().replace(/\s+/g, " ")
+  if (supplier.length < 2 || supplier.length > 150) throw bad("Supplier name must be 2-150 characters", { field: "supplier" })
+  if (!Array.isArray(body.items) || body.items.length === 0) throw bad("Add at least one component to the purchase")
+  const seen = new Set()
+  const items = body.items.map((raw, line) => {
+    const c = comp(raw?.component_id)
+    if (!c) throw new Http(404, "Component not found", "NOT_FOUND", { line, field: "component" })
+    if (seen.has(c.id)) throw bad("This component appears more than once in the list", { line, field: "component" })
+    seen.add(c.id)
+    return { c, cents: qty(raw.quantity, "Quantity") }
+  })
+  const st = purState()
+  const id = st.next++
+  st.list.push({
+    id, po_number: `PO-${String(id).padStart(4, "0")}`, supplier, notes: String(body.notes ?? "").trim() || null, status: "ORDER_PLACED",
+    created_by: currentUserId, created_at: fmtDT(new Date()), received_by: null, received_at: null, sent_to_iqc_by: null, sent_to_iqc_at: null, iqc_by: null, iqc_at: null, iqc_remarks: null, accepted_by: null, accepted_at: null,
+    items: items.map((it, k) => ({ id: id * 100 + k, component_id: it.c.id, ordered: it.cents, received: null, defective: 0, approved: null, remarks: null })),
+  })
+  return { status: 201, data: purView(purGet(id)) }
+}
+
+function receivePurchase(id) {
+  const p = purGet(id)
+  if (p.status !== "ORDER_PLACED") throw new Http(409, "This purchase is not waiting to be received. Refresh the page.", "NOT_ORDERED")
+  p.status = "RECEIVED"; p.received_by = currentUserId; p.received_at = fmtDT(new Date())
+  return purView(p)
+}
+
+function sendPurchaseToIqc(id) {
+  const p = purGet(id)
+  if (p.status !== "RECEIVED") throw new Http(409, "Mark this purchase as received before sending it to IQC. Refresh the page.", "NOT_RECEIVED")
+  p.status = "PENDING_IQC"; p.sent_to_iqc_by = currentUserId; p.sent_to_iqc_at = fmtDT(new Date())
+  return purView(p)
+}
+
+function inspectPurchase(id, body) {
+  const p = purGet(id)
+  if (p.status !== "PENDING_IQC") throw new Http(409, "This purchase has already been inspected. Refresh the page.", "ALREADY_INSPECTED")
+  if (!Array.isArray(body.items) || body.items.length !== p.items.length) throw bad("Inspect every component of the purchase")
+  const plan = p.items.map((it, line) => {
+    const raw = body.items.find((x) => Number(x?.id) === it.id)
+    if (!raw) throw bad("Inspect every component of the purchase")
+    if (typeof raw.approve !== "boolean") throw bad("Tick or untick every component", { line, field: "approve" })
+    const received = qty(raw.received, "Received quantity", { allowZero: true })
+    const defective = raw.defective === undefined || raw.defective === null || raw.defective === "" ? 0 : qty(raw.defective, "Defective quantity", { allowZero: true })
+    if (defective > received) throw bad("Defective quantity cannot be more than the received quantity", { line, field: "defective" })
+    if (raw.approve && received - defective <= 0) throw bad("Nothing to approve on this line. Untick it to reject it.", { line, field: "approve" })
+    return { it, received, defective, approve: raw.approve, remarks: String(raw.remarks ?? "").trim() || null }
+  })
+  let approvedTotal = 0
+  for (const x of plan) {
+    x.it.received = x.received; x.it.defective = x.defective; x.it.approved = x.approve ? x.received - x.defective : 0
+    x.it.decision = x.approve ? "APPROVED" : "REJECTED"; x.it.remarks = x.remarks
+    approvedTotal += x.it.approved
+  }
+  p.status = approvedTotal > 0 ? "PENDING_STORE" : "REJECTED"
+  p.iqc_by = currentUserId; p.iqc_at = fmtDT(new Date()); p.iqc_remarks = String(body.remarks ?? "").trim() || null
+  return purView(p)
+}
+
+function acceptPurchase(id) {
+  const p = purGet(id)
+  if (p.status === "STORED") throw new Http(409, "This purchase is already accepted into stock.", "ALREADY_ACCEPTED")
+  if (p.status !== "PENDING_STORE") throw new Http(409, "This purchase has not been approved by IQC yet.", "NOT_APPROVED")
+  for (const it of p.items.filter((i) => i.approved > 0)) {
+    const c = comp(it.component_id)
+    c.is_active = 1; c.archived_at = null
+    post(c, "STOCK_IN", "IN", it.approved, { reason: `Purchase ${p.po_number} from ${p.supplier} (IQC approved)`, reference_no: p.po_number, key: `po-accept-${p.id}-${it.id}` })
+  }
+  p.status = "STORED"; p.accepted_by = currentUserId; p.accepted_at = fmtDT(new Date())
+  return purView(p)
+}
+
 /* ------------------------------------------------------------------ router */
 const ok = (data, status = 200) => ({ status, data })
 const ROUTES = [
   ["GET", /^\/auth\/me$/, () => (authed ? ok({ user: currentUser() }) : ok({ message: "Not authenticated" }, 401))],
-  ["POST", /^\/auth\/(?:store-manager\/)?login$/, (m, q, body) => {
+  ["GET", /^\/auth\/sessions$/, () => ok({ sessions: authed ? [{ role: currentUser().role, name: currentUser().name, email: currentUser().email }] : [] })],
+  ["POST", /^\/auth\/(?:([a-z-]+)\/)?login$/, (m, q, body) => {
     // mock only: log in as whichever USERS email is typed (default: super admin); each page only accepts its own role
-    const portalRole = m[0].includes("store-manager") ? "STORE_MANAGER" : "SUPER_ADMIN"
+    const portalRole = m[1] ? m[1].toUpperCase().replace(/-/g, "_") : "SUPER_ADMIN" // /auth/iqc-manager/login -> IQC_MANAGER
     const u = USERS.find((x) => x.email === body?.email) || USERS.find((x) => x.role === portalRole)
+    if (!u) return ok({ message: "Invalid email or password" }, 401)
     if (u.role !== portalRole) return ok({ message: "This account cannot log in on this page. Please use your own login page." }, 403)
     currentUserId = u.id
     try { sessionStorage.setItem("mock_user", String(u.id)) } catch { /* ignore */ }
@@ -513,6 +658,18 @@ const ROUTES = [
   ["PUT", /^\/inventory\/(\d+)$/, (m, q, b) => updateItem(m[1], b)],
   ["DELETE", /^\/inventory\/(\d+)$/, (m, q, b) => ok(archive(m[1], b))],
 
+  // incoming goods: purchase manager -> IQC -> store manager
+  ["GET", /^\/purchase\/components$/, (m, q) => ok(componentOptions(q))],
+  ["GET", /^\/purchase$/, (m, q) => ok(purList(q.status))],
+  ["GET", /^\/purchase\/(\d+)$/, (m) => ok(purView(purGet(m[1])))],
+  ["POST", /^\/purchase$/, (m, q, b) => createPurchase(b)],
+  ["POST", /^\/purchase\/(\d+)\/receive$/, (m) => ok(receivePurchase(m[1]))],
+  ["POST", /^\/purchase\/(\d+)\/send-to-iqc$/, (m) => ok(sendPurchaseToIqc(m[1]))],
+  ["GET", /^\/iqc$/, (m, q) => ok(purList(q.status).filter((p) => ["PENDING_IQC", "PENDING_STORE", "STORED", "REJECTED"].includes(p.status)))],
+  ["GET", /^\/iqc\/(\d+)$/, (m) => ok(purView(purGet(m[1])))],
+  ["POST", /^\/iqc\/(\d+)\/inspect$/, (m, q, b) => ok(inspectPurchase(m[1], b))],
+  ["GET", /^\/incoming-stock$/, () => ok(purList("PENDING_STORE,STORED"))],
+  ["POST", /^\/incoming-stock\/(\d+)\/accept$/, (m) => ok(acceptPurchase(m[1]))],
   ["GET", /^\/orders$/, () => ok(orderRows())],
   ["GET", /^\/products$/, () => ok(state().products)],
   ["GET", /^\/products\/next-sku$/, () => ok({ sku: `PRD-${String(state().products.length + 1).padStart(3, "0")}` })],

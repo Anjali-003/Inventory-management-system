@@ -9,7 +9,7 @@ const AppError = require("../shared/AppError");
         (none)  -> 403
     SUPER_ADMIN ("*") can do everything.
 
-    TO ADD A ROLE LATER (e.g. IQC, PURCHASE_MANAGER): add it to ACCESS below, then to ROLES in
+    TO ADD A ROLE LATER (e.g. QUALITY_INSPECTOR): add it to ACCESS below, then to ROLES in
     scripts/create-user.js (it uses ROLE_NAMES from this file, so nothing else to change there).
     Store Manager already has "iqc" / "purchase": "view" for the pages that will come later.
 */
@@ -20,9 +20,21 @@ const ACCESS = {
         inventory: "edit",
         inventoryHistory: "edit",
         finishedGoods: "edit",
-        // future modules: can look, cannot change
+        // IQC-approved purchases waiting to be accepted into stock
+        incomingStock: "edit",
+        // can look at these, cannot change
         iqc: "view",
         purchase: "view"
+    },
+
+    // Incoming Quality Control manager: owns the IQC module only
+    IQC_MANAGER: {
+        iqc: "edit"
+    },
+
+    // Purchase department manager: owns the purchase module only
+    PURCHASE_MANAGER: {
+        purchase: "edit"
     }
 };
 
@@ -36,7 +48,9 @@ const ROLE_NAMES = Object.keys(ACCESS);
 */
 const LOGIN_ROUTES = {
     SUPER_ADMIN: "/login",
-    STORE_MANAGER: "/store-manager/login"
+    STORE_MANAGER: "/store-manager/login",
+    IQC_MANAGER: "/iqc-manager/login",
+    PURCHASE_MANAGER: "/purchase-manager/login"
 };
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -80,14 +94,21 @@ const RESOURCE_MODULE = {
     production: "production",
     "quality-control": "qualityControl",
     "finished-goods": "finishedGoods",
+    purchase: "purchase",
+    iqc: "iqc",
+    "incoming-stock": "incomingStock",
     employees: "employees",
     attendance: "attendance"
     // "auth" and "super-admins" are not listed on purpose: super admin only
 };
 
 const REFRESH_ONLY = {
-    inventory: ["orders", "production", "quality-control", "finished-goods"],
-    finishedGoods: ["orders", "production", "quality-control", "inventory"]
+    inventory: ["orders", "production", "quality-control", "finished-goods", "incoming-stock"],
+    finishedGoods: ["orders", "production", "quality-control", "inventory"],
+    // incoming goods: each department's screen refreshes when another department moves a purchase along
+    purchase: ["iqc", "incoming-stock"],
+    iqc: ["purchase", "incoming-stock"],
+    incomingStock: ["purchase", "iqc"]
 };
 
 /* "full" = event with activity, "refresh" = event without activity text, null = nothing */

@@ -4,6 +4,7 @@ import Layout from "@/components/Layout";
 import { ToastProvider } from "@/components/toast";
 import LiveSync from "@/realtime/LiveSync";
 import Login from "@/features/auth/Login";
+import Landing from "@/features/landing/Landing";
 import ProtectedRoute from "@/features/auth/ProtectedRoute";
 import RequireAccess from "@/features/auth/RequireAccess";
 import { LOGIN_PORTALS } from "@/lib/permissions";
@@ -14,6 +15,9 @@ function App() {
     <ToastProvider>
       <BrowserRouter>
         <Routes>
+          {/* public: landing page, the first thing anyone sees */}
+          <Route path="/" element={<Landing />} />
+
           {/* public: one login page per role (/login = super admin, /store-manager/login ...) */}
           {Object.values(LOGIN_PORTALS).map((portal) => (
             <Route key={portal.path} path={portal.path} element={<Login portal={portal} />} />

@@ -17,8 +17,8 @@
     "schema:check": "node src/database/schema-check.js",
     "seed": "node src/database/run-seeds.js",
     "seed:reset": "node src/database/run-seeds.js --reset",
-    "superadmin": "node src/scripts/create-super-admin.js",
-    "createuser": "node src/scripts/create-user.js",
+    "super-admin": "node src/scripts/create-super-admin.js",
+    "create-user": "node src/scripts/create-user.js",
     "test:watch": "vitest"
   },
   "keywords": [],

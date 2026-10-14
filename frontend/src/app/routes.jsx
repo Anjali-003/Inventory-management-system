@@ -14,10 +14,13 @@ import FinishedGoods from "@/features/finished-goods/FinishedGoods";
 import Employees from "@/features/employees/Employees";
 import Attendance from "@/features/attendance/Attendance";
 import Activity from "@/features/activity/Activity";
+import Iqc from "@/features/iqc/Iqc";
+import Purchase from "@/features/purchase/Purchase";
+import IncomingStock from "@/features/incoming-stock/IncomingStock";
 
 /** { path, module (see MODULE_PATHS in lib/permissions.js), Page } */
 export const PAGES = [
-  { path: "/", module: "dashboard", Page: Dashboard },
+  { path: "/dashboard", module: "dashboard", Page: Dashboard },
   { path: "/inventory-history", module: "inventoryHistory", Page: InventoryHistory },
   { path: "/activity", module: "activity", Page: Activity },
   { path: "/orders", module: "orders", Page: Orders },
@@ -28,4 +31,7 @@ export const PAGES = [
   { path: "/finished-goods", module: "finishedGoods", Page: FinishedGoods },
   { path: "/employees", module: "employees", Page: Employees },
   { path: "/attendance", module: "attendance", Page: Attendance },
+  { path: "/iqc", module: "iqc", Page: Iqc },
+  { path: "/purchase", module: "purchase", Page: Purchase },
+  { path: "/incoming-stock", module: "incomingStock", Page: IncomingStock },
 ];

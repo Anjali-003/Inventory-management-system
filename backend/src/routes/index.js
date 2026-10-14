@@ -25,6 +25,9 @@ const orderRoutes = require("../modules/orders/order.routes");
 const productionRoutes = require("../modules/production/production.routes");
 const qualityControlRoutes = require("../modules/quality-control/quality-control.routes");
 const finishedGoodsRoutes = require("../modules/finished-goods/finished-goods.routes");
+const purchaseRoutes = require("../modules/purchase/purchase.routes");
+const iqcRoutes = require("../modules/iqc/iqc.routes");
+const incomingStockRoutes = require("../modules/incoming-stock/incoming-stock.routes");
 const employeeRoutes = require("../modules/employees/employee.routes");
 const attendanceRoutes = require("../modules/attendance/attendance.routes");
 const superAdminRoutes = require("../modules/super-admins/super-admin.routes");
@@ -47,6 +50,11 @@ const MODULES = [
 
     // QC PASS -> Finished goods -> Packaging -> Dispatched -> Completed
     { path: "/finished-goods", router: finishedGoodsRoutes, resource: "finished-goods", guards: [permit("finishedGoods")] },
+
+    // Incoming goods:  Purchase manager buys -> IQC inspects -> Store manager accepts into stock
+    { path: "/purchase", router: purchaseRoutes, resource: "purchase", guards: [permit("purchase")] },
+    { path: "/iqc", router: iqcRoutes, resource: "iqc", guards: [permit("iqc")] },
+    { path: "/incoming-stock", router: incomingStockRoutes, resource: "incoming-stock", guards: [permit("incomingStock")] },
 
     { path: "/employees", router: employeeRoutes, resource: "employees", guards: [permit("employees")] },
     { path: "/attendance", router: attendanceRoutes, resource: "attendance", guards: [permit("attendance")] },

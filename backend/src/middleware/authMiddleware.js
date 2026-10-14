@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const db = require("../config/db");
 const env = require("../config/env");
 const AppError = require("../shared/AppError");
+const { cookieNameFor, roleFromRequest } = require("../shared/session");
 
 /*
     1. The JWT cookie must be valid.
@@ -13,7 +14,9 @@ const AppError = require("../shared/AppError");
 */
 async function authMiddleware(req, res, next) {
     try {
-        const token = req.cookies[env.cookie.name];
+        // which role is this tab working as? (each role has its own login cookie, see shared/session.js)
+        const role = roleFromRequest(req);
+        const token = role && req.cookies[cookieNameFor(role)];
         if (!token) throw AppError.unauthorized("Authentication required");
 
         let decoded;
@@ -28,7 +31,8 @@ async function authMiddleware(req, res, next) {
             [decoded.userId]
         );
 
-        if (rows.length === 0 || !rows[0].is_active) {
+        // the token must belong to the role asked for, and the user must still hold that role
+        if (decoded.role !== role || rows.length === 0 || !rows[0].is_active || rows[0].role !== role) {
             throw AppError.unauthorized("Invalid or expired session");
         }
 

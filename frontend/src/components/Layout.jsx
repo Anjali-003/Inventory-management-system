@@ -19,20 +19,22 @@ import {
   Users,
   CalendarCheck,
   Activity,
+  ShoppingCart,
+  Truck,
 } from "lucide-react";
 
 import { cn } from "../lib/utils";
 import { authService } from "@/features/auth/authService"
 import { baseApi } from "../api/baseApi";
 import { usePermissions } from "@/features/auth/usePermissions";
-import { loginPathFor } from "@/lib/permissions";
+import { clearActiveRole, loginPathFor } from "@/lib/permissions";
 
 const GROUPS = [
   {
     label: "Overview",
     items: [
       {
-        to: "/",
+        to: "/dashboard",
         label: "Dashboard",
         icon: LayoutDashboard,
         module: "dashboard",
@@ -103,6 +105,16 @@ const GROUPS = [
         icon: PackageCheck,
         module: "finishedGoods",
       },
+    ],
+  },
+
+  {
+    label: "Quality & Purchase",
+    items: [
+      // the incoming-goods flow, in order: buy -> inspect -> accept into stock
+      { to: "/purchase", label: "Purchase", icon: ShoppingCart, module: "purchase" },
+      { to: "/iqc", label: "IQC", icon: ClipboardCheck, module: "iqc" },
+      { to: "/incoming-stock", label: "Incoming Stock", icon: Truck, module: "incomingStock" },
     ],
   },
 
@@ -259,7 +271,8 @@ export default function Layout() {
 
   const handleLogout = async () => {
     try {
-      await authService.logout();
+      await authService.logout(); // clears only THIS role's login; other roles stay logged in
+      clearActiveRole();
       dispatch(baseApi.util.resetApiState()); // never show the previous user's cached data
 
       navigate(loginPathFor(user?.role)); // back to the login page of THIS role
