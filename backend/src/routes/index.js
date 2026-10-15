@@ -44,7 +44,7 @@ const MODULES = [
     // permit() is applied per route inside inventory.routes.js (stock screens vs history screen)
     { path: "/inventory", router: inventoryRoutes, resource: "inventory" },
 
-    { path: "/orders", router: orderRoutes, resource: "orders", guards: [permit("orders")] },
+    { path: "/orders", router: orderRoutes, resource: "orders" },
     { path: "/production", router: productionRoutes, resource: "production", guards: [permit("production")] },
     { path: "/quality-control", router: qualityControlRoutes, resource: "quality-control", guards: [permit("qualityControl")] },
 

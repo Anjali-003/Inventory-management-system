@@ -115,6 +115,7 @@ const ACCESS = {
   PURCHASE_MANAGER: { purchase: "edit" },
 
   PRODUCTION_MANAGER: {
+    dashboard: "view",
     production: "edit",
     inventory: "view",
   },

@@ -4,7 +4,7 @@ import { authService } from "@/features/auth/authService"
 import { Eye, EyeOff } from "lucide-react";
 import { useDispatch } from "react-redux";
 import { baseApi } from "@/api/baseApi";
-import { LOGIN_PORTALS, rememberPortal } from "@/lib/permissions";
+import { LOGIN_PORTALS, rememberPortal, homePathFor } from "@/lib/permissions";
 
 // portal = which role this page logs in (see LOGIN_PORTALS); /login is the super admin page
 function Login({ portal = LOGIN_PORTALS.SUPER_ADMIN }) {
@@ -42,7 +42,7 @@ function Login({ portal = LOGIN_PORTALS.SUPER_ADMIN }) {
 
       dispatch(baseApi.util.resetApiState()); // drop anything cached for a previous role in this tab
 
-      navigate("/dashboard"); // redirects to the first page this role may open
+      navigate(homePathFor(portal.role) || "/dashboard"); // open this role's configured home page
     } catch (error) {
       console.error(error);
 

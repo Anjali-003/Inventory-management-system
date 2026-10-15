@@ -14,7 +14,7 @@ function Verdict({ ok }) {
     <div className={cn("rounded-lg border p-4", ok ? "border-success/25 bg-success/10 text-success" : "border-destructive/25 bg-destructive/10 text-destructive")}>
       <p className="font-semibold">{ok ? "Ready for production" : "Material shortage"}</p>
       <p className="mt-0.5 text-sm opacity-90">
-        {ok ? "All required materials are available for the full order." : "Some required materials are not available in sufficient quantity."}
+        {ok ? "All required materials are available for the checked quantity." : "Some required materials are not available in sufficient quantity."}
       </p>
     </div>
   )
@@ -79,19 +79,22 @@ function Materials({ materials }) {
 }
 
 // Mounted only while an order is selected (see Orders.jsx), so state resets per order.
-export default function MaterialCheckModal({ order, onClose, onStart }) {
+export default function MaterialCheckModal({ order, onClose, onStart, partialProduction = false }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
   useEffect(() => {
     let stale = false
-    ordersService.materialCheck(order.id)
+    const request = partialProduction
+      ? ordersService.productionCheck(order.id, Number(order.remaining_to_start))
+      : ordersService.materialCheck(order.id)
+    request
       .then((r) => !stale && setResult(r.data))
       .catch((e) => !stale && setError(errorMessage(e, "Failed to check materials")))
       .finally(() => !stale && setLoading(false))
     return () => { stale = true }
-  }, [order])
+  }, [order, partialProduction])
 
   return (
     <Modal
@@ -99,11 +102,11 @@ export default function MaterialCheckModal({ order, onClose, onStart }) {
       onClose={onClose}
       size="lg"
       title="Material availability"
-      description="Required components compared with current available inventory."
+      description={partialProduction ? "Required components for the remaining quantity, compared with unreserved inventory." : "Required components compared with current available inventory."}
       footer={
         <>
           <Button type="button" variant="outline" size="lg" onClick={onClose}>Close</Button>
-          <Button type="button" size="lg" onClick={() => onStart(order)}>Start production</Button>
+          <Button type="button" size="lg" onClick={() => onStart(order)}>{partialProduction && Number(order.quantity_to_produce) > 0 ? "Start more" : "Start production"}</Button>
         </>
       }
     >
@@ -114,8 +117,8 @@ export default function MaterialCheckModal({ order, onClose, onStart }) {
               <p className="truncate text-sm text-muted-foreground">{order.product_name}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-muted-foreground">Order qty</p>
-              <p className="text-lg font-semibold tabular-nums">{Number(order.quantity)}</p>
+              <p className="text-xs text-muted-foreground">{partialProduction ? "Remaining to start" : "Order qty"}</p>
+              <p className="text-lg font-semibold tabular-nums">{partialProduction ? Number(order.remaining_to_start) : Number(order.quantity)}</p>
             </div>
           </div>
 

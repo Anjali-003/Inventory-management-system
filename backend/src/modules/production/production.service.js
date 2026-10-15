@@ -202,24 +202,71 @@ async function startProduction(orderId, quantity, userId) {
 }
 
 async function getProductionOrders() {
-  const [rows] = await db.query(`
-    SELECT po.id, po.order_id, o.order_number, o.status AS order_status, po.status,
-           po.quantity_to_produce, po.quantity_completed,
-           (po.quantity_to_produce - po.quantity_completed) AS quantity_in_production,
-           oi.ordered_quantity, oi.product_name, po.started_at, po.completed_at,
-           po.started_by, su.name AS started_by_name,
-           po.updated_by, uu.name AS updated_by_name
-    FROM production_orders po
-    JOIN orders o ON o.id = po.order_id
-    LEFT JOIN users su ON su.id = po.started_by
-    LEFT JOIN users uu ON uu.id = po.updated_by
-    JOIN (
-      SELECT oi.order_id, SUM(oi.quantity) AS ordered_quantity, MAX(p.name) AS product_name
-      FROM order_items oi JOIN products p ON p.id = oi.product_id GROUP BY oi.order_id
-    ) oi ON oi.order_id = po.order_id
-    ORDER BY po.id DESC
-  `)
-  return rows
+  const connection = await db.getConnection()
+  try {
+    // Include orders that have not started yet so the Production page can own the
+    // complete workflow. The latest production run (when present) is joined once.
+    const [rows] = await connection.query(`
+      SELECT po.id, o.id AS order_id, o.order_number, o.status AS order_status,
+             COALESCE(po.status, 'NOT_STARTED') AS status,
+             COALESCE(po.quantity_to_produce, 0) AS quantity_to_produce,
+             COALESCE(po.quantity_completed, 0) AS quantity_completed,
+             GREATEST(COALESCE(po.quantity_to_produce, 0) - COALESCE(po.quantity_completed, 0), 0) AS quantity_in_production,
+             oi.ordered_quantity, oi.product_name, oi.item_count,
+             o.created_at AS order_created_at, po.started_at, po.completed_at,
+             po.started_by, su.name AS started_by_name,
+             po.updated_by, uu.name AS updated_by_name
+      FROM orders o
+      JOIN (
+        SELECT oi.order_id, SUM(oi.quantity) AS ordered_quantity,
+               MAX(p.name) AS product_name, COUNT(*) AS item_count
+        FROM order_items oi
+        JOIN products p ON p.id = oi.product_id
+        GROUP BY oi.order_id
+      ) oi ON oi.order_id = o.id
+      LEFT JOIN production_orders po ON po.id = (
+        SELECT MAX(latest.id) FROM production_orders latest WHERE latest.order_id = o.id
+      )
+      LEFT JOIN users su ON su.id = po.started_by
+      LEFT JOIN users uu ON uu.id = po.updated_by
+      ORDER BY COALESCE(po.started_at, o.created_at) DESC, o.id DESC
+    `)
+
+    for (const row of rows) {
+      const ordered = Number(row.ordered_quantity || 0)
+      const started = Number(row.quantity_to_produce || 0)
+      const completed = Number(row.quantity_completed || 0)
+      const remainingToStart = Math.max(0, ordered - started)
+      row.ordered_quantity = ordered
+      row.quantity_to_produce = started
+      row.quantity_completed = completed
+      row.quantity_in_production = Math.max(0, started - completed)
+      row.remaining_to_start = remainingToStart
+      row.max_production_quantity = 0
+      row.material_status = remainingToStart > 0 ? "UNKNOWN" : "NOT_REQUIRED"
+      row.material_check_available = false
+
+      // The existing partial-production workflow supports one product/BOM per order.
+      // Compute how many additional units current unreserved stock can cover so the
+      // page can show material readiness without opening a dialog for every row.
+      if (remainingToStart > 0 && ["PENDING", "IN_PRODUCTION", "TESTING"].includes(row.order_status)) {
+        try {
+          const perUnitMaterials = await getRequiredMaterialsForQuantity(connection, Number(row.order_id), 1)
+          const maxProductionQuantity = await calculateMaxProductionQuantity(connection, perUnitMaterials, remainingToStart)
+          row.max_production_quantity = maxProductionQuantity
+          row.material_status = maxProductionQuantity >= remainingToStart ? "COVERED" : "SHORTAGE"
+          row.material_check_available = true
+        } catch (error) {
+          // One incomplete BOM should not prevent the rest of Production from loading.
+          row.material_issue = error.message
+        }
+      }
+    }
+
+    return rows
+  } finally {
+    connection.release()
+  }
 }
 
 async function updateProductionProgress(productionId, quantity, userId) {

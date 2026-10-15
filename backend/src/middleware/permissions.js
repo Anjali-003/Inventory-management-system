@@ -39,6 +39,7 @@ const ACCESS = {
 
     // Production can update production runs and view inventory without changing stock.
     PRODUCTION_MANAGER: {
+        dashboard: "view",
         production: "edit",
         inventory: "view"
     }

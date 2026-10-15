@@ -81,7 +81,7 @@ const ACCESS_ROWS = [
   { role: "Store Manager", edit: "Inventory, inventory history, finished goods, incoming stock", view: "IQC, purchase" },
   { role: "IQC Manager", edit: "IQC", view: "None" },
   { role: "Purchase Manager", edit: "Purchase", view: "None" },
-  { role: "Production", edit: "Production", view: "Inventory" },
+  { role: "Production", edit: "Production", view: "Dashboard, Inventory" },
 ];
 
 /* ---------- shared Tailwind class sets ---------- */
