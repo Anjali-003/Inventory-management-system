@@ -44,6 +44,12 @@ async function saveQc(req, res) {
     );
 }
 
+async function decideBatch(req, res) {
+    const id = productionIdOf(req);
+    const decision = String(req.body?.decision || "").toUpperCase();
+    res.status(201).json(await service.decideBatch(id, decision, req.user.id));
+}
+
 module.exports = {
     list: asyncHandler(list, { message: "Failed to fetch quality control orders" }),
     getOne: asyncHandler(getOne, { message: "Failed to fetch quality control information" }),
@@ -51,4 +57,5 @@ module.exports = {
     redoTestingResult: asyncHandler(redoTestingResult, { message: "Failed to save redo testing result" }),
     redoQcResult: asyncHandler(redoQcResult, { message: "Failed to save QC edit result" }),
     saveQc: asyncHandler(saveQc, { message: "Failed to save quality control result" }),
+    decideBatch: asyncHandler(decideBatch, { message: "Failed to record batch QC decision" }),
 };

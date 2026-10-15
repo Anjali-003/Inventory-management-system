@@ -66,8 +66,19 @@ async function createFinishedGood(productionId, orderId, quantity, connection = 
 
     const ordered = Number(production[0].ordered_quantity)
     if (Number(production[0].quantity_completed) < ordered) throw new AppError(409, "Finished goods can only be created after full production is completed")
-    if (Number(testing[0].tested) < ordered || Number(testing[0].failed) > 0) throw new AppError(409, "Finished goods require all units to pass testing")
-    if (Number(qc[0].inspected) < ordered || Number(qc[0].approved) < ordered) throw new AppError(409, "Finished goods require full QC approval")
+
+    // New QC flow: an explicit batch PASS is the single release gate.
+    // Older batches still pass through the original testing + QC checks below.
+    const [decisions] = await connection.query(
+      `SELECT decision FROM quality_control_batch_decisions WHERE production_id = ? LIMIT 1`,
+      [productionId],
+    )
+    const batchDecision = decisions[0]?.decision || null
+    if (batchDecision === "FAIL") throw new AppError(409, "A batch that failed Quality Control cannot enter Finished Goods")
+    if (batchDecision !== "PASS") {
+      if (Number(testing[0].tested) < ordered || Number(testing[0].failed) > 0) throw new AppError(409, "Finished goods require all units to pass testing")
+      if (Number(qc[0].inspected) < ordered || Number(qc[0].approved) < ordered) throw new AppError(409, "Finished goods require full QC approval")
+    }
 
     const [existing] = await connection.query(`SELECT id FROM finished_goods WHERE order_id = ? LIMIT 1`, [orderId])
     if (existing.length) return { success: true, finishedGoodsId: existing[0].id, productionId, orderId, quantity, status: "PACKAGING", message: "Finished goods already exist for this order" }

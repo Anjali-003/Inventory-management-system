@@ -36,7 +36,7 @@ export default function FinishedGoodsPipeline({ items = [], loading }) {
 
       {loading ? <TableSkeleton rows={3} /> : recent.length === 0 ? (
         <EmptyState icon={PackageCheck} title="No finished-goods batches yet">
-          Batches appear after all produced units pass testing and Quality Control.
+          Batches appear here only after the entire production batch receives a PASS decision in Quality Control.
         </EmptyState>
       ) : (
         <div className="divide-y">

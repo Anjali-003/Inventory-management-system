@@ -540,33 +540,131 @@ async function saveQualityControlResult(
   }
 }
 
+async function decideBatch(productionId, decision, userId) {
+  if (!["PASS", "FAIL"].includes(decision)) {
+    throw new AppError(400, "Batch decision must be PASS or FAIL");
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Lock the batch so two QC users cannot decide it simultaneously.
+    const [locked] = await connection.query(
+      "SELECT id FROM production_orders WHERE id = ? FOR UPDATE",
+      [productionId],
+    );
+    if (!locked.length) throw new AppError(404, "Production batch not found");
+
+    const production = await getProductionOrder(connection, productionId);
+    const completed = Number(production.quantity_completed);
+    const ordered = Number(production.ordered_quantity);
+    if (ordered <= 0 || completed < ordered) {
+      throw new AppError(409, "Quality Control is available only after the entire production batch is completed");
+    }
+
+    const [existingDecision] = await connection.query(
+      "SELECT id, decision FROM quality_control_batch_decisions WHERE production_id = ? FOR UPDATE",
+      [productionId],
+    );
+    if (existingDecision.length) {
+      throw new AppError(409, `This batch already has a final QC decision: ${existingDecision[0].decision}`);
+    }
+
+    // Older batches approved through the previous testing + inspection flow
+    // may already be in Finished Goods. Never ask QC to decide them again.
+    const [existingFinishedGoods] = await connection.query(
+      "SELECT id FROM finished_goods WHERE production_id = ? OR order_id = ? LIMIT 1 FOR UPDATE",
+      [productionId, production.order_id],
+    );
+    if (existingFinishedGoods.length) {
+      throw new AppError(409, "This batch has already been released to Finished Goods");
+    }
+
+    const [insertResult] = await connection.query(
+      `INSERT INTO quality_control_batch_decisions (production_id, decision, decided_by)
+       VALUES (?, ?, ?)`,
+      [productionId, decision, userId || null],
+    );
+
+    let finishedGoods = null;
+    if (decision === "PASS") {
+      // createFinishedGood validates this stored batch decision and still checks
+      // that all production units are complete before making the batch visible.
+      finishedGoods = await createFinishedGood(
+        production.id,
+        production.order_id,
+        ordered,
+        connection,
+        userId,
+      );
+    }
+    // A FAIL is stored in QC history only. It is intentionally not sent to FG.
+
+    await connection.commit();
+    return {
+      success: true,
+      decisionId: insertResult.insertId,
+      productionId,
+      decision,
+      finishedGoodsId: finishedGoods?.finishedGoodsId || null,
+      finishedGoodsStatus: finishedGoods?.status || null,
+      message: decision === "PASS"
+        ? "Batch passed QC and was sent to Finished Goods"
+        : "Batch marked as failed and held out of Finished Goods",
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function getQualityControlOrders() {
   const connection = await db.getConnection();
 
   try {
     const [rows] = await connection.query(`
       SELECT
-    po.id,
-    po.order_id,
-    o.status AS order_status,
-    po.quantity_to_produce,
-    po.quantity_completed,
-             po.started_at, po.completed_at, o.order_number, oi.quantity AS ordered_quantity,
-             p.name AS product_name, p.sku AS product_sku,
-             COALESCE((SELECT SUM(t.quantity_tested) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_tested,
-             COALESCE((SELECT SUM(t.quantity_passed) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_passed,
-             COALESCE((SELECT SUM(t.quantity_failed) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_failed,
-             COALESCE((SELECT SUM(q.quantity_inspected) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_inspected,
-             COALESCE((SELECT SUM(q.quantity_approved) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_approved,
-             COALESCE((SELECT SUM(q.quantity_rejected) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_rejected,
-             (SELECT u.name FROM testing_records t JOIN users u ON u.id = t.tested_by WHERE t.production_id = po.id ORDER BY t.id DESC LIMIT 1) AS last_tested_by,
-             (SELECT u.name FROM quality_control_records q JOIN users u ON u.id = q.checked_by WHERE q.production_id = po.id ORDER BY q.id DESC LIMIT 1) AS last_checked_by
+        po.id,
+        po.order_id,
+        o.status AS order_status,
+        po.quantity_to_produce,
+        po.quantity_completed,
+        po.started_at,
+        po.completed_at,
+        o.order_number,
+        oi.quantity AS ordered_quantity,
+        p.name AS product_name,
+        p.sku AS product_sku,
+        COALESCE((SELECT SUM(t.quantity_tested) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_tested,
+        COALESCE((SELECT SUM(t.quantity_passed) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_passed,
+        COALESCE((SELECT SUM(t.quantity_failed) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_failed,
+        COALESCE((SELECT SUM(q.quantity_inspected) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_inspected,
+        COALESCE((SELECT SUM(q.quantity_approved) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_approved,
+        COALESCE((SELECT SUM(q.quantity_rejected) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_rejected,
+        qbd.id AS batch_decision_id,
+        qbd.decision AS recorded_batch_decision,
+        qbd.decided_at AS batch_decided_at,
+        decision_user.name AS batch_decided_by_name,
+        fg.id AS finished_goods_id,
+        fg.created_at AS finished_goods_created_at,
+        fg_user.name AS finished_goods_created_by_name,
+        fg.status AS finished_goods_status
       FROM production_orders po
       JOIN orders o ON o.id = po.order_id
       JOIN order_items oi ON oi.order_id = o.id
       JOIN products p ON p.id = oi.product_id
-      WHERE po.quantity_completed > 0
-      ORDER BY po.id DESC
+      LEFT JOIN quality_control_batch_decisions qbd ON qbd.production_id = po.id
+      LEFT JOIN users decision_user ON decision_user.id = qbd.decided_by
+      LEFT JOIN finished_goods fg ON fg.production_id = po.id
+      LEFT JOIN users fg_user ON fg_user.id = fg.created_by
+      WHERE oi.quantity > 0 AND po.quantity_completed >= oi.quantity
+      ORDER BY
+        CASE WHEN qbd.id IS NULL AND fg.id IS NULL THEN 0 ELSE 1 END,
+        COALESCE(qbd.decided_at, fg.created_at, po.completed_at) DESC,
+        po.id DESC
     `);
 
     return rows.map((row) => {
@@ -580,13 +678,16 @@ async function getQualityControlOrders() {
       const rejected = Number(row.quantity_rejected);
       const remainingToTest = Math.max(0, completed - tested);
       const availableForQC = Math.max(0, passed - inspected);
-      const readyForFinishedGoods =
-        completed >= ordered &&
-        remainingToTest === 0 &&
-        failed === 0 &&
-        inspected >= ordered &&
-        approved >= ordered &&
-        rejected === 0;
+      // Existing Finished Goods rows count as a historical PASS from the old
+      // workflow, even if they predate the new batch-decision table.
+      const batchDecision = row.recorded_batch_decision || (row.finished_goods_id ? "PASS" : null);
+      const decisionAt = row.batch_decided_at || row.finished_goods_created_at || null;
+      const decisionByName = row.batch_decided_by_name || row.finished_goods_created_by_name || null;
+      const legacyFinishedGoodsPass = !row.recorded_batch_decision && !!row.finished_goods_id;
+      const readyForFinishedGoods = batchDecision === "PASS" || (
+        completed >= ordered && remainingToTest === 0 && failed === 0 &&
+        inspected >= ordered && approved >= ordered && rejected === 0
+      );
 
       return {
         id: row.id,
@@ -605,11 +706,15 @@ async function getQualityControlOrders() {
         quantityRejected: rejected,
         availableForQC,
         readyForFinishedGoods,
+        batchDecision,
+        decisionAt,
+        decisionByName,
+        legacyFinishedGoodsPass,
+        finishedGoodsId: row.finished_goods_id || null,
+        finishedGoodsStatus: row.finished_goods_status || null,
         status: row.order_status,
         startedAt: row.started_at,
         completedAt: row.completed_at,
-        lastTestedBy: row.last_tested_by,
-        lastCheckedBy: row.last_checked_by,
       };
     });
   } finally {
@@ -619,6 +724,7 @@ async function getQualityControlOrders() {
 
 module.exports = {
   getQualityControlOrders,
+  decideBatch,
   getQualityControlInfo,
   saveTestingResult,
   redoTesting,

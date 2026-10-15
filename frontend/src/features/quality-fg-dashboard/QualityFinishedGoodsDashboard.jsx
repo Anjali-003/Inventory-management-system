@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react"
-import { ClipboardCheck, Factory, FlaskConical, PackageCheck, RefreshCw, Truck } from "lucide-react"
+import { ClipboardCheck, Factory, PackageCheck, RefreshCw, Truck, XCircle } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import PageHeader from "@/components/PageHeader"
 import { Notice } from "@/components/feedback"
@@ -13,7 +13,7 @@ import DashboardMetricCard from "@/features/quality-fg-dashboard/components/Dash
 import QualityWorkQueue from "@/features/quality-fg-dashboard/components/QualityWorkQueue"
 import FinishedGoodsPipeline from "@/features/quality-fg-dashboard/components/FinishedGoodsPipeline"
 import ProductionReadOnlyPanel from "@/features/quality-fg-dashboard/components/ProductionReadOnlyPanel"
-import { countFinishedGoods, getQcNeedsTesting, getQcReadyForInspection } from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
+import { countFinishedGoods, getQcPendingBatches, getQcFailedBatches } from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
 
 const asArray = (value) => Array.isArray(value) ? value : []
 
@@ -27,7 +27,6 @@ export default function QualityFinishedGoodsDashboard() {
   const qcItems = asArray(qcQuery.data)
   const finishedItems = asArray(finishedQuery.data)
   const productionItems = asArray(productionQuery.data)
-  const loading = qcQuery.isLoading || finishedQuery.isLoading || productionQuery.isLoading
 
   const refresh = useCallback(async () => {
     await Promise.allSettled([
@@ -40,8 +39,8 @@ export default function QualityFinishedGoodsDashboard() {
   const qcError = qcQuery.error ? errorMessage(qcQuery.error, "Could not load Quality Control data.") : ""
   const finishedError = finishedQuery.error ? errorMessage(finishedQuery.error, "Could not load Finished Goods data.") : ""
   const productionError = productionQuery.error ? errorMessage(productionQuery.error, "Could not load read-only Production data.") : ""
-  const qcTestingCount = useMemo(() => getQcNeedsTesting(qcItems).length, [qcItems])
-  const qcReadyCount = useMemo(() => getQcReadyForInspection(qcItems).length, [qcItems])
+  const qcPendingCount = useMemo(() => getQcPendingBatches(qcItems).length, [qcItems])
+  const qcFailedCount = useMemo(() => getQcFailedBatches(qcItems).length, [qcItems])
   const packagingCount = useMemo(() => countFinishedGoods(finishedItems, "PACKAGING"), [finishedItems])
   const dispatchedCount = useMemo(() => countFinishedGoods(finishedItems, "DISPATCHED"), [finishedItems])
 
@@ -49,7 +48,7 @@ export default function QualityFinishedGoodsDashboard() {
     <>
       <PageHeader
         title={user?.name ? `Hello, ${user.name}` : "Quality & Finished Goods dashboard"}
-        description="Manage quality checks and finished batches, with production progress available for reference."
+        description="Make one final QC decision for completed batches, manage Finished Goods, and view production progress."
       >
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => navigate("/quality-control")}><ClipboardCheck /> Open Quality Control</Button>
@@ -69,10 +68,10 @@ export default function QualityFinishedGoodsDashboard() {
       )}
 
       <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <DashboardMetricCard index={0} to="/quality-control" icon={FlaskConical} tone={qcTestingCount ? "amber" : "blue"} label="Testing / retesting" value={qcTestingCount} loading={qcQuery.isLoading} detail={qcTestingCount ? "Runs need test attention" : "No testing backlog"} />
-        <DashboardMetricCard index={1} to="/quality-control" icon={ClipboardCheck} tone={qcReadyCount ? "blue" : "green"} label="Ready for QC" value={qcReadyCount} loading={qcQuery.isLoading} detail="Production runs with units to inspect" />
-        <DashboardMetricCard index={2} to="/finished-goods" icon={PackageCheck} tone={packagingCount ? "amber" : "green"} label="Packaging / dispatch" value={packagingCount} loading={finishedQuery.isLoading} detail="Finished batches waiting to dispatch" />
-        <DashboardMetricCard index={3} to="/finished-goods" icon={Truck} tone={dispatchedCount ? "blue" : "green"} label="Awaiting completion" value={dispatchedCount} loading={finishedQuery.isLoading} detail="Dispatched batches not yet completed" />
+        <DashboardMetricCard index={0} to="/quality-control" icon={ClipboardCheck} tone={qcPendingCount ? "amber" : "green"} label="Pending QC decisions" value={qcPendingCount} loading={qcQuery.isLoading} detail="Fully completed batches awaiting Pass / Fail" />
+        <DashboardMetricCard index={1} to="/quality-control" icon={XCircle} tone={qcFailedCount ? "red" : "green"} label="Failed batches" value={qcFailedCount} loading={qcQuery.isLoading} detail="Held out of Finished Goods" />
+        <DashboardMetricCard index={2} to="/finished-goods" icon={PackageCheck} tone={packagingCount ? "amber" : "green"} label="Packaging queue" value={packagingCount} loading={finishedQuery.isLoading} detail="Passed QC and ready to dispatch" />
+        <DashboardMetricCard index={3} to="/finished-goods" icon={Truck} tone={dispatchedCount ? "blue" : "green"} label="Dispatched batches" value={dispatchedCount} loading={finishedQuery.isLoading} detail="Waiting for final completion" />
       </div>
 
       <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-3">
@@ -92,7 +91,7 @@ export default function QualityFinishedGoodsDashboard() {
           <h2 className="flex items-center gap-2.5 text-sm font-bold before:h-4 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-emerald-400 before:to-primary">Useful shortcuts</h2>
           <p className="mt-1 pl-[13px] text-xs text-muted-foreground">Only actions for your role.</p>
           <div className="mt-4 grid gap-2">
-            <Button className="w-full justify-start" onClick={() => navigate("/quality-control")}><ClipboardCheck /> Record testing / QC results</Button>
+            <Button className="w-full justify-start" onClick={() => navigate("/quality-control")}><ClipboardCheck /> Review pending batches and decide Pass / Fail</Button>
             <Button variant="outline" className="w-full justify-start" onClick={() => navigate("/finished-goods")}><PackageCheck /> Dispatch or complete a batch</Button>
             <Button variant="outline" className="w-full justify-start" onClick={() => navigate("/production")}><Factory /> View production progress (read-only)</Button>
           </div>

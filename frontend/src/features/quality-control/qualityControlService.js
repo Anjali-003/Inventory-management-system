@@ -7,4 +7,5 @@ export const qualityControlService = {
   redoTesting: (id, body) => api.patch(`/quality-control/${id}/testing/redo`, body),
   redoQc: (id, body) => api.patch(`/quality-control/${id}/qc/redo`, body),
   saveQc: (id, body) => api.post(`/quality-control/${id}/qc`, body),
+  decideBatch: (id, decision) => api.post(`/quality-control/${id}/decision`, { decision }),
 };
