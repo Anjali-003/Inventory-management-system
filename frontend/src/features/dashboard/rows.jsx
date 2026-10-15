@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { Modal } from "@/components/Modal"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import UserCell from "@/components/UserCell"
 import { APPROVAL_META, OrderLines } from "@/features/order-approvals/approvalParts"
@@ -25,6 +26,9 @@ export function OrderInfoModal({ order, onClose }) {
       footer={<Button type="button" variant="outline" size="lg" onClick={onClose} data-autofocus>Close</Button>}
     >
       <div className="space-y-5">
+        {APPROVAL_META[order.approval_status] && (
+          <Badge variant={APPROVAL_META[order.approval_status].variant}>{APPROVAL_META[order.approval_status].label}</Badge>
+        )}
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Raised by</p>

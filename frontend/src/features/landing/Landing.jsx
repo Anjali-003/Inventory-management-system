@@ -297,7 +297,7 @@ export default function Landing() {
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-lp-line bg-white">
-            <table className="w-full min-w-[620px] border-collapse text-[0.97rem]">
+            <table data-cards="off" className="w-full min-w-[620px] border-collapse text-[0.97rem]">
               <thead>
                 <tr className="border-b border-lp-line">
                   {["Role", "Can edit", "Can only view"].map((h) => (

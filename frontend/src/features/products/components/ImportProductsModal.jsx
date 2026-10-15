@@ -137,7 +137,7 @@ export default function ImportProductsModal({ open, onClose, onImported }) {
                 {summary.invalid > 0 && <Badge variant="danger">{summary.invalid} invalid (skipped)</Badge>}
               </div>
               <div className="max-h-[50vh] overflow-auto rounded-lg border">
-                <Table>
+                <Table data-cards="off">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-14">Row</TableHead>

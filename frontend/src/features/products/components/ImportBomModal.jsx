@@ -202,7 +202,7 @@ export default function ImportBomModal({ open, product, onClose, onImported }) {
               {blocked && <Notice title="Cannot import yet">{blocked}</Notice>}
 
               <div className="max-h-[45vh] overflow-auto rounded-lg border">
-                <Table>
+                <Table data-cards="off">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-14">Row</TableHead>

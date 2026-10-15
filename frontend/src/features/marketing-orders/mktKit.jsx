@@ -1,4 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
+import { createPortal } from "react-dom"
 import { Link } from "react-router-dom"
 import { motion } from "motion/react"
 import { ArrowUpRight, Minus, Plus, Search, X } from "lucide-react"
@@ -88,13 +89,12 @@ export function MktBtn({ variant = "outline", size = "md", className, type = "bu
 export function NewOrderFab({ to, onClick }) {
   const cls =
     "inline-flex h-12 items-center gap-2 rounded-full bg-gradient-to-br from-emerald-500 to-teal-700 px-5 text-sm font-semibold text-white shadow-[0_14px_30px_-8px_rgba(13,148,136,0.8)] ring-1 ring-inset ring-white/30 outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-  return (
-    <>
+  const button = (
       <motion.div
         initial={{ opacity: 0, scale: 0.8, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0, transition: { ...SPRING_POP, delay: 0.3 } }}
         whileTap={PRESS}
-        className="fixed right-4 z-30 md:hidden"
+        className="fixed right-4 z-40 md:hidden"
         style={{ bottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
         {to ? (
@@ -103,6 +103,11 @@ export function NewOrderFab({ to, onClick }) {
           <button type="button" onClick={onClick} className={cls}><Plus className="size-5" /> New order</button>
         )}
       </motion.div>
+  )
+  return (
+    <>
+      {/* on <body>, not inside the page: a transformed or clipped parent can never hide or move it */}
+      {typeof document !== "undefined" ? createPortal(button, document.body) : null}
       {/* so the last card is never hidden behind the button */}
       <div aria-hidden className="h-16 md:hidden" />
     </>

@@ -13,10 +13,12 @@ import Landing from "@/features/landing/Landing";
 import ProtectedRoute from "@/features/auth/ProtectedRoute";
 import RequireAccess from "@/features/auth/RequireAccess";
 import { LOGIN_PORTALS } from "@/lib/permissions"; // each portal object will have ROLE, PATH, API, and TITLE properties
+import { useResponsiveTables } from "@/lib/responsiveTables";
 import { PAGES } from "@/app/routes"; // each page object will have PATH, MODULE, and PAGE properties{ path: "/dashboard", module: "dashboard", Page: Dashboard },
 
 
 function App() {
+  useResponsiveTables(); // phones: every table row becomes a card
   return (
     <ToastProvider>
       <BrowserRouter>
