@@ -12,6 +12,7 @@ export default function useQualityControl() {
   const [actionError, setError] = useState("");
   const error = actionError || (loadError ? errorMessage(loadError, "Failed to load quality control.") : "");
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all"); // set by clicking a figure in the summary strip
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
   const [stage, setStage] = useState("TESTING");
@@ -32,14 +33,18 @@ export default function useQualityControl() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return items.filter(
-      (x) =>
+    return items.filter((x) => {
+      if (filter === "produced" && !(n(x.quantityCompleted) > 0)) return false;
+      if (filter === "testing" && !(n(x.remainingToTest) > 0)) return false;
+      if (filter === "qc" && !(n(x.availableForQC) > 0)) return false;
+      return (
         !q ||
         `${x.orderNumber} ${x.productName} ${x.productSku}`
           .toLowerCase()
-          .includes(q),
-    );
-  }, [items, query]);
+          .includes(q)
+      );
+    });
+  }, [items, query, filter]);
 
   const totals = useMemo(
     () => ({
@@ -271,6 +276,8 @@ export default function useQualityControl() {
     load,
     rows,
     totals,
+    filter,
+    setFilter,
     open,
     close,
     testingMax,

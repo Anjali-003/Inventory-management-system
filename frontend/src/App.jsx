@@ -39,7 +39,7 @@ function App() {
               </ProtectedRoute>
             }
           >
-            //These are the pages which are to be rendered after successful login only.
+            {/* These are the pages which are to be rendered after successful login only. */}
             {PAGES.map(({ path, module, Page }) => (
               <Route
                 key={path}

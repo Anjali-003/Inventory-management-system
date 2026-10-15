@@ -4,7 +4,13 @@ const inventory = require("../inventory/inventory.service");
 
 /*
     Purchase orders = components the purchase manager bought. They are the "lots" the other two
-    departments work on:
+    departments work on.
+
+    A purchase can ONLY be placed for components the Operations Admin sent on dispatch (order_purchase_items):
+    the purchase manager picks an approved order and ticks lines of ITS list. The component and the quantity
+    are read from that list on the server, so nothing else can be bought. A line that is already on a purchase
+    order cannot be ordered again.
+
         ORDER_PLACED -> RECEIVED -> (Send to IQC) -> PENDING_IQC -> (IQC) -> PENDING_STORE -> (store manager) -> STORED
         (purchase manager: place order, mark received, send to IQC)     \-> REJECTED  (IQC approved nothing)
 
@@ -15,12 +21,13 @@ const inventory = require("../inventory/inventory.service");
 const STATUSES = ["ORDER_PLACED", "RECEIVED", "PENDING_IQC", "PENDING_STORE", "STORED", "REJECTED"];
 // what the IQC / store screens may see: a purchase is invisible to them until it is sent to IQC
 const IQC_VISIBLE = ["PENDING_IQC", "PENDING_STORE", "STORED", "REJECTED"];
-const MAX_ITEMS = 50;
 
 const PO_SELECT = `
     SELECT
         po.id,
         po.po_number,
+        po.order_id,
+        o.order_number,
         po.supplier,
         po.notes,
         po.status,
@@ -36,6 +43,7 @@ const PO_SELECT = `
         DATE_FORMAT(po.iqc_at, '%Y-%m-%d %H:%i:%s') AS iqc_at,
         DATE_FORMAT(po.accepted_at, '%Y-%m-%d %H:%i:%s') AS accepted_at
     FROM purchase_orders po
+    LEFT JOIN orders o ON o.id = po.order_id
     LEFT JOIN users cu ON cu.id = po.created_by
     LEFT JOIN users ru ON ru.id = po.received_by
     LEFT JOIN users su ON su.id = po.sent_to_iqc_by
@@ -116,64 +124,74 @@ function parseCreate(body) {
     const notes = typeof body.notes === "string" ? body.notes.trim() : "";
     if (notes.length > 500) throw new AppError(422, "Notes must be 500 characters or fewer", "VALIDATION", { field: "notes" });
 
-    if (!Array.isArray(body.items) || body.items.length === 0) {
-        throw new AppError(422, "Add at least one component to the purchase", "VALIDATION");
-    }
-    if (body.items.length > MAX_ITEMS) {
-        throw new AppError(422, `One purchase can hold at most ${MAX_ITEMS} components`, "VALIDATION");
+    const orderId = Number(body.order_id);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+        throw new AppError(422, "Select the approved order you are buying for", "VALIDATION", { field: "order_id" });
     }
 
-    const seen = new Set();
-    const items = body.items.map((raw, line) => {
-        const id = Number(raw && raw.component_id);
-        if (!Number.isInteger(id) || id <= 0) {
-            throw new AppError(422, "Select a component", "VALIDATION", { line, field: "component" });
-        }
-        if (seen.has(id)) {
-            throw new AppError(422, "This component appears more than once in the list", "VALIDATION", { line, field: "component" });
-        }
-        seen.add(id);
+    // ids of the lines of the Operations Admin's list (order_purchase_items.id). Nothing else is accepted.
+    if (!Array.isArray(body.request_item_ids) || body.request_item_ids.length === 0) {
+        throw new AppError(422, "Select at least one component from the Operations Admin's list", "VALIDATION");
+    }
+    // no cap on the number of lines: they all come from the Operations Admin's list, and a big BOM can have hundreds
+    const ids = body.request_item_ids.map((v) => Number(v));
+    if (ids.some((id) => !Number.isInteger(id) || id <= 0)) {
+        throw new AppError(422, "Invalid component selected", "VALIDATION");
+    }
+    if (new Set(ids).size !== ids.length) {
+        throw new AppError(422, "The same component is selected twice", "VALIDATION");
+    }
 
-        let cents;
-        try {
-            cents = inventory.parseQty(raw.quantity, "Quantity");
-        } catch (error) {
-            error.extra = { line, field: "quantity" };
-            throw error;
-        }
-        return { componentId: id, cents };
-    });
-
-    return { supplier, notes: notes || null, items };
+    return { orderId, supplier, notes: notes || null, requestItemIds: ids };
 }
 
+/*
+    body: { order_id, supplier, notes?, request_item_ids: [order_purchase_items.id, ...] }
+    The order must be APPROVED, every selected line must belong to it and must not be on a purchase order yet.
+    Lines are locked first, so two clicks (or two purchase managers) can never order the same line twice.
+*/
 async function createPurchase(body, userId) {
-    const { supplier, notes, items } = parseCreate(body || {});
+    const { orderId, supplier, notes, requestItemIds } = parseCreate(body || {});
 
     return inventory.inTransaction(async (conn) => {
-        const ids = items.map((i) => i.componentId);
-        const [found] = await conn.query(`SELECT id FROM components WHERE id IN (?)`, [ids]);
-        const have = new Set(found.map((r) => r.id));
-        items.forEach((it, line) => {
-            if (!have.has(it.componentId)) {
-                throw new AppError(404, "Component not found", "NOT_FOUND", { line, field: "component" });
+        const [orders] = await conn.query(`SELECT id, approval_status FROM orders WHERE id = ? FOR UPDATE`, [orderId]);
+        if (orders.length === 0) throw AppError.notFound("Order not found", "NOT_FOUND");
+        if (orders[0].approval_status !== "APPROVED") {
+            throw AppError.conflict("This order is not approved, so nothing can be bought for it.", "NOT_APPROVED");
+        }
+
+        const [lines] = await conn.query(
+            `SELECT id, order_id, component_id, quantity, purchase_order_id
+             FROM order_purchase_items WHERE id IN (?) FOR UPDATE`,
+            [requestItemIds]
+        );
+        const byId = new Map(lines.map((l) => [l.id, l]));
+        for (const id of requestItemIds) {
+            const line = byId.get(id);
+            if (!line || line.order_id !== orderId) {
+                throw new AppError(422, "A selected component is not on the Operations Admin's list for this order.", "NOT_ON_LIST");
             }
-        });
+            if (line.purchase_order_id !== null && line.purchase_order_id !== undefined) {
+                throw AppError.conflict("A selected component has already been ordered. Refresh the page.", "ALREADY_ORDERED");
+            }
+        }
 
         // po_number is derived from the id, so insert with a throw-away unique value first
         const [res] = await conn.query(
-            `INSERT INTO purchase_orders (po_number, supplier, notes, status, created_by)
-             VALUES (CONCAT('TMP-', UUID()), ?, ?, 'ORDER_PLACED', ?)`,
-            [supplier, notes, userId]
+            `INSERT INTO purchase_orders (po_number, order_id, supplier, notes, status, created_by)
+             VALUES (CONCAT('TMP-', UUID()), ?, ?, ?, 'ORDER_PLACED', ?)`,
+            [orderId, supplier, notes, userId]
         );
         const poId = res.insertId;
         await conn.query(`UPDATE purchase_orders SET po_number = ? WHERE id = ?`, [`PO-${String(poId).padStart(4, "0")}`, poId]);
 
-        for (const it of items) {
+        for (const id of requestItemIds) {
+            const line = byId.get(id);
             await conn.query(
                 `INSERT INTO purchase_order_items (purchase_order_id, component_id, quantity_ordered) VALUES (?, ?, ?)`,
-                [poId, it.componentId, inventory.fromCents(it.cents)]
+                [poId, line.component_id, line.quantity]
             );
+            await conn.query(`UPDATE order_purchase_items SET purchase_order_id = ? WHERE id = ?`, [poId, id]);
         }
         return getPurchase(poId, conn);
     });
@@ -209,9 +227,4 @@ function sendToIqc(purchaseId, userId) {
     }, userId);
 }
 
-/* Component picker for the purchase form (the inventory picker is behind the inventory permission). */
-async function componentOptions(query = {}) {
-    return inventory.listComponentOptions({ q: query.q, limit: query.limit });
-}
-
-module.exports = { STATUSES, IQC_VISIBLE, listPurchases, getPurchase, createPurchase, markReceived, sendToIqc, componentOptions };
+module.exports = { STATUSES, IQC_VISIBLE, listPurchases, getPurchase, createPurchase, markReceived, sendToIqc };

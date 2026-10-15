@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useGetMeQuery } from "@/features/auth/authApi"
+import { useDrill } from "@/features/dashboard/DashboardKit"
+import { purchaseRow } from "@/features/dashboard/rows"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useGetIqcQueueQuery } from "@/features/purchasing/purchasingApi"
 import { PurchaseDetailModal, PurchaseStatus } from "@/features/purchasing/PurchaseParts"
@@ -31,6 +33,7 @@ export default function Iqc() {
 
   const { data = EMPTY, isLoading, isFetching, error, refetch } = useGetIqcQueueQuery()
   const [query, setQuery] = useState("")
+  const drill = useDrill() // clicking a figure opens a popup with the purchases behind it
   const [inspecting, setInspecting] = useState(null) // purchase id (looked up again so the dialog always has fresh data)
   const [viewing, setViewing] = useState(null)
 
@@ -48,6 +51,13 @@ export default function Iqc() {
 
   const toInspect = inspecting ? data.find((p) => p.id === inspecting && p.status === "PENDING_IQC") : null
   const first = (me?.name || "").split(/\s+/)[0]
+
+  // rows of the figure popups; a waiting purchase opens straight into the inspection when this user may inspect
+  const rowsFor = (list) => list.map((p) => {
+    const r = purchaseRow(p)
+    return p.status === "PENDING_IQC" && editable ? { ...r, detail: (close) => <InspectModal key={p.id} purchase={p} onClose={close} /> } : r
+  })
+  const open = (title, description, list, empty) => () => drill.openList({ title, description, rows: rowsFor(list), empty })
 
   return (
     <>
@@ -71,13 +81,13 @@ export default function Iqc() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard index={0} icon={ClipboardList} tone={waiting.length ? "amber" : "green"} label="Waiting for inspection" value={waiting.length} loading={isLoading} detail="Purchased, not checked yet" />
-        <StatCard index={1} icon={PackageCheck} tone="blue" label="Sent to store" value={byStatus("PENDING_STORE").length} loading={isLoading} detail="Approved, store must accept" />
-        <StatCard index={2} icon={CheckCircle2} tone="green" label="Accepted into stock" value={byStatus("STORED").length} loading={isLoading} detail="Fully through the flow" />
-        <StatCard index={3} icon={AlertTriangle} tone={byStatus("REJECTED").length ? "red" : "violet"} label="Rejected" value={byStatus("REJECTED").length} loading={isLoading} detail="Nothing approved" />
+        <StatCard index={0} icon={ClipboardList} tone={waiting.length ? "amber" : "green"} label="Waiting for inspection" value={waiting.length} loading={isLoading} detail="Purchased, not checked yet" onClick={open("Waiting for inspection", "Purchased, not checked yet.", waiting, "Nothing is waiting for inspection")} />
+        <StatCard index={1} icon={PackageCheck} tone="blue" label="Sent to store" value={byStatus("PENDING_STORE").length} loading={isLoading} detail="Approved, store must accept" onClick={open("Sent to store", "Approved by IQC, the store must accept them.", byStatus("PENDING_STORE"), "Nothing is with the store")} />
+        <StatCard index={2} icon={CheckCircle2} tone="green" label="Accepted into stock" value={byStatus("STORED").length} loading={isLoading} detail="Fully through the flow" onClick={open("Accepted into stock", "Fully through the flow.", byStatus("STORED"), "Nothing accepted yet")} />
+        <StatCard index={3} icon={AlertTriangle} tone={byStatus("REJECTED").length ? "red" : "violet"} label="Rejected" value={byStatus("REJECTED").length} loading={isLoading} detail="Nothing approved" onClick={open("Rejected", "Nothing from these purchases was approved.", byStatus("REJECTED"), "Nothing rejected")} />
       </div>
 
-      <Card className="mt-4 overflow-hidden">
+      <Card id="iqc-waiting" className="mt-4 scroll-mt-4 overflow-hidden">
         <CardHeader>
           <div>
             <CardTitle>To inspect</CardTitle>
@@ -128,7 +138,7 @@ export default function Iqc() {
         )}
       </Card>
 
-      <Card className="mt-4 overflow-hidden">
+      <Card id="iqc-inspected" className="mt-4 scroll-mt-4 overflow-hidden">
         <CardHeader>
           <div>
             <CardTitle>Inspected</CardTitle>
@@ -183,6 +193,7 @@ export default function Iqc() {
         )}
       </Card>
 
+      {drill.host}
       {toInspect && <InspectModal key={toInspect.id} purchase={toInspect} onClose={() => setInspecting(null)} />}
       <PurchaseDetailModal purchase={viewing && (data.find((p) => p.id === viewing.id) || viewing)} onClose={() => setViewing(null)} />
     </>

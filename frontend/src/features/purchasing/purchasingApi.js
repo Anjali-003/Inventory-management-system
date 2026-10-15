@@ -29,13 +29,13 @@ export const purchasingApi = baseApi.injectEndpoints({
       transformResponse: asList,
       providesTags: ["Purchases"],
     }),
-    searchPurchaseComponents: build.query({
-      query: (q) => ({ url: "/purchase/components", params: { q, limit: 8 } }),
-    }),
 
+    // purchase manager: place the order for lines of the Operations Admin's list.
+    // data = { order_id, supplier, notes, request_item_ids: [purchase_request.items[].request_item_id] }
+    // (the server takes the component and quantity from that list; nothing else can be bought)
     createPurchase: build.mutation({
       query: (data) => ({ url: "/purchase", method: "post", data }),
-      invalidatesTags: ["Purchases"],
+      invalidatesTags: ["Purchases", "OrderApprovals"],
     }),
     // purchase manager: goods arrived
     receivePurchase: build.mutation({
@@ -62,7 +62,6 @@ export const {
   useGetPurchasesQuery,
   useGetIqcQueueQuery,
   useGetIncomingStockQuery,
-  useSearchPurchaseComponentsQuery,
   useCreatePurchaseMutation,
   useReceivePurchaseMutation,
   useSendPurchaseToIqcMutation,

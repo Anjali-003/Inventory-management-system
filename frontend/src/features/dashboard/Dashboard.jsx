@@ -1,178 +1,31 @@
-import { useState } from "react"
-import { Link } from "react-router-dom"
-import { motion } from "motion/react"
-import { AlertTriangle, Boxes, ClipboardList, PackageCheck, Warehouse } from "lucide-react"
-import { useGetOrdersQuery } from "@/features/orders/ordersApi"
-import { useGetProductsQuery } from "@/features/products/productsApi"
-import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
-import { useGetAttendanceQuery } from "@/features/attendance/attendanceApi"
-import { useGetMeQuery } from "@/features/auth/authApi"
-import RecentActivity from "@/features/activity/RecentActivity"
-import PageHeader from "@/components/PageHeader"
-import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { StatCard } from "@/components/HistoryUI"
-import { cn } from "@/lib/utils"
+import { Navigate } from "react-router-dom"
+import { usePermissions } from "@/features/auth/usePermissions"
+import { ROLES } from "@/lib/permissions"
+import IqcView from "./roles/IqcView"
+import MarketingView from "./roles/MarketingView"
+import OperationsView from "./roles/OperationsView"
+import PurchaseView from "./roles/PurchaseView"
+import StoreView from "./roles/StoreView"
+import SuperAdminView from "./roles/SuperAdminView"
 
-const STATUSES = [
-  ["PENDING", "Pending", "bg-warning"],
-  ["MATERIAL_SHORTAGE", "Material shortage", "bg-destructive"],
-  ["READY_FOR_PRODUCTION", "Ready for production", "bg-success"],
-  ["IN_PRODUCTION", "In production", "bg-primary"],
-  ["COMPLETED", "Completed", "bg-muted-foreground/50"],
-]
-
-const EMPTY = []
+/*
+  One dashboard per role, all on /dashboard. Each view only asks the server for data that role is allowed to read,
+  starts with "Hello, <name>", and every figure / list row opens a popup with the records behind it.
+  TO ADD A NEW ROLE: make roles/<Name>View.jsx (copy IqcView) and add it to VIEWS.
+*/
+const VIEWS = {
+  [ROLES.SUPER_ADMIN]: SuperAdminView,
+  [ROLES.STORE_MANAGER]: StoreView,
+  [ROLES.IQC_MANAGER]: IqcView,
+  [ROLES.PURCHASE_MANAGER]: PurchaseView,
+  [ROLES.OPERATIONS_ADMIN]: OperationsView,
+  [ROLES.MARKETING_MANAGER]: MarketingView,
+}
 
 export default function Dashboard() {
-  // Same cached data the Orders / Products / Inventory / Attendance pages use.
-  const productsQ = useGetProductsQuery()
-  const inventoryQ = useGetInventoryQuery("active")
-  const ordersQ = useGetOrdersQuery()
-  const loading = productsQ.isLoading || inventoryQ.isLoading || ordersQ.isLoading
-  const failed = Boolean(productsQ.error || inventoryQ.error || ordersQ.error)
-  const error = failed ? "Could not load the dashboard. Check that the server is running." : ""
-  // all-or-nothing, like before: if any of the three fails the cards show 0 and the notice explains why
-  const products = failed ? EMPTY : productsQ.data ?? EMPTY
-  const inventory = failed ? EMPTY : inventoryQ.data ?? EMPTY
-  const orders = failed ? EMPTY : ordersQ.data ?? EMPTY
-
-  const [today] = useState(() => {
-    const d = new Date()
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset())
-    return d.toISOString().slice(0, 10)
-  })
-  const { data: att = null } = useGetAttendanceQuery(today)
-  const attCount = (s) => (att ? att.filter((e) => e.status === s).length : 0)
-
-  const { data: me } = useGetMeQuery()
-
-  const lowStock = inventory.filter((i) => Number(i.available) <= Number(i.minimum_stock_level))
-  const uniqueOrders = [...new Map(orders.map((o) => [o.id, o])).values()]
-  const openOrders = new Set(orders.filter((o) => o.status !== "COMPLETED").map((o) => o.id)).size
-
-  return (
-    <>
-      <PageHeader title={me?.name ? `Hello, ${me.name}` : "Dashboard"} description="Stock health and order load across production." />
-      {error && <div className="mb-6"><Notice title="Something went wrong">{error}</Notice></div>}
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard index={0} icon={Boxes} tone="blue" label="Products" value={products.length} loading={loading} detail="In the catalog" />
-        <StatCard index={1} icon={ClipboardList} tone="green" label="Open orders" value={openOrders} loading={loading} detail="Not completed yet" />
-        <StatCard index={2} icon={Warehouse} tone="violet" label="Components tracked" value={inventory.length} loading={loading} detail="In inventory" />
-        <StatCard
-          index={3}
-          icon={AlertTriangle}
-          tone={lowStock.length > 0 ? "amber" : "green"}
-          label="At or below minimum"
-          value={lowStock.length}
-          loading={loading}
-          detail={lowStock.length > 0 ? "Needs reordering" : "All stocked up"}
-        />
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-      <Card className="overflow-hidden lg:col-span-2">
-        <CardHeader>
-          <div>
-            <CardTitle>Components to reorder</CardTitle>
-            <CardDescription>Available stock is at or below the minimum level.</CardDescription>
-          </div>
-        </CardHeader>
-        {loading ? (
-          <TableSkeleton rows={4} />
-        ) : lowStock.length === 0 ? (
-          <EmptyState icon={PackageCheck} title="All components are above minimum">
-            Anything that drops to its minimum level will be listed here.
-          </EmptyState>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Component</TableHead>
-                <TableHead className="w-64">Stock level</TableHead>
-                <TableHead className="text-right">Available</TableHead>
-                <TableHead className="text-right">Minimum</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lowStock.map((item) => {
-                const min = Number(item.minimum_stock_level)
-                const avail = Number(item.available)
-                const pct = min > 0 ? Math.max(0, Math.min(100, (avail / min) * 100)) : 0
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <p className="font-medium">{item.component_name}</p>
-                      <p className="text-xs text-muted-foreground">{item.sku}</p>
-                    </TableCell>
-                    <TableCell>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={cn("h-full rounded-full", avail <= 0 ? "bg-destructive" : "bg-warning")}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </TableCell>
-                    <TableCell className={cn("text-right tabular-nums font-medium", avail <= 0 && "text-destructive")}>{avail}</TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">{min}</TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
-
-      <Card className="self-start">
-        <CardHeader>
-          <div>
-            <CardTitle>Orders by status</CardTitle>
-            <CardDescription>{uniqueOrders.length} orders in total</CardDescription>
-          </div>
-        </CardHeader>
-        <div className="space-y-4 p-5">
-          {STATUSES.map(([key, label, color], i) => {
-            const count = uniqueOrders.filter((o) => o.status === key).length
-            const pct = uniqueOrders.length ? (count / uniqueOrders.length) * 100 : 0
-            return (
-              <div key={key}>
-                <div className="mb-1.5 flex justify-between text-sm">
-                  <span>{label}</span>
-                  <span className="font-medium tabular-nums">{count}</span>
-                </div>
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
-                  <motion.div className={cn("h-full rounded-full", color)} initial={{ width: 0 }} animate={{ width: `${loading ? 0 : pct}%` }} transition={{ duration: 0.7, delay: 0.2 + i * 0.08, ease: "easeOut" }} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </Card>
-      </div>
-
-      <RecentActivity />
-
-      {att && (
-        <Card className="mt-4">
-          <CardHeader className="items-center">
-            <div>
-              <CardTitle>Today&apos;s attendance</CardTitle>
-              <CardDescription>{att.filter((e) => !e.status).length} of {att.length} employees not marked yet.</CardDescription>
-            </div>
-            <Link to="/attendance" className="text-sm font-medium text-primary hover:underline">Mark attendance</Link>
-          </CardHeader>
-          <div className="grid grid-cols-2 divide-x divide-y sm:grid-cols-4 sm:divide-y-0">
-            {[["Present", "PRESENT", "text-success"], ["Absent", "ABSENT", "text-destructive"], ["Half day", "HALF_DAY", "text-warning"], ["On leave", "LEAVE", "text-primary"]].map(([label, key, color]) => (
-              <div key={key} className="px-5 py-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-                <p className={cn("mt-1 text-2xl font-semibold tabular-nums", color)}>{attCount(key)}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-    </>
-  )
+  const { role, loading, homePath } = usePermissions()
+  if (loading) return null
+  const View = VIEWS[String(role || "").toUpperCase()]
+  if (!View) return homePath && homePath !== "/dashboard" ? <Navigate to={homePath} replace /> : null
+  return <View />
 }

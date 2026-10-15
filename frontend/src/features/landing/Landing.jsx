@@ -27,6 +27,18 @@ const PORTAL_CARDS = [
     icon: ShieldCheck,
   },
   {
+    portal: LOGIN_PORTALS.MARKETING_MANAGER,
+    label: "Marketing Manager",
+    note: "Prepare orders and send them for approval",
+    icon: Activity,
+  },
+  {
+    portal: LOGIN_PORTALS.OPERATIONS_ADMIN,
+    label: "Operations Admin",
+    note: "Approve or reject incoming orders",
+    icon: Factory,
+  },
+  {
     portal: LOGIN_PORTALS.STORE_MANAGER,
     label: "Store Manager",
     note: "Stock in and out, incoming stock, finished goods",

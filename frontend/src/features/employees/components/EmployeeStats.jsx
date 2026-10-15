@@ -40,6 +40,13 @@ export default function EmployeeStats({
           label: "Departments",
           value: stats.departments,
           tone: "info",
+          onClick: () => {
+            const el = document.querySelector('select[aria-label="Filter by department"]');
+            if (!el) return;
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+            el.focus();
+            try { el.showPicker?.(); } catch { /* not allowed here, focus is enough */ }
+          },
         },
       ]}
     />

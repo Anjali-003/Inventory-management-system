@@ -28,6 +28,29 @@ const ACCESS = {
         purchase: "view"
     },
 
+    // Marketing Manager: prepares orders and sends them to the Operations Admin
+    MARKETING_MANAGER: {
+        marketingOrders: "edit"
+    },
+
+    // Operations Admin: reviews the orders that come in (e.g. from marketing): sees what can be built from the
+    // current stock, then approves the order and sends the producible list to the Production Manager and the list
+    // of missing components to the Purchase Manager (POST /order-approvals/:id/dispatch), or rejects it.
+    // Approved orders appear for the Purchase Manager ("approvedOrders").
+    // Can also LOOK at (never change) the Store, IQC and Purchase manager pages.
+    OPERATIONS_ADMIN: {
+        orderApprovals: "edit",
+        approvedOrders: "view",
+        // store manager pages
+        inventory: "view",
+        inventoryHistory: "view",
+        finishedGoods: "view",
+        incomingStock: "view",
+        // IQC manager + purchase manager pages
+        iqc: "view",
+        purchase: "view"
+    },
+
     // Incoming Quality Control manager: edits IQC, views purchase + the store pages
     IQC_MANAGER: {
         iqc: "edit",
@@ -38,9 +61,13 @@ const ACCESS = {
         incomingStock: "view"
     },
 
-    // Purchase department manager: edits purchase, views IQC + the store pages
+    // Purchase department manager: edits purchase, views IQC + the store pages.
+    // He can NOT buy anything on his own: a purchase is only accepted for the components the Operations Admin sent
+    // on dispatch (POST /purchase checks every line against order_purchase_items). He then marks it received and
+    // sends it to IQC.
     PURCHASE_MANAGER: {
         purchase: "edit",
+        approvedOrders: "view", // orders approved by the Operations Admin
         iqc: "view",
         inventory: "view",
         inventoryHistory: "view",
@@ -61,7 +88,9 @@ const LOGIN_ROUTES = {
     SUPER_ADMIN: "/login",
     STORE_MANAGER: "/store-manager/login",
     IQC_MANAGER: "/iqc-manager/login",
-    PURCHASE_MANAGER: "/purchase-manager/login"
+    PURCHASE_MANAGER: "/purchase-manager/login",
+    OPERATIONS_ADMIN: "/operations-admin/login",
+    MARKETING_MANAGER: "/marketing-manager/login"
 };
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -108,6 +137,9 @@ const RESOURCE_MODULE = {
     purchase: "purchase",
     iqc: "iqc",
     "incoming-stock": "incomingStock",
+    "marketing-orders": "marketingOrders",
+    "order-approvals": "orderApprovals",
+    "approved-orders": "approvedOrders",
     employees: "employees",
     attendance: "attendance"
     // "auth" and "super-admins" are not listed on purpose: super admin only
@@ -119,7 +151,12 @@ const REFRESH_ONLY = {
     // incoming goods: each department's screen refreshes when another department moves a purchase along
     purchase: ["iqc", "incoming-stock"],
     iqc: ["purchase", "incoming-stock"],
-    incomingStock: ["purchase", "iqc"]
+    incomingStock: ["purchase", "iqc"],
+    // an approval decision must refresh the Purchase Manager's "Approved orders" screen (and the other way round)
+    // sending an order refreshes the admin's queue; a decision refreshes marketing's list
+    orderApprovals: ["approved-orders", "marketing-orders"],
+    approvedOrders: ["order-approvals"],
+    marketingOrders: ["order-approvals"]
 };
 
 /* "full" = event with activity, "refresh" = event without activity text, null = nothing */

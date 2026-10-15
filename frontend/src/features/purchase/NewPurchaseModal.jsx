@@ -1,42 +1,49 @@
 import { useState } from "react"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { Modal } from "@/components/Modal"
 import { Notice } from "@/components/feedback"
 import { Button } from "@/components/ui/button"
 import { Field, TextInput } from "@/components/FormField"
 import { useToast } from "@/components/toast"
-import { checkQty, errorMessage } from "@/lib/stock"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { errorMessage } from "@/lib/stock"
 import { useCreatePurchaseMutation } from "@/features/purchasing/purchasingApi"
-import ComponentPicker from "./ComponentPicker"
+import { qtyWithUnit } from "@/features/purchasing/purchasingUtils"
 
-const blankLine = () => ({ key: Math.random().toString(36).slice(2), component: null, quantity: "" })
-
-/* Purchase manager: place an order with a supplier. Later: Received -> Send to IQC (buttons on the Purchase page). */
-export default function NewPurchaseModal({ onClose }) {
+/*
+  Purchase manager: place the order for the components the Operations Admin sent for ONE approved order.
+  He cannot add a component or change a quantity: the lines come from the Operations Admin's list and the
+  server takes the quantities from that list again. He can only choose which lines go on this order
+  (e.g. different suppliers -> place the order twice) and who the supplier is.
+  `lines` = the lines of that list that are still to be ordered.
+  Later: Received -> Send to IQC (buttons on the Purchase page).
+*/
+export default function NewPurchaseModal({ order, lines, onClose }) {
   const toast = useToast()
   const [create, { isLoading: saving }] = useCreatePurchaseMutation()
 
   const [supplier, setSupplier] = useState("")
   const [notes, setNotes] = useState("")
-  const [lines, setLines] = useState([blankLine()])
+  const [picked, setPicked] = useState(() => new Set(lines.map((l) => l.request_item_id)))
   const [showErrors, setShowErrors] = useState(false)
   const [serverError, setServerError] = useState("")
 
-  const set = (key, patch) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)))
+  const toggle = (id) => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const allPicked = picked.size === lines.length
 
   const supplierError = supplier.trim().length < 2 ? "Enter the supplier name" : ""
-  const checked = lines.map((l) => ({ component: l.component ? "" : "Select a component", qty: checkQty(l.quantity, "Quantity").error || "" }))
-  const valid = !supplierError && checked.every((c) => !c.component && !c.qty)
+  const linesError = picked.size === 0 ? "Tick at least one component" : ""
 
   const submit = async (e) => {
     e.preventDefault()
     setServerError("")
-    if (!valid) { setShowErrors(true); return }
+    if (supplierError || linesError) { setShowErrors(true); return }
     try {
       const po = await create({
+        order_id: order.id,
         supplier: supplier.trim(),
         notes: notes.trim(),
-        items: lines.map((l) => ({ component_id: l.component.id, quantity: checkQty(l.quantity, "Quantity").value })),
+        request_item_ids: lines.filter((l) => picked.has(l.request_item_id)).map((l) => l.request_item_id),
       }).unwrap()
       toast.success(`${po.po_number} order placed`)
       onClose()
@@ -52,8 +59,8 @@ export default function NewPurchaseModal({ onClose }) {
       onSubmit={submit}
       busy={saving}
       size="lg"
-      title="New purchase"
-      description="This places the order. When the goods arrive, mark it Received, then send it to IQC."
+      title={`Place order · ${order.order_number}`}
+      description="These are the components the Operations Admin asked you to buy. When the goods arrive, mark the purchase Received, then send it to IQC."
       footer={
         <>
           <Button type="button" variant="outline" size="lg" onClick={onClose} disabled={saving}>Cancel</Button>
@@ -77,47 +84,48 @@ export default function NewPurchaseModal({ onClose }) {
         </div>
 
         <div>
-          <p className="mb-2 text-[13px] font-semibold">Components bought <span className="text-destructive" aria-hidden="true">*</span></p>
-          <div className="space-y-3">
-            {lines.map((l, i) => (
-              <div key={l.key} className="grid grid-cols-[1fr_7rem_2rem] items-start gap-2">
-                <div>
-                  <ComponentPicker
-                    value={l.component}
-                    usedIds={lines.map((x) => x.component?.id).filter(Boolean)}
-                    error={showErrors && checked[i].component}
-                    onSelect={(c) => set(l.key, { component: c })}
-                    onClear={() => set(l.key, { component: null })}
-                  />
-                  {showErrors && checked[i].component && <p className="mt-1 text-xs text-destructive">{checked[i].component}</p>}
-                </div>
-                <div>
-                  <TextInput
-                    inputMode="decimal"
-                    placeholder={l.component?.unit ? `Qty (${l.component.unit})` : "Qty"}
-                    aria-label="Quantity ordered"
-                    value={l.quantity}
-                    error={showErrors && checked[i].qty}
-                    onChange={(e) => set(l.key, { quantity: e.target.value })}
-                  />
-                  {showErrors && checked[i].qty && <p className="mt-1 text-xs text-destructive">{checked[i].qty}</p>}
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Remove line"
-                  disabled={lines.length === 1}
-                  onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}
-                >
-                  <Trash2 />
-                </Button>
-              </div>
-            ))}
+          <p className="mb-2 text-[13px] font-semibold">Components to order <span className="text-destructive" aria-hidden="true">*</span></p>
+          <div className="overflow-x-auto rounded-xl border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all components"
+                      className="size-4 accent-primary"
+                      checked={allPicked}
+                      onChange={() => setPicked(allPicked ? new Set() : new Set(lines.map((l) => l.request_item_id)))}
+                    />
+                  </TableHead>
+                  <TableHead>Component</TableHead>
+                  <TableHead className="text-right">Quantity</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lines.map((l) => (
+                  <TableRow key={l.request_item_id} className="cursor-pointer" onClick={() => toggle(l.request_item_id)}>
+                    <TableCell>
+                      <input
+                        type="checkbox"
+                        aria-label={`Order ${l.name}`}
+                        className="size-4 accent-primary"
+                        checked={picked.has(l.request_item_id)}
+                        onChange={() => toggle(l.request_item_id)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium">{l.name}</p>
+                      {l.sku && <p className="text-xs text-muted-foreground">{l.sku}</p>}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">{qtyWithUnit(l.quantity, l.unit)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
-          <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => setLines((ls) => [...ls, blankLine()])}>
-            <Plus /> Add component
-          </Button>
+          {showErrors && linesError && <p className="mt-1 text-xs text-destructive">{linesError}</p>}
         </div>
       </div>
     </Modal>

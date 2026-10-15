@@ -11,6 +11,8 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/components/toast"
 import { usePermissions } from "@/features/auth/usePermissions"
+import { useDrill } from "@/features/dashboard/DashboardKit"
+import { incomingRow } from "@/features/dashboard/rows"
 import { useAcceptPurchaseMutation, useGetIncomingStockQuery } from "@/features/purchasing/purchasingApi"
 import { PurchaseDetailModal } from "@/features/purchasing/PurchaseParts"
 import { qtyWithUnit } from "@/features/purchasing/purchasingUtils"
@@ -36,6 +38,8 @@ export default function IncomingStock() {
   const waiting = data.filter((p) => p.status === "PENDING_STORE")
   const done = data.filter((p) => p.status === "STORED")
   const piecesWaiting = waiting.reduce((s, p) => s + p.totals.approved, 0)
+  const drill = useDrill() // clicking a figure opens a popup with the purchases behind it
+  const open = (title, description, list, empty) => () => drill.openList({ title, description, rows: list.map(incomingRow), empty })
 
   const confirmAccept = async () => {
     setAcceptError("")
@@ -57,12 +61,12 @@ export default function IncomingStock() {
       {error && <div className="mb-4"><Notice title="Something went wrong">Could not load incoming stock. Check that the server is running.</Notice></div>}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard index={0} icon={Truck} tone={waiting.length ? "amber" : "green"} label="Waiting for you" value={waiting.length} loading={isLoading} detail="IQC approved, not accepted yet" />
-        <StatCard index={1} icon={PackageCheck} tone="blue" label="Pieces to receive" value={piecesWaiting} loading={isLoading} detail="Approved quantity in those purchases" />
-        <StatCard index={2} icon={CheckCircle2} tone="green" label="Accepted" value={done.length} loading={isLoading} detail="Already in inventory" />
+        <StatCard index={0} icon={Truck} tone={waiting.length ? "amber" : "green"} label="Waiting for you" value={waiting.length} loading={isLoading} detail="IQC approved, not accepted yet" onClick={open("Waiting for you", "IQC approved these. Accept them into stock.", waiting, "Nothing to accept")} />
+        <StatCard index={1} icon={PackageCheck} tone="blue" label="Pieces to receive" value={piecesWaiting} loading={isLoading} detail="Approved quantity in those purchases" onClick={open("Pieces to receive", "Approved quantity in each purchase.", waiting, "Nothing to receive")} />
+        <StatCard index={2} icon={CheckCircle2} tone="green" label="Accepted" value={done.length} loading={isLoading} detail="Already in inventory" onClick={open("Accepted", "Already added to inventory.", done, "Nothing accepted yet")} />
       </div>
 
-      <div className="mt-4 space-y-4">
+      <div id="incoming-waiting" className="mt-4 scroll-mt-4 space-y-4">
         {isLoading ? (
           <Card><TableSkeleton rows={3} /></Card>
         ) : waiting.length === 0 ? (
@@ -107,7 +111,7 @@ export default function IncomingStock() {
           ))
         )}
 
-        <Card className="overflow-hidden">
+        <Card id="incoming-accepted" className="scroll-mt-4 overflow-hidden">
           <CardHeader>
             <div>
               <CardTitle>Accepted</CardTitle>
@@ -166,6 +170,7 @@ export default function IncomingStock() {
         )}
       </ConfirmDialog>
 
+      {drill.host}
       <PurchaseDetailModal purchase={viewing && (data.find((p) => p.id === viewing.id) || viewing)} onClose={() => setViewing(null)} />
     </>
   )

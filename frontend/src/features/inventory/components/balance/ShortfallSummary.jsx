@@ -92,6 +92,7 @@ export default function ShortfallSummary({
             label="Unexplained"
             value={fmtQty(Math.abs(unexplained))}
             sub={status.sub}
+            onClick={() => document.getElementById("shortfall-list")?.scrollIntoView({ behavior: "smooth", block: "start" })}
           />
         </div>
       </div>

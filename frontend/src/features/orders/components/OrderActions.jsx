@@ -9,6 +9,17 @@ export default function OrderActions({ order, onCheck, onStart, className }) {
   const remainingToStart = Math.max(0, Number(order?.remaining_to_start ?? 0))
   const started = Number(order?.quantity_to_produce ?? 0)
 
+  // production starts only after the Operations Admin approved the order
+  if (order?.approval_status && order.approval_status !== "APPROVED") {
+    return (
+      <div className={className ?? "flex justify-end"}>
+        <span className="text-sm text-muted-foreground">
+          {order.approval_status === "REJECTED" ? "Rejected by Operations Admin" : order.approval_status === "DRAFT" ? "Draft with Marketing" : "Waiting for Operations Admin approval"}
+        </span>
+      </div>
+    )
+  }
+
   if (remainingToStart > 0 && ["PENDING", "IN_PRODUCTION", "TESTING"].includes(status)) {
     return (
       <div className={baseClass}>
