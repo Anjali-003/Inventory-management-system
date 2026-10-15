@@ -1,31 +1,36 @@
 import { useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
+import { MotionConfig, motion } from "motion/react"
 import { ClipboardList, Loader2, Plus, RefreshCw, Send, Trash2, X } from "lucide-react"
-import PageHeader from "@/components/PageHeader"
-import SearchBar from "@/components/SearchBar"
-import StatStrip from "@/components/StatStrip"
 import UserCell from "@/components/UserCell"
 import { ConfirmDialog } from "@/components/Modal"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { useToast } from "@/components/toast"
-import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { usePermissions } from "@/features/auth/usePermissions"
-import { ApprovalStatus } from "@/features/order-approvals/approvalParts"
 import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
+import { cn } from "@/lib/utils"
 import NewOrderModal from "./NewOrderModal"
 import OrderDetailModal from "./OrderDetailModal"
-import { OrderProgress, STAGES, countByStatus, isStatus, newestFirst, plural, stageOf } from "./orderParts"
+import { HeroButton, MktBtn, MktHero, NewOrderFab, SearchField, StageChips, StageTile, StatusPill, TileGrid } from "./mktKit"
+import { PRESS_SOFT, rise, stagger } from "./mktMotion"
+import { ALL_STAGE, OrderProgress, OrderSteps, STAGES, countByStatus, isStatus, newestFirst, plural, stageOf } from "./orderParts"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "./marketingOrdersApi"
 
 const EMPTY = []
 const SHOW_LINES = 2
 
+const isDecided = (o) => o.approval_status === "APPROVED" || o.approval_status === "REJECTED"
+
 /*
   Marketing Manager: build an order (Draft), press Send to hand it to the Operations Admin.
   After that the admin's decision (and the reason, when rejected) shows here. Only drafts can still be deleted.
+
+  Layout: from `lg` up the orders are a table; below that (phones and tablets) each order is a card.
+  The status filter is a row of colour tiles from `md` up and a scrolling row of chips on a phone.
 
   The page state lives in the URL, so a link (or a click on a dashboard figure) opens it already set up:
     ?status=DRAFT | PENDING_APPROVAL | APPROVED | REJECTED   filter
@@ -33,6 +38,88 @@ const SHOW_LINES = 2
     ?order=12                                                that order's popup
     ?new=1                                                   the New order popup
 */
+
+/* One order as a card (phones and tablets). The body opens the order; the buttons under it never do. */
+function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
+  const stage = stageOf(o.approval_status)
+  const draft = o.approval_status === "DRAFT"
+  const extra = o.items.length - SHOW_LINES
+
+  return (
+    <motion.article
+      layout="position"
+      variants={rise}
+      className="relative overflow-hidden rounded-2xl border border-[#dce5e0] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
+    >
+      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1 bg-gradient-to-b", stage?.s.grad ?? "from-slate-300 to-slate-400")} />
+
+      <motion.div
+        role="button"
+        tabIndex={0}
+        whileTap={PRESS_SOFT}
+        onClick={() => onOpen(o)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(o) }
+        }}
+        className="cursor-pointer p-4 pl-5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-[15px] font-bold tabular-nums tracking-[-0.01em]">{o.order_number}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground" title={fmtDateTime(o.created_at)}>
+              {o.created_by_name ? `${o.created_by_name} · ` : ""}{timeAgo(o.created_at)}
+            </p>
+          </div>
+          <StatusPill value={o.approval_status} short />
+        </div>
+
+        <ul className="mt-3.5 space-y-1.5">
+          {o.items.slice(0, SHOW_LINES).map((it) => (
+            <li key={it.product_id} className="flex items-center justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate">{it.name}</span>
+              <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-slate-700">× {fmtQty(it.quantity)}</span>
+            </li>
+          ))}
+          {extra > 0 && <li className="text-xs font-semibold text-primary">+ {plural(extra, "more product")}</li>}
+        </ul>
+
+        <OrderSteps status={o.approval_status} className="mt-4" />
+
+        {isDecided(o) && (
+          <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
+            <UserCell name={o.approved_by_name} sub={fmtDateTime(o.approved_at)} />
+            {o.approval_remarks && <p className="mt-1.5 line-clamp-3 text-xs leading-snug text-foreground/80">{o.approval_remarks}</p>}
+          </div>
+        )}
+      </motion.div>
+
+      {editable && draft && (
+        <div className="flex gap-2 border-t bg-cf-head/70 px-4 py-3 pl-5">
+          <MktBtn variant="danger" size="icon" aria-label={`Delete draft ${o.order_number}`} onClick={() => onDelete(o)}><Trash2 /></MktBtn>
+          <MktBtn variant="primary" className="flex-1" disabled={busy} onClick={() => onSend(o)}>
+            {busy ? <Loader2 className="animate-spin" /> : <Send />} Send to admin
+          </MktBtn>
+        </div>
+      )}
+    </motion.article>
+  )
+}
+
+function CardsSkeleton() {
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="space-y-3 rounded-2xl border bg-card p-4">
+          <div className="flex justify-between"><Skeleton className="h-5 w-28" /><Skeleton className="h-6 w-20 rounded-full" /></div>
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-1.5 w-full rounded-full" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function MarketingOrders() {
   const toast = useToast()
   const { canEdit } = usePermissions()
@@ -78,6 +165,8 @@ export default function MarketingOrders() {
 
   const filtered = !!(status || query.trim())
   const clearFilters = () => patch({ status: null, q: null })
+  const openNew = () => patch({ new: "1" })
+  const openOrder = (o) => patch({ order: o.id })
 
   const sendOrder = async (o) => {
     setBusyId(o.id)
@@ -104,13 +193,12 @@ export default function MarketingOrders() {
     }
   }
 
-  const strip = [
-    { key: "ALL", label: "All orders", tone: "info", hint: "Everything you raised", value: counts.total, active: !status, onClick: () => patch({ status: null }), className: "col-span-2 xl:col-span-1" },
+  // Same list feeds the tiles (md and up) and the chips (phones).
+  const filters = [
+    { key: "ALL", stage: ALL_STAGE, value: counts.total, active: !status, onClick: () => patch({ status: null }) },
     ...STAGES.map((s) => ({
       key: s.status,
-      label: s.label,
-      tone: s.dotTone,
-      hint: s.hint,
+      stage: s,
       value: counts[s.status],
       active: status === s.status,
       onClick: () => patch({ status: status === s.status ? null : s.status }),
@@ -118,38 +206,73 @@ export default function MarketingOrders() {
   ]
 
   return (
-    <>
-      <PageHeader title="Marketing Orders" description="Prepare an order, then send it to the Operations Admin for approval.">
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={refetch} disabled={isFetching}><RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh</Button>
-          {editable && <Button onClick={() => patch({ new: "1" })}><Plus /> New order</Button>}
-        </div>
-      </PageHeader>
+    <MotionConfig reducedMotion="user">
+      <MktHero eyebrow="Marketing" title="Marketing Orders" description="Prepare an order, then send it to the Operations Admin for approval.">
+        <HeroButton variant="glass" onClick={refetch} disabled={isFetching} aria-label="Refresh orders">
+          <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
+        </HeroButton>
+        {editable && (
+          <span className="hidden md:inline-flex">
+            <HeroButton onClick={openNew}><Plus /> New order</HeroButton>
+          </span>
+        )}
+      </MktHero>
 
       {error && <div className="mb-4"><Notice title="Something went wrong">Could not load orders. Check that the server is running.</Notice></div>}
 
-      <Card className="overflow-hidden">
-        <StatStrip cols="grid-cols-2 xl:grid-cols-5" layoutId="marketing-order-summary" items={strip} />
+      {/* filter: tiles on md+, chips on a phone */}
+      <div className="hidden md:block">
+        <TileGrid>
+          {filters.map((f) => (
+            <StageTile
+              key={f.key}
+              stage={f.stage}
+              value={f.value}
+              loading={isLoading}
+              active={f.active}
+              onClick={f.onClick}
+              className={f.key === "ALL" ? "col-span-2 md:col-span-4 xl:col-span-1" : undefined}
+            />
+          ))}
+        </TileGrid>
+      </div>
+      <StageChips
+        label="Filter orders by status"
+        items={filters.map((f) => ({ key: f.key, label: f.stage.label, value: f.value, grad: f.stage.s.grad, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
+      />
 
-        <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3 sm:px-5">
-          <SearchBar value={query} onChange={(v) => patch({ q: v }, true)} placeholder="Search order or product..." />
-          <div className="flex min-h-8 flex-1 flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground" aria-live="polite">
-            <span className="tabular-nums">Showing {shown.length} of {counts.total}</span>
-            {status && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-cf-green-soft py-1 pl-2.5 pr-1 font-semibold text-primary animate-in fade-in zoom-in-95 duration-200">
+      {/* search: stays under the top bar while a phone scrolls. On a phone the bar stays one line tall:
+          the count and the removable filter tag are for bigger screens (the chips already show the filter). */}
+      <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-5 md:bg-transparent md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
+        <SearchField className="min-w-0 flex-1 sm:max-w-xs sm:flex-none" value={query} onChange={(v) => patch({ q: v }, true)} placeholder="Search order or product..." />
+        <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground sm:min-h-8 sm:flex-1 sm:flex-wrap sm:justify-end" aria-live="polite">
+          <span className="hidden tabular-nums sm:inline">Showing {shown.length} of {counts.total}</span>
+          {status && (
+            <span className="hidden sm:inline-flex">
+              <motion.span
+                key={status}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className={cn("inline-flex items-center gap-1 rounded-full py-1 pl-2.5 pr-1 font-semibold ring-1 ring-inset", stageOf(status).s.pill)}
+              >
                 {stageOf(status).label}
-                <button type="button" aria-label={`Remove ${stageOf(status).label} filter`} onClick={() => patch({ status: null })} className="grid size-4 place-items-center rounded-full outline-none transition-colors hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring/60">
+                <button type="button" aria-label={`Remove ${stageOf(status).label} filter`} onClick={() => patch({ status: null })} className="grid size-5 place-items-center rounded-full outline-none transition-colors hover:bg-black/10 focus-visible:ring-2 focus-visible:ring-ring/60">
                   <X className="size-3" />
                 </button>
-              </span>
-            )}
-            {filtered && <button type="button" onClick={clearFilters} className="font-semibold text-primary outline-none hover:underline focus-visible:underline">Clear filters</button>}
-          </div>
+              </motion.span>
+            </span>
+          )}
+          {filtered && <button type="button" onClick={clearFilters} className="whitespace-nowrap font-semibold text-primary outline-none hover:underline focus-visible:underline">Clear filters</button>}
         </div>
+      </div>
 
-        {isLoading ? (
-          <TableSkeleton />
-        ) : shown.length === 0 ? (
+      {isLoading ? (
+        <>
+          <div className="lg:hidden"><CardsSkeleton /></div>
+          <Card className="hidden overflow-hidden lg:block"><TableSkeleton /></Card>
+        </>
+      ) : shown.length === 0 ? (
+        <Card>
           <EmptyState icon={ClipboardList} title={filtered ? "No order matches" : "No orders yet"}>
             {filtered
               ? status && !query.trim() && counts[status] === 0
@@ -157,12 +280,28 @@ export default function MarketingOrders() {
                 : "Try a different search or filter."
               : "Use New order to prepare your first order."}
             <span className="mt-4 flex justify-center gap-2">
-              {filtered && <Button variant="outline" onClick={clearFilters}>Clear filters</Button>}
-              {!filtered && editable && <Button onClick={() => patch({ new: "1" })}><Plus /> New order</Button>}
+              {filtered && <MktBtn onClick={clearFilters}>Clear filters</MktBtn>}
+              {!filtered && editable && <MktBtn variant="primary" onClick={openNew}><Plus /> New order</MktBtn>}
             </span>
           </EmptyState>
-        ) : (
-          <div className="overflow-x-auto">
+        </Card>
+      ) : (
+        <>
+          {/* phones + tablets: cards. Keyed by the filter so they rise in again whenever it changes. */}
+          <motion.div
+            key={`cards-${status ?? "all"}`}
+            variants={stagger(0.045)}
+            initial="hidden"
+            animate="show"
+            className="grid gap-3 md:grid-cols-2 lg:hidden"
+          >
+            {shown.map((o) => (
+              <OrderCard key={o.id} o={o} editable={editable} busy={busyId === o.id} onOpen={openOrder} onSend={sendOrder} onDelete={setConfirmDelete} />
+            ))}
+          </motion.div>
+
+          {/* desktop: table */}
+          <Card className="hidden overflow-hidden lg:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -177,11 +316,10 @@ export default function MarketingOrders() {
               <TableBody key={status ?? "all"}>
                 {shown.map((o, i) => {
                   const extra = o.items.length - SHOW_LINES
-                  const decided = o.approval_status === "APPROVED" || o.approval_status === "REJECTED"
                   return (
                     <TableRow
                       key={o.id}
-                      onClick={() => patch({ order: o.id })}
+                      onClick={() => openOrder(o)}
                       style={{ animationDelay: `${Math.min(i, 8) * 30}ms`, animationFillMode: "backwards" }}
                       className="cursor-pointer motion-reduce:animate-none"
                     >
@@ -203,12 +341,12 @@ export default function MarketingOrders() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col items-start gap-2">
-                          <ApprovalStatus value={o.approval_status} />
+                          <StatusPill value={o.approval_status} />
                           <OrderProgress status={o.approval_status} />
                         </div>
                       </TableCell>
                       <TableCell className="min-w-44">
-                        {decided ? (
+                        {isDecided(o) ? (
                           <div className="space-y-0.5">
                             <UserCell name={o.approved_by_name} sub={fmtDateTime(o.approved_at)} />
                             {o.approval_remarks && <p className="line-clamp-2 max-w-64 whitespace-normal text-xs text-muted-foreground">{o.approval_remarks}</p>}
@@ -220,10 +358,10 @@ export default function MarketingOrders() {
                       <TableCell className="text-right">
                         {editable && o.approval_status === "DRAFT" && (
                           <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="outline" aria-label={`Delete draft ${o.order_number}`} onClick={(e) => { e.stopPropagation(); setConfirmDelete(o) }}><Trash2 /></Button>
-                            <Button size="sm" disabled={busyId === o.id} onClick={(e) => { e.stopPropagation(); sendOrder(o) }}>
+                            <MktBtn variant="danger" size="icon" aria-label={`Delete draft ${o.order_number}`} onClick={(e) => { e.stopPropagation(); setConfirmDelete(o) }}><Trash2 /></MktBtn>
+                            <MktBtn variant="primary" disabled={busyId === o.id} onClick={(e) => { e.stopPropagation(); sendOrder(o) }}>
                               {busyId === o.id ? <Loader2 className="animate-spin" /> : <Send />} Send to admin
-                            </Button>
+                            </MktBtn>
                           </div>
                         )}
                       </TableCell>
@@ -232,9 +370,11 @@ export default function MarketingOrders() {
                 })}
               </TableBody>
             </Table>
-          </div>
-        )}
-      </Card>
+          </Card>
+        </>
+      )}
+
+      {editable && <NewOrderFab onClick={openNew} />}
 
       {adding && <NewOrderModal onClose={() => patch({ new: null }, true)} />}
       {selected && !confirmDelete && (
@@ -258,6 +398,6 @@ export default function MarketingOrders() {
       >
         {confirmDelete && <p>{confirmDelete.order_number} has not been sent yet. It will be removed permanently.</p>}
       </ConfirmDialog>
-    </>
+    </MotionConfig>
   )
 }

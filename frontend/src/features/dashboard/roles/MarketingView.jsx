@@ -1,20 +1,21 @@
 import { useMemo, useState } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
+import { MotionConfig, motion } from "motion/react"
 import { CheckCircle2, ChevronRight, ClipboardList, Loader2, Plus, Send } from "lucide-react"
 import { EmptyState } from "@/components/feedback"
-import { Reveal, StatCard } from "@/components/HistoryUI"
+import { Reveal } from "@/components/HistoryUI"
 import { useToast } from "@/components/toast"
-import { Button, buttonVariants } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useGetMeQuery } from "@/features/auth/authApi"
 import { usePermissions } from "@/features/auth/usePermissions"
-import { ApprovalStatus } from "@/features/order-approvals/approvalParts"
 import { useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "@/features/marketing-orders/marketingOrdersApi"
-import { OrderPipeline, STAGES, countByStatus, newestFirst, ordersHref, plural, stageOf } from "@/features/marketing-orders/orderParts"
+import { HeroLink, MktBtn, MktHero, NewOrderFab, StageTile, StatusPill, TileGrid } from "@/features/marketing-orders/mktKit"
+import { PRESS_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
+import { ALL_STAGE, OrderPipeline, STAGES, countByStatus, newestFirst, ordersHref, plural, stageOf } from "@/features/marketing-orders/orderParts"
 import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
-import { Greeting } from "../DashboardKit"
 
 const EMPTY = []
 
@@ -33,23 +34,25 @@ function OrderRow({ order, line, action }) {
   const stage = stageOf(order.approval_status)
   const Icon = stage?.icon ?? ClipboardList
   return (
-    <li className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/50">
-      <Link
-        to={ordersHref(null, { order: order.id })}
-        className="group flex min-w-0 flex-1 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-      >
-        <span className={cn("grid size-8 shrink-0 place-items-center rounded-[9px] text-white", stage?.bar ?? "bg-slate-400")}>
-          <Icon className="size-4" aria-hidden />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold">{order.order_number}</span>
-          <span className="block truncate text-xs text-muted-foreground">{line}</span>
-        </span>
-        <span className="hidden sm:block"><ApprovalStatus value={order.approval_status} /></span>
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
-      </Link>
+    <motion.li variants={rise} className="flex items-center gap-2 px-3 py-1.5 sm:px-4">
+      <motion.div whileTap={PRESS_SOFT} className="min-w-0 flex-1">
+        <Link
+          to={ordersHref(null, { order: order.id })}
+          className="group flex min-h-14 min-w-0 items-center gap-3 rounded-xl px-2 py-2 outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/60"
+        >
+          <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-white shadow-sm", stage?.s.grad ?? "from-slate-300 to-slate-400")}>
+            <Icon className="size-[18px]" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold tabular-nums">{order.order_number}</span>
+            <span className="block truncate text-xs text-muted-foreground">{line}</span>
+          </span>
+          <span className="hidden sm:block"><StatusPill value={order.approval_status} short /></span>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden />
+        </Link>
+      </motion.div>
       {action}
-    </li>
+    </motion.li>
   )
 }
 
@@ -57,20 +60,27 @@ function Panel({ title, description, to, toLabel, loading, children }) {
   return (
     <Card className="overflow-hidden">
       <CardHeader className="items-center">
-        <div>
+        <div className="min-w-0">
           <CardTitle>{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </div>
-        {to && <Link to={to} className={buttonVariants({ variant: "ghost", size: "sm" })}>{toLabel}</Link>}
+        {to && <Link to={to} className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-soft focus-visible:ring-2 focus-visible:ring-ring/60">{toLabel}</Link>}
       </CardHeader>
-      {loading ? <div className="space-y-2 p-5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div> : children}
+      {loading ? <div className="space-y-2 p-5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div> : children}
     </Card>
   )
 }
 
+/* The list inside a panel: rows rise in one after another. */
+const RowList = ({ children }) => (
+  <motion.ul variants={stagger(0.05, 0.05)} initial="hidden" animate="show" className="divide-y py-1">
+    {children}
+  </motion.ul>
+)
+
 export default function MarketingView() {
-  const navigate = useNavigate()
   const toast = useToast()
+  const { data: me } = useGetMeQuery()
   const { canEdit } = usePermissions()
   const editable = canEdit("marketingOrders")
 
@@ -98,36 +108,25 @@ export default function MarketingView() {
   }
 
   // Every figure opens the Orders page with that filter already on.
-  const stats = [
-    ...STAGES.map((s) => ({
-      label: s.label,
-      value: counts[s.status],
-      icon: s.icon,
-      detail: s.hint,
-      tone: s.status === "DRAFT" ? (counts.DRAFT ? "amber" : "green") : s.status === "REJECTED" ? (counts.REJECTED ? "red" : "green") : s.tone,
-      to: ordersHref(s.status),
-    })),
-    { label: "All orders", value: counts.total, icon: ClipboardList, detail: "Raised by you", tone: "violet", to: ordersHref(null) },
+  const tiles = [
+    { key: "ALL", stage: ALL_STAGE, value: counts.total, to: ordersHref(null), className: "col-span-2 md:col-span-4 xl:col-span-1" },
+    ...STAGES.map((s) => ({ key: s.status, stage: s, value: counts[s.status], to: ordersHref(s.status) })),
   ]
 
   return (
-    <>
-      <Greeting description={nudge(counts)}>
-        {editable && (
-          <Link to={ordersHref(null, { new: 1 })} className={buttonVariants()}>
-            <Plus /> New order
-          </Link>
-        )}
-      </Greeting>
+    <MotionConfig reducedMotion="user">
+      <MktHero eyebrow="Marketing dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={nudge(counts)}>
+        {editable && <HeroLink wrap="hidden md:inline-flex" to={ordersHref(null, { new: 1 })}><Plus /> New order</HeroLink>}
+      </MktHero>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {stats.map((s, i) => (
-          <StatCard key={s.label} index={i} icon={s.icon} tone={s.tone} label={s.label} value={s.value} detail={s.detail} loading={isLoading} onClick={() => navigate(s.to)} />
+      <TileGrid>
+        {tiles.map((t) => (
+          <StageTile key={t.key} solid stage={t.stage} value={t.value} loading={isLoading} to={t.to} className={t.className} />
         ))}
-      </div>
+      </TileGrid>
 
       <Reveal delay={0.2} className="mt-4">
-        <Panel title="Order pipeline" description="Click a stage to see only those orders." to={ordersHref(null)} toLabel="All orders">
+        <Panel title="Order pipeline" description="Tap a stage to see only those orders." to={ordersHref(null)} toLabel="All orders">
           <OrderPipeline counts={counts} loading={isLoading} />
         </Panel>
       </Reveal>
@@ -139,7 +138,9 @@ export default function MarketingView() {
               Prepare an order, save it as a draft, then send it to the Operations Admin when it is ready.
               {editable && (
                 <span className="mt-4 flex justify-center">
-                  <Link to={ordersHref(null, { new: 1 })} className={buttonVariants()}><Plus /> Create your first order</Link>
+                  <Link to={ordersHref(null, { new: 1 })} className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-gradient-to-br from-emerald-500 to-teal-700 px-4 text-[13px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(13,148,136,0.8)] outline-none transition-[filter,transform] hover:brightness-110 focus-visible:ring-3 focus-visible:ring-primary/30 active:scale-[0.97] sm:h-9">
+                    <Plus className="size-4" /> Create your first order
+                  </Link>
                 </span>
               )}
             </EmptyState>
@@ -152,7 +153,7 @@ export default function MarketingView() {
               {attention.length === 0 ? (
                 <EmptyState icon={CheckCircle2} title="Nothing needs attention">Every order has been sent and decided.</EmptyState>
               ) : (
-                <ul className="divide-y">
+                <RowList>
                   {attention.slice(0, 5).map((o) => (
                     <OrderRow
                       key={o.id}
@@ -160,28 +161,30 @@ export default function MarketingView() {
                       line={o.approval_status === "REJECTED" && o.approval_remarks ? o.approval_remarks : productsText(o.items)}
                       action={
                         editable && o.approval_status === "DRAFT" ? (
-                          <Button size="sm" disabled={busyId === o.id} onClick={() => sendOrder(o)} aria-label={`Send ${o.order_number} to the Operations Admin`}>
+                          <MktBtn variant="primary" size="sm" disabled={busyId === o.id} onClick={() => sendOrder(o)} aria-label={`Send ${o.order_number} to the Operations Admin`}>
                             {busyId === o.id ? <Loader2 className="animate-spin" /> : <Send />} Send
-                          </Button>
+                          </MktBtn>
                         ) : null
                       }
                     />
                   ))}
-                </ul>
+                </RowList>
               )}
             </Panel>
           </Reveal>
           <Reveal delay={0.4}>
             <Panel title="Latest orders" description="Newest first." loading={isLoading} to={ordersHref(null)} toLabel="View all">
-              <ul className="divide-y">
+              <RowList>
                 {latest.slice(0, 5).map((o) => (
                   <OrderRow key={o.id} order={o} line={`${timeAgo(o.created_at)} · ${productsText(o.items)}`} />
                 ))}
-              </ul>
+              </RowList>
             </Panel>
           </Reveal>
         </div>
       )}
-    </>
+
+      {editable && <NewOrderFab to={ordersHref(null, { new: 1 })} />}
+    </MotionConfig>
   )
 }

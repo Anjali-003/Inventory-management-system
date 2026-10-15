@@ -287,3 +287,35 @@
 .password-eye:hover {
     color: #111827;
 }
+
+/* ------------------------------------------------------------------------------------------------
+   Marketing Manager screens (features/marketing-orders + dashboard/roles/MarketingView).
+   In @layer components so Tailwind utilities (md:bg-transparent, md:static ...) can still override them.
+   ------------------------------------------------------------------------------------------------ */
+@layer components {
+  /* a row that scrolls sideways (the status chips on a phone): no scrollbar, snaps, does not drag the page along */
+  .mkt-scroll-x {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 1rem;
+  }
+  .mkt-scroll-x::-webkit-scrollbar { display: none; }
+
+  /* translucent bar: content scrolls under it, a bright top edge is the light catching the glass */
+  .mkt-glass {
+    background: color-mix(in oklab, var(--background) 78%, transparent);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    backdrop-filter: blur(18px) saturate(180%);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), 0 1px 0 var(--border);
+  }
+}
+
+/* people who ask the OS for less transparency get a plain solid bar */
+@media (prefers-reduced-transparency: reduce) {
+  .mkt-glass { background: var(--background); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media (prefers-contrast: more) {
+  .mkt-glass { background: var(--background); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 1px 0 var(--foreground); }
+}

@@ -2,27 +2,68 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { motion } from "motion/react"
-import { Check, CheckCircle2, FilePen, Hourglass, X, XCircle } from "lucide-react"
+import { Check, CheckCircle2, ClipboardList, FilePen, Hourglass, X, XCircle } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fmtDateTime } from "@/lib/stock"
 import { cn } from "@/lib/utils"
+import { SPRING, SPRING_SOFT } from "./mktMotion"
 
 /*
   Small pieces shared by the Marketing Manager dashboard and the Marketing Orders page.
 
   The orders page keeps its filter in the URL (?status=APPROVED&q=...&order=12&new=1), so every stat on the
   dashboard can simply link to ordersHref("APPROVED") and the page opens already filtered.
-*/
 
-const EASE = [0.22, 1, 0.36, 1]
+  Every stage has ONE colour family, used everywhere (tiles, chips, pills, bars, timeline):
+    Draft = amber   Waiting = sky   Approved = emerald   Rejected = rose   All = violet
+  `s` holds the full Tailwind class strings (kept whole, so Tailwind can see them).
+*/
 
 /* One entry per approval stage, in the order an order moves through them. */
 export const STAGES = [
-  { status: "DRAFT", label: "Drafts", icon: FilePen, tone: "amber", dotTone: "neutral", bar: "bg-slate-400", dot: "bg-slate-400", hint: "Not sent yet" },
-  { status: "PENDING_APPROVAL", label: "Waiting for approval", icon: Hourglass, tone: "blue", dotTone: "warning", bar: "bg-sky-500", dot: "bg-sky-500", hint: "With Operations Admin" },
-  { status: "APPROVED", label: "Approved", icon: CheckCircle2, tone: "green", dotTone: "success", bar: "bg-emerald-600", dot: "bg-emerald-600", hint: "Sent on to purchase" },
-  { status: "REJECTED", label: "Rejected", icon: XCircle, tone: "red", dotTone: "danger", bar: "bg-rose-500", dot: "bg-rose-500", hint: "See the remarks" },
+  {
+    status: "DRAFT", label: "Drafts", short: "Draft", icon: FilePen, tone: "amber", dotTone: "neutral",
+    bar: "bg-gradient-to-r from-amber-400 to-orange-500", dot: "bg-amber-500", hint: "Not sent yet",
+    s: {
+      grad: "from-amber-400 to-orange-500", glow: "shadow-orange-500/30", soft: "bg-amber-50 ring-amber-200/70",
+      pill: "bg-amber-50 text-amber-800 ring-amber-200", ink: "text-amber-700",
+    },
+  },
+  {
+    status: "PENDING_APPROVAL", label: "Waiting for approval", short: "Pending", icon: Hourglass, tone: "blue", dotTone: "warning",
+    bar: "bg-gradient-to-r from-sky-400 to-blue-600", dot: "bg-sky-500", hint: "With Operations Admin",
+    s: {
+      grad: "from-sky-400 to-blue-600", glow: "shadow-blue-500/30", soft: "bg-sky-50 ring-sky-200/70",
+      pill: "bg-sky-50 text-sky-800 ring-sky-200", ink: "text-sky-700",
+    },
+  },
+  {
+    status: "APPROVED", label: "Approved", short: "Approved", icon: CheckCircle2, tone: "green", dotTone: "success",
+    bar: "bg-gradient-to-r from-emerald-400 to-emerald-700", dot: "bg-emerald-600", hint: "Sent on to purchase",
+    s: {
+      grad: "from-emerald-400 to-emerald-700", glow: "shadow-emerald-600/30", soft: "bg-emerald-50 ring-emerald-200/70",
+      pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", ink: "text-emerald-700",
+    },
+  },
+  {
+    status: "REJECTED", label: "Rejected", short: "Rejected", icon: XCircle, tone: "red", dotTone: "danger",
+    bar: "bg-gradient-to-r from-rose-400 to-red-600", dot: "bg-rose-500", hint: "See the remarks",
+    s: {
+      grad: "from-rose-400 to-red-600", glow: "shadow-red-500/30", soft: "bg-rose-50 ring-rose-200/70",
+      pill: "bg-rose-50 text-rose-800 ring-rose-200", ink: "text-rose-700",
+    },
+  },
 ]
+
+/* The "everything" filter: not a real status, so it is kept out of STAGES. */
+export const ALL_STAGE = {
+  status: "ALL", label: "All orders", short: "All", icon: ClipboardList, hint: "Everything you raised",
+  bar: "bg-gradient-to-r from-violet-400 to-purple-600", dot: "bg-violet-500",
+  s: {
+    grad: "from-violet-400 to-purple-600", glow: "shadow-purple-500/30", soft: "bg-violet-50 ring-violet-200/70",
+    pill: "bg-violet-50 text-violet-800 ring-violet-200", ink: "text-violet-700",
+  },
+}
 
 export const stageOf = (status) => STAGES.find((s) => s.status === status)
 export const isStatus = (value) => STAGES.some((s) => s.status === value)
@@ -55,7 +96,7 @@ export function OrderPipeline({ counts, loading }) {
 
   if (loading) {
     return (
-      <div className="space-y-4 px-5 py-5">
+      <div className="space-y-4 px-4 py-5 sm:px-5">
         <Skeleton className="h-3 w-full rounded-full" />
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{STAGES.map((s) => <Skeleton key={s.status} className="h-12" />)}</div>
       </div>
@@ -70,17 +111,17 @@ export function OrderPipeline({ counts, loading }) {
   })
 
   return (
-    <div className="px-5 py-5">
+    <div className="px-4 py-5 sm:px-5">
       {counts.total === 0 ? (
-        <div className="h-3 rounded-full bg-muted" aria-hidden />
+        <div className="h-3.5 rounded-full bg-muted" aria-hidden />
       ) : (
         <motion.div
-          className="flex h-3 origin-left gap-1"
+          className="flex h-3.5 origin-left gap-1"
           role="list"
           aria-label="Orders by stage"
           initial={{ scaleX: 0.15, opacity: 0 }}
           animate={{ scaleX: 1, opacity: 1 }}
-          transition={{ duration: 0.55, ease: EASE }}
+          transition={SPRING_SOFT}
         >
           {STAGES.filter((s) => counts[s.status] > 0).map((s) => (
             <Link
@@ -90,7 +131,7 @@ export function OrderPipeline({ counts, loading }) {
               aria-label={`${s.label}: ${plural(counts[s.status], "order")}`}
               style={{ flexGrow: counts[s.status] }}
               className={cn(
-                "block min-w-3 basis-0 rounded-full outline-none transition-[opacity,transform] duration-200 hover:-translate-y-px focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2",
+                "block min-w-3 basis-0 rounded-full outline-none transition-[opacity,transform,filter] duration-200 hover:-translate-y-px hover:brightness-105 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2",
                 s.bar,
                 hover && hover !== s.status && "opacity-30"
               )}
@@ -106,7 +147,7 @@ export function OrderPipeline({ counts, loading }) {
             <Link
               to={ordersHref(s.status)}
               className={cn(
-                "flex items-center gap-2.5 rounded-lg px-2.5 py-2 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/60",
+                "flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 outline-none transition-[background-color,opacity,transform] duration-150 hover:bg-muted active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring/60",
                 hover && hover !== s.status && "opacity-60"
               )}
               {...hoverProps(s.status)}
@@ -147,7 +188,7 @@ const DOT_STATE = {
   fail: "border-destructive bg-destructive",
 }
 
-/* Three dots joined by a line: where this order is on its way to a decision. */
+/* Three dots joined by a line: where this order is on its way to a decision. (Used in the table.) */
 export function OrderProgress({ status, className }) {
   const steps = orderSteps(status)
   return (
@@ -162,11 +203,41 @@ export function OrderProgress({ status, className }) {
   )
 }
 
+const FILL = {
+  done: "bg-gradient-to-r from-emerald-400 to-emerald-600",
+  fail: "bg-gradient-to-r from-rose-400 to-red-600",
+}
+
+/* The same three steps as a labelled bar that fills in. (Used on the phone cards.) */
+export function OrderSteps({ status, className }) {
+  const steps = orderSteps(status)
+  const stage = stageOf(status)
+  return (
+    <div role="img" aria-label={steps.map(([l, s]) => `${l}: ${s}`).join(", ")} className={cn("grid grid-cols-3 gap-1.5", className)}>
+      {steps.map(([label, state], i) => (
+        <div key={label} className="min-w-0">
+          <span className="block h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+            <motion.span
+              className={cn("block h-full origin-left rounded-full", state === "current" ? stage?.bar : FILL[state])}
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: state === "todo" ? 0 : state === "current" ? 0.5 : 1 }}
+              transition={{ ...SPRING_SOFT, delay: 0.08 * i }}
+            />
+          </span>
+          <span className={cn("mt-1.5 block truncate text-[10px] font-medium", state === "todo" ? "text-cf-faint" : state === "fail" ? "text-destructive" : "text-muted-foreground")}>
+            {label}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const MARK = {
-  done: "bg-primary text-primary-foreground",
+  done: "bg-gradient-to-br from-emerald-400 to-emerald-700 text-white shadow-sm",
   current: "border-2 border-primary bg-card text-primary",
   todo: "border-2 border-border bg-card text-transparent",
-  fail: "bg-destructive text-white",
+  fail: "bg-gradient-to-br from-rose-400 to-red-600 text-white shadow-sm",
 }
 
 /* Vertical timeline for the order popup. There is no "sent at" time in the data, so none is shown. */
@@ -196,28 +267,34 @@ export function OrderTimeline({ order }) {
   ]
 
   return (
-    <ol className="space-y-0">
+    <ol>
       {rows.map((r, i) => {
         const state = steps[i][1]
         const last = i === rows.length - 1
         return (
-          <li key={r.title} className="relative flex gap-3 pb-5 last:pb-0">
-            {!last && <span aria-hidden className={cn("absolute left-[11px] top-6 h-[calc(100%-1.5rem)] w-px", state === "done" ? "bg-primary/40" : "bg-border")} />}
-            <span className={cn("relative z-10 grid size-6 shrink-0 place-items-center rounded-full", MARK[state])}>
-              {state === "done" && <Check className="size-3.5" strokeWidth={3} aria-hidden />}
-              {state === "fail" && <X className="size-3.5" strokeWidth={3} aria-hidden />}
-              {state === "current" && <span className="size-1.5 rounded-full bg-primary motion-safe:animate-pulse" aria-hidden />}
+          <motion.li
+            key={r.title}
+            className="relative flex gap-3.5 pb-5 last:pb-0"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ ...SPRING, delay: 0.06 * i }}
+          >
+            {!last && <span aria-hidden className={cn("absolute left-[13px] top-7 h-[calc(100%-1.75rem)] w-0.5 rounded-full", state === "done" ? "bg-emerald-300" : "bg-border")} />}
+            <span className={cn("relative z-10 grid size-7 shrink-0 place-items-center rounded-full", MARK[state])}>
+              {state === "done" && <Check className="size-4" strokeWidth={3} aria-hidden />}
+              {state === "fail" && <X className="size-4" strokeWidth={3} aria-hidden />}
+              {state === "current" && <span className="size-2 rounded-full bg-primary motion-safe:animate-pulse" aria-hidden />}
             </span>
             <div className="min-w-0 pt-0.5">
               <p className={cn("text-sm font-semibold", state === "todo" && "text-muted-foreground", state === "fail" && "text-destructive")}>{r.title}</p>
               <p className="text-xs text-muted-foreground">{r.sub}</p>
               {r.remarks && (
-                <p className={cn("mt-2 rounded-lg border px-3 py-2 text-sm", state === "fail" ? "border-destructive/20 bg-cf-red-soft text-destructive" : "bg-muted/60 text-foreground")}>
+                <p className={cn("mt-2 rounded-xl border px-3 py-2 text-sm leading-snug", state === "fail" ? "border-destructive/20 bg-cf-red-soft text-destructive" : "bg-muted/60 text-foreground")}>
                   {r.remarks}
                 </p>
               )}
             </div>
-          </li>
+          </motion.li>
         )
       })}
     </ol>

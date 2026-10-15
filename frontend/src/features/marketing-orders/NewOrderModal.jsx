@@ -1,15 +1,28 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
+import { AnimatePresence, motion } from "motion/react"
 import { Loader2, Plus, Trash2 } from "lucide-react"
 import { Modal } from "@/components/Modal"
 import { useToast } from "@/components/toast"
-import { errorMessage } from "@/lib/stock"
-import { BIG_MODAL, MKT_FIELD, MKT_FIELD_BAD, MKT_FIELD_OK, MktButton, MktField, MktNotice } from "./mktUi"
+import { errorMessage, fmtQty } from "@/lib/stock"
+import { cn } from "@/lib/utils"
+import { MktBtn, QtyStepper } from "./mktKit"
+import { SPRING } from "./mktMotion"
 import { useCreateMarketingOrderMutation, useGetMarketingProductsQuery } from "./marketingOrdersApi"
 
 const EMPTY = []
 const blank = () => ({ key: Math.random().toString(36).slice(2), product: "", qty: "1" })
 
-/* New order: one or more products with whole-number quantities. It is saved as a DRAFT; sending is a separate step. */
+const LABEL = "mb-1.5 block text-xs font-semibold text-muted-foreground"
+const ERR = "mt-1.5 text-xs font-medium text-destructive"
+// 16px + 44px tall on a phone, 13px + 36px with a mouse. (The shared Select is 36px / 13px only, so it is not used here.)
+const SELECT =
+  "h-11 w-full rounded-[10px] border bg-card px-3 pr-9 text-base outline-none transition-shadow focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15 sm:h-9 sm:text-[13px]"
+
+/*
+  New order: one or more products with whole-number quantities. It is saved as a DRAFT; sending is a separate step.
+  Each product is its own card: on a phone the product picker is full width with the quantity stepper and the
+  remove button under it; from `sm` up the three sit on one line.
+*/
 export default function NewOrderModal({ onClose }) {
   const toast = useToast()
   const { data, isLoading } = useGetMarketingProductsQuery()
@@ -19,6 +32,7 @@ export default function NewOrderModal({ onClose }) {
   const [rows, setRows] = useState(() => [blank()])
   const [showErrors, setShowErrors] = useState(false)
   const [serverError, setServerError] = useState("")
+  const endRef = useRef(null)
 
   const set = (key, patch) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)))
   const used = new Set(rows.map((r) => r.product))
@@ -27,6 +41,15 @@ export default function NewOrderModal({ onClose }) {
     if (!r.product) return "Select a product"
     if (!/^\d+$/.test(r.qty) || Number(r.qty) <= 0) return "Quantity must be a whole number above 0"
     return ""
+  }
+
+  const picked = rows.filter((r) => r.product).length
+  const units = rows.reduce((sum, r) => sum + (r.product && /^\d+$/.test(r.qty) ? Number(r.qty) : 0), 0)
+
+  const addRow = () => {
+    setRows((rs) => [...rs, blank()])
+    // bring the new card into view inside the scrolling popup
+    setTimeout(() => endRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 60)
   }
 
   const submit = async (e) => {
@@ -48,50 +71,93 @@ export default function NewOrderModal({ onClose }) {
       onClose={onClose}
       onSubmit={submit}
       busy={saving}
-      size="xl"
-      className={BIG_MODAL}
+      size="lg"
       title="New order"
       description="Add the products, save, then send it to the Operations Admin when it is ready."
       footer={
         <>
-          <MktButton variant="outline" onClick={onClose} disabled={saving}>Cancel</MktButton>
-          <MktButton type="submit" disabled={saving || isLoading}>
+          <MktBtn onClick={onClose} disabled={saving}>Cancel</MktBtn>
+          <MktBtn type="submit" variant="primary" disabled={saving || isLoading}>
             {saving && <Loader2 className="animate-spin" />}
             Save as draft
-          </MktButton>
+          </MktBtn>
         </>
       }
     >
-      <div className="space-y-5">
-        {serverError && <MktNotice title="Could not save">{serverError}</MktNotice>}
+      <div className="space-y-4">
+        {serverError && (
+          <div role="alert" className="rounded-xl border border-destructive/20 bg-cf-red-soft px-4 py-3 text-sm text-destructive">
+            <p className="font-semibold">Could not save</p>
+            <p className="mt-0.5 opacity-90">{serverError}</p>
+          </div>
+        )}
 
-        {rows.map((r, i) => {
-          const err = showErrors ? rowError(r) : ""
-          return (
-            <div key={r.key} className="grid items-start gap-4 sm:grid-cols-[1fr_10rem_auto]">
-              <MktField label={i === 0 ? "Product" : ""} htmlFor={`mo-product-${r.key}`} error={err && !r.product ? err : ""}>
-                <select id={`mo-product-${r.key}`} className={`${MKT_FIELD} pr-10 ${err && !r.product ? MKT_FIELD_BAD : MKT_FIELD_OK}`} value={r.product} onChange={(e) => set(r.key, { product: e.target.value })}>
-                  <option value="">Select a product</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id} disabled={used.has(String(p.id)) && r.product !== String(p.id)}>{p.name} ({p.sku})</option>
-                  ))}
-                </select>
-              </MktField>
-              <MktField label={i === 0 ? "Quantity" : ""} htmlFor={`mo-qty-${r.key}`} error={err && r.product ? err : ""}>
-                <input id={`mo-qty-${r.key}`} type="number" min="1" step="1" inputMode="numeric" className={`${MKT_FIELD} ${err && r.product ? MKT_FIELD_BAD : MKT_FIELD_OK}`} aria-invalid={err && r.product ? true : undefined} value={r.qty} onChange={(e) => set(r.key, { qty: e.target.value })} />
-              </MktField>
-              <div className="sm:pt-8">
-                <MktButton variant="outline" size="icon" aria-label="Remove product" disabled={rows.length === 1} onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
-                  <Trash2 />
-                </MktButton>
-              </div>
-            </div>
-          )
-        })}
+        <div className="relative space-y-3">
+          <AnimatePresence initial={false} mode="popLayout">
+            {rows.map((r, i) => {
+              const err = showErrors ? rowError(r) : ""
+              const productBad = !!err && !r.product
+              const qtyBad = !!err && !!r.product
+              return (
+                <motion.div
+                  key={r.key}
+                  layout
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1, transition: SPRING }}
+                  exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
+                  className="rounded-2xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 shadow-[0_1px_2px_rgba(22,34,30,0.04)] sm:p-4"
+                >
+                  <div className="mb-3 flex items-center gap-2">
+                    <span className="grid size-6 place-items-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 text-[11px] font-bold text-white">{i + 1}</span>
+                    <span className="text-xs font-semibold text-muted-foreground">Product {i + 1}</span>
+                  </div>
 
-        <MktButton variant="outline" onClick={() => setRows((rs) => [...rs, blank()])} disabled={rows.length >= products.length && products.length > 0}>
-          <Plus /> Add another product
-        </MktButton>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:grid-cols-[minmax(0,1fr)_11rem_auto]">
+                    <div className="col-span-2 sm:col-span-1">
+                      <label htmlFor={`mo-product-${r.key}`} className={LABEL}>Product</label>
+                      <select
+                        id={`mo-product-${r.key}`}
+                        className={cn(SELECT, productBad ? "border-destructive" : "border-cf-line-strong")}
+                        aria-invalid={productBad ? true : undefined}
+                        value={r.product}
+                        onChange={(e) => set(r.key, { product: e.target.value })}
+                      >
+                        <option value="">Select a product</option>
+                        {products.map((p) => (
+                          <option key={p.id} value={p.id} disabled={used.has(String(p.id)) && r.product !== String(p.id)}>{p.name} ({p.sku})</option>
+                        ))}
+                      </select>
+                      {productBad && <p className={ERR}>{err}</p>}
+                    </div>
+
+                    <div>
+                      <label htmlFor={`mo-qty-${r.key}`} className={LABEL}>Quantity</label>
+                      <QtyStepper id={`mo-qty-${r.key}`} value={r.qty} invalid={qtyBad} onChange={(v) => set(r.key, { qty: v })} />
+                      {qtyBad && <p className={ERR}>{err}</p>}
+                    </div>
+
+                    <div className="pt-[1.375rem]">
+                      <MktBtn variant="danger" size="icon" aria-label={`Remove product ${i + 1}`} disabled={rows.length === 1} onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
+                        <Trash2 />
+                      </MktBtn>
+                    </div>
+                  </div>
+                </motion.div>
+              )
+            })}
+          </AnimatePresence>
+          <div ref={endRef} aria-hidden />
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <MktBtn onClick={addRow} disabled={rows.length >= products.length && products.length > 0}>
+            <Plus /> Add another product
+          </MktBtn>
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            <span className="font-bold tabular-nums text-foreground">{picked}</span> {picked === 1 ? "product" : "products"} ·{" "}
+            <span className="font-bold tabular-nums text-foreground">{fmtQty(units)}</span> units
+          </p>
+        </div>
       </div>
     </Modal>
   )
