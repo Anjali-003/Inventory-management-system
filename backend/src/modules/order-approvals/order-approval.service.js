@@ -194,10 +194,11 @@ async function computePlan(conn, orderId, { lock = false } = {}) {
 
     const bomByProduct = {};
     const incomplete = new Set();
+    const blankLines = {}; // product_id -> components whose quantity is blank (or 0), to tell the user exactly what to fix
     const componentInfo = {};
     for (const r of bomRows) {
         componentInfo[r.component_id] = { sku: r.sku, name: r.name, unit: r.unit };
-        if (r.quantity_required === null || Number(r.quantity_required) <= 0) { incomplete.add(r.product_id); continue; }
+        if (r.quantity_required === null || Number(r.quantity_required) <= 0) { incomplete.add(r.product_id); (blankLines[r.product_id] ||= []).push({ component_id: r.component_id, sku: r.sku, name: r.name }); continue; }
         (bomByProduct[r.product_id] ||= []).push({ component_id: r.component_id, quantity_per_unit: Number(r.quantity_required) });
     }
     for (const id of incomplete) bomByProduct[id] = [];
@@ -223,6 +224,8 @@ async function computePlan(conn, orderId, { lock = false } = {}) {
     return {
         order_id: orderId,
         ...plan,
+        // products that DO have BOM lines but at least one line has no quantity (planner treats them as missing_bom)
+        incomplete_bom: plan.missing_bom.filter((id) => blankLines[id]).map((id) => ({ product_id: id, components: blankLines[id] })),
         lines: plan.lines.map((l) => ({ ...l, sku: byProduct.get(l.product_id).sku, name: byProduct.get(l.product_id).name })),
     };
 }

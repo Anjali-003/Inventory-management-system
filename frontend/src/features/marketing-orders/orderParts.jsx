@@ -90,15 +90,16 @@ export const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`
 
 /* ------------------------------------------------------------ pipeline bar */
 
-/* One bar split by stage. Each segment and each legend entry is a link to the page with that filter on. */
-export function OrderPipeline({ counts, loading }) {
+/* One bar split by stage. Each segment and each legend entry is a link to the page with that filter on.
+   `stages` and `hrefFor` default to the Marketing ones; the Operations Admin dashboard passes its own. */
+export function OrderPipeline({ counts, loading, stages = STAGES, hrefFor = ordersHref }) {
   const [hover, setHover] = useState(null)
 
   if (loading) {
     return (
       <div className="space-y-4 px-4 py-5 sm:px-5">
         <Skeleton className="h-3 w-full rounded-full" />
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{STAGES.map((s) => <Skeleton key={s.status} className="h-12" />)}</div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{stages.map((s) => <Skeleton key={s.status} className="h-12" />)}</div>
       </div>
     )
   }
@@ -123,11 +124,11 @@ export function OrderPipeline({ counts, loading }) {
           animate={{ scaleX: 1, opacity: 1 }}
           transition={SPRING_SOFT}
         >
-          {STAGES.filter((s) => counts[s.status] > 0).map((s) => (
+          {stages.filter((s) => counts[s.status] > 0).map((s) => (
             <Link
               key={s.status}
               role="listitem"
-              to={ordersHref(s.status)}
+              to={hrefFor(s.status)}
               aria-label={`${s.label}: ${plural(counts[s.status], "order")}`}
               style={{ flexGrow: counts[s.status] }}
               className={cn(
@@ -141,11 +142,11 @@ export function OrderPipeline({ counts, loading }) {
         </motion.div>
       )}
 
-      <ul className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {STAGES.map((s) => (
+      <ul className={cn("mt-4 grid grid-cols-2 gap-2", stages.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-4")}>
+        {stages.map((s) => (
           <li key={s.status}>
             <Link
-              to={ordersHref(s.status)}
+              to={hrefFor(s.status)}
               className={cn(
                 "flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 outline-none transition-[background-color,opacity,transform] duration-150 hover:bg-muted active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring/60",
                 hover && hover !== s.status && "opacity-60"

@@ -54,7 +54,7 @@ export function planTotals(plan) {
 /** One-word verdict for a plan: tone + label for a Badge. */
 export function planVerdict(plan) {
   const { canMake, ordered } = planTotals(plan)
-  if (plan?.missing_bom?.length && canMake === 0) return { variant: "neutral", label: "No BOM" }
+  if (plan?.missing_bom?.length && canMake === 0) return { variant: "neutral", label: plan.incomplete_bom?.length ? "BOM incomplete" : "No BOM" }
   if (ordered > 0 && canMake === ordered && !plan?.missing_bom?.length) return { variant: "success", label: "Can make all" }
   if (canMake > 0) return { variant: "warning", label: "Partly" }
   return { variant: "danger", label: "Cannot make yet" }

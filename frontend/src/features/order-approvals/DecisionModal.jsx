@@ -2,11 +2,10 @@ import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { Modal, DangerButton } from "@/components/Modal"
 import { Notice } from "@/components/feedback"
-import { Button } from "@/components/ui/button"
+import { MktBtn, OrderItems } from "@/features/marketing-orders/mktKit"
 import { Field } from "@/components/FormField"
 import { useToast } from "@/components/toast"
 import { errorMessage } from "@/lib/stock"
-import { OrderLines } from "./approvalParts"
 import { useApproveOrderMutation, useRejectOrderMutation } from "./orderApprovalsApi"
 
 /*
@@ -50,14 +49,14 @@ export default function DecisionModal({ order, mode, onClose }) {
       description={isReject ? "Tell the team why this order cannot go ahead." : "Approved orders go to the Purchase Manager and production can start."}
       footer={
         <>
-          <Button type="button" variant="outline" size="lg" onClick={onClose} disabled={busy}>Cancel</Button>
+          <MktBtn onClick={onClose} disabled={busy}>Cancel</MktBtn>
           {isReject ? (
             <DangerButton type="submit" busy={busy}>Reject order</DangerButton>
           ) : (
-            <Button type="submit" size="lg" disabled={busy}>
+            <MktBtn type="submit" variant="primary" disabled={busy}>
               {busy && <Loader2 className="animate-spin" />}
               Approve order
-            </Button>
+            </MktBtn>
           )}
         </>
       }
@@ -65,7 +64,7 @@ export default function DecisionModal({ order, mode, onClose }) {
       <div className="space-y-4">
         {serverError && <Notice title="Could not save">{serverError}</Notice>}
 
-        <OrderLines items={order.items} />
+        <OrderItems items={order.items} />
 
         <Field
           label={isReject ? "Reason for rejection" : "Remarks (optional)"}

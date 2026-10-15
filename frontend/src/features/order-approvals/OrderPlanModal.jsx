@@ -5,11 +5,12 @@ import { Notice } from "@/components/feedback"
 import { Field } from "@/components/FormField"
 import { useToast } from "@/components/toast"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { MktBtn } from "@/features/marketing-orders/mktKit"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { errorMessage, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { planTotals, planVerdict } from "./approvalParts"
+import { BomBlockModal } from "./BomWarning"
 import { useDispatchOrderMutation, useGetOrderPlanQuery } from "./orderApprovalsApi"
 
 function Section({ icon: Icon, title, hint, children }) {
@@ -70,6 +71,9 @@ export default function OrderPlanModal({ order, onClose }) {
     }
   }
 
+  // An order with an incomplete BOM gets the blocking warning popup instead of the plan.
+  if (plan?.missing_bom?.length > 0) return <BomBlockModal order={order} plan={plan} onClose={onClose} />
+
   return (
     <Modal
       open
@@ -81,11 +85,11 @@ export default function OrderPlanModal({ order, onClose }) {
       description="Checked against the stock available right now (on hand minus what is reserved for production)."
       footer={
         <>
-          <Button type="button" variant="outline" size="lg" onClick={onClose} disabled={sending}>Close</Button>
-          <Button type="submit" size="lg" disabled={sending || isLoading || isFetching || !plan || nothingToSend}>
+          <MktBtn onClick={onClose} disabled={sending}>Close</MktBtn>
+          <MktBtn type="submit" variant="primary" disabled={sending || isLoading || isFetching || !plan || nothingToSend}>
             {sending && <Loader2 className="animate-spin" />}
             Approve &amp; send lists
-          </Button>
+          </MktBtn>
         </>
       }
     >
@@ -115,12 +119,6 @@ export default function OrderPlanModal({ order, onClose }) {
               )}
               <Badge variant={verdict.variant}>{verdict.label}</Badge>
             </div>
-
-            {plan.missing_bom?.length > 0 && (
-              <Notice title="Some products have no complete component list (BOM)">
-                {plan.missing_bom.map((id) => names[id]?.name || `#${id}`).join(", ")} cannot be planned until their BOM is completed on the Products page.
-              </Notice>
-            )}
 
             <Section icon={Factory} title="Can be made now: goes to the Production Manager" hint="Quantities that the current stock fully covers.">
               <div className="overflow-x-auto rounded-xl border">
@@ -153,7 +151,7 @@ export default function OrderPlanModal({ order, onClose }) {
             <Section icon={ShoppingCart} title="Components short: goes to the Purchase Manager" hint="Only what is missing for the units that cannot be made yet.">
               {shortages.length === 0 ? (
                 <p className="rounded-lg border bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">
-                  {plan.missing_bom?.length ? "No shortage can be worked out until the BOM is added." : "Nothing to buy: every component is in stock."}
+                  {plan.missing_bom?.length ? "No shortage can be worked out until the BOM is completed." : "Nothing to buy: every component is in stock."}
                 </p>
               ) : (
                 <div className="overflow-x-auto rounded-xl border">

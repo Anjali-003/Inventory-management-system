@@ -1,0 +1,204 @@
+/* eslint-disable react-refresh/only-export-components */
+import { Link } from "react-router-dom"
+import { motion } from "motion/react"
+import { ChevronRight, Loader2, PackageCheck, X } from "lucide-react"
+import UserCell from "@/components/UserCell"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { MktBtn, StatusPill } from "@/features/marketing-orders/mktKit"
+import { rise, stagger } from "@/features/marketing-orders/mktMotion"
+import { ALL_STAGE, OrderSteps, STAGES, plural } from "@/features/marketing-orders/orderParts"
+import { timeAgo } from "@/features/activity/time"
+import { fmtDateTime, fmtQty } from "@/lib/stock"
+import { cn } from "@/lib/utils"
+import PlanSummary from "./PlanSummary"
+
+/*
+  Building blocks for the Operations Admin screens (dashboard + Order Approvals), made from the same
+  pieces as the Marketing Manager screens (hero, colour tiles, status pills, cards on a phone, tables from
+  `md`/`lg` up). Nothing in the Marketing files changes: the kit is reused as it is.
+
+  The Operations Admin never sees drafts, so the stages are Waiting / Approved / Rejected, in the same colours
+  the Marketing Manager sees for them. Only the small hint under each figure is worded for the admin.
+*/
+
+/* ------------------------------------------------------------------- stages */
+
+const HINT = {
+  PENDING_APPROVAL: "Needs your decision",
+  APPROVED: "Lists sent to Production / Purchase",
+  REJECTED: "With the reason you gave",
+}
+
+export const OPS_STAGES = STAGES.filter((s) => s.status !== "DRAFT").map((s) => ({ ...s, hint: HINT[s.status] ?? s.hint }))
+export const OPS_ALL = { ...ALL_STAGE, hint: "Everything that came in" }
+
+export const isOpsStatus = (value) => OPS_STAGES.some((s) => s.status === value)
+
+/** Link to Order Approvals with a filter on. No status means the page's own default: the waiting queue. "ALL" shows every order. */
+export function opsHref(status, extra = {}) {
+  const p = new URLSearchParams()
+  if (status) p.set("status", status)
+  for (const [k, v] of Object.entries(extra)) if (v != null && v !== "") p.set(k, v)
+  const s = p.toString()
+  return `/order-approvals${s ? `?${s}` : ""}`
+}
+
+/* ------------------------------------------------------------------ helpers */
+
+export const productsSummary = (items = []) => (items.length === 0 ? "No products" : items.length === 1 ? items[0].name : `${items[0].name} + ${items.length - 1} more`)
+export const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
+export const isDecided = (o) => o.approval_status === "APPROVED" || o.approval_status === "REJECTED"
+
+/* -------------------------------------------------------------------- tiles */
+
+/** The grid of figures. Children are <StageTile/>; they rise in one after another. Three stages + "All" = four tiles. */
+export function OpsTileGrid({ children, className }) {
+  return (
+    <motion.div variants={stagger(0.06, 0.05)} initial="hidden" animate="show" className={cn("grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4", className)}>
+      {children}
+    </motion.div>
+  )
+}
+
+/* ------------------------------------------------------------------- panels */
+
+/** A card with a title, an optional "view all" link and a body. Hairline border, no shadow. */
+export function OpsPanel({ title, description, to, toLabel, loading, children }) {
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="items-center">
+        <div className="min-w-0">
+          <CardTitle>{title}</CardTitle>
+          {description && <CardDescription>{description}</CardDescription>}
+        </div>
+        {to && <Link to={to} className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-soft focus-visible:ring-2 focus-visible:ring-ring/60">{toLabel}</Link>}
+      </CardHeader>
+      {loading ? <div className="space-y-2 p-5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div> : children}
+    </Card>
+  )
+}
+
+/* The list of cards inside a panel or page: they rise in one after another. */
+export const CardList = ({ children, className }) => (
+  <motion.ul variants={stagger(0.05, 0.05)} initial="hidden" animate="show" className={cn("grid gap-3", className)}>
+    {children}
+  </motion.ul>
+)
+
+/* -------------------------------------------------------------------- cards */
+
+/*
+  One order as a card (phones, tablets, and the dashboard panels). The whole body opens the order's popup;
+  the buttons under it (Reject / Check stock & send) sit above the tap area and only do their own job.
+  `showPlan` adds the live stock check for an order that is waiting.
+*/
+export function ApprovalCard({ order, canAct, showPlan, busy, onOpen, onReject, onPlan }) {
+  const items = order.items ?? []
+  const pending = order.approval_status === "PENDING_APPROVAL"
+  const rejected = order.approval_status === "REJECTED"
+
+  return (
+    <motion.li variants={rise} className="relative rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]">
+      <button type="button" onClick={onOpen} aria-label={`Open ${order.order_number}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />
+      <div className="pointer-events-none relative p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="break-all text-[15px] font-semibold leading-snug tabular-nums">{order.order_number}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground" title={fmtDateTime(order.created_at)}>
+              {order.created_by_name ? `${order.created_by_name} · ` : ""}{timeAgo(order.created_at)}
+            </p>
+          </div>
+          <StatusPill value={order.approval_status} short className="shrink-0" />
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-medium">{productsSummary(items)}</p>
+            <p className="text-xs text-muted-foreground">{plural(items.length, "product")} · {fmtQty(unitsOf(items))} units</p>
+          </div>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        </div>
+
+        {showPlan && pending && (
+          <div className="mt-3 rounded-xl border border-[#dce5e0] px-3 py-2.5">
+            <PlanSummary orderId={order.id} items={items} />
+          </div>
+        )}
+
+        <OrderSteps status={order.approval_status} className="mt-4" />
+
+        {isDecided(order) && order.approval_remarks && (
+          <p className={cn("mt-3 line-clamp-2 rounded-lg border px-3 py-2 text-xs leading-snug", rejected ? "border-rose-200 text-rose-800" : "border-emerald-200 text-emerald-800")}>{order.approval_remarks}</p>
+        )}
+      </div>
+
+      {canAct && pending && (
+        <div className="relative flex gap-2 border-t border-dashed p-3">
+          <MktBtn variant="danger" disabled={busy} onClick={onReject} aria-label={`Reject ${order.order_number}`}><X /> Reject</MktBtn>
+          <MktBtn variant="primary" className="flex-1" disabled={busy} onClick={onPlan} aria-label={`Check stock and send ${order.order_number}`}>
+            {busy ? <Loader2 className="animate-spin" /> : <PackageCheck />} Check stock &amp; send
+          </MktBtn>
+        </div>
+      )}
+    </motion.li>
+  )
+}
+
+/* ------------------------------------------------------------ compact lists */
+
+/* Dashboard panels: a compact table from 768px up (click a row to open it), cards below. */
+export function ApprovalList({ orders, onOpen }) {
+  return (
+    <>
+      <div className="hidden md:block">
+        <Table data-cards="off">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Order</TableHead>
+              <TableHead>Products</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right"><span className="sr-only">Open</span></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {orders.map((o) => {
+              const items = o.items ?? []
+              return (
+                <TableRow key={o.id} onClick={() => onOpen(o)} className="cursor-pointer">
+                  <TableCell>
+                    <button type="button" onClick={() => onOpen(o)} className="font-semibold tabular-nums text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/60">{o.order_number}</button>
+                    <p className="text-xs text-muted-foreground">{timeAgo(o.created_at)}</p>
+                  </TableCell>
+                  <TableCell className="min-w-40 whitespace-normal">
+                    <p className="break-words leading-snug">{productsSummary(items)}</p>
+                    <p className="text-xs text-muted-foreground">{fmtQty(unitsOf(items))} units</p>
+                  </TableCell>
+                  <TableCell><StatusPill value={o.approval_status} short /></TableCell>
+                  <TableCell className="text-right"><ChevronRight className="ml-auto size-4 text-muted-foreground" aria-hidden /></TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </div>
+      <div className="md:hidden">
+        <CardList className="p-3 sm:p-4">
+          {orders.map((o) => <ApprovalCard key={o.id} order={o} onOpen={() => onOpen(o)} />)}
+        </CardList>
+      </div>
+    </>
+  )
+}
+
+/* "Who decided it, when, and why": the Decision column of the table. */
+export function DecisionCell({ order }) {
+  if (!isDecided(order)) return <span className="text-muted-foreground">-</span>
+  return (
+    <div className="space-y-0.5">
+      <UserCell name={order.approved_by_name} sub={fmtDateTime(order.approved_at)} />
+      {order.approval_remarks && <p className="line-clamp-2 max-w-64 whitespace-normal text-xs text-muted-foreground">{order.approval_remarks}</p>}
+    </div>
+  )
+}

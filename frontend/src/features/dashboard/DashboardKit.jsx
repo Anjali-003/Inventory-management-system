@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StatCard } from "@/components/HistoryUI"
 import { useGetMeQuery } from "@/features/auth/authApi"
 
@@ -104,8 +105,67 @@ export function StatRow({ stats, drill, cols = "sm:grid-cols-2 xl:grid-cols-4" }
   )
 }
 
+/* Opt-in look for a ListPanel (`table` prop): a compact table from 768px, short tap-to-open cards on a phone. */
+function RowTable({ rows, onOpen, rightLabel }) {
+  const hasRight = rows.some((r) => r.right != null)
+  return (
+    <Table data-cards="off">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Item</TableHead>
+          {hasRight && <TableHead className="text-right">{rightLabel || "Value"}</TableHead>}
+          <TableHead>Status</TableHead>
+          <TableHead className="text-right"><span className="sr-only">Open</span></TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((r) => (
+          <TableRow key={r.id} onClick={r.detail ? () => onOpen(r) : undefined} className={r.detail ? "cursor-pointer" : undefined}>
+            <TableCell className="min-w-40 whitespace-normal">
+              {r.detail ? (
+                <button type="button" onClick={() => onOpen(r)} className="break-words text-left font-semibold text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/60">{r.title}</button>
+              ) : (
+                <p className="break-words font-semibold">{r.title}</p>
+              )}
+              {r.sub && <p className="break-words text-xs text-muted-foreground">{r.sub}</p>}
+            </TableCell>
+            {hasRight && <TableCell className="text-right font-semibold tabular-nums">{r.right ?? "-"}</TableCell>}
+            <TableCell>{r.badge ? <Badge variant={r.badge.variant}>{r.badge.label}</Badge> : <span className="text-muted-foreground">-</span>}</TableCell>
+            <TableCell className="text-right">{r.detail && <ChevronRight className="ml-auto size-4 text-muted-foreground" aria-hidden />}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  )
+}
+
+function RowCards({ rows, onOpen, rightLabel }) {
+  return (
+    <ul className="grid gap-3 p-3 sm:p-4">
+      {rows.map((r) => (
+        <li key={r.id} className="relative rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]">
+          {r.detail && <button type="button" onClick={() => onOpen(r)} aria-label={`Open ${r.title}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />}
+          <div className="pointer-events-none relative p-4">
+            <div className="flex items-start justify-between gap-3">
+              <span className="min-w-0 break-words text-[15px] font-semibold leading-snug">{r.title}</span>
+              {r.badge && <Badge variant={r.badge.variant} className="shrink-0">{r.badge.label}</Badge>}
+            </div>
+            <div className="mt-1.5 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                {r.sub && <p className="break-words text-xs text-muted-foreground">{r.sub}</p>}
+                {r.right != null && <p className="mt-0.5 text-[13px] font-medium tabular-nums">{rightLabel ? `${rightLabel}: ` : ""}{r.right}</p>}
+              </div>
+              {r.detail && <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 /* A card with the first few rows of a list; "View all" opens the full list in a popup. */
-export function ListPanel({ drill, title, description, rows, limit = 5, loading, empty, emptyIcon, to, toLabel, className }) {
+export function ListPanel({ drill, title, description, rows, limit = 5, loading, empty, emptyIcon, to, toLabel, className, table = false, rightLabel }) {
   const shown = rows.slice(0, limit)
   return (
     <Card className={`overflow-hidden ${className || ""}`}>
@@ -124,6 +184,11 @@ export function ListPanel({ drill, title, description, rows, limit = 5, loading,
         <div className="space-y-2 p-5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
       ) : shown.length === 0 ? (
         <EmptyState icon={emptyIcon} title={empty || "Nothing here right now"} />
+      ) : table ? (
+        <>
+          <div className="hidden md:block"><RowTable rows={shown} onOpen={drill.openRow} rightLabel={rightLabel} /></div>
+          <div className="md:hidden"><RowCards rows={shown} onOpen={drill.openRow} rightLabel={rightLabel} /></div>
+        </>
       ) : (
         <div className="divide-y">
           {shown.map((r) => <RowButton key={r.id} row={r} onOpen={drill.openRow} />)}
