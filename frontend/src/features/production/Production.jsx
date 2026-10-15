@@ -9,6 +9,7 @@ import Pagination from "@/components/Pagination"
 import StatStrip from "@/components/StatStrip"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { useToast } from "@/components/toast"
+import { usePermissions } from "@/features/auth/usePermissions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -62,7 +63,8 @@ function MaterialReadiness({ item }) {
   return <div className="space-y-1"><Badge variant="success">Materials covered</Badge><p className="text-xs text-muted-foreground">All {remaining} remaining unit{remaining === 1 ? "" : "s"} can start</p></div>
 }
 
-function ProductionActions({ item, onUpdate, onCheck, onStart, compact = false }) {
+function ProductionActions({ item, onUpdate, onCheck, onStart, editable = true, compact = false }) {
+  if (!editable) return <span className="text-xs text-muted-foreground">View only</span>
   const activeUnits = inProduction(item)
   const hasUpdate = item.id && item.status === "IN_PRODUCTION" && activeUnits > 0
   const eligibleToStart = canStartMore(item)
@@ -85,7 +87,7 @@ function ProductionActions({ item, onUpdate, onCheck, onStart, compact = false }
   )
 }
 
-function ProductionCard({ item, onUpdate, onCheck, onStart }) {
+function ProductionCard({ item, onUpdate, onCheck, onStart, editable }) {
   const started = num(item.quantity_to_produce)
   const completed = num(item.quantity_completed)
   const ordered = num(item.ordered_quantity)
@@ -116,7 +118,7 @@ function ProductionCard({ item, onUpdate, onCheck, onStart }) {
           <span>Started: {date(item.started_at)}</span>
           {item.started_by_name && <span className="truncate">{item.started_by_name}</span>}
         </div>
-        <ProductionActions item={item} onUpdate={onUpdate} onCheck={onCheck} onStart={onStart} compact />
+        <ProductionActions item={item} onUpdate={onUpdate} onCheck={onCheck} onStart={onStart} editable={editable} compact />
       </div>
     </div>
   )
@@ -136,6 +138,8 @@ function toOrder(item) {
 
 export default function Production() {
   const toast = useToast()
+  const { canEdit } = usePermissions()
+  const editable = canEdit("production")
   // The list includes both unstarted orders and existing production runs.
   const { data: items = [], isLoading: loading, error: loadError, refetch } = useGetProductionQuery()
   const [actionError, setError] = useState("")
@@ -183,6 +187,7 @@ export default function Production() {
   ]
 
   const openUpdate = (item) => {
+    if (!editable) return
     const remaining = Math.max(0, num(item.quantity_to_produce) - num(item.quantity_completed))
     if (!item.id || remaining <= 0) return
     setSelected(item)
@@ -229,7 +234,7 @@ export default function Production() {
 
   return (
     <>
-      <PageHeader title="Production" description="Check material readiness, start units, and record completed production from one page.">
+      <PageHeader title="Production" description={editable ? "Check material readiness, start units, and record completed production from one page." : "View production progress and material readiness. This workspace is read-only for production."}>
         <Button variant="outline" onClick={load} disabled={loading}><RefreshCw /> Refresh</Button>
       </PageHeader>
 
@@ -275,7 +280,7 @@ export default function Production() {
                         {item.started_by_name && <p className="mt-1 truncate text-foreground" title={item.started_by_name}>{item.started_by_name}</p>}
                       </TableCell>
                       <TableCell className="whitespace-normal text-right">
-                        <ProductionActions item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} />
+                        <ProductionActions item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -284,17 +289,17 @@ export default function Production() {
             </div>
 
             <div className="grid min-w-0 gap-3 p-3 xl:hidden">
-              {pageRows.map((item) => <ProductionCard key={item.order_id} item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} />)}
+              {pageRows.map((item) => <ProductionCard key={item.order_id} item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} />)}
             </div>
             <Pagination page={page} pageSize={PAGE_SIZE} total={rows.length} onPage={setPage} noun="production orders" />
           </>
         )}
       </Card>
 
-      {checkFor && <MaterialCheckModal order={checkFor} onClose={() => setCheckFor(null)} onStart={startFromCheck} partialProduction />}
-      {startFor && <StartProductionModal order={startFor} onClose={() => setStartFor(null)} onStarted={started} />}
+      {editable && checkFor && <MaterialCheckModal order={checkFor} onClose={() => setCheckFor(null)} onStart={startFromCheck} partialProduction />}
+      {editable && startFor && <StartProductionModal order={startFor} onClose={() => setStartFor(null)} onStarted={started} />}
 
-      {selected && (
+      {editable && selected && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-3" onMouseDown={(e) => e.target === e.currentTarget && closeUpdate()}>
           <div className="w-full max-w-md rounded-2xl border bg-background shadow-2xl">
             <div className="border-b px-5 py-4">

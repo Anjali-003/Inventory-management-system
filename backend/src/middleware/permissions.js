@@ -42,6 +42,15 @@ const ACCESS = {
         dashboard: "view",
         production: "edit",
         inventory: "view"
+    },
+
+    // Quality Control can record test/QC results and manage finished-goods transitions;
+    // Production is visible as a read-only reference.
+    QUALITY_FG_MANAGER: {
+        dashboard: "view",
+        qualityControl: "edit",
+        finishedGoods: "edit",
+        production: "view"
     }
 };
 
@@ -58,7 +67,8 @@ const LOGIN_ROUTES = {
     STORE_MANAGER: "/store-manager/login",
     IQC_MANAGER: "/iqc-manager/login",
     PURCHASE_MANAGER: "/purchase-manager/login",
-    PRODUCTION_MANAGER: "/production-manager/login"
+    PRODUCTION_MANAGER: "/production-manager/login",
+    QUALITY_FG_MANAGER: "/quality-fg-manager/login"
 };
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);

@@ -1,6 +1,7 @@
 import { useGetMeQuery } from "@/features/auth/authApi"
 import ProductionDashboard from "@/features/production-dashboard/ProductionDashboard"
 import GeneralDashboard from "@/features/dashboard/GeneralDashboard"
+import QualityFinishedGoodsDashboard from "@/features/quality-fg-dashboard/QualityFinishedGoodsDashboard"
 
 /** Keep the existing dashboard for other roles and show a production-focused view to Production Manager. */
 export default function Dashboard() {
@@ -18,7 +19,9 @@ export default function Dashboard() {
     )
   }
 
-  return String(user?.role || "").toUpperCase() === "PRODUCTION_MANAGER"
-    ? <ProductionDashboard />
-    : <GeneralDashboard />
+  const role = String(user?.role || "").toUpperCase()
+
+  if (role === "PRODUCTION_MANAGER") return <ProductionDashboard />
+  if (role === "QUALITY_FG_MANAGER") return <QualityFinishedGoodsDashboard />
+  return <GeneralDashboard />
 }

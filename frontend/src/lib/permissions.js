@@ -11,7 +11,7 @@
       "view"  -> can open the page but every action button is hidden (read only)
       (absent) -> page is hidden from the sidebar and the route redirects away
 
-  TO ADD A NEW ROLE LATER: add one entry in ACCESS below (and its label in ROLE_LABELS). Nothing else.
+  TO ADD A LOGIN ROLE: add ROLES + ROLE_LABELS + LOGIN_PORTALS here, then matching ACCESS and LOGIN_ROUTES entries on the backend.
   TO ADD A NEW PAGE LATER: add the module key to MODULE_PATHS, put the page in
   Layout.jsx GROUPS with `module: "iqc"`, wrap its <Route> in <RequireAccess module="iqc"> in App.jsx,
   and use usePermissions().canEdit("iqc") inside the page to hide edit buttons.
@@ -27,6 +27,7 @@ export const ROLES = {
   IQC_MANAGER: "IQC_MANAGER",
   PURCHASE_MANAGER: "PURCHASE_MANAGER",
   PRODUCTION_MANAGER: "PRODUCTION_MANAGER",
+  QUALITY_FG_MANAGER: "QUALITY_FG_MANAGER",
 }
 
 export const ROLE_LABELS = {
@@ -35,6 +36,7 @@ export const ROLE_LABELS = {
   IQC_MANAGER: "IQC Manager",
   PURCHASE_MANAGER: "Purchase Manager",
   PRODUCTION_MANAGER: "Production Manager",
+  QUALITY_FG_MANAGER: "Quality Control & Finished Goods",
 }
 
 const norm = (role) => String(role || "").toUpperCase()
@@ -49,6 +51,7 @@ export const LOGIN_PORTALS = {
   IQC_MANAGER: { role: "IQC_MANAGER", path: "/iqc-manager/login", api: "/auth/iqc-manager/login", title: "IQC Manager Login" },
   PURCHASE_MANAGER: { role: "PURCHASE_MANAGER", path: "/purchase-manager/login", api: "/auth/purchase-manager/login", title: "Purchase Manager Login" },
   PRODUCTION_MANAGER: { role: "PRODUCTION_MANAGER", path: "/production-manager/login", api: "/auth/production-manager/login", title: "Production Login" },
+  QUALITY_FG_MANAGER: { role: "QUALITY_FG_MANAGER", path: "/quality-fg-manager/login", api: "/auth/quality-fg-manager/login", title: "Quality Control & Finished Goods Login" },
 }
 
 export const loginPathFor = (role) => LOGIN_PORTALS[norm(role)]?.path || "/login"
@@ -118,6 +121,14 @@ const ACCESS = {
     dashboard: "view",
     production: "edit",
     inventory: "view",
+  },
+
+  // One workspace for post-production inspection and finished-goods handling.
+  QUALITY_FG_MANAGER: {
+    dashboard: "view",
+    qualityControl: "edit",
+    finishedGoods: "edit",
+    production: "view",
   },
 }
 

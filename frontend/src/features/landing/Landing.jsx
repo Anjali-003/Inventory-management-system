@@ -50,6 +50,12 @@ const PORTAL_CARDS = [
     note: "Update production runs and view inventory",
     icon: Factory,
   },
+  {
+    portal: LOGIN_PORTALS.QUALITY_FG_MANAGER,
+    label: "Quality Control & Finished Goods",
+    note: "Record testing/QC results and manage finished batches",
+    icon: PackageCheck,
+  },
 ];
 
 // Keep the landing page renderable if a local permissions.js is out of sync.
@@ -82,6 +88,7 @@ const ACCESS_ROWS = [
   { role: "IQC Manager", edit: "IQC", view: "None" },
   { role: "Purchase Manager", edit: "Purchase", view: "None" },
   { role: "Production", edit: "Production", view: "Dashboard, Inventory" },
+  { role: "Quality Control & Finished Goods", edit: "Quality Control, Finished Goods", view: "Dashboard, Production" },
 ];
 
 /* ---------- shared Tailwind class sets ---------- */
