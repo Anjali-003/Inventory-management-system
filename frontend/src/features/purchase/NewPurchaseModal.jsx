@@ -1,14 +1,20 @@
 import { useState } from "react"
-import { Loader2 } from "lucide-react"
+import { motion } from "motion/react"
+import { Check, Loader2 } from "lucide-react"
 import { Modal } from "@/components/Modal"
-import { Notice } from "@/components/feedback"
-import { Button } from "@/components/ui/button"
-import { Field, TextInput } from "@/components/FormField"
 import { useToast } from "@/components/toast"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { MktBtn } from "@/features/marketing-orders/mktKit"
+import { PRESS_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { errorMessage } from "@/lib/stock"
+import { cn } from "@/lib/utils"
 import { useCreatePurchaseMutation } from "@/features/purchasing/purchasingApi"
 import { qtyWithUnit } from "@/features/purchasing/purchasingUtils"
+
+const LABEL = "mb-1.5 block text-xs font-semibold text-muted-foreground"
+const ERR = "mt-1.5 text-xs font-medium text-destructive"
+// 16px + 44px tall on a phone, 13px + 36px with a mouse (iOS zooms the page in on anything smaller than 16px).
+const INPUT =
+  "h-11 w-full rounded-[10px] border bg-card px-3 text-base outline-none transition-shadow placeholder:text-cf-faint focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15 sm:h-9 sm:text-[13px]"
 
 /*
   Purchase manager: place the order for the components the Operations Admin sent for ONE approved order.
@@ -17,6 +23,8 @@ import { qtyWithUnit } from "@/features/purchasing/purchasingUtils"
   (e.g. different suppliers -> place the order twice) and who the supplier is.
   `lines` = the lines of that list that are still to be ordered.
   Later: Received -> Send to IQC (buttons on the Purchase page).
+
+  Each component is a big tick card (the whole card is the tap target), so it is easy to hit on a phone.
 */
 export default function NewPurchaseModal({ order, lines, onClose }) {
   const toast = useToast()
@@ -52,6 +60,8 @@ export default function NewPurchaseModal({ order, lines, onClose }) {
     }
   }
 
+  const supplierBad = showErrors && !!supplierError
+
   return (
     <Modal
       open
@@ -63,69 +73,92 @@ export default function NewPurchaseModal({ order, lines, onClose }) {
       description="These are the components the Operations Admin asked you to buy. When the goods arrive, mark the purchase Received, then send it to IQC."
       footer={
         <>
-          <Button type="button" variant="outline" size="lg" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" size="lg" disabled={saving}>
+          <MktBtn onClick={onClose} disabled={saving}>Cancel</MktBtn>
+          <MktBtn type="submit" variant="primary" disabled={saving}>
             {saving && <Loader2 className="animate-spin" />}
             Place order
-          </Button>
+          </MktBtn>
         </>
       }
     >
       <div className="space-y-5">
-        {serverError && <Notice title="Could not save">{serverError}</Notice>}
+        {serverError && (
+          <div role="alert" className="rounded-xl border border-destructive/20 bg-cf-red-soft px-4 py-3 text-sm text-destructive">
+            <p className="font-semibold">Could not save</p>
+            <p className="mt-0.5 opacity-90">{serverError}</p>
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Supplier" htmlFor="po-supplier" required error={showErrors ? supplierError : ""}>
-            <TextInput id="po-supplier" maxLength={150} value={supplier} error={showErrors && supplierError} onChange={(e) => setSupplier(e.target.value)} />
-          </Field>
-          <Field label="Notes" htmlFor="po-notes" hint="Optional, for example the invoice number.">
-            <TextInput id="po-notes" maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </Field>
+          <div>
+            <label htmlFor="po-supplier" className={LABEL}>Supplier <span className="text-destructive" aria-hidden="true">*</span></label>
+            <input
+              id="po-supplier"
+              maxLength={150}
+              autoComplete="off"
+              value={supplier}
+              aria-invalid={supplierBad ? true : undefined}
+              onChange={(e) => setSupplier(e.target.value)}
+              className={cn(INPUT, supplierBad ? "border-destructive" : "border-cf-line-strong")}
+            />
+            {supplierBad && <p className={ERR}>{supplierError}</p>}
+          </div>
+          <div>
+            <label htmlFor="po-notes" className={LABEL}>Notes</label>
+            <input id="po-notes" maxLength={500} autoComplete="off" value={notes} onChange={(e) => setNotes(e.target.value)} className={cn(INPUT, "border-cf-line-strong")} />
+            <p className="mt-1.5 text-xs text-muted-foreground">Optional, for example the invoice number.</p>
+          </div>
         </div>
 
         <div>
-          <p className="mb-2 text-[13px] font-semibold">Components to order <span className="text-destructive" aria-hidden="true">*</span></p>
-          <div className="overflow-x-auto rounded-xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10">
-                    <input
-                      type="checkbox"
-                      aria-label="Select all components"
-                      className="size-4 accent-primary"
-                      checked={allPicked}
-                      onChange={() => setPicked(allPicked ? new Set() : new Set(lines.map((l) => l.request_item_id)))}
-                    />
-                  </TableHead>
-                  <TableHead>Component</TableHead>
-                  <TableHead className="text-right">Quantity</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lines.map((l) => (
-                  <TableRow key={l.request_item_id} className="cursor-pointer" onClick={() => toggle(l.request_item_id)}>
-                    <TableCell>
-                      <input
-                        type="checkbox"
-                        aria-label={`Order ${l.name}`}
-                        className="size-4 accent-primary"
-                        checked={picked.has(l.request_item_id)}
-                        onChange={() => toggle(l.request_item_id)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <p className="font-medium">{l.name}</p>
-                      {l.sku && <p className="text-xs text-muted-foreground">{l.sku}</p>}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">{qtyWithUnit(l.quantity, l.unit)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="mb-2.5 flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold text-muted-foreground">Components to order <span className="text-destructive" aria-hidden="true">*</span></p>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-muted-foreground" aria-live="polite">
+                <span className="font-bold tabular-nums text-foreground">{picked.size}</span> of {lines.length} selected
+              </p>
+              <button
+                type="button"
+                onClick={() => setPicked(allPicked ? new Set() : new Set(lines.map((l) => l.request_item_id)))}
+                className="rounded-lg px-2 py-1 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-soft focus-visible:ring-2 focus-visible:ring-ring/60"
+              >
+                {allPicked ? "Clear all" : "Select all"}
+              </button>
+            </div>
           </div>
-          {showErrors && linesError && <p className="mt-1 text-xs text-destructive">{linesError}</p>}
+
+          <motion.ul variants={stagger(0.04)} initial="hidden" animate="show" className="space-y-2">
+            {lines.map((l) => {
+              const on = picked.has(l.request_item_id)
+              return (
+                <motion.li key={l.request_item_id} variants={rise} whileTap={PRESS_SOFT}>
+                  <label
+                    className={cn(
+                      "flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-3 transition-[background-color,border-color,box-shadow] duration-200 focus-within:ring-2 focus-within:ring-ring/60",
+                      on ? "border-emerald-500/60 bg-emerald-50/70 shadow-[0_1px_2px_rgba(16,185,129,0.12)]" : "border-cf-line-strong bg-card hover:bg-muted/50"
+                    )}
+                  >
+                    <input type="checkbox" aria-label={`Order ${l.name}`} className="peer sr-only" checked={on} onChange={() => toggle(l.request_item_id)} />
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "grid size-6 shrink-0 place-items-center rounded-md border-2 transition-colors duration-150",
+                        on ? "border-transparent bg-gradient-to-br from-emerald-500 to-teal-700 text-white" : "border-slate-300 bg-white text-transparent"
+                      )}
+                    >
+                      <Check className="size-4" strokeWidth={3} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block break-words text-sm font-semibold leading-snug">{l.name}</span>
+                      {l.sku && <span className="block text-xs text-muted-foreground">{l.sku}</span>}
+                    </span>
+                    <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-bold tabular-nums text-slate-800">{qtyWithUnit(l.quantity, l.unit)}</span>
+                  </label>
+                </motion.li>
+              )
+            })}
+          </motion.ul>
+          {showErrors && linesError && <p className={ERR}>{linesError}</p>}
         </div>
       </div>
     </Modal>

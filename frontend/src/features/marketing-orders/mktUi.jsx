@@ -24,7 +24,7 @@ import { stageOf } from "./orderParts"
 export const ALL_STAGE = {
   label: "All orders",
   icon: ClipboardList,
-  hint: "Everything you raised",
+  // hint: "Everything you raised",
   s: {
     tile: "border-blue-700 bg-blue-50",
     icon: "bg-blue-700 text-white",
