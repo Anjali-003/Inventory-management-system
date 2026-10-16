@@ -70,7 +70,8 @@ async function createFinishedGood(productionId, orderId, quantity, connection = 
     // New QC flow: an explicit batch PASS is the single release gate.
     // Older batches still pass through the original testing + QC checks below.
     const [decisions] = await connection.query(
-      `SELECT decision FROM quality_control_batch_decisions WHERE production_id = ? LIMIT 1`,
+      `SELECT decision FROM quality_control_batch_decisions
+       WHERE production_id = ? ORDER BY attempt_number DESC LIMIT 1`,
       [productionId],
     )
     const batchDecision = decisions[0]?.decision || null

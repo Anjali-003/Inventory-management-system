@@ -215,7 +215,15 @@ async function getProductionOrders() {
              oi.ordered_quantity, oi.product_name, oi.item_count,
              o.created_at AS order_created_at, po.started_at, po.completed_at,
              po.started_by, su.name AS started_by_name,
-             po.updated_by, uu.name AS updated_by_name
+             po.updated_by, uu.name AS updated_by_name,
+             qbd.decision AS qc_decision, qbd.attempt_number AS qc_attempt_number,
+             qbd.remarks AS qc_remarks, qbd.decided_at AS qc_decided_at,
+             qc_user.name AS qc_decided_by_name,
+             rc.id AS rework_id, rc.failed_attempt_number AS rework_attempt_number,
+             rc.status AS rework_status, rc.rework_remarks,
+             rc.started_at AS rework_started_at, rc.submitted_at AS rework_submitted_at,
+             rework_start_user.name AS rework_started_by_name,
+             rework_submit_user.name AS rework_submitted_by_name
       FROM orders o
       JOIN (
         SELECT oi.order_id, SUM(oi.quantity) AS ordered_quantity,
@@ -229,6 +237,19 @@ async function getProductionOrders() {
       )
       LEFT JOIN users su ON su.id = po.started_by
       LEFT JOIN users uu ON uu.id = po.updated_by
+      LEFT JOIN quality_control_batch_decisions qbd ON qbd.id = (
+        SELECT d.id FROM quality_control_batch_decisions d
+        WHERE d.production_id = po.id
+        ORDER BY d.attempt_number DESC LIMIT 1
+      )
+      LEFT JOIN users qc_user ON qc_user.id = qbd.decided_by
+      LEFT JOIN quality_control_rework_cycles rc ON rc.id = (
+        SELECT r.id FROM quality_control_rework_cycles r
+        WHERE r.production_id = po.id
+        ORDER BY r.failed_attempt_number DESC LIMIT 1
+      )
+      LEFT JOIN users rework_start_user ON rework_start_user.id = rc.started_by
+      LEFT JOIN users rework_submit_user ON rework_submit_user.id = rc.submitted_by
       ORDER BY COALESCE(po.started_at, o.created_at) DESC, o.id DESC
     `)
 
@@ -338,6 +359,155 @@ async function completeProduction(productionId, userId) {
   return updateProductionProgress(productionId, remaining, userId)
 }
 
+
+async function getLatestReworkCycle(connection, productionId) {
+  const [rows] = await connection.query(
+    `SELECT * FROM quality_control_rework_cycles
+     WHERE production_id = ?
+     ORDER BY failed_attempt_number DESC LIMIT 1 FOR UPDATE`,
+    [productionId],
+  )
+  return rows[0] || null
+}
+
+async function assertLatestDecisionFailed(connection, productionId, cycle) {
+  const [rows] = await connection.query(
+    `SELECT decision, attempt_number FROM quality_control_batch_decisions
+     WHERE production_id = ?
+     ORDER BY attempt_number DESC LIMIT 1 FOR UPDATE`,
+    [productionId],
+  )
+  const latest = rows[0]
+  if (!latest || latest.decision !== "FAIL" || Number(latest.attempt_number) !== Number(cycle.failed_attempt_number)) {
+    throw new AppError(409, "Only the latest QC-failed attempt can be reworked")
+  }
+}
+
+async function startQualityControlRework(productionId, userId) {
+  const connection = await db.getConnection()
+  try {
+    await connection.beginTransaction()
+    const [locked] = await connection.query(
+      "SELECT id FROM production_orders WHERE id = ? FOR UPDATE",
+      [productionId],
+    )
+    if (!locked.length) throw new AppError(404, "Production batch not found")
+
+    const cycle = await getLatestReworkCycle(connection, productionId)
+    if (!cycle) throw new AppError(409, "This batch has no QC failure requiring rework")
+    await assertLatestDecisionFailed(connection, productionId, cycle)
+    if (cycle.status !== "NEEDS_REWORK") {
+      throw new AppError(409, cycle.status === "IN_PROGRESS"
+        ? "Rework has already been started for this batch"
+        : "This rework task is no longer available to start")
+    }
+
+    await connection.query(
+      `UPDATE quality_control_rework_cycles
+       SET status = 'IN_PROGRESS', started_by = ?, started_at = CURRENT_TIMESTAMP,
+           submitted_by = NULL, submitted_at = NULL, rework_remarks = NULL
+       WHERE id = ?`,
+      [userId || null, cycle.id],
+    )
+    await connection.commit()
+    return {
+      success: true,
+      productionId,
+      reworkId: cycle.id,
+      status: "IN_PROGRESS",
+      message: "Rework started. Fix the issue, then submit the batch to QC.",
+    }
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
+async function submitQualityControlRework(productionId, remarks, userId) {
+  const cleanRemarks = String(remarks || "").trim()
+  if (!cleanRemarks) throw new AppError(400, "Enter the rework performed before submitting to QC")
+  if (cleanRemarks.length > 2000) throw new AppError(400, "Rework notes must be 2,000 characters or fewer")
+
+  const connection = await db.getConnection()
+  let transactionStarted = false
+  try {
+    await connection.beginTransaction()
+    transactionStarted = true
+
+    // Lock and read only the production fields needed for the full-completion check.
+    // Avoid joining product details here; rework submission does not need them.
+    const [productionRows] = await connection.query(
+      `SELECT id, order_id, quantity_completed
+       FROM production_orders
+       WHERE id = ?
+       LIMIT 1 FOR UPDATE`,
+      [productionId],
+    )
+    const production = productionRows[0]
+    if (!production) throw new AppError(404, "Production batch not found")
+
+    const [quantityRows] = await connection.query(
+      `SELECT COALESCE(SUM(quantity), 0) AS ordered_quantity
+       FROM order_items
+       WHERE order_id = ?`,
+      [production.order_id],
+    )
+    const orderedQuantity = Number(quantityRows[0]?.ordered_quantity || 0)
+    const completedQuantity = Number(production.quantity_completed || 0)
+    if (orderedQuantity <= 0 || completedQuantity < orderedQuantity) {
+      throw new AppError(409, "The full production batch must be complete before QC rework can be resubmitted")
+    }
+
+    const cycle = await getLatestReworkCycle(connection, productionId)
+    if (!cycle) throw new AppError(409, "This batch has no QC rework task")
+    await assertLatestDecisionFailed(connection, productionId, cycle)
+    if (cycle.status !== "IN_PROGRESS") {
+      throw new AppError(409, "Start rework before submitting the batch to QC")
+    }
+
+    const [updateResult] = await connection.query(
+      `UPDATE quality_control_rework_cycles
+       SET status = 'READY_FOR_QC', submitted_by = ?, submitted_at = CURRENT_TIMESTAMP,
+           rework_remarks = ?
+       WHERE id = ? AND production_id = ? AND status = 'IN_PROGRESS'`,
+      [userId || null, cleanRemarks, cycle.id, productionId],
+    )
+    if (!updateResult.affectedRows) {
+      throw new AppError(409, "The rework task changed before it could be submitted. Refresh and try again.")
+    }
+
+    await connection.commit()
+    transactionStarted = false
+    return {
+      success: true,
+      productionId,
+      reworkId: cycle.id,
+      status: "READY_FOR_QC",
+      message: "Rework recorded. The batch is back in the Quality Control queue for retesting.",
+    }
+  } catch (error) {
+    if (transactionStarted) {
+      try { await connection.rollback() } catch (rollbackError) {
+        console.error("Failed to roll back QC rework submission", rollbackError)
+      }
+    }
+    // The central async handler provides the client-safe message; log DB details for diagnosis.
+    if (!(error instanceof AppError)) {
+      console.error("[submitQualityControlRework]", {
+        productionId,
+        code: error.code,
+        sqlMessage: error.sqlMessage,
+        message: error.message,
+      })
+    }
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
 module.exports = {
   startProduction,
   getProductionOrders,
@@ -345,4 +515,6 @@ module.exports = {
   updateProductionProgress,
   getProductionInfo,
   checkProductionMaterials,
+  startQualityControlRework,
+  submitQualityControlRework,
 }

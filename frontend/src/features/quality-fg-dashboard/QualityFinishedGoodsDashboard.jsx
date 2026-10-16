@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react"
-import { ClipboardCheck, Factory, PackageCheck, RefreshCw, Truck, XCircle } from "lucide-react"
+import { ClipboardCheck, Factory, PackageCheck, RefreshCw, RotateCcw, Truck, XCircle } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import PageHeader from "@/components/PageHeader"
 import { Notice } from "@/components/feedback"
@@ -13,7 +13,7 @@ import DashboardMetricCard from "@/features/quality-fg-dashboard/components/Dash
 import QualityWorkQueue from "@/features/quality-fg-dashboard/components/QualityWorkQueue"
 import FinishedGoodsPipeline from "@/features/quality-fg-dashboard/components/FinishedGoodsPipeline"
 import ProductionReadOnlyPanel from "@/features/quality-fg-dashboard/components/ProductionReadOnlyPanel"
-import { countFinishedGoods, getQcPendingBatches, getQcFailedBatches } from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
+import { countFinishedGoods, getQcPendingBatches, getQcFailedBatches, getQcReadyForRetest } from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
 
 const asArray = (value) => Array.isArray(value) ? value : []
 
@@ -41,6 +41,7 @@ export default function QualityFinishedGoodsDashboard() {
   const productionError = productionQuery.error ? errorMessage(productionQuery.error, "Could not load read-only Production data.") : ""
   const qcPendingCount = useMemo(() => getQcPendingBatches(qcItems).length, [qcItems])
   const qcFailedCount = useMemo(() => getQcFailedBatches(qcItems).length, [qcItems])
+  const qcRetestCount = useMemo(() => getQcReadyForRetest(qcItems).length, [qcItems])
   const packagingCount = useMemo(() => countFinishedGoods(finishedItems, "PACKAGING"), [finishedItems])
   const dispatchedCount = useMemo(() => countFinishedGoods(finishedItems, "DISPATCHED"), [finishedItems])
 
@@ -67,11 +68,12 @@ export default function QualityFinishedGoodsDashboard() {
         </div>
       )}
 
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <DashboardMetricCard index={0} to="/quality-control" icon={ClipboardCheck} tone={qcPendingCount ? "amber" : "green"} label="Pending QC decisions" value={qcPendingCount} loading={qcQuery.isLoading} detail="Fully completed batches awaiting Pass / Fail" />
-        <DashboardMetricCard index={1} to="/quality-control" icon={XCircle} tone={qcFailedCount ? "red" : "green"} label="Failed batches" value={qcFailedCount} loading={qcQuery.isLoading} detail="Held out of Finished Goods" />
-        <DashboardMetricCard index={2} to="/finished-goods" icon={PackageCheck} tone={packagingCount ? "amber" : "green"} label="Packaging queue" value={packagingCount} loading={finishedQuery.isLoading} detail="Passed QC and ready to dispatch" />
-        <DashboardMetricCard index={3} to="/finished-goods" icon={Truck} tone={dispatchedCount ? "blue" : "green"} label="Dispatched batches" value={dispatchedCount} loading={finishedQuery.isLoading} detail="Waiting for final completion" />
+        <DashboardMetricCard index={1} to="/quality-control" icon={XCircle} tone={qcFailedCount ? "red" : "green"} label="Failed / rework" value={qcFailedCount} loading={qcQuery.isLoading} detail="Waiting for repair or retest submission" />
+        <DashboardMetricCard index={2} to="/quality-control" icon={RotateCcw} tone={qcRetestCount ? "blue" : "green"} label="Ready for retest" value={qcRetestCount} loading={qcQuery.isLoading} detail="Production has resubmitted these batches" />
+        <DashboardMetricCard index={3} to="/finished-goods" icon={PackageCheck} tone={packagingCount ? "amber" : "green"} label="Packaging queue" value={packagingCount} loading={finishedQuery.isLoading} detail="Passed QC and ready to dispatch" />
+        <DashboardMetricCard index={4} to="/finished-goods" icon={Truck} tone={dispatchedCount ? "blue" : "green"} label="Dispatched batches" value={dispatchedCount} loading={finishedQuery.isLoading} detail="Waiting for final completion" />
       </div>
 
       <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-3">

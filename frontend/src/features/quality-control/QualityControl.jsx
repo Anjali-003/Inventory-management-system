@@ -18,7 +18,7 @@ import QcBatchSection from "./components/QcBatchSection"
 import BatchDecisionConfirm from "./components/BatchDecisionConfirm"
 
 const asArray = (value) => Array.isArray(value) ? value : []
-const searchText = (item) => `${item.orderNumber || ""} ${item.productName || ""} ${item.productSku || ""}`.toLowerCase()
+const searchText = (item) => `${item.orderNumber || ""} ${item.productName || ""} ${item.productSku || ""} ${item.decisionRemarks || ""} ${(item.decisionHistory || []).map((attempt) => `${attempt.remarks || ""} ${attempt.reworkRemarks || ""}`).join(" ")}`.toLowerCase()
 
 export default function QualityControl() {
   const dispatch = useDispatch()
@@ -29,6 +29,7 @@ export default function QualityControl() {
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState(null)
   const [decision, setDecision] = useState(null)
+  const [remarks, setRemarks] = useState("")
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState("")
 
@@ -39,12 +40,32 @@ export default function QualityControl() {
     return rows.filter((item) => !q || searchText(item).includes(q))
   }, [rows, query])
   const pendingRows = useMemo(() => filtered.filter((item) => !item.batchDecision), [filtered])
-  const historyRows = useMemo(() => filtered.filter((item) => Boolean(item.batchDecision)), [filtered])
+  const historyRows = useMemo(() => filtered.flatMap((item) => {
+    const attempts = Array.isArray(item.decisionHistory) ? item.decisionHistory : []
+    if (attempts.length) {
+      return attempts.map((attempt) => ({
+        ...item,
+        id: `${item.id}-attempt-${attempt.attemptNumber}`,
+        productionId: item.id,
+        batchDecision: attempt.decision,
+        attemptNumber: attempt.attemptNumber,
+        decisionRemarks: attempt.remarks,
+        decisionAt: attempt.decidedAt,
+        decisionByName: attempt.decidedByName,
+        reworkStatus: attempt.reworkStatus,
+        reworkRemarks: attempt.reworkRemarks,
+        reworkStartedAt: attempt.reworkStartedAt,
+        reworkSubmittedAt: attempt.reworkSubmittedAt,
+      }))
+    }
+    // Preserve visibility of older batches released before batch-decision history existed.
+    return item.batchDecision ? [{ ...item, id: `${item.id}-legacy`, productionId: item.id, attemptNumber: 1 }] : []
+  }), [filtered])
   const counts = useMemo(() => ({
     pending: rows.filter((item) => !item.batchDecision).length,
-    passed: rows.filter((item) => item.batchDecision === "PASS").length,
-    failed: rows.filter((item) => item.batchDecision === "FAIL").length,
-    released: rows.filter((item) => item.batchDecision === "PASS" && item.finishedGoodsId).length,
+    passed: rows.filter((item) => item.latestDecision === "PASS" || item.legacyFinishedGoodsPass).length,
+    failed: rows.filter((item) => item.latestDecision === "FAIL" && item.reworkStatus !== "READY_FOR_QC").length,
+    released: rows.filter((item) => item.finishedGoodsId).length,
   }), [rows])
 
   const refresh = useCallback(async () => {
@@ -56,6 +77,7 @@ export default function QualityControl() {
   const askDecision = (item, nextDecision) => {
     if (!editable || !item || item.batchDecision) return
     setActionError("")
+    setRemarks("")
     setSelected(item)
     setDecision(nextDecision)
   }
@@ -64,7 +86,13 @@ export default function QualityControl() {
     if (!busy) {
       setSelected(null)
       setDecision(null)
+      setRemarks("")
     }
+  }
+
+  const changeRemarks = (value) => {
+    setRemarks(value)
+    if (actionError) setActionError("")
   }
 
   const submitDecision = async () => {
@@ -72,11 +100,12 @@ export default function QualityControl() {
     try {
       setBusy(true)
       setActionError("")
-      const { data } = await qualityControlService.decideBatch(selected.id, decision)
+      const { data } = await qualityControlService.decideBatch(selected.productionId || selected.id, decision, remarks)
       setSelected(null)
       setDecision(null)
+      setRemarks("")
       toast.success(data?.message || (decision === "PASS" ? "Batch passed QC" : "Batch marked as failed"))
-      dispatch(baseApi.util.invalidateTags(["FinishedGoods", "Orders", "Production"]))
+      dispatch(baseApi.util.invalidateTags(["QualityControl", "FinishedGoods", "Orders", "Production"]))
       await refetch()
     } catch (err) {
       console.error(err)
@@ -90,7 +119,7 @@ export default function QualityControl() {
     <div className="min-w-0 space-y-4">
       <PageHeader
         title="Quality Control"
-        description="Make one final Pass or Fail decision for each fully completed production batch."
+        description="Record each Pass/Fail attempt, send failed batches for rework, and review them again after Production resubmits."
       >
         <Button variant="outline" onClick={refresh} disabled={loading || isFetching}>
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
@@ -105,8 +134,8 @@ export default function QualityControl() {
           layoutId="qc-batch-summary"
           items={[
             { key: "pending", label: "Pending QC", value: loading ? "—" : counts.pending, hint: "Completed batches", tone: "warning" },
-            { key: "passed", label: "Passed batches", value: loading ? "—" : counts.passed, hint: "Released / approved", tone: "success" },
-            { key: "failed", label: "Failed batches", value: loading ? "—" : counts.failed, hint: "Held out of Finished Goods", tone: "danger" },
+            { key: "passed", label: "Passed batches", value: loading ? "—" : counts.passed, hint: "Latest QC result is Pass", tone: "success" },
+            { key: "failed", label: "Failed batches", value: loading ? "—" : counts.failed, hint: "Awaiting rework or retest", tone: "danger" },
             { key: "released", label: "Sent to Finished Goods", value: loading ? "—" : counts.released, hint: "Ready for packaging", tone: "info" },
           ]}
         />
@@ -130,7 +159,7 @@ export default function QualityControl() {
 
       <QcBatchSection
         title="Previous QC tests"
-        description="A history of previous batch decisions. Passed batches go to Finished Goods; failed batches stay here."
+        description="Every QC attempt remains here, including the original failure remark, repair notes and the final release decision."
         icon={CheckCircle2}
         kind="history"
         items={historyRows}
@@ -139,7 +168,7 @@ export default function QualityControl() {
         editable={false}
       />
 
-      {editable && <BatchDecisionConfirm item={selected} decision={decision} busy={busy} error={actionError} onClose={closeConfirm} onConfirm={submitDecision} />}
+      {editable && <BatchDecisionConfirm item={selected} decision={decision} remarks={remarks} onRemarksChange={changeRemarks} busy={busy} error={actionError} onClose={closeConfirm} onConfirm={submitDecision} />}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom"
-import { CheckCircle2, PackageCheck, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, PackageCheck, Wrench, XCircle } from "lucide-react"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,7 @@ function ResultBadge({ decision }) {
 function BatchIdentity({ item }) {
   return (
     <div className="min-w-0">
-      <p className="break-words font-semibold tabular-nums">{item.orderNumber || `Production #${item.id}`}</p>
+      <p className="break-words font-semibold tabular-nums">{item.orderNumber || `Production #${item.productionId || item.id}`}</p>
       <p className="mt-1 break-words text-sm text-foreground">{item.productName || "Product unavailable"}</p>
       <p className="break-words text-xs text-muted-foreground">{item.productSku || "SKU unavailable"}</p>
     </div>
@@ -35,14 +35,30 @@ function DecisionActions({ item, onDecide, editable }) {
   if (!editable) return <span className="text-xs text-muted-foreground">View only</span>
   return (
     <div className="flex flex-wrap gap-2 xl:justify-end">
-      <Button size="sm" onClick={() => onDecide(item, "PASS")}><CheckCircle2 /> Pass</Button>
-      <Button size="sm" variant="destructive" onClick={() => onDecide(item, "FAIL")}><XCircle /> Fail</Button>
+      <Button size="sm" onClick={() => onDecide(item, "PASS")}><CheckCircle2 className="size-4" /> Pass</Button>
+      <Button size="sm" variant="destructive" onClick={() => onDecide(item, "FAIL")}><XCircle className="size-4" /> Fail</Button>
+    </div>
+  )
+}
+
+function Remarks({ title, value, tone = "neutral" }) {
+  if (!value) return null
+  const toneClass = tone === "danger"
+    ? "border-destructive/20 bg-cf-red-soft"
+    : tone === "success"
+      ? "border-primary/20 bg-cf-green-soft"
+      : "border-border bg-muted/30"
+  return (
+    <div className={`mt-2 min-w-0 rounded-lg border p-2.5 ${toneClass}`}>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      <p className="mt-1 break-words whitespace-pre-wrap text-sm leading-relaxed">{value}</p>
     </div>
   )
 }
 
 function BatchCard({ item, kind, onDecide, editable, navigate }) {
   const history = kind === "history"
+  const productionId = item.productionId || item.id
   return (
     <article className="min-w-0 rounded-xl border bg-card p-4">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
@@ -54,13 +70,28 @@ function BatchCard({ item, kind, onDecide, editable, navigate }) {
         <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Ordered</p><p className="mt-1 text-lg font-semibold tabular-nums">{Number(item.orderedQuantity || 0).toLocaleString()}</p></div>
       </div>
       {history ? (
-        <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-3 border-t pt-3">
-          <div className="min-w-0"><p className="text-xs text-muted-foreground">Decision recorded {dateLabel(item.decisionAt)}</p>{item.decisionByName && <UserCell className="mt-1" name={item.decisionByName} sub="Decided by" />}</div>
-          {item.batchDecision === "PASS" && <Button size="sm" variant="outline" onClick={() => navigate("/finished-goods")}><PackageCheck /> Finished Goods</Button>}
-          {item.batchDecision === "FAIL" && <span className="text-xs font-medium text-destructive">Held from Finished Goods</span>}
-        </div>
+        <>
+          <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 border-t pt-3">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Attempt {item.attemptNumber || 1} · {dateLabel(item.decisionAt)}</p>
+              {item.decisionByName && <UserCell className="mt-1" name={item.decisionByName} sub="QC decision by" />}
+            </div>
+            {item.batchDecision === "PASS"
+              ? <Button size="sm" variant="outline" onClick={() => navigate("/finished-goods")}><PackageCheck className="size-4" /> Finished Goods</Button>
+              : <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive"><AlertTriangle className="size-3.5" /> Held from Finished Goods</span>}
+          </div>
+          <Remarks title="QC failure remark" value={item.decisionRemarks || (item.batchDecision === "FAIL" ? "No remark recorded for this legacy failure." : "")} tone="danger" />
+          {item.reworkRemarks && <Remarks title="Production rework notes" value={item.reworkRemarks} tone="success" />}
+        </>
       ) : (
-        <div className="mt-3 flex flex-wrap justify-end gap-2 border-t pt-3"><DecisionActions item={item} onDecide={onDecide} editable={editable} /></div>
+        <div className="mt-3 border-t pt-3">
+          <p className="text-xs text-muted-foreground">
+            {item.attemptNumber > 1 ? `Retest attempt ${item.attemptNumber}` : "Entire batch completed"}
+            {item.reworkStatus === "READY_FOR_QC" ? " · Rework submitted" : ` · Completed ${dateLabel(item.completedAt)}`}
+          </p>
+          {item.latestDecision === "FAIL" && item.decisionRemarks && <Remarks title="Previous QC failure" value={item.decisionRemarks} tone="danger" />}
+          <div className="mt-3 flex flex-wrap justify-end gap-2"><DecisionActions item={item} onDecide={onDecide} editable={editable} /></div>
+        </div>
       )}
     </article>
   )
@@ -74,7 +105,7 @@ export default function QcBatchSection({ title, description, icon: Icon, kind, i
     : history ? "No previous QC decisions" : "No batches waiting for QC"
   const emptyDescription = query
     ? "Try a different order number, product name or SKU."
-    : history ? "Batch decisions will be recorded here after Pass or Fail is confirmed." : "A batch appears here only after all ordered units have completed production."
+    : history ? "Each Pass/Fail decision and its rework notes will be retained here." : "A batch appears here only after all ordered units are complete or rework has been submitted for retest."
 
   return (
     <Card className="min-w-0 overflow-hidden">
@@ -83,7 +114,7 @@ export default function QcBatchSection({ title, description, icon: Icon, kind, i
           <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-cf-green-soft text-primary"><Icon className="size-4" /></span>
           <div className="min-w-0"><CardTitle>{title}</CardTitle><CardDescription className="mt-1 max-w-3xl">{description}</CardDescription></div>
         </div>
-        <Badge variant="neutral">{loading ? "Loading…" : `${items.length} batch${items.length === 1 ? "" : "es"}`}</Badge>
+        <Badge variant="neutral">{loading ? "Loading…" : `${items.length} ${history ? "attempt" : "batch"}${items.length === 1 ? "" : "es"}`}</Badge>
       </CardHeader>
 
       {loading ? <div className="p-3"><TableSkeleton rows={3} /></div> : items.length === 0 ? (
@@ -93,25 +124,36 @@ export default function QcBatchSection({ title, description, icon: Icon, kind, i
           <div className="hidden min-w-0 overflow-hidden xl:block">
             <Table className="w-full table-fixed">
               <TableHeader><TableRow>
-                <TableHead className="w-[23%]">Order / Product</TableHead>
-                <TableHead className="w-[13%]">Completed / Ordered</TableHead>
-                {history && <TableHead className="w-[12%]">QC result</TableHead>}
-                <TableHead className={history ? "w-[25%]" : "w-[33%]"}>{history ? "Decision recorded" : "Production completed"}</TableHead>
-                <TableHead className={history ? "w-[27%] text-right" : "w-[31%] text-right"}>{history ? "Outcome" : "Final decision"}</TableHead>
+                <TableHead className="w-[20%]">Order / Product</TableHead>
+                <TableHead className="w-[11%]">Completed / Ordered</TableHead>
+                {history && <TableHead className="w-[9%]">Result</TableHead>}
+                <TableHead className={history ? "w-[9%]" : "w-[13%]"}>{history ? "Attempt" : "Production completed"}</TableHead>
+                <TableHead className={history ? "w-[29%]" : "w-[27%]"}>{history ? "QC and rework remarks" : "Previous issue / next decision"}</TableHead>
+                <TableHead className={history ? "w-[22%]" : "w-[29%] text-right"}>{history ? "Decision / Outcome" : "Final decision"}</TableHead>
               </TableRow></TableHeader>
               <TableBody>{items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell className="min-w-0 whitespace-normal align-top"><BatchIdentity item={item} /></TableCell>
-                  <TableCell className="whitespace-normal align-top"><p className="font-semibold tabular-nums">{Number(item.quantityCompleted || 0).toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">of {Number(item.orderedQuantity || 0).toLocaleString()} units</p></TableCell>
+                  <TableCell className="whitespace-normal align-top"><p className="font-semibold tabular-nums">{Number(item.quantityCompleted || 0).toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">of {Number(item.orderedQuantity || 0).toLocaleString()}</p></TableCell>
                   {history && <TableCell className="whitespace-normal align-top"><ResultBadge decision={item.batchDecision} /></TableCell>}
-                  <TableCell className="whitespace-normal align-top">
-                    {history ? <><p className="break-words text-sm">{dateLabel(item.decisionAt)}</p>{item.decisionByName && <UserCell className="mt-1" name={item.decisionByName} sub="Decided by" />}</> : <><p className="break-words text-sm">{dateLabel(item.completedAt)}</p><p className="mt-1 text-xs text-muted-foreground">Entire batch completed</p></>}
+                  <TableCell className="whitespace-normal align-top text-sm">
+                    {history ? <><p>Attempt {item.attemptNumber || 1}</p><p className="mt-1 break-words text-xs text-muted-foreground">{dateLabel(item.decisionAt)}</p>{item.decisionByName && <UserCell className="mt-1" name={item.decisionByName} sub="QC by" />}</> : <><p className="break-words">{item.attemptNumber > 1 ? `Retest ${item.attemptNumber}` : dateLabel(item.completedAt)}</p><p className="mt-1 text-xs text-muted-foreground">Full batch completed</p></>}
                   </TableCell>
-                  <TableCell className="whitespace-normal text-right align-top">
+                  <TableCell className="whitespace-normal align-top">
+                    {history ? <>
+                      <Remarks title="QC remark" value={item.decisionRemarks || (item.batchDecision === "FAIL" ? "No remark recorded (legacy decision)." : "No remark recorded.")} tone={item.batchDecision === "FAIL" ? "danger" : "neutral"} />
+                      {item.reworkRemarks && <Remarks title="Rework notes" value={item.reworkRemarks} tone="success" />}
+                    </> : <>
+                      {item.latestDecision === "FAIL" && item.decisionRemarks
+                        ? <Remarks title="Previous failure" value={item.decisionRemarks} tone="danger" />
+                        : <span className="text-xs text-muted-foreground">Ready for final batch decision.</span>}
+                    </>}
+                  </TableCell>
+                  <TableCell className="whitespace-normal align-top">
                     {history
                       ? item.batchDecision === "PASS"
-                        ? <Button size="sm" variant="outline" onClick={() => navigate("/finished-goods")}><PackageCheck /> Open Finished Goods</Button>
-                        : <span className="text-sm font-medium text-destructive">Not released</span>
+                        ? <div className="space-y-2"><Badge variant="success">Released</Badge><Button size="sm" variant="outline" onClick={() => navigate("/finished-goods")}><PackageCheck className="size-4" /> Finished Goods</Button></div>
+                        : <span className="inline-flex items-center gap-1 text-sm font-medium text-destructive"><XCircle className="size-4" /> Held from release</span>
                       : <DecisionActions item={item} onDecide={onDecide} editable={editable} />}
                   </TableCell>
                 </TableRow>

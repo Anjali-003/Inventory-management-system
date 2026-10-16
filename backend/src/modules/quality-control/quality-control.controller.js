@@ -47,7 +47,8 @@ async function saveQc(req, res) {
 async function decideBatch(req, res) {
     const id = productionIdOf(req);
     const decision = String(req.body?.decision || "").toUpperCase();
-    res.status(201).json(await service.decideBatch(id, decision, req.user.id));
+    const remarks = typeof req.body?.remarks === "string" ? req.body.remarks : "";
+    res.status(201).json(await service.decideBatch(id, decision, remarks, req.user.id));
 }
 
 module.exports = {

@@ -540,16 +540,24 @@ async function saveQualityControlResult(
   }
 }
 
-async function decideBatch(productionId, decision, userId) {
+async function decideBatch(productionId, decision, remarks, userId) {
   if (!["PASS", "FAIL"].includes(decision)) {
     throw new AppError(400, "Batch decision must be PASS or FAIL");
+  }
+
+  const cleanRemarks = String(remarks || "").trim();
+  if (decision === "FAIL" && !cleanRemarks) {
+    throw new AppError(400, "A remark is required when a batch fails Quality Control");
+  }
+  if (cleanRemarks.length > 2000) {
+    throw new AppError(400, "QC remarks must be 2,000 characters or fewer");
   }
 
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
 
-    // Lock the batch so two QC users cannot decide it simultaneously.
+    // Serialize decisions and rework transitions for this production batch.
     const [locked] = await connection.query(
       "SELECT id FROM production_orders WHERE id = ? FOR UPDATE",
       [productionId],
@@ -563,16 +571,35 @@ async function decideBatch(productionId, decision, userId) {
       throw new AppError(409, "Quality Control is available only after the entire production batch is completed");
     }
 
-    const [existingDecision] = await connection.query(
-      "SELECT id, decision FROM quality_control_batch_decisions WHERE production_id = ? FOR UPDATE",
+    const [latestRows] = await connection.query(
+      `SELECT id, decision, attempt_number
+       FROM quality_control_batch_decisions
+       WHERE production_id = ?
+       ORDER BY attempt_number DESC
+       LIMIT 1 FOR UPDATE`,
       [productionId],
     );
-    if (existingDecision.length) {
-      throw new AppError(409, `This batch already has a final QC decision: ${existingDecision[0].decision}`);
+    const latest = latestRows[0] || null;
+
+    let reworkCycle = null;
+    if (latest?.decision === "PASS") {
+      throw new AppError(409, "This batch has already passed Quality Control");
+    }
+    if (latest?.decision === "FAIL") {
+      const [cycles] = await connection.query(
+        `SELECT id, status
+         FROM quality_control_rework_cycles
+         WHERE production_id = ? AND failed_attempt_number = ?
+         LIMIT 1 FOR UPDATE`,
+        [productionId, latest.attempt_number],
+      );
+      reworkCycle = cycles[0] || null;
+      if (!reworkCycle || reworkCycle.status !== "READY_FOR_QC") {
+        throw new AppError(409, "Production must finish and submit rework before QC can decide this batch again");
+      }
     }
 
-    // Older batches approved through the previous testing + inspection flow
-    // may already be in Finished Goods. Never ask QC to decide them again.
+    // Legacy releases from the old testing/inspection flow must not be re-released.
     const [existingFinishedGoods] = await connection.query(
       "SELECT id FROM finished_goods WHERE production_id = ? OR order_id = ? LIMIT 1 FOR UPDATE",
       [productionId, production.order_id],
@@ -581,16 +608,27 @@ async function decideBatch(productionId, decision, userId) {
       throw new AppError(409, "This batch has already been released to Finished Goods");
     }
 
+    const attemptNumber = latest ? Number(latest.attempt_number) + 1 : 1;
+
+    // A submitted rework cycle has now received its retest decision. Keep it as history.
+    if (reworkCycle) {
+      await connection.query(
+        `UPDATE quality_control_rework_cycles
+         SET status = 'QC_REVIEWED', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [userId || null, reworkCycle.id],
+      );
+    }
+
     const [insertResult] = await connection.query(
-      `INSERT INTO quality_control_batch_decisions (production_id, decision, decided_by)
-       VALUES (?, ?, ?)`,
-      [productionId, decision, userId || null],
+      `INSERT INTO quality_control_batch_decisions
+         (production_id, attempt_number, decision, remarks, decided_by)
+       VALUES (?, ?, ?, ?, ?)`,
+      [productionId, attemptNumber, decision, cleanRemarks || null, userId || null],
     );
 
     let finishedGoods = null;
     if (decision === "PASS") {
-      // createFinishedGood validates this stored batch decision and still checks
-      // that all production units are complete before making the batch visible.
       finishedGoods = await createFinishedGood(
         production.id,
         production.order_id,
@@ -598,20 +636,28 @@ async function decideBatch(productionId, decision, userId) {
         connection,
         userId,
       );
+    } else {
+      await connection.query(
+        `INSERT INTO quality_control_rework_cycles
+           (production_id, failed_attempt_number, failure_decision_id, status)
+         VALUES (?, ?, ?, 'NEEDS_REWORK')`,
+        [productionId, attemptNumber, insertResult.insertId],
+      );
     }
-    // A FAIL is stored in QC history only. It is intentionally not sent to FG.
 
     await connection.commit();
     return {
       success: true,
       decisionId: insertResult.insertId,
       productionId,
+      attemptNumber,
       decision,
+      remarks: cleanRemarks || null,
       finishedGoodsId: finishedGoods?.finishedGoodsId || null,
       finishedGoodsStatus: finishedGoods?.status || null,
       message: decision === "PASS"
-        ? "Batch passed QC and was sent to Finished Goods"
-        : "Batch marked as failed and held out of Finished Goods",
+        ? `Batch passed QC on attempt ${attemptNumber} and was sent to Finished Goods`
+        : `Batch failed QC on attempt ${attemptNumber}; Production has been assigned rework`,
     };
   } catch (error) {
     await connection.rollback();
@@ -645,9 +691,19 @@ async function getQualityControlOrders() {
         COALESCE((SELECT SUM(q.quantity_approved) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_approved,
         COALESCE((SELECT SUM(q.quantity_rejected) FROM quality_control_records q WHERE q.production_id = po.id),0) AS quantity_rejected,
         qbd.id AS batch_decision_id,
+        qbd.attempt_number AS batch_attempt_number,
         qbd.decision AS recorded_batch_decision,
+        qbd.remarks AS batch_decision_remarks,
         qbd.decided_at AS batch_decided_at,
         decision_user.name AS batch_decided_by_name,
+        rc.id AS rework_id,
+        rc.status AS rework_status,
+        rc.failed_attempt_number AS rework_attempt_number,
+        rc.rework_remarks,
+        rc.started_at AS rework_started_at,
+        rc.submitted_at AS rework_submitted_at,
+        rework_started_user.name AS rework_started_by_name,
+        rework_submitted_user.name AS rework_submitted_by_name,
         fg.id AS finished_goods_id,
         fg.created_at AS finished_goods_created_at,
         fg_user.name AS finished_goods_created_by_name,
@@ -656,16 +712,61 @@ async function getQualityControlOrders() {
       JOIN orders o ON o.id = po.order_id
       JOIN order_items oi ON oi.order_id = o.id
       JOIN products p ON p.id = oi.product_id
-      LEFT JOIN quality_control_batch_decisions qbd ON qbd.production_id = po.id
+      LEFT JOIN quality_control_batch_decisions qbd ON qbd.id = (
+        SELECT d.id FROM quality_control_batch_decisions d
+        WHERE d.production_id = po.id
+        ORDER BY d.attempt_number DESC LIMIT 1
+      )
       LEFT JOIN users decision_user ON decision_user.id = qbd.decided_by
+      LEFT JOIN quality_control_rework_cycles rc ON rc.id = (
+        SELECT r.id FROM quality_control_rework_cycles r
+        WHERE r.production_id = po.id
+        ORDER BY r.failed_attempt_number DESC LIMIT 1
+      )
+      LEFT JOIN users rework_started_user ON rework_started_user.id = rc.started_by
+      LEFT JOIN users rework_submitted_user ON rework_submitted_user.id = rc.submitted_by
       LEFT JOIN finished_goods fg ON fg.production_id = po.id
       LEFT JOIN users fg_user ON fg_user.id = fg.created_by
       WHERE oi.quantity > 0 AND po.quantity_completed >= oi.quantity
       ORDER BY
-        CASE WHEN qbd.id IS NULL AND fg.id IS NULL THEN 0 ELSE 1 END,
+        CASE
+          WHEN qbd.id IS NULL AND fg.id IS NULL THEN 0
+          WHEN rc.status = 'READY_FOR_QC' THEN 0
+          ELSE 1
+        END,
         COALESCE(qbd.decided_at, fg.created_at, po.completed_at) DESC,
         po.id DESC
     `);
+
+    const [historyRows] = await connection.query(`
+      SELECT d.id, d.production_id, d.attempt_number, d.decision, d.remarks,
+             d.decided_at, u.name AS decided_by_name,
+             r.status AS rework_status, r.rework_remarks,
+             r.started_at AS rework_started_at, r.submitted_at AS rework_submitted_at
+      FROM quality_control_batch_decisions d
+      LEFT JOIN users u ON u.id = d.decided_by
+      LEFT JOIN quality_control_rework_cycles r
+        ON r.production_id = d.production_id
+       AND r.failed_attempt_number = d.attempt_number
+      ORDER BY d.production_id, d.attempt_number
+    `);
+    const historyByProduction = new Map();
+    for (const entry of historyRows) {
+      const key = Number(entry.production_id);
+      if (!historyByProduction.has(key)) historyByProduction.set(key, []);
+      historyByProduction.get(key).push({
+        id: entry.id,
+        attemptNumber: Number(entry.attempt_number),
+        decision: entry.decision,
+        remarks: entry.remarks || "",
+        decidedAt: entry.decided_at,
+        decidedByName: entry.decided_by_name || null,
+        reworkStatus: entry.rework_status || null,
+        reworkRemarks: entry.rework_remarks || null,
+        reworkStartedAt: entry.rework_started_at || null,
+        reworkSubmittedAt: entry.rework_submitted_at || null,
+      });
+    }
 
     return rows.map((row) => {
       const ordered = Number(row.ordered_quantity);
@@ -678,16 +779,17 @@ async function getQualityControlOrders() {
       const rejected = Number(row.quantity_rejected);
       const remainingToTest = Math.max(0, completed - tested);
       const availableForQC = Math.max(0, passed - inspected);
-      // Existing Finished Goods rows count as a historical PASS from the old
-      // workflow, even if they predate the new batch-decision table.
-      const batchDecision = row.recorded_batch_decision || (row.finished_goods_id ? "PASS" : null);
+      const latestDecision = row.recorded_batch_decision || (row.finished_goods_id ? "PASS" : null);
+      const pendingRetest = latestDecision === "FAIL" && row.rework_status === "READY_FOR_QC";
+      // A submitted rework batch appears in the pending queue again; the old FAIL remains in attempt history.
+      const batchDecision = pendingRetest ? null : latestDecision;
       const decisionAt = row.batch_decided_at || row.finished_goods_created_at || null;
       const decisionByName = row.batch_decided_by_name || row.finished_goods_created_by_name || null;
       const legacyFinishedGoodsPass = !row.recorded_batch_decision && !!row.finished_goods_id;
-      const readyForFinishedGoods = batchDecision === "PASS" || (
+      const readyForFinishedGoods = latestDecision === "PASS" || (!latestDecision && (
         completed >= ordered && remainingToTest === 0 && failed === 0 &&
         inspected >= ordered && approved >= ordered && rejected === 0
-      );
+      ));
 
       return {
         id: row.id,
@@ -707,11 +809,23 @@ async function getQualityControlOrders() {
         availableForQC,
         readyForFinishedGoods,
         batchDecision,
+        latestDecision,
+        attemptNumber: pendingRetest ? Number(row.batch_attempt_number || 0) + 1 : Number(row.batch_attempt_number || 1),
+        decisionRemarks: row.batch_decision_remarks || "",
         decisionAt,
         decisionByName,
+        decisionHistory: historyByProduction.get(Number(row.id)) || [],
         legacyFinishedGoodsPass,
         finishedGoodsId: row.finished_goods_id || null,
         finishedGoodsStatus: row.finished_goods_status || null,
+        reworkId: row.rework_id || null,
+        reworkStatus: row.rework_status || null,
+        reworkAttemptNumber: row.rework_attempt_number || null,
+        reworkRemarks: row.rework_remarks || null,
+        reworkStartedAt: row.rework_started_at || null,
+        reworkSubmittedAt: row.rework_submitted_at || null,
+        reworkStartedByName: row.rework_started_by_name || null,
+        reworkSubmittedByName: row.rework_submitted_by_name || null,
         status: row.order_status,
         startedAt: row.started_at,
         completedAt: row.completed_at,

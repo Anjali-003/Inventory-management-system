@@ -9,7 +9,11 @@ export function getQcPreviousBatches(items = []) {
 }
 
 export function getQcFailedBatches(items = []) {
-  return items.filter((item) => item.batchDecision === "FAIL")
+  return items.filter((item) => item.latestDecision === "FAIL" && item.reworkStatus !== "READY_FOR_QC")
+}
+
+export function getQcReadyForRetest(items = []) {
+  return items.filter((item) => item.reworkStatus === "READY_FOR_QC" && !item.batchDecision)
 }
 
 export function getActionableQcItems(items = []) {
@@ -17,7 +21,10 @@ export function getActionableQcItems(items = []) {
 }
 
 export function getQcActionLabel(item) {
-  return `Full batch complete · ${number(item.quantityCompleted)} of ${number(item.orderedQuantity)} units ready for one Pass/Fail decision`
+  const attempt = Number(item.attemptNumber || 1)
+  return attempt > 1
+    ? `Retest attempt ${attempt} · ${number(item.quantityCompleted)} of ${number(item.orderedQuantity)} units`
+    : `Full batch complete · ${number(item.quantityCompleted)} of ${number(item.orderedQuantity)} units ready for Pass/Fail`
 }
 
 export function countFinishedGoods(items = [], status) {

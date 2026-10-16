@@ -1,7 +1,11 @@
 import { useCallback, useMemo, useState } from "react"
-import { ClipboardCheck, Factory, RefreshCw } from "lucide-react"
+import { useDispatch } from "react-redux"
+import { AlertTriangle, ClipboardCheck, Factory, RefreshCw } from "lucide-react"
 import { productionService } from "@/features/production/productionService"
 import { useGetProductionQuery } from "@/features/production/productionApi"
+import { baseApi } from "@/api/baseApi"
+import ReworkWorkspace from "@/features/production/components/ReworkWorkspace"
+import ReworkSubmitModal from "@/features/production/components/ReworkSubmitModal"
 import { errorMessage } from "@/lib/stock"
 import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
@@ -138,6 +142,7 @@ function toOrder(item) {
 
 export default function Production() {
   const toast = useToast()
+  const dispatch = useDispatch()
   const { canEdit } = usePermissions()
   const editable = canEdit("production")
   // The list includes both unstarted orders and existing production runs.
@@ -146,23 +151,36 @@ export default function Production() {
   const error = actionError || (loadError ? errorMessage(loadError, "Failed to load production orders.") : "")
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("all")
+  const [activeView, setActiveView] = useState("orders")
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState(null)
   const [checkFor, setCheckFor] = useState(null)
   const [startFor, setStartFor] = useState(null)
   const [quantity, setQuantity] = useState("1")
   const [saving, setSaving] = useState(false)
+  const [reworkBusy, setReworkBusy] = useState(false)
+  const [reworkSubmitFor, setReworkSubmitFor] = useState(null)
+  const [reworkRemarks, setReworkRemarks] = useState("")
+  const [reworkError, setReworkError] = useState("")
+
+  const invalidateWorkflowData = useCallback(() => {
+    dispatch(baseApi.util.invalidateTags(["Production", "QualityControl", "FinishedGoods", "Orders"]))
+  }, [dispatch])
 
   const load = useCallback(async () => {
     setError("")
+    invalidateWorkflowData()
     await refetch()
-  }, [refetch])
+  }, [refetch, invalidateWorkflowData])
 
   const counts = useMemo(() => ({
     all: items.length,
     shortage: items.filter((item) => item.material_status === "SHORTAGE" && remainingToStart(item) > 0).length,
     active: items.filter((item) => item.status === "IN_PRODUCTION" && (inProduction(item) > 0 || remainingToStart(item) > 0)).length,
-    history: items.filter((item) => item.status === "COMPLETED").length,
+    history: items.filter((item) => item.status === "COMPLETED" || item.qc_decision === "PASS").length,
+    qcFailed: items.filter((item) => item.rework_status === "NEEDS_REWORK").length,
+    rework: items.filter((item) => item.rework_status === "IN_PROGRESS").length,
+    readyQc: items.filter((item) => item.rework_status === "READY_FOR_QC").length,
   }), [items])
 
   const rows = useMemo(() => {
@@ -170,8 +188,8 @@ export default function Production() {
     return items.filter((item) => {
       if (filter === "shortage" && !(item.material_status === "SHORTAGE" && remainingToStart(item) > 0)) return false
       if (filter === "active" && !(item.status === "IN_PRODUCTION" && (inProduction(item) > 0 || remainingToStart(item) > 0))) return false
-      if (filter === "history" && item.status !== "COMPLETED") return false
-      return !q || `${item.order_number} ${item.product_name || ""} ${item.order_status || ""} ${item.status || ""} ${item.started_by_name || ""} ${item.updated_by_name || ""}`.toLowerCase().includes(q)
+      if (filter === "history" && !(item.status === "COMPLETED" || item.qc_decision === "PASS" || item.qc_decision === "FAIL")) return false
+      return !q || `${item.order_number} ${item.product_name || ""} ${item.order_status || ""} ${item.status || ""} ${item.started_by_name || ""} ${item.updated_by_name || ""} ${item.qc_remarks || ""} ${item.rework_remarks || ""}`.toLowerCase().includes(q)
     })
   }, [items, query, filter])
 
@@ -179,6 +197,7 @@ export default function Production() {
   const setFilterAndReset = (value) => { setFilter(value); setPage(1) }
   const setQueryAndReset = (value) => { setQuery(value); setPage(1) }
 
+  // Keep the original Production Orders filters here. QC recovery has its own tab.
   const stats = [
     { key: "all", label: "All production", value: counts.all, tone: "neutral", active: filter === "all", onClick: () => setFilterAndReset("all") },
     { key: "shortage", label: "Material shortages", value: counts.shortage, tone: "danger", active: filter === "shortage", onClick: () => setFilterAndReset("shortage") },
@@ -232,16 +251,100 @@ export default function Production() {
     await load()
   }
 
+  const startRework = async (item) => {
+    if (!editable || !item?.id || reworkBusy) return
+    try {
+      setReworkBusy(true)
+      setError("")
+      const { data } = await productionService.startRework(item.id)
+      toast.success(data?.message || "Rework started")
+      await load()
+    } catch (err) {
+      console.error(err)
+      setError(err.response?.data?.message || "Failed to start rework.")
+    } finally {
+      setReworkBusy(false)
+    }
+  }
+
+  const openReworkSubmit = (item) => {
+    if (!editable || !item?.id || reworkBusy) return
+    setReworkError("")
+    setReworkRemarks("")
+    setReworkSubmitFor(item)
+  }
+
+  const closeReworkSubmit = () => {
+    if (reworkBusy) return
+    setReworkSubmitFor(null)
+    setReworkRemarks("")
+    setReworkError("")
+  }
+
+  const submitRework = async () => {
+    if (!reworkSubmitFor || !reworkRemarks.trim() || reworkBusy) return
+    try {
+      setReworkBusy(true)
+      setReworkError("")
+      const { data } = await productionService.submitRework(reworkSubmitFor.id, reworkRemarks)
+      setReworkSubmitFor(null)
+      setReworkRemarks("")
+      toast.success(data?.message || "Batch submitted to Quality Control")
+      await load()
+    } catch (err) {
+      console.error(err)
+      setReworkError(err.response?.data?.message || "Failed to submit rework to Quality Control.")
+    } finally {
+      setReworkBusy(false)
+    }
+  }
+
   return (
     <>
-      <PageHeader title="Production" description={editable ? "Check material readiness, start units, and record completed production from one page." : "View production progress and material readiness. This workspace is read-only for production."}>
+      <PageHeader title="Production" description={editable ? "Track production runs, start more units, and record completed production from one page." : "View production progress and material readiness. This workspace is read-only for production."}>
         <Button variant="outline" onClick={load} disabled={loading}><RefreshCw /> Refresh</Button>
       </PageHeader>
 
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
+      <div className="mb-4 inline-flex max-w-full flex-wrap gap-1 rounded-xl border bg-card p-1" role="tablist" aria-label="Production workspace">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "orders"}
+          onClick={() => setActiveView("orders")}
+          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${activeView === "orders" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"}`}
+        >
+          <Factory className="size-4" />
+          Production Orders
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "qc-failed"}
+          onClick={() => setActiveView("qc-failed")}
+          className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${activeView === "qc-failed" ? "border-destructive/30 bg-cf-red-soft text-destructive shadow-sm" : "border-transparent text-destructive hover:bg-cf-red-soft/70"}`}
+        >
+          <AlertTriangle className="size-4" />
+          QC Failed
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${activeView === "qc-failed" ? "bg-destructive text-destructive-foreground" : "bg-cf-red-soft"}`}>
+            {counts.qcFailed + counts.rework + counts.readyQc}
+          </span>
+        </button>
+      </div>
+
+      {activeView === "qc-failed" ? (
+        <ReworkWorkspace
+          items={items}
+          loading={loading}
+          editable={editable}
+          busy={reworkBusy}
+          onStartRework={startRework}
+          onSubmitRework={openReworkSubmit}
+        />
+      ) : (
       <Card className="min-w-0 overflow-hidden">
-        <StatStrip layoutId="production-filter" cols="grid-cols-2 lg:grid-cols-4" items={stats} />
+        <StatStrip layoutId="production-filter" cols="grid-cols-2 sm:grid-cols-4" items={stats} />
         <div className="flex min-w-0 flex-wrap items-center gap-3 border-y px-4 py-3 sm:px-5">
           <SearchBar value={query} onChange={setQueryAndReset} placeholder="Search order, product or person..." />
           <p className="ml-auto text-xs text-muted-foreground">{rows.length} result{rows.length === 1 ? "" : "s"}</p>
@@ -249,7 +352,7 @@ export default function Production() {
 
         {loading ? <TableSkeleton rows={7} /> : rows.length === 0 ? (
           <EmptyState icon={Factory} title={query || filter !== "all" ? "No matching production orders" : "No production orders yet"}>
-            {query || filter !== "all" ? "Try another search or select All production." : "Orders ready to start and existing production runs will appear here."}
+            {query || filter !== "all" ? "Try another search or select another production filter." : "Orders ready to start and existing production runs will appear here."}
           </EmptyState>
         ) : (
           <>
@@ -295,9 +398,22 @@ export default function Production() {
           </>
         )}
       </Card>
+      )}
 
       {editable && checkFor && <MaterialCheckModal order={checkFor} onClose={() => setCheckFor(null)} onStart={startFromCheck} partialProduction />}
       {editable && startFor && <StartProductionModal order={startFor} onClose={() => setStartFor(null)} onStarted={started} />}
+
+      {editable && reworkSubmitFor && (
+        <ReworkSubmitModal
+          item={reworkSubmitFor}
+          remarks={reworkRemarks}
+          onRemarksChange={setReworkRemarks}
+          busy={reworkBusy}
+          error={reworkError}
+          onClose={closeReworkSubmit}
+          onSubmit={submitRework}
+        />
+      )}
 
       {editable && selected && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-3" onMouseDown={(e) => e.target === e.currentTarget && closeUpdate()}>
