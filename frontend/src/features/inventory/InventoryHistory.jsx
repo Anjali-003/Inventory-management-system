@@ -181,6 +181,12 @@ export default function InventoryHistory() {
     ? `${picked.receipt_count} ${picked.receipt_count === 1 ? "receipt" : "receipts"}${growth !== null && growth > 0 ? ` · ↑ ${growth.toFixed(growth >= 10 ? 0 : 1)}% on carried-in` : ""}`
     : undefined;
 
+  // a figure card opens the matching section below and scrolls to it
+  const goTab = (key, id = "history-reconciliation") => {
+    if (key) setTab(key);
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   const tabs = [
     { key: "balance", label: "Balance sheet" },
     ...(isShort
@@ -330,6 +336,7 @@ export default function InventoryHistory() {
                     ? `As of today, ${shortDate(summary.today)}`
                     : `End of ${monthLabel(month)}`
                 }
+                onClick={() => goTab("balance")}
               />
               <StatCard
                 index={1}
@@ -338,6 +345,7 @@ export default function InventoryHistory() {
                 label={`Received in ${picked ? shortMonth(picked.month) : "month"}`}
                 value={picked ? picked.received : null}
                 detail={receivedDetail}
+                onClick={() => goTab(null, "history-months")}
               />
               <StatCard
                 index={2}
@@ -347,6 +355,7 @@ export default function InventoryHistory() {
                 value={balance ? balance.components_used : null}
                 loading={!balance && !detailError}
                 detail="All time"
+                onClick={() => goTab("products")}
               />
               <StatCard
                 index={3}
@@ -357,11 +366,12 @@ export default function InventoryHistory() {
                 format={signed}
                 loading={!balance && !detailError}
                 detail={balance ? st.short : undefined}
+                onClick={() => goTab(isShort ? "shortfall" : "balance")}
               />
             </div>
 
             <Reveal delay={0.16}>
-              <Panel>
+              <Panel id="history-reconciliation" className="scroll-mt-4">
                 <PanelHeader
                   title="Stock reconciliation"
                   subtitle={descriptions[activeTab]}
@@ -403,7 +413,7 @@ export default function InventoryHistory() {
             </Reveal>
 
             <Reveal delay={0.24}>
-              <Panel>
+              <Panel id="history-months" className="scroll-mt-4">
                 <PanelHeader
                   title="Received month by month"
                   subtitle={`${fmtQty(yearTotal)} received in ${year}. Click a bar to open that month.`}

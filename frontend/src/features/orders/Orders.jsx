@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { ClipboardList, Plus } from "lucide-react"
 import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
@@ -14,6 +15,7 @@ import CreateOrderModal from "./components/CreateOrderModal"
 import MaterialCheckModal from "./components/MaterialCheckModal"
 import StartProductionModal from "./components/StartProductionModal"
 import OrderActions from "./components/OrderActions"
+import { ApprovalStatus } from "@/features/order-approvals/approvalParts"
 import { errorMessage } from "@/lib/stock"
 import { useGetOrdersQuery } from "./ordersApi"
 import { useGetProductsQuery } from "@/features/products/productsApi"
@@ -35,7 +37,8 @@ export default function Orders() {
       ? errorMessage(productsError, "Failed to load products")
       : ""
   const [query, setQuery] = useState("")
-  const [filter, setFilter] = useState("all")
+  const [searchParams] = useSearchParams() // /orders?status=PENDING (from the dashboard)
+  const [filter, setFilter] = useState(() => searchParams.get("status") || "all")
   const [page, setPage] = useState(1)
 
   // one dialog at a time
@@ -106,6 +109,7 @@ export default function Orders() {
                     <TableHead>Product</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Approval</TableHead>
                     <TableHead>Created by</TableHead>
                     <TableHead className="text-right">Action</TableHead>
                   </TableRow>
@@ -117,6 +121,7 @@ export default function Orders() {
                       <TableCell>{o.product_name}</TableCell>
                       <TableCell className="text-right tabular-nums">{Number(o.quantity)}</TableCell>
                       <TableCell><OrderStatus status={o.status} /></TableCell>
+                      <TableCell><ApprovalStatus value={o.approval_status} /></TableCell>
                       <TableCell className="min-w-44"><UserCell name={o.created_by_name} sub={when(o.created_at)} /></TableCell>
                       <TableCell><OrderActions order={o} onCheck={setCheckFor} onStart={setStartFor} /></TableCell>
                     </TableRow>
@@ -135,6 +140,10 @@ export default function Orders() {
                       <p className="text-sm text-muted-foreground">{o.product_name} · Qty {Number(o.quantity)}</p>
                     </div>
                     <OrderStatus status={o.status} />
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                    <span>Approval</span>
+                    <ApprovalStatus value={o.approval_status} />
                   </div>
                   <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
                     <span>Created by</span>

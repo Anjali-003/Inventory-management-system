@@ -17,8 +17,12 @@ import Activity from "@/features/activity/Activity";
 import Iqc from "@/features/iqc/Iqc";
 import Purchase from "@/features/purchase/Purchase";
 import IncomingStock from "@/features/incoming-stock/IncomingStock";
+import MarketingOrders from "@/features/marketing-orders/MarketingOrders";
+import OrderApprovals from "@/features/order-approvals/OrderApprovals";
+import ApprovedOrders from "@/features/approved-orders/ApprovedOrders";
 
 /** { path, module (see MODULE_PATHS in lib/permissions.js), Page } */
+//Page batata hai kya render karna hai, module batata hai kis permission ko check karna hai, aur path batata hai kis URL par route match karna hai.
 export const PAGES = [
   { path: "/dashboard", module: "dashboard", Page: Dashboard },
   { path: "/inventory-history", module: "inventoryHistory", Page: InventoryHistory },
@@ -34,4 +38,7 @@ export const PAGES = [
   { path: "/iqc", module: "iqc", Page: Iqc },
   { path: "/purchase", module: "purchase", Page: Purchase },
   { path: "/incoming-stock", module: "incomingStock", Page: IncomingStock },
+  { path: "/marketing-orders", module: "marketingOrders", Page: MarketingOrders },
+  { path: "/order-approvals", module: "orderApprovals", Page: OrderApprovals },
+  { path: "/approved-orders", module: "approvedOrders", Page: ApprovedOrders },
 ];

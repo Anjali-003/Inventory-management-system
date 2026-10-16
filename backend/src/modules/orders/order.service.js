@@ -39,6 +39,7 @@ async function listOrders() {
             o.id,
             o.order_number,
             o.status,
+            o.approval_status,
             o.created_at,
             o.created_by,
             cu.name AS created_by_name,
@@ -62,6 +63,16 @@ async function listOrders() {
     );
 
     return rows;
+}
+
+
+/*
+    Production may only start for an order the Operations Admin approved (see order-approvals module).
+    Returns the approval status, or null when the order does not exist.
+*/
+async function getApprovalStatus(orderId) {
+    const [rows] = await db.query("SELECT approval_status FROM orders WHERE id = ?", [orderId]);
+    return rows.length ? rows[0].approval_status : null;
 }
 
 
@@ -260,6 +271,7 @@ async function createOrder(items, userId = null) {
 module.exports = {
     ORDER_STATUSES,
     listOrders,
+    getApprovalStatus,
     getOrderById,
     updateOrderStatus,
     createOrder

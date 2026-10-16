@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { Archive, ArrowDownToLine, ArrowUpFromLine, Eye, History, Plus, Warehouse } from "lucide-react"
 import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
@@ -68,7 +69,8 @@ export default function Inventory() {
   const [tab, setTab] = useState("stock")
   const [query, setQuery] = useState("")
   const [view, setView] = useState("active")
-  const [filter, setFilter] = useState("all")
+  const [searchParams] = useSearchParams() // /inventory?filter=low (from the dashboard)
+  const [filter, setFilter] = useState(() => (["low", "out"].includes(searchParams.get("filter")) ? searchParams.get("filter") : "all"))
   const [cat, setCat] = useState("")
   const [token, setToken] = useState(0) // bumps after every change so ledger/detail refetch
   const [ledgerFor, setLedgerFor] = useState(null)

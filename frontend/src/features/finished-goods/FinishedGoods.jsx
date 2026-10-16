@@ -84,6 +84,7 @@ export default function FinishedGoods() {
   const [actionError, setError] = useState("")
   const error = actionError || (loadError ? errorMessage(loadError, "Failed to load finished goods.") : "")
   const [query, setQuery] = useState("")
+  const [status, setStatus] = useState("all") // set by clicking a figure in the strip
   const [selected, setSelected] = useState(null)
   const [action, setAction] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -95,8 +96,8 @@ export default function FinishedGoods() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return items.filter((item) => !q || `${item.orderNumber} ${item.productName} ${item.productSku} ${item.status} ${item.createdByName || ""} ${item.dispatchedByName || ""} ${item.completedByName || ""}`.toLowerCase().includes(q))
-  }, [items, query])
+    return items.filter((item) => (status === "all" || item.status === status) && (!q || `${item.orderNumber} ${item.productName} ${item.productSku} ${item.status} ${item.createdByName || ""} ${item.dispatchedByName || ""} ${item.completedByName || ""}`.toLowerCase().includes(q)))
+  }, [items, query, status])
 
   const counts = useMemo(() => ({
     packaging: items.filter((x) => x.status === "PACKAGING").length,
@@ -136,16 +137,16 @@ export default function FinishedGoods() {
           layoutId="finished-goods-status"
           cols="grid-cols-2 md:grid-cols-4"
           items={[
-            { key: "packaging", label: "Packaging", value: counts.packaging, tone: "warning" },
-            { key: "dispatched", label: "Dispatched", value: counts.dispatched, tone: "info" },
-            { key: "completed", label: "Completed", value: counts.completed, tone: "success" },
-            { key: "total", label: "Total batches", value: items.length, tone: "neutral" },
+            { key: "packaging", label: "Packaging", value: counts.packaging, tone: "warning", active: status === "PACKAGING", onClick: () => setStatus(status === "PACKAGING" ? "all" : "PACKAGING") },
+            { key: "dispatched", label: "Dispatched", value: counts.dispatched, tone: "info", active: status === "DISPATCHED", onClick: () => setStatus(status === "DISPATCHED" ? "all" : "DISPATCHED") },
+            { key: "completed", label: "Completed", value: counts.completed, tone: "success", active: status === "COMPLETED", onClick: () => setStatus(status === "COMPLETED" ? "all" : "COMPLETED") },
+            { key: "total", label: "Total batches", value: items.length, tone: "neutral", active: status === "all", onClick: () => setStatus("all") },
           ]}
         />
         <div className="flex items-center gap-3 border-b px-4 py-3 sm:px-5"><SearchBar value={query} onChange={setQuery} placeholder="Search order, product, SKU or person..." /></div>
 
         {loading ? <TableSkeleton rows={6} /> : rows.length === 0 ? (
-          <EmptyState icon={PackageCheck} title={query ? "No matching finished goods" : "No finished goods yet"}>
+          <EmptyState icon={PackageCheck} title={query || status !== "all" ? "No matching finished goods" : "No finished goods yet"}>
             Approved products will appear here after Quality Control.
           </EmptyState>
         ) : (

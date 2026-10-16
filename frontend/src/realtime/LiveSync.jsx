@@ -1,3 +1,4 @@
+//LiveSync.jsx doosre users ke changes ka pata lagata hai aur data refresh karwata hai.
 import { useEffect, useRef } from "react";
 import { useDispatch } from "react-redux";
 import api, { isMock } from "@/api/api";
@@ -27,9 +28,13 @@ const TAGS = {
   employees: ["Attendance", "Employees"],
   attendance: ["Attendance"],
   // incoming goods: purchase -> IQC -> store. Accepting also changes stock.
-  purchase: ["Purchases"],
+  purchase: ["Purchases", "OrderApprovals"], // placing a purchase marks lines of the approved order as ordered
   iqc: ["Purchases"],
   "incoming-stock": ["Purchases", "Inventory"],
+  // order approval: both screens (Operations Admin + Purchase Manager) and the Orders page refresh together
+  "order-approvals": ["OrderApprovals", "Orders", "MarketingOrders", "Production", "Purchases"],
+  "marketing-orders": ["MarketingOrders", "OrderApprovals", "Orders"],
+  "approved-orders": ["OrderApprovals"],
 };
 
 export default function LiveSync() {

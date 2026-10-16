@@ -546,26 +546,10 @@ const purGet = (id) => {
   return p
 }
 
-function createPurchase(body) {
-  const supplier = String(body.supplier ?? "").trim().replace(/\s+/g, " ")
-  if (supplier.length < 2 || supplier.length > 150) throw bad("Supplier name must be 2-150 characters", { field: "supplier" })
-  if (!Array.isArray(body.items) || body.items.length === 0) throw bad("Add at least one component to the purchase")
-  const seen = new Set()
-  const items = body.items.map((raw, line) => {
-    const c = comp(raw?.component_id)
-    if (!c) throw new Http(404, "Component not found", "NOT_FOUND", { line, field: "component" })
-    if (seen.has(c.id)) throw bad("This component appears more than once in the list", { line, field: "component" })
-    seen.add(c.id)
-    return { c, cents: qty(raw.quantity, "Quantity") }
-  })
-  const st = purState()
-  const id = st.next++
-  st.list.push({
-    id, po_number: `PO-${String(id).padStart(4, "0")}`, supplier, notes: String(body.notes ?? "").trim() || null, status: "ORDER_PLACED",
-    created_by: currentUserId, created_at: fmtDT(new Date()), received_by: null, received_at: null, sent_to_iqc_by: null, sent_to_iqc_at: null, iqc_by: null, iqc_at: null, iqc_remarks: null, accepted_by: null, accepted_at: null,
-    items: items.map((it, k) => ({ id: id * 100 + k, component_id: it.c.id, ordered: it.cents, received: null, defective: 0, approved: null, remarks: null })),
-  })
-  return { status: 201, data: purView(purGet(id)) }
+function createPurchase() {
+  // Real rule (backend): a purchase can only be placed for components the Operations Admin sent (order_purchase_items).
+  // The mock has no approved orders, so nothing can be bought here.
+  throw bad("Purchases can only be placed for components the Operations Admin sent. Use the real backend (VITE_DATA_MODE=mysql).")
 }
 
 function receivePurchase(id) {
@@ -659,7 +643,6 @@ const ROUTES = [
   ["DELETE", /^\/inventory\/(\d+)$/, (m, q, b) => ok(archive(m[1], b))],
 
   // incoming goods: purchase manager -> IQC -> store manager
-  ["GET", /^\/purchase\/components$/, (m, q) => ok(componentOptions(q))],
   ["GET", /^\/purchase$/, (m, q) => ok(purList(q.status))],
   ["GET", /^\/purchase\/(\d+)$/, (m) => ok(purView(purGet(m[1])))],
   ["POST", /^\/purchase$/, (m, q, b) => createPurchase(b)],

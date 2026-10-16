@@ -29,3 +29,17 @@ export function downloadRejected(p) {
   ])
   downloadXlsx(`${p.po_number}-rejected-components.xlsx`, `${p.po_number} rejected`, headers, rows)
 }
+
+/*
+  The Operations Admin's list, as the Purchase Manager sees it. An approved order carries
+  purchase_request.items = [{ request_item_id, component_id, sku, name, unit, quantity, purchase_order_id, po_number }].
+  purchase_order_id is null while the line is still "to order".
+*/
+export const isToOrder = (line) => line.purchase_order_id == null
+
+/* Approved orders that still have components to order -> [{ order, lines }] (lines = only the ones not ordered yet). */
+export function ordersToOrder(orders) {
+  return (orders || [])
+    .map((order) => ({ order, lines: (order.purchase_request?.items || []).filter(isToOrder) }))
+    .filter((g) => g.lines.length > 0)
+}

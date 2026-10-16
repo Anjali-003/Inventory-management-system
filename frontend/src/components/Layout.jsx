@@ -1,3 +1,5 @@
+// website ka common UI banata hai, jaise header, sidebar, navigation aur page display.
+
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
@@ -111,6 +113,10 @@ const GROUPS = [
   {
     label: "Quality & Purchase",
     items: [
+      { to: "/marketing-orders", label: "Marketing Orders", icon: ClipboardList, module: "marketingOrders" },
+      // order approval: Operations Admin decides, then the Purchase Manager sees the approved orders
+      { to: "/order-approvals", label: "Order Approvals", icon: ClipboardCheck, module: "orderApprovals" },
+      { to: "/approved-orders", label: "Approved Orders", icon: ClipboardList, module: "approvedOrders" },
       // the incoming-goods flow, in order: buy -> inspect -> accept into stock
       { to: "/purchase", label: "Purchase", icon: ShoppingCart, module: "purchase" },
       { to: "/iqc", label: "IQC", icon: ClipboardCheck, module: "iqc" },
@@ -234,6 +240,8 @@ function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
   );
 }
 
+// pathname isi liye use ho raha hai, taaki page badalne par sidebar band ho aur naya page animation ke saath dikhe.
+//usePermissions() ek object return kar raha hai, jisme user, role, roleLabel, loading, canView, canEdit aur homePath properties hain.
 export default function Layout() {
   const { pathname } = useLocation();
   const { user, roleLabel } = usePermissions();
@@ -318,7 +326,7 @@ export default function Layout() {
             className="size-8 rounded-lg bg-white object-contain ring-1 ring-border"
           />
 
-          <div className="leading-none">
+          <div className="hidden leading-none md:block">
             <p className="text-lg font-bold italic tracking-tight text-primary">
               Sensation Systems
             </p>
@@ -327,8 +335,14 @@ export default function Layout() {
           </div>
         </div>
 
+        {roleLabel && (
+          <p className="min-w-0 flex-1 truncate px-2 text-center text-base font-extrabold uppercase tracking-wide text-primary sm:text-xl lg:text-2xl">
+            {roleLabel}
+          </p>
+        )}
+
         <div className="flex items-center gap-4">
-          <span className="hidden text-xs text-muted-foreground sm:block">{today}</span>
+          <span className="hidden text-xs text-muted-foreground xl:block">{today}</span>
 
           {user && (
             <div className="hidden text-right leading-tight sm:block">
