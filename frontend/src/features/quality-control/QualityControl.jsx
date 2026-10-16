@@ -2,13 +2,7 @@ import { useCallback, useMemo, useState } from "react"
 import { CheckCircle2, ClipboardCheck, PackageCheck, RefreshCw, XCircle } from "lucide-react"
 import { useDispatch } from "react-redux"
 import { useToast } from "@/components/toast"
-import PageHeader from "@/components/PageHeader"
-import SearchBar from "@/components/SearchBar"
-import StatStrip from "@/components/StatStrip"
-import { Notice } from "@/components/feedback"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { HeroButton, MktHero, SearchField } from "@/features/marketing-orders/mktKit"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useGetQualityControlQuery } from "@/features/quality-control/qualityControlApi"
 import { qualityControlService } from "@/features/quality-control/qualityControlService"
@@ -68,6 +62,13 @@ export default function QualityControl() {
     released: rows.filter((item) => item.finishedGoodsId).length,
   }), [rows])
 
+  const summaryCards = [
+    { key: "pending", label: "Pending QC", value: counts.pending, hint: "Completed batches awaiting decision", icon: ClipboardCheck, tone: "amber" },
+    { key: "passed", label: "Passed batches", value: counts.passed, hint: "Latest decision is Pass", icon: CheckCircle2, tone: "green" },
+    { key: "failed", label: "Failed batches", value: counts.failed, hint: "Require rework or retest", icon: XCircle, tone: "rose" },
+    { key: "released", label: "Sent to Finished Goods", value: counts.released, hint: "Released for packaging", icon: PackageCheck, tone: "teal" },
+  ]
+
   const refresh = useCallback(async () => {
     setActionError("")
     await refetch()
@@ -117,33 +118,58 @@ export default function QualityControl() {
 
   return (
     <div className="min-w-0 space-y-4">
-      <PageHeader
+      <MktHero
+        eyebrow="Quality & release"
         title="Quality Control"
-        description="Record each Pass/Fail attempt, send failed batches for rework, and review them again after Production resubmits."
+        description="Review completed production batches, record Pass/Fail decisions and send failed batches back for correction."
       >
-        <Button variant="outline" onClick={refresh} disabled={loading || isFetching}>
+        <HeroButton variant="glass" onClick={refresh} disabled={loading || isFetching} aria-label="Refresh quality control">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
-        </Button>
-      </PageHeader>
+        </HeroButton>
+      </MktHero>
 
-      {error && <Notice title="Quality Control update">{error}</Notice>}
-
-      <Card className="min-w-0 overflow-hidden">
-        <StatStrip
-          cols="grid-cols-2 md:grid-cols-4"
-          layoutId="qc-batch-summary"
-          items={[
-            { key: "pending", label: "Pending QC", value: loading ? "—" : counts.pending, hint: "Completed batches", tone: "warning" },
-            { key: "passed", label: "Passed batches", value: loading ? "—" : counts.passed, hint: "Latest QC result is Pass", tone: "success" },
-            { key: "failed", label: "Failed batches", value: loading ? "—" : counts.failed, hint: "Awaiting rework or retest", tone: "danger" },
-            { key: "released", label: "Sent to Finished Goods", value: loading ? "—" : counts.released, hint: "Ready for packaging", tone: "info" },
-          ]}
-        />
-        <div className="border-t p-3 sm:p-4">
-          <SearchBar value={query} onChange={setQuery} placeholder="Search order, product or SKU..." />
-          <p className="mt-2 text-xs text-muted-foreground">Only batches where completed production meets the full ordered quantity are listed.</p>
+      {error && (
+        <div role="alert" className="rounded-2xl border-2 border-rose-200 bg-rose-50 px-4 py-3 text-rose-900 sm:px-5">
+          <p className="font-extrabold">Quality Control update</p>
+          <p className="mt-1 text-sm">{error}</p>
         </div>
-      </Card>
+      )}
+
+      <section className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
+        {summaryCards.map(({ key, label, value, hint, icon: Icon, tone }) => {
+          const toneStyles = {
+            amber: { edge: "bg-gradient-to-r from-amber-400 to-orange-500", icon: "bg-gradient-to-br from-amber-400 to-orange-600", text: "text-amber-800" },
+            green: { edge: "bg-gradient-to-r from-emerald-500 to-teal-700", icon: "bg-gradient-to-br from-emerald-500 to-teal-700", text: "text-emerald-800" },
+            rose: { edge: "bg-gradient-to-r from-rose-500 to-red-700", icon: "bg-gradient-to-br from-rose-500 to-red-700", text: "text-rose-800" },
+            teal: { edge: "bg-gradient-to-r from-teal-500 to-cyan-700", icon: "bg-gradient-to-br from-teal-500 to-cyan-700", text: "text-teal-800" },
+          }[tone]
+          return (
+            <article key={key} className="relative min-w-0 overflow-hidden rounded-2xl border border-[#dce5e0] bg-white p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] sm:p-5">
+              <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${toneStyles.edge}`} />
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold leading-snug text-slate-700 sm:text-sm">{label}</p>
+                  <p className={`mt-3 text-3xl font-extrabold leading-none tabular-nums sm:text-4xl ${toneStyles.text}`}>{loading ? "—" : value}</p>
+                </div>
+                <span className={`grid size-9 shrink-0 place-items-center rounded-xl text-white shadow-sm sm:size-11 ${toneStyles.icon}`}>
+                  <Icon className="size-5 sm:size-6" aria-hidden />
+                </span>
+              </div>
+              <p className="mt-3 text-[11px] leading-snug text-slate-600 sm:text-xs">{hint}</p>
+            </article>
+          )
+        })}
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border-2 border-slate-300 bg-white p-3 shadow-sm sm:p-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1 sm:max-w-sm">
+            <SearchField value={query} onChange={setQuery} placeholder="Search order, product or SKU..." />
+          </div>
+          <p className="text-xs font-semibold text-slate-600">{filtered.length} result{filtered.length === 1 ? "" : "s"}</p>
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-slate-600">Only batches where completed production meets the full ordered quantity are listed.</p>
+      </section>
 
       <QcBatchSection
         title="Pending batches for QC"

@@ -1,8 +1,8 @@
 import { useNavigate } from "react-router-dom"
-import { AlertTriangle, CheckCircle2, PackageCheck, Wrench, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, PackageCheck, XCircle } from "lucide-react"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { MktBtn } from "@/features/marketing-orders/mktKit"
 import { EmptyState, TableSkeleton } from "@/components/feedback"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import UserCell from "@/components/UserCell"
@@ -35,8 +35,8 @@ function DecisionActions({ item, onDecide, editable }) {
   if (!editable) return <span className="text-xs text-muted-foreground">View only</span>
   return (
     <div className="flex flex-wrap gap-2 xl:justify-end">
-      <Button size="sm" onClick={() => onDecide(item, "PASS")}><CheckCircle2 className="size-4" /> Pass</Button>
-      <Button size="sm" variant="destructive" onClick={() => onDecide(item, "FAIL")}><XCircle className="size-4" /> Fail</Button>
+      <MktBtn size="sm" variant="primary" onClick={() => onDecide(item, "PASS")}><CheckCircle2 className="size-4" /> Pass</MktBtn>
+      <MktBtn size="sm" variant="danger" onClick={() => onDecide(item, "FAIL")}><XCircle className="size-4" /> Fail</MktBtn>
     </div>
   )
 }
@@ -58,9 +58,8 @@ function Remarks({ title, value, tone = "neutral" }) {
 
 function BatchCard({ item, kind, onDecide, editable, navigate }) {
   const history = kind === "history"
-  const productionId = item.productionId || item.id
   return (
-    <article className="min-w-0 rounded-xl border bg-card p-4">
+    <article className="min-w-0 rounded-2xl border border-[#dce5e0] bg-white p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1"><BatchIdentity item={item} /></div>
         {history && <ResultBadge decision={item.batchDecision} />}
@@ -77,7 +76,7 @@ function BatchCard({ item, kind, onDecide, editable, navigate }) {
               {item.decisionByName && <UserCell className="mt-1" name={item.decisionByName} sub="QC decision by" />}
             </div>
             {item.batchDecision === "PASS"
-              ? <Button size="sm" variant="outline" onClick={() => navigate("/finished-goods")}><PackageCheck className="size-4" /> Finished Goods</Button>
+              ? <MktBtn size="sm" variant="outline" onClick={() => navigate("/finished-goods")}><PackageCheck className="size-4" /> Finished Goods</MktBtn>
               : <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive"><AlertTriangle className="size-3.5" /> Held from Finished Goods</span>}
           </div>
           <Remarks title="QC failure remark" value={item.decisionRemarks || (item.batchDecision === "FAIL" ? "No remark recorded for this legacy failure." : "")} tone="danger" />
@@ -108,13 +107,13 @@ export default function QcBatchSection({ title, description, icon: Icon, kind, i
     : history ? "Each Pass/Fail decision and its rework notes will be retained here." : "A batch appears here only after all ordered units are complete or rework has been submitted for retest."
 
   return (
-    <Card className="min-w-0 overflow-hidden">
-      <CardHeader className="flex flex-wrap items-start justify-between gap-3 border-b">
+    <Card className="min-w-0 overflow-hidden rounded-2xl border-2 border-slate-300 bg-white shadow-sm">
+      <CardHeader className="flex flex-wrap items-start justify-between gap-3 border-b-2 border-slate-200 bg-slate-50 px-4 py-4 sm:px-6 sm:py-5">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-cf-green-soft text-primary"><Icon className="size-4" /></span>
-          <div className="min-w-0"><CardTitle>{title}</CardTitle><CardDescription className="mt-1 max-w-3xl">{description}</CardDescription></div>
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-800"><Icon className="size-5" /></span>
+          <div className="min-w-0"><CardTitle className="text-lg font-extrabold leading-tight text-slate-950 sm:text-2xl">{title}</CardTitle><CardDescription className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-700">{description}</CardDescription></div>
         </div>
-        <Badge variant="neutral">{loading ? "Loading…" : `${items.length} ${history ? "attempt" : "batch"}${items.length === 1 ? "" : "es"}`}</Badge>
+        <span className="inline-flex shrink-0 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">{loading ? "Loading…" : `${items.length} ${history ? "attempt" : "batch"}${items.length === 1 ? "" : "es"}`}</span>
       </CardHeader>
 
       {loading ? <div className="p-3"><TableSkeleton rows={3} /></div> : items.length === 0 ? (
@@ -152,7 +151,7 @@ export default function QcBatchSection({ title, description, icon: Icon, kind, i
                   <TableCell className="whitespace-normal align-top">
                     {history
                       ? item.batchDecision === "PASS"
-                        ? <div className="space-y-2"><Badge variant="success">Released</Badge><Button size="sm" variant="outline" onClick={() => navigate("/finished-goods")}><PackageCheck className="size-4" /> Finished Goods</Button></div>
+                        ? <div className="space-y-2"><Badge variant="success">Released</Badge><MktBtn size="sm" variant="outline" onClick={() => navigate("/finished-goods")}><PackageCheck className="size-4" /> Finished Goods</MktBtn></div>
                         : <span className="inline-flex items-center gap-1 text-sm font-medium text-destructive"><XCircle className="size-4" /> Held from release</span>
                       : <DecisionActions item={item} onDecide={onDecide} editable={editable} />}
                   </TableCell>

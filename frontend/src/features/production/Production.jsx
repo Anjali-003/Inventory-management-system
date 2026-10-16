@@ -1,16 +1,17 @@
 import { useCallback, useMemo, useState } from "react"
 import { useDispatch } from "react-redux"
-import { AlertTriangle, ClipboardCheck, Factory, RefreshCw } from "lucide-react"
+import { Activity, AlertTriangle, ClipboardCheck, Factory, History, RefreshCw } from "lucide-react"
 import { productionService } from "@/features/production/productionService"
 import { useGetProductionQuery } from "@/features/production/productionApi"
 import { baseApi } from "@/api/baseApi"
 import ReworkWorkspace from "@/features/production/components/ReworkWorkspace"
 import ReworkSubmitModal from "@/features/production/components/ReworkSubmitModal"
 import { errorMessage } from "@/lib/stock"
-import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
 import Pagination from "@/components/Pagination"
 import StatStrip from "@/components/StatStrip"
+import { HeroButton, MktBtn, MktHero, SearchField, StageTile, TileGrid } from "@/features/marketing-orders/mktKit"
+import ProductionOrderCard from "@/features/production/components/ProductionOrderCard"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { useToast } from "@/components/toast"
 import { usePermissions } from "@/features/auth/usePermissions"
@@ -18,7 +19,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input, Label } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import MaterialCheckModal from "@/features/orders/components/MaterialCheckModal"
 import StartProductionModal from "@/features/orders/components/StartProductionModal"
 
@@ -67,7 +67,7 @@ function MaterialReadiness({ item }) {
   return <div className="space-y-1"><Badge variant="success">Materials covered</Badge><p className="text-xs text-muted-foreground">All {remaining} remaining unit{remaining === 1 ? "" : "s"} can start</p></div>
 }
 
-function ProductionActions({ item, onUpdate, onCheck, onStart, editable = true, compact = false }) {
+function ProductionActions({ item, onUpdate, onCheck, onStart, editable = true, compact = false, marketing = false }) {
   if (!editable) return <span className="text-xs text-muted-foreground">View only</span>
   const activeUnits = inProduction(item)
   const hasUpdate = item.id && item.status === "IN_PRODUCTION" && activeUnits > 0
@@ -78,15 +78,18 @@ function ProductionActions({ item, onUpdate, onCheck, onStart, editable = true, 
     return <span className="text-xs text-muted-foreground">{item.status === "COMPLETED" ? "Production complete" : needsBomReview ? "Resolve BOM first" : "—"}</span>
   }
 
+  const ActionButton = marketing ? MktBtn : Button
+  const primaryVariant = marketing ? "primary" : "default"
+
   return (
     <div className={`flex flex-wrap gap-1.5 ${compact ? "justify-start" : "justify-end"}`}>
       {eligibleToStart && (
         <>
-          <Button variant="outline" size="sm" onClick={() => onCheck(item)}><ClipboardCheck className="size-3.5" /> Check materials</Button>
-          <Button size="sm" onClick={() => onStart(item)}>{num(item.quantity_to_produce) > 0 ? "Start more" : "Start production"}</Button>
+          <ActionButton variant="outline" size="sm" onClick={() => onCheck(item)}><ClipboardCheck className="size-3.5" /> Check materials</ActionButton>
+          <ActionButton variant={primaryVariant} size="sm" onClick={() => onStart(item)}>{num(item.quantity_to_produce) > 0 ? "Start more" : "Start production"}</ActionButton>
         </>
       )}
-      {hasUpdate && <Button variant="outline" size="sm" onClick={() => onUpdate(item)}>Update</Button>}
+      {hasUpdate && <ActionButton variant="outline" size="sm" onClick={() => onUpdate(item)}>Update progress</ActionButton>}
     </div>
   )
 }
@@ -199,10 +202,10 @@ export default function Production() {
 
   // Keep the original Production Orders filters here. QC recovery has its own tab.
   const stats = [
-    { key: "all", label: "All production", value: counts.all, tone: "neutral", active: filter === "all", onClick: () => setFilterAndReset("all") },
-    { key: "shortage", label: "Material shortages", value: counts.shortage, tone: "danger", active: filter === "shortage", onClick: () => setFilterAndReset("shortage") },
-    { key: "active", label: "Active production", value: counts.active, tone: "info", active: filter === "active", onClick: () => setFilterAndReset("active") },
-    { key: "history", label: "Production history", value: counts.history, tone: "success", active: filter === "history", onClick: () => setFilterAndReset("history") },
+    { key: "all", label: "All production", hint: "Every production order", icon: Factory, dot: "bg-slate-400", s: { grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/20" }, value: counts.all, tone: "neutral", active: filter === "all", onClick: () => setFilterAndReset("all") },
+    { key: "shortage", label: "Material shortages", hint: "Orders blocked by stock", icon: AlertTriangle, dot: "bg-rose-500", s: { grad: "from-rose-500 to-red-700", glow: "shadow-rose-600/20" }, value: counts.shortage, tone: "danger", active: filter === "shortage", onClick: () => setFilterAndReset("shortage") },
+    { key: "active", label: "Active production", hint: "Units currently in progress", icon: Activity, dot: "bg-blue-500", s: { grad: "from-blue-500 to-indigo-700", glow: "shadow-blue-600/20" }, value: counts.active, tone: "info", active: filter === "active", onClick: () => setFilterAndReset("active") },
+    { key: "history", label: "Production history", hint: "Completed production orders", icon: History, dot: "bg-emerald-500", s: { grad: "from-emerald-500 to-teal-700", glow: "shadow-emerald-600/20" }, value: counts.history, tone: "success", active: filter === "history", onClick: () => setFilterAndReset("history") },
   ]
 
   const openUpdate = (item) => {
@@ -251,22 +254,6 @@ export default function Production() {
     await load()
   }
 
-  const startRework = async (item) => {
-    if (!editable || !item?.id || reworkBusy) return
-    try {
-      setReworkBusy(true)
-      setError("")
-      const { data } = await productionService.startRework(item.id)
-      toast.success(data?.message || "Rework started")
-      await load()
-    } catch (err) {
-      console.error(err)
-      setError(err.response?.data?.message || "Failed to start rework.")
-    } finally {
-      setReworkBusy(false)
-    }
-  }
-
   const openReworkSubmit = (item) => {
     if (!editable || !item?.id || reworkBusy) return
     setReworkError("")
@@ -286,6 +273,13 @@ export default function Production() {
     try {
       setReworkBusy(true)
       setReworkError("")
+      // A failed batch can be repaired and submitted in one user action.
+      // Start its rework state first, then submit the corrective notes for QC.
+      if (reworkSubmitFor.rework_status === "NEEDS_REWORK") {
+        await productionService.startRework(reworkSubmitFor.id)
+        // Keep the modal in a retryable state if the following submit request fails.
+        setReworkSubmitFor((current) => current ? { ...current, rework_status: "IN_PROGRESS" } : current)
+      }
       const { data } = await productionService.submitRework(reworkSubmitFor.id, reworkRemarks)
       setReworkSubmitFor(null)
       setReworkRemarks("")
@@ -301,36 +295,40 @@ export default function Production() {
 
   return (
     <>
-      <PageHeader title="Production" description={editable ? "Track production runs, start more units, and record completed production from one page." : "View production progress and material readiness. This workspace is read-only for production."}>
-        <Button variant="outline" onClick={load} disabled={loading}><RefreshCw /> Refresh</Button>
-      </PageHeader>
+      <MktHero
+        eyebrow="Operations"
+        title="Production"
+        description={editable ? "Track production runs, start more units, and record completed production from one page." : "View production progress and material readiness. This workspace is read-only for production."}
+      >
+        <HeroButton variant="glass" onClick={load} disabled={loading} aria-label="Refresh production">
+          <RefreshCw className={loading ? "animate-spin" : ""} /> Refresh
+        </HeroButton>
+      </MktHero>
 
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
       <div className="mb-4 inline-flex max-w-full flex-wrap gap-1 rounded-xl border bg-card p-1" role="tablist" aria-label="Production workspace">
-        <button
-          type="button"
+        <MktBtn
           role="tab"
           aria-selected={activeView === "orders"}
+          variant={activeView === "orders" ? "primary" : "outline"}
           onClick={() => setActiveView("orders")}
-          className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${activeView === "orders" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"}`}
+          className="h-11 px-4"
         >
-          <Factory className="size-4" />
-          Production Orders
-        </button>
-        <button
-          type="button"
+          <Factory className="size-4" /> Production Orders
+        </MktBtn>
+        <MktBtn
           role="tab"
           aria-selected={activeView === "qc-failed"}
+          variant={activeView === "qc-failed" ? "danger" : "outline"}
           onClick={() => setActiveView("qc-failed")}
-          className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium transition-colors ${activeView === "qc-failed" ? "border-destructive/30 bg-cf-red-soft text-destructive shadow-sm" : "border-transparent text-destructive hover:bg-cf-red-soft/70"}`}
+          className="h-11 border-rose-200 px-4 text-rose-700 hover:bg-rose-50"
         >
-          <AlertTriangle className="size-4" />
-          QC Failed
-          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${activeView === "qc-failed" ? "bg-destructive text-destructive-foreground" : "bg-cf-red-soft"}`}>
+          <AlertTriangle className="size-4" /> QC Failed
+          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold tabular-nums text-rose-700">
             {counts.qcFailed + counts.rework + counts.readyQc}
           </span>
-        </button>
+        </MktBtn>
       </div>
 
       {activeView === "qc-failed" ? (
@@ -339,65 +337,64 @@ export default function Production() {
           loading={loading}
           editable={editable}
           busy={reworkBusy}
-          onStartRework={startRework}
           onSubmitRework={openReworkSubmit}
         />
       ) : (
+      <div className="min-w-0 space-y-4">
+      <div className="hidden md:block">
+        <TileGrid className="md:grid-cols-4 xl:grid-cols-4">
+          {stats.map((item) => (
+            <StageTile key={item.key} stage={item} value={item.value} loading={loading} active={item.active} onClick={item.onClick} />
+          ))}
+        </TileGrid>
+      </div>
       <Card className="min-w-0 overflow-hidden">
-        <StatStrip layoutId="production-filter" cols="grid-cols-2 sm:grid-cols-4" items={stats} />
-        <div className="flex min-w-0 flex-wrap items-center gap-3 border-y px-4 py-3 sm:px-5">
-          <SearchBar value={query} onChange={setQueryAndReset} placeholder="Search order, product or person..." />
-          <p className="ml-auto text-xs text-muted-foreground">{rows.length} result{rows.length === 1 ? "" : "s"}</p>
+        <div className="md:hidden">
+          <StatStrip layoutId="production-filter" cols="grid-cols-2 sm:grid-cols-4" items={stats} />
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-3 border-y border-slate-200 bg-slate-50/70 px-4 py-3 sm:px-5">
+          <div className="hidden min-w-0 flex-1 md:block md:max-w-sm">
+            <SearchField value={query} onChange={setQueryAndReset} placeholder="Search order, product or person..." />
+          </div>
+          <div className="min-w-0 flex-1 md:hidden">
+            <SearchBar value={query} onChange={setQueryAndReset} placeholder="Search order, product or person..." />
+          </div>
+          <p className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-slate-600">{rows.length} result{rows.length === 1 ? "" : "s"}</p>
         </div>
 
-        {loading ? <TableSkeleton rows={7} /> : rows.length === 0 ? (
+        {loading ? (
+          <>
+            <div className="hidden min-w-0 grid-cols-2 gap-4 p-4 lg:grid 2xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-2xl border border-slate-200 bg-slate-100" />)}
+            </div>
+            <div className="lg:hidden"><TableSkeleton rows={7} /></div>
+          </>
+        ) : rows.length === 0 ? (
           <EmptyState icon={Factory} title={query || filter !== "all" ? "No matching production orders" : "No production orders yet"}>
             {query || filter !== "all" ? "Try another search or select another production filter." : "Orders ready to start and existing production runs will appear here."}
           </EmptyState>
         ) : (
           <>
-            {/* Wider screens use a fixed-width table; smaller screens use cards to avoid horizontal scrolling. */}
-            <div className="hidden xl:block">
-              <Table className="table-fixed">
-                <TableHeader><TableRow>
-                  <TableHead className="w-[20%]">Order / product</TableHead>
-                  <TableHead className="w-[19%]">Progress</TableHead>
-                  <TableHead className="w-[20%]">Material readiness</TableHead>
-                  <TableHead className="w-[13%]">Started</TableHead>
-                  <TableHead className="w-[28%] text-right">Actions</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {pageRows.map((item) => (
-                    <TableRow key={item.order_id}>
-                      <TableCell className="min-w-0 whitespace-normal">
-                        <p className="break-words font-medium tabular-nums">{item.order_number}</p>
-                        <p className="mt-1 truncate text-xs text-muted-foreground" title={item.product_name || "-"}>{item.product_name || "-"}</p>
-                      </TableCell>
-                      <TableCell className="whitespace-normal">
-                        <Progress done={num(item.quantity_completed)} total={num(item.ordered_quantity)} />
-                        <p className="mt-1 text-xs leading-snug text-muted-foreground">{inProduction(item)} currently in production</p>
-                      </TableCell>
-                      <TableCell className="whitespace-normal"><MaterialReadiness item={item} /></TableCell>
-                      <TableCell className="whitespace-normal text-xs leading-snug text-muted-foreground">
-                        <p>{date(item.started_at)}</p>
-                        {item.started_by_name && <p className="mt-1 truncate text-foreground" title={item.started_by_name}>{item.started_by_name}</p>}
-                      </TableCell>
-                      <TableCell className="whitespace-normal text-right">
-                        <ProductionActions item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            {/* Desktop gets spacious order cards in the Marketing style; mobile/tablet retain the original compact cards. */}
+            <div className="hidden min-w-0 grid-cols-2 gap-4 p-4 lg:grid 2xl:grid-cols-3">
+              {pageRows.map((item) => (
+                <ProductionOrderCard
+                  key={item.order_id}
+                  item={item}
+                  readiness={<MaterialReadiness item={item} />}
+                  actions={<ProductionActions item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} marketing />}
+                />
+              ))}
             </div>
 
-            <div className="grid min-w-0 gap-3 p-3 xl:hidden">
+            <div className="grid min-w-0 gap-3 p-3 lg:hidden">
               {pageRows.map((item) => <ProductionCard key={item.order_id} item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} />)}
             </div>
             <Pagination page={page} pageSize={PAGE_SIZE} total={rows.length} onPage={setPage} noun="production orders" />
           </>
         )}
       </Card>
+      </div>
       )}
 
       {editable && checkFor && <MaterialCheckModal order={checkFor} onClose={() => setCheckFor(null)} onStart={startFromCheck} partialProduction />}

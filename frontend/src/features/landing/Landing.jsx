@@ -65,7 +65,7 @@ const PORTAL_CARDS = [
   {
     portal: LOGIN_PORTALS.QUALITY_FG_MANAGER,
     label: "Quality Control & Finished Goods",
-    note: "Record testing/QC results and manage finished batches",
+    note: "Review completed batches, record Pass/Fail decisions, manage rework and release finished goods",
     icon: PackageCheck,
   },
 ];
@@ -95,14 +95,46 @@ const FLOW = [
 ];
 
 const ACCESS_ROWS = [
-  { role: "Super Admin", edit: "All modules", view: "None" },
-  { role: "Store Manager", edit: "Inventory, inventory history, finished goods, incoming stock", view: "IQC, purchase" },
-  { role: "IQC Manager", edit: "IQC", view: "None" },
-  { role: "Purchase Manager", edit: "Purchase", view: "None" },
-  { role: "Production", edit: "Production", view: "Dashboard, Inventory" },
-  { role: "Quality Control & Finished Goods", edit: "Quality Control, Finished Goods", view: "Dashboard, Production" },
-  { role: "IQC Manager", edit: "IQC", view: "Purchase, inventory, inventory history, finished goods, incoming stock" },
-  { role: "Purchase Manager", edit: "Purchase", view: "IQC, inventory, inventory history, finished goods, incoming stock" },
+  {
+    role: "Super Admin",
+    edit: "All modules",
+    view: "None",
+  },
+  {
+    role: "Marketing Manager",
+    edit: "Marketing orders",
+    view: "Dashboard",
+  },
+  {
+    role: "Operations Admin",
+    edit: "Order approvals",
+    view: "Dashboard, approved orders, inventory, inventory history, finished goods, incoming stock, IQC, purchase",
+  },
+  {
+    role: "Store Manager",
+    edit: "Inventory, inventory history, finished goods, incoming stock",
+    view: "Dashboard, IQC, purchase",
+  },
+  {
+    role: "IQC Manager",
+    edit: "IQC",
+    view: "Dashboard, purchase, inventory, inventory history, finished goods, incoming stock",
+  },
+  {
+    role: "Purchase Manager",
+    edit: "Purchase",
+    view: "Dashboard, approved orders, IQC, inventory, inventory history, finished goods, incoming stock",
+  },
+  {
+    role: "Production Manager",
+    edit: "Production",
+    view: "Dashboard, inventory",
+  },
+  {
+    role: "Quality Control & Finished Goods",
+    edit: "Quality Control, finished goods",
+    view: "Dashboard, production",
+  },
 ];
 
 /* ---------- shared Tailwind class sets ---------- */

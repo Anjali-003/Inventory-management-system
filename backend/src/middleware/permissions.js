@@ -88,7 +88,7 @@ const ACCESS = {
         iqc: "view",
         inventory: "view",
         inventoryHistory: "view",
-        finishedGoods: "view",
+        
         incomingStock: "view"
     }
 };

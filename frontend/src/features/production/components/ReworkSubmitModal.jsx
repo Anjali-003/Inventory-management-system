@@ -1,5 +1,5 @@
 import { ArrowRight, X, Wrench } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { MktBtn } from "@/features/marketing-orders/mktKit"
 
 export default function ReworkSubmitModal({ item, remarks, onRemarksChange, busy, error, onClose, onSubmit }) {
   if (!item) return null
@@ -15,10 +15,10 @@ export default function ReworkSubmitModal({ item, remarks, onRemarksChange, busy
         <div className="flex min-w-0 items-start gap-3 border-b px-5 py-4">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-cf-green-soft text-primary"><Wrench className="size-5" /></span>
           <div className="min-w-0 flex-1">
-            <h2 id="rework-submit-title" className="text-lg font-semibold">Submit batch for QC retest</h2>
+            <h2 id="rework-submit-title" className="text-lg font-semibold">Record fix &amp; submit for QC retest</h2>
             <p className="mt-1 break-words text-sm text-muted-foreground">{item.order_number} · {item.product_name}</p>
           </div>
-          <Button type="button" variant="ghost" size="icon" onClick={onClose} disabled={busy} aria-label="Close submit rework dialog"><X /></Button>
+          <MktBtn type="button" variant="ghost" size="icon" onClick={onClose} disabled={busy} aria-label="Close submit rework dialog"><X /></MktBtn>
         </div>
         <div className="space-y-4 p-5">
           <div className="rounded-lg border border-destructive/20 bg-cf-red-soft p-3">
@@ -42,8 +42,8 @@ export default function ReworkSubmitModal({ item, remarks, onRemarksChange, busy
           {error && <p role="alert" className="rounded-lg border border-destructive/20 bg-cf-red-soft px-3 py-2 text-sm text-destructive">{error}</p>}
         </div>
         <div className="flex flex-wrap justify-end gap-2 border-t px-5 py-4">
-          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button type="button" onClick={onSubmit} disabled={busy || !valid}>{busy ? "Submitting..." : "Submit to QC"} <ArrowRight className="size-4" /></Button>
+          <MktBtn type="button" variant="outline" onClick={onClose} disabled={busy}>Cancel</MktBtn>
+          <MktBtn type="button" variant="primary" onClick={onSubmit} disabled={busy || !valid}>{busy ? "Submitting..." : "Record fix & submit"} <ArrowRight className="size-4" /></MktBtn>
         </div>
       </section>
     </div>
