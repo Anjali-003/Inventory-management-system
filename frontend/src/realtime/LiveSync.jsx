@@ -23,6 +23,7 @@ const TAGS = {
   inventory: ["Inventory"],
   orders: ["Orders", "Inventory", "Production", "FinishedGoods", "QualityControl"],
   production: ["Orders", "Inventory", "Production", "QualityControl"],
+  "qc-failed": ["Production", "QualityControl", "FinishedGoods", "Orders"],
   "quality-control": ["Orders", "Inventory", "QualityControl"],
   "finished-goods": ["Orders", "FinishedGoods"],
   employees: ["Attendance", "Employees"],

@@ -191,6 +191,7 @@ export const MODULE_PATHS = {
   activity: "/activity",
   products: "/products",
   production: "/production",
+  qcFailed: "/qc-failed",
   inventory: "/inventory",
   inventoryHistory: "/inventory-history",
   orders: "/orders",
@@ -264,6 +265,7 @@ const ACCESS = {
   PRODUCTION_MANAGER: {
     dashboard: "view",
     production: "edit",
+    qcFailed: "edit",
     inventory: "view",
   },
 
@@ -272,6 +274,7 @@ const ACCESS = {
     dashboard: "view",
     qualityControl: "edit",
     finishedGoods: "edit",
+    qcFailed: "edit",
     production: "view",
   },
 

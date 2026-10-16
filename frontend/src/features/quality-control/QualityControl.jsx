@@ -21,6 +21,7 @@ export default function QualityControl() {
   const editable = canEdit("qualityControl")
   const { data: items = [], isLoading: loading, isFetching, error: loadError, refetch } = useGetQualityControlQuery()
   const [query, setQuery] = useState("")
+  const [activeView, setActiveView] = useState("pending")
   const [selected, setSelected] = useState(null)
   const [decision, setDecision] = useState(null)
   const [remarks, setRemarks] = useState("")
@@ -161,6 +162,35 @@ export default function QualityControl() {
         })}
       </section>
 
+      <section aria-label="Quality Control views" className="grid min-w-0 grid-cols-1 gap-2 rounded-2xl border-2 border-slate-300 bg-slate-50 p-2 sm:grid-cols-2">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "pending"}
+          onClick={() => setActiveView("pending")}
+          className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${activeView === "pending" ? "border-emerald-700 bg-emerald-700 text-white shadow-sm" : "border-slate-200 bg-white text-slate-800 hover:bg-emerald-50"}`}
+        >
+          <span className="flex min-w-0 items-center gap-2.5">
+            <ClipboardCheck className="size-5 shrink-0" aria-hidden />
+            <span className="text-sm font-extrabold sm:text-base">Pending batches for QC</span>
+          </span>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold tabular-nums ${activeView === "pending" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"}`}>{pendingRows.length}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeView === "history"}
+          onClick={() => setActiveView("history")}
+          className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${activeView === "history" ? "border-emerald-700 bg-emerald-700 text-white shadow-sm" : "border-slate-200 bg-white text-slate-800 hover:bg-emerald-50"}`}
+        >
+          <span className="flex min-w-0 items-center gap-2.5">
+            <CheckCircle2 className="size-5 shrink-0" aria-hidden />
+            <span className="text-sm font-extrabold sm:text-base">Previous QC tests</span>
+          </span>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold tabular-nums ${activeView === "history" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"}`}>{historyRows.length}</span>
+        </button>
+      </section>
+
       <section className="overflow-hidden rounded-2xl border-2 border-slate-300 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1 sm:max-w-sm">
@@ -171,28 +201,30 @@ export default function QualityControl() {
         <p className="mt-3 text-xs leading-relaxed text-slate-600">Only batches where completed production meets the full ordered quantity are listed.</p>
       </section>
 
-      <QcBatchSection
-        title="Pending batches for QC"
-        description="Review the completed batch, then choose Pass or Fail. The decision applies to the whole batch."
-        icon={ClipboardCheck}
-        kind="pending"
-        items={pendingRows}
-        loading={loading}
-        query={query}
-        editable={editable}
-        onDecide={askDecision}
-      />
-
-      <QcBatchSection
-        title="Previous QC tests"
-        description="Every QC attempt remains here, including the original failure remark, repair notes and the final release decision."
-        icon={CheckCircle2}
-        kind="history"
-        items={historyRows}
-        loading={loading}
-        query={query}
-        editable={false}
-      />
+      {activeView === "pending" ? (
+        <QcBatchSection
+          title="Pending batches for QC"
+          description="Review the completed batch, then choose Pass or Fail. The decision applies to the whole batch. Retest batches include the original failure and repair notes."
+          icon={ClipboardCheck}
+          kind="pending"
+          items={pendingRows}
+          loading={loading}
+          query={query}
+          editable={editable}
+          onDecide={askDecision}
+        />
+      ) : (
+        <QcBatchSection
+          title="Previous QC tests"
+          description="Every QC attempt remains here, including the original failure remark, repair notes and the final release decision."
+          icon={CheckCircle2}
+          kind="history"
+          items={historyRows}
+          loading={loading}
+          query={query}
+          editable={false}
+        />
+      )}
 
       {editable && <BatchDecisionConfirm item={selected} decision={decision} remarks={remarks} onRemarksChange={changeRemarks} busy={busy} error={actionError} onClose={closeConfirm} onConfirm={submitDecision} />}
     </div>

@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom"
-import { AlertTriangle, CheckCircle2, PackageCheck, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, PackageCheck, RefreshCw, XCircle } from "lucide-react"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { MktBtn } from "@/features/marketing-orders/mktKit"
@@ -58,12 +58,14 @@ function Remarks({ title, value, tone = "neutral" }) {
 
 function BatchCard({ item, kind, onDecide, editable, navigate }) {
   const history = kind === "history"
+  const retest = !history && (item.reworkStatus === "READY_FOR_QC" || Number(item.attemptNumber || 1) > 1)
   return (
-    <article className="min-w-0 rounded-2xl border border-[#dce5e0] bg-white p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+    <article className={`min-w-0 rounded-2xl border p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] ${retest ? "border-amber-300 bg-gradient-to-br from-amber-50 via-white to-white ring-1 ring-amber-200" : "border-[#dce5e0] bg-white"}`}>
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1"><BatchIdentity item={item} /></div>
-        {history && <ResultBadge decision={item.batchDecision} />}
+        {history ? <ResultBadge decision={item.batchDecision} /> : retest && <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-900"><RefreshCw className="size-3.5" aria-hidden /> Retest · Attempt {item.attemptNumber || 2}</span>}
       </div>
+      {retest && <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-100/70 px-3 py-2 text-xs font-semibold leading-relaxed text-amber-950"><RefreshCw className="mt-0.5 size-4 shrink-0" aria-hidden /><span>This batch has been repaired and returned for another QC decision. Review both notes below before deciding.</span></div>}
       <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border bg-muted/20 p-3">
         <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Batch completed</p><p className="mt-1 text-lg font-semibold tabular-nums">{Number(item.quantityCompleted || 0).toLocaleString()}</p></div>
         <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Ordered</p><p className="mt-1 text-lg font-semibold tabular-nums">{Number(item.orderedQuantity || 0).toLocaleString()}</p></div>
@@ -88,7 +90,10 @@ function BatchCard({ item, kind, onDecide, editable, navigate }) {
             {item.attemptNumber > 1 ? `Retest attempt ${item.attemptNumber}` : "Entire batch completed"}
             {item.reworkStatus === "READY_FOR_QC" ? " · Rework submitted" : ` · Completed ${dateLabel(item.completedAt)}`}
           </p>
-          {item.latestDecision === "FAIL" && item.decisionRemarks && <Remarks title="Previous QC failure" value={item.decisionRemarks} tone="danger" />}
+          {(item.latestDecision === "FAIL" || retest) && <>
+            <Remarks title="Previous QC failure" value={item.decisionRemarks || "No failure reason recorded."} tone="danger" />
+            {retest && <Remarks title="Repair notes" value={item.reworkRemarks || "No repair notes recorded."} tone="success" />}
+          </>}
           <div className="mt-3 flex flex-wrap justify-end gap-2"><DecisionActions item={item} onDecide={onDecide} editable={editable} /></div>
         </div>
       )}
@@ -130,22 +135,25 @@ export default function QcBatchSection({ title, description, icon: Icon, kind, i
                 <TableHead className={history ? "w-[29%]" : "w-[27%]"}>{history ? "QC and rework remarks" : "Previous issue / next decision"}</TableHead>
                 <TableHead className={history ? "w-[22%]" : "w-[29%] text-right"}>{history ? "Decision / Outcome" : "Final decision"}</TableHead>
               </TableRow></TableHeader>
-              <TableBody>{items.map((item) => (
-                <TableRow key={item.id}>
+              <TableBody>{items.map((item) => {
+                const retest = !history && (item.reworkStatus === "READY_FOR_QC" || Number(item.attemptNumber || 1) > 1)
+                return (
+                <TableRow key={item.id} className={retest ? "bg-amber-50/80 [&>td]:border-amber-100" : undefined}>
                   <TableCell className="min-w-0 whitespace-normal align-top"><BatchIdentity item={item} /></TableCell>
                   <TableCell className="whitespace-normal align-top"><p className="font-semibold tabular-nums">{Number(item.quantityCompleted || 0).toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">of {Number(item.orderedQuantity || 0).toLocaleString()}</p></TableCell>
                   {history && <TableCell className="whitespace-normal align-top"><ResultBadge decision={item.batchDecision} /></TableCell>}
                   <TableCell className="whitespace-normal align-top text-sm">
-                    {history ? <><p>Attempt {item.attemptNumber || 1}</p><p className="mt-1 break-words text-xs text-muted-foreground">{dateLabel(item.decisionAt)}</p>{item.decisionByName && <UserCell className="mt-1" name={item.decisionByName} sub="QC by" />}</> : <><p className="break-words">{item.attemptNumber > 1 ? `Retest ${item.attemptNumber}` : dateLabel(item.completedAt)}</p><p className="mt-1 text-xs text-muted-foreground">Full batch completed</p></>}
+                    {history ? <><p>Attempt {item.attemptNumber || 1}</p><p className="mt-1 break-words text-xs text-muted-foreground">{dateLabel(item.decisionAt)}</p>{item.decisionByName && <UserCell className="mt-1" name={item.decisionByName} sub="QC by" />}</> : <>{retest && <span className="mb-1 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-900"><RefreshCw className="size-3" aria-hidden /> Retest · Attempt {item.attemptNumber || 2}</span>}<p className="break-words">{retest ? `Retest ${item.attemptNumber || 2}` : dateLabel(item.completedAt)}</p><p className="mt-1 text-xs text-muted-foreground">Full batch completed</p></>}
                   </TableCell>
                   <TableCell className="whitespace-normal align-top">
                     {history ? <>
                       <Remarks title="QC remark" value={item.decisionRemarks || (item.batchDecision === "FAIL" ? "No remark recorded (legacy decision)." : "No remark recorded.")} tone={item.batchDecision === "FAIL" ? "danger" : "neutral"} />
                       {item.reworkRemarks && <Remarks title="Rework notes" value={item.reworkRemarks} tone="success" />}
                     </> : <>
-                      {item.latestDecision === "FAIL" && item.decisionRemarks
-                        ? <Remarks title="Previous failure" value={item.decisionRemarks} tone="danger" />
-                        : <span className="text-xs text-muted-foreground">Ready for final batch decision.</span>}
+                      {(item.latestDecision === "FAIL" || retest) ? <>
+                        <Remarks title="Previous QC failure" value={item.decisionRemarks || "No failure reason recorded."} tone="danger" />
+                        {retest && <Remarks title="Repair notes" value={item.reworkRemarks || "No repair notes recorded."} tone="success" />}
+                      </> : <span className="text-xs text-muted-foreground">Ready for final batch decision.</span>}
                     </>}
                   </TableCell>
                   <TableCell className="whitespace-normal align-top">
@@ -156,7 +164,7 @@ export default function QcBatchSection({ title, description, icon: Icon, kind, i
                       : <DecisionActions item={item} onDecide={onDecide} editable={editable} />}
                   </TableCell>
                 </TableRow>
-              ))}</TableBody>
+              )})}</TableBody>
             </Table>
           </div>
           <div className="grid min-w-0 gap-3 p-3 xl:hidden">

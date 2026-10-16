@@ -1,13 +1,12 @@
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { AlertTriangle, ArrowRight, ClipboardCheck, Clock3, PackageCheck, Wrench } from "lucide-react"
 import { MktBtn } from "@/features/marketing-orders/mktKit"
 import { EmptyState } from "@/components/feedback"
 import { cn } from "@/lib/utils"
 
 const STAGES = [
-  { key: "failed", status: "NEEDS_REWORK", label: "QC failed", description: "Review the original defect and record the corrective work.", tone: "danger", icon: AlertTriangle },
-  { key: "working", status: "IN_PROGRESS", label: "Rework in progress", description: "Continue the repair and submit the completed correction for QC retest.", tone: "warning", icon: Wrench },
-  { key: "ready", status: "READY_FOR_QC", label: "Ready for QC", description: "Submitted batches are waiting for the QC team to retest.", tone: "success", icon: ClipboardCheck },
+  { key: "failed", status: "NEEDS_REWORK", label: "QC Failed", description: "Review the original QC failure, record the fix and submit the batch for retesting.", tone: "danger", icon: AlertTriangle },
+  { key: "ready", status: "READY_FOR_QC", label: "Ready for QC", description: "These batches have been submitted and are waiting for a QC retest decision.", tone: "success", icon: ClipboardCheck },
 ]
 
 function formatWhen(value) {
@@ -24,7 +23,7 @@ function StageBadge({ status }) {
   }
   const labels = {
     NEEDS_REWORK: "Needs rework",
-    IN_PROGRESS: "Rework in progress",
+    IN_PROGRESS: "Correction started",
     READY_FOR_QC: "Ready for QC retest",
   }
 
@@ -66,7 +65,7 @@ function ReworkCard({ item, editable, busy, onSubmit }) {
 
         {status !== "NEEDS_REWORK" && (
           <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-slate-600">Rework notes</p>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.06em] text-slate-600">Correction notes</p>
             {item.rework_remarks
               ? <p className="mt-1.5 break-words whitespace-pre-wrap text-sm leading-relaxed text-slate-900">{item.rework_remarks}</p>
               : <p className="mt-1.5 text-sm text-slate-600">No repair notes recorded yet.</p>}
@@ -118,12 +117,10 @@ function StageSection({ stage, items, loading, editable, busy, onSubmit }) {
           <div className="h-48 animate-pulse rounded-xl bg-slate-100" />
         </div>
       ) : items.length === 0 ? (
-        <EmptyState icon={Icon} title={stage.key === "failed" ? "No failed batches need rework" : stage.key === "working" ? "No rework is in progress" : "No batches waiting for QC retest"}>
+        <EmptyState icon={Icon} title={stage.key === "failed" ? "No QC-failed batches" : "No batches waiting for QC retest"}>
           {stage.key === "failed"
-            ? "Batches that fail QC appear here with the original failure remark. Open a batch to record the repair and submit it back to QC."
-            : stage.key === "working"
-              ? "Rework started by the Production Manager appears here until repair notes are submitted."
-              : "After Production submits the correction, QC can review the batch and make the next Pass/Fail decision."}
+            ? "Batches that fail QC appear here with the original failure remark. Record the correction and submit the batch for retesting."
+            : "After the correction is submitted, the batch appears here while it waits for the QC team to make the next Pass/Fail decision."}
         </EmptyState>
       ) : (
         <div className="grid min-w-0 gap-3 p-3 sm:p-4 xl:grid-cols-2">
@@ -135,12 +132,14 @@ function StageSection({ stage, items, loading, editable, busy, onSubmit }) {
 }
 
 export default function ReworkWorkspace({ items = [], loading = false, editable = true, busy = false, onSubmitRework }) {
+  const [activeStage, setActiveStage] = useState("failed")
   const groups = useMemo(() => ({
-    failed: items.filter((item) => item.rework_status === "NEEDS_REWORK"),
-    working: items.filter((item) => item.rework_status === "IN_PROGRESS"),
+    // Keep interrupted submissions visible so staff can retry without a hidden stage.
+    failed: items.filter((item) => item.rework_status === "NEEDS_REWORK" || item.rework_status === "IN_PROGRESS"),
     ready: items.filter((item) => item.rework_status === "READY_FOR_QC"),
   }), [items])
-  const openTasks = groups.failed.length + groups.working.length + groups.ready.length
+  const openTasks = groups.failed.length + groups.ready.length
+  const currentStage = STAGES.find((stage) => stage.key === activeStage) || STAGES[0]
 
   return (
     <div className="min-w-0 space-y-5">
@@ -149,27 +148,53 @@ export default function ReworkWorkspace({ items = [], loading = false, editable 
           <div className="flex min-w-0 items-start gap-3">
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-rose-100 text-rose-800"><Wrench className="size-5" /></span>
             <div className="min-w-0">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-rose-800">Production recovery</p>
-              <h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">Quality recovery workspace</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-700">Review the original QC remark, record the correction and submit the same completed batch for QC retest. Only QC can release a passed batch to Finished Goods.</p>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-rose-800">QC recovery</p>
+              <h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">QC Failed</h2>
+              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-700">Review the failure remark and submit the completed correction for QC retest. Only a QC PASS can release a batch to Finished Goods.</p>
             </div>
           </div>
           <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
             <span className="size-2 rounded-full bg-rose-600" /> {loading ? "Loading tasks…" : `${openTasks} open ${openTasks === 1 ? "task" : "tasks"}`}
           </span>
         </div>
+        <div className="px-3 pt-3 sm:px-5 sm:pt-5">
+          <div role="tablist" aria-label="QC failed views" className="grid grid-cols-1 gap-2 rounded-2xl border-2 border-slate-200 bg-slate-50 p-2 sm:grid-cols-2">
+            {STAGES.map((stage) => {
+              const Icon = stage.icon
+              const selected = activeStage === stage.key
+              const activeStyle = stage.key === "failed"
+                ? "border-rose-700 bg-rose-700 text-white shadow-sm"
+                : "border-emerald-700 bg-emerald-700 text-white shadow-sm"
+              return (
+                <button
+                  key={stage.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setActiveStage(stage.key)}
+                  className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${selected ? activeStyle : "border-slate-200 bg-white text-slate-800 hover:bg-slate-100"}`}
+                >
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <Icon className="size-5 shrink-0" aria-hidden />
+                    <span className="text-sm font-extrabold sm:text-base">{stage.label}</span>
+                  </span>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold tabular-nums ${selected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"}`}>
+                    {loading ? "…" : groups[stage.key].length}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
         <div className="space-y-5 p-3 sm:p-5">
-          {STAGES.map((stage) => (
-            <StageSection
-              key={stage.key}
-              stage={stage}
-              items={groups[stage.key]}
-              loading={loading}
-              editable={editable}
-              busy={busy}
-              onSubmit={onSubmitRework}
-            />
-          ))}
+          <StageSection
+            stage={currentStage}
+            items={groups[currentStage.key]}
+            loading={loading}
+            editable={editable}
+            busy={busy}
+            onSubmit={onSubmitRework}
+          />
         </div>
       </section>
     </div>

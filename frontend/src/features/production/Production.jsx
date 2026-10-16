@@ -4,8 +4,6 @@ import { Activity, AlertTriangle, ClipboardCheck, Factory, History, RefreshCw } 
 import { productionService } from "@/features/production/productionService"
 import { useGetProductionQuery } from "@/features/production/productionApi"
 import { baseApi } from "@/api/baseApi"
-import ReworkWorkspace from "@/features/production/components/ReworkWorkspace"
-import ReworkSubmitModal from "@/features/production/components/ReworkSubmitModal"
 import { errorMessage } from "@/lib/stock"
 import SearchBar from "@/components/SearchBar"
 import Pagination from "@/components/Pagination"
@@ -154,17 +152,12 @@ export default function Production() {
   const error = actionError || (loadError ? errorMessage(loadError, "Failed to load production orders.") : "")
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("all")
-  const [activeView, setActiveView] = useState("orders")
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState(null)
   const [checkFor, setCheckFor] = useState(null)
   const [startFor, setStartFor] = useState(null)
   const [quantity, setQuantity] = useState("1")
   const [saving, setSaving] = useState(false)
-  const [reworkBusy, setReworkBusy] = useState(false)
-  const [reworkSubmitFor, setReworkSubmitFor] = useState(null)
-  const [reworkRemarks, setReworkRemarks] = useState("")
-  const [reworkError, setReworkError] = useState("")
 
   const invalidateWorkflowData = useCallback(() => {
     dispatch(baseApi.util.invalidateTags(["Production", "QualityControl", "FinishedGoods", "Orders"]))
@@ -181,9 +174,6 @@ export default function Production() {
     shortage: items.filter((item) => item.material_status === "SHORTAGE" && remainingToStart(item) > 0).length,
     active: items.filter((item) => item.status === "IN_PRODUCTION" && (inProduction(item) > 0 || remainingToStart(item) > 0)).length,
     history: items.filter((item) => item.status === "COMPLETED" || item.qc_decision === "PASS").length,
-    qcFailed: items.filter((item) => item.rework_status === "NEEDS_REWORK").length,
-    rework: items.filter((item) => item.rework_status === "IN_PROGRESS").length,
-    readyQc: items.filter((item) => item.rework_status === "READY_FOR_QC").length,
   }), [items])
 
   const rows = useMemo(() => {
@@ -200,7 +190,7 @@ export default function Production() {
   const setFilterAndReset = (value) => { setFilter(value); setPage(1) }
   const setQueryAndReset = (value) => { setQuery(value); setPage(1) }
 
-  // Keep the original Production Orders filters here. QC recovery has its own tab.
+  // Keep this page focused on normal Production Orders; QC recovery has a separate page.
   const stats = [
     { key: "all", label: "All production", hint: "Every production order", icon: Factory, dot: "bg-slate-400", s: { grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/20" }, value: counts.all, tone: "neutral", active: filter === "all", onClick: () => setFilterAndReset("all") },
     { key: "shortage", label: "Material shortages", hint: "Orders blocked by stock", icon: AlertTriangle, dot: "bg-rose-500", s: { grad: "from-rose-500 to-red-700", glow: "shadow-rose-600/20" }, value: counts.shortage, tone: "danger", active: filter === "shortage", onClick: () => setFilterAndReset("shortage") },
@@ -254,45 +244,6 @@ export default function Production() {
     await load()
   }
 
-  const openReworkSubmit = (item) => {
-    if (!editable || !item?.id || reworkBusy) return
-    setReworkError("")
-    setReworkRemarks("")
-    setReworkSubmitFor(item)
-  }
-
-  const closeReworkSubmit = () => {
-    if (reworkBusy) return
-    setReworkSubmitFor(null)
-    setReworkRemarks("")
-    setReworkError("")
-  }
-
-  const submitRework = async () => {
-    if (!reworkSubmitFor || !reworkRemarks.trim() || reworkBusy) return
-    try {
-      setReworkBusy(true)
-      setReworkError("")
-      // A failed batch can be repaired and submitted in one user action.
-      // Start its rework state first, then submit the corrective notes for QC.
-      if (reworkSubmitFor.rework_status === "NEEDS_REWORK") {
-        await productionService.startRework(reworkSubmitFor.id)
-        // Keep the modal in a retryable state if the following submit request fails.
-        setReworkSubmitFor((current) => current ? { ...current, rework_status: "IN_PROGRESS" } : current)
-      }
-      const { data } = await productionService.submitRework(reworkSubmitFor.id, reworkRemarks)
-      setReworkSubmitFor(null)
-      setReworkRemarks("")
-      toast.success(data?.message || "Batch submitted to Quality Control")
-      await load()
-    } catch (err) {
-      console.error(err)
-      setReworkError(err.response?.data?.message || "Failed to submit rework to Quality Control.")
-    } finally {
-      setReworkBusy(false)
-    }
-  }
-
   return (
     <>
       <MktHero
@@ -307,110 +258,65 @@ export default function Production() {
 
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
-      <div className="mb-4 inline-flex max-w-full flex-wrap gap-1 rounded-xl border bg-card p-1" role="tablist" aria-label="Production workspace">
-        <MktBtn
-          role="tab"
-          aria-selected={activeView === "orders"}
-          variant={activeView === "orders" ? "primary" : "outline"}
-          onClick={() => setActiveView("orders")}
-          className="h-11 px-4"
-        >
-          <Factory className="size-4" /> Production Orders
-        </MktBtn>
-        <MktBtn
-          role="tab"
-          aria-selected={activeView === "qc-failed"}
-          variant={activeView === "qc-failed" ? "danger" : "outline"}
-          onClick={() => setActiveView("qc-failed")}
-          className="h-11 border-rose-200 px-4 text-rose-700 hover:bg-rose-50"
-        >
-          <AlertTriangle className="size-4" /> QC Failed
-          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold tabular-nums text-rose-700">
-            {counts.qcFailed + counts.rework + counts.readyQc}
-          </span>
-        </MktBtn>
+
+    <div className="min-w-0 space-y-4">
+    <div className="hidden md:block">
+      <TileGrid className="md:grid-cols-4 xl:grid-cols-4">
+        {stats.map((item) => (
+          <StageTile key={item.key} stage={item} value={item.value} loading={loading} active={item.active} onClick={item.onClick} />
+        ))}
+      </TileGrid>
+    </div>
+    <Card className="min-w-0 overflow-hidden">
+      <div className="md:hidden">
+        <StatStrip layoutId="production-filter" cols="grid-cols-2 sm:grid-cols-4" items={stats} />
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-3 border-y border-slate-200 bg-slate-50/70 px-4 py-3 sm:px-5">
+        <div className="hidden min-w-0 flex-1 md:block md:max-w-sm">
+          <SearchField value={query} onChange={setQueryAndReset} placeholder="Search order, product or person..." />
+        </div>
+        <div className="min-w-0 flex-1 md:hidden">
+          <SearchBar value={query} onChange={setQueryAndReset} placeholder="Search order, product or person..." />
+        </div>
+        <p className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-slate-600">{rows.length} result{rows.length === 1 ? "" : "s"}</p>
       </div>
 
-      {activeView === "qc-failed" ? (
-        <ReworkWorkspace
-          items={items}
-          loading={loading}
-          editable={editable}
-          busy={reworkBusy}
-          onSubmitRework={openReworkSubmit}
-        />
+      {loading ? (
+        <>
+          <div className="hidden min-w-0 grid-cols-2 gap-4 p-4 lg:grid 2xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-2xl border border-slate-200 bg-slate-100" />)}
+          </div>
+          <div className="lg:hidden"><TableSkeleton rows={7} /></div>
+        </>
+      ) : rows.length === 0 ? (
+        <EmptyState icon={Factory} title={query || filter !== "all" ? "No matching production orders" : "No production orders yet"}>
+          {query || filter !== "all" ? "Try another search or select another production filter." : "Orders ready to start and existing production runs will appear here."}
+        </EmptyState>
       ) : (
-      <div className="min-w-0 space-y-4">
-      <div className="hidden md:block">
-        <TileGrid className="md:grid-cols-4 xl:grid-cols-4">
-          {stats.map((item) => (
-            <StageTile key={item.key} stage={item} value={item.value} loading={loading} active={item.active} onClick={item.onClick} />
-          ))}
-        </TileGrid>
-      </div>
-      <Card className="min-w-0 overflow-hidden">
-        <div className="md:hidden">
-          <StatStrip layoutId="production-filter" cols="grid-cols-2 sm:grid-cols-4" items={stats} />
-        </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-3 border-y border-slate-200 bg-slate-50/70 px-4 py-3 sm:px-5">
-          <div className="hidden min-w-0 flex-1 md:block md:max-w-sm">
-            <SearchField value={query} onChange={setQueryAndReset} placeholder="Search order, product or person..." />
+        <>
+          {/* Desktop gets spacious order cards in the Marketing style; mobile/tablet retain the original compact cards. */}
+          <div className="hidden min-w-0 grid-cols-2 gap-4 p-4 lg:grid 2xl:grid-cols-3">
+            {pageRows.map((item) => (
+              <ProductionOrderCard
+                key={item.order_id}
+                item={item}
+                readiness={<MaterialReadiness item={item} />}
+                actions={<ProductionActions item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} marketing />}
+              />
+            ))}
           </div>
-          <div className="min-w-0 flex-1 md:hidden">
-            <SearchBar value={query} onChange={setQueryAndReset} placeholder="Search order, product or person..." />
+
+          <div className="grid min-w-0 gap-3 p-3 lg:hidden">
+            {pageRows.map((item) => <ProductionCard key={item.order_id} item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} />)}
           </div>
-          <p className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-slate-600">{rows.length} result{rows.length === 1 ? "" : "s"}</p>
-        </div>
-
-        {loading ? (
-          <>
-            <div className="hidden min-w-0 grid-cols-2 gap-4 p-4 lg:grid 2xl:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-72 animate-pulse rounded-2xl border border-slate-200 bg-slate-100" />)}
-            </div>
-            <div className="lg:hidden"><TableSkeleton rows={7} /></div>
-          </>
-        ) : rows.length === 0 ? (
-          <EmptyState icon={Factory} title={query || filter !== "all" ? "No matching production orders" : "No production orders yet"}>
-            {query || filter !== "all" ? "Try another search or select another production filter." : "Orders ready to start and existing production runs will appear here."}
-          </EmptyState>
-        ) : (
-          <>
-            {/* Desktop gets spacious order cards in the Marketing style; mobile/tablet retain the original compact cards. */}
-            <div className="hidden min-w-0 grid-cols-2 gap-4 p-4 lg:grid 2xl:grid-cols-3">
-              {pageRows.map((item) => (
-                <ProductionOrderCard
-                  key={item.order_id}
-                  item={item}
-                  readiness={<MaterialReadiness item={item} />}
-                  actions={<ProductionActions item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} marketing />}
-                />
-              ))}
-            </div>
-
-            <div className="grid min-w-0 gap-3 p-3 lg:hidden">
-              {pageRows.map((item) => <ProductionCard key={item.order_id} item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} />)}
-            </div>
-            <Pagination page={page} pageSize={PAGE_SIZE} total={rows.length} onPage={setPage} noun="production orders" />
-          </>
-        )}
-      </Card>
-      </div>
+          <Pagination page={page} pageSize={PAGE_SIZE} total={rows.length} onPage={setPage} noun="production orders" />
+        </>
       )}
+    </Card>
+    </div>
 
       {editable && checkFor && <MaterialCheckModal order={checkFor} onClose={() => setCheckFor(null)} onStart={startFromCheck} partialProduction />}
       {editable && startFor && <StartProductionModal order={startFor} onClose={() => setStartFor(null)} onStarted={started} />}
-
-      {editable && reworkSubmitFor && (
-        <ReworkSubmitModal
-          item={reworkSubmitFor}
-          remarks={reworkRemarks}
-          onRemarksChange={setReworkRemarks}
-          busy={reworkBusy}
-          error={reworkError}
-          onClose={closeReworkSubmit}
-          onSubmit={submitRework}
-        />
-      )}
 
       {editable && selected && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-3" onMouseDown={(e) => e.target === e.currentTarget && closeUpdate()}>

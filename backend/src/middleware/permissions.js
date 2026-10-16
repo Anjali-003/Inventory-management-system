@@ -73,6 +73,7 @@ const ACCESS = {
     PRODUCTION_MANAGER: {
         dashboard: "view",
         production: "edit",
+        qcFailed: "edit",
         inventory: "view"
     },
 
@@ -82,6 +83,7 @@ const ACCESS = {
         dashboard: "view",
         qualityControl: "edit",
         finishedGoods: "edit",
+        qcFailed: "edit",
         production: "view",
         purchase: "edit",
         approvedOrders: "view", // orders approved by the Operations Admin
@@ -151,6 +153,7 @@ const RESOURCE_MODULE = {
     inventory: "inventory",
     orders: "orders",
     production: "production",
+    "qc-failed": "qcFailed",
     "quality-control": "qualityControl",
     "finished-goods": "finishedGoods",
     purchase: "purchase",
@@ -165,8 +168,8 @@ const RESOURCE_MODULE = {
 };
 
 const REFRESH_ONLY = {
-    inventory: ["orders", "production", "quality-control", "finished-goods", "incoming-stock"],
-    finishedGoods: ["orders", "production", "quality-control", "inventory"],
+    inventory: ["orders", "production", "quality-control", "qc-failed", "finished-goods", "incoming-stock"],
+    finishedGoods: ["orders", "production", "quality-control", "qc-failed", "inventory"],
     // incoming goods: each department's screen refreshes when another department moves a purchase along
     purchase: ["iqc", "incoming-stock"],
     iqc: ["purchase", "incoming-stock"],

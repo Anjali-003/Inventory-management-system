@@ -102,6 +102,12 @@ const GROUPS = [
         module: "qualityControl",
       },
       {
+        to: "/qc-failed",
+        label: "QC Failed",
+        icon: ClipboardCheck,
+        module: "qcFailed",
+      },
+      {
         to: "/finished-goods",
         label: "Finished Goods",
         icon: PackageCheck,

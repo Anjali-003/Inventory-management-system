@@ -23,6 +23,7 @@ const componentRoutes = require("../modules/components/component.routes");
 const inventoryRoutes = require("../modules/inventory/inventory.routes");
 const orderRoutes = require("../modules/orders/order.routes");
 const productionRoutes = require("../modules/production/production.routes");
+const qcFailedRoutes = require("../modules/production/qc-failed.routes");
 const qualityControlRoutes = require("../modules/quality-control/quality-control.routes");
 const finishedGoodsRoutes = require("../modules/finished-goods/finished-goods.routes");
 const purchaseRoutes = require("../modules/purchase/purchase.routes");
@@ -49,6 +50,7 @@ const MODULES = [
 
     { path: "/orders", router: orderRoutes, resource: "orders" },
     { path: "/production", router: productionRoutes, resource: "production", guards: [permit("production")] },
+    { path: "/qc-failed", router: qcFailedRoutes, resource: "qc-failed", guards: [permit("qcFailed")] },
     { path: "/quality-control", router: qualityControlRoutes, resource: "quality-control", guards: [permit("qualityControl")] },
 
     // QC PASS -> Finished goods -> Packaging -> Dispatched -> Completed

@@ -9,6 +9,7 @@ import Inventory from "@/features/inventory/Inventory";
 import InventoryHistory from "@/features/inventory/InventoryHistory";
 import Orders from "@/features/orders/Orders";
 import Production from "@/features/production/Production";
+import QCFailed from "@/features/production/QCFailed";
 import QualityControl from "@/features/quality-control/QualityControl";
 import FinishedGoods from "@/features/finished-goods/FinishedGoods";
 import Employees from "@/features/employees/Employees";
@@ -31,6 +32,7 @@ export const PAGES = [
   { path: "/products", module: "products", Page: Products },
   { path: "/inventory", module: "inventory", Page: Inventory },
   { path: "/production", module: "production", Page: Production },
+  { path: "/qc-failed", module: "qcFailed", Page: QCFailed },
   { path: "/quality-control", module: "qualityControl", Page: QualityControl },
   { path: "/finished-goods", module: "finishedGoods", Page: FinishedGoods },
   { path: "/employees", module: "employees", Page: Employees },
