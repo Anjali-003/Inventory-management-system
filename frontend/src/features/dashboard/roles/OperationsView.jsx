@@ -72,13 +72,13 @@ export default function OperationsView() {
         ))}
       </OpsTileGrid>
 
-      <Reveal delay={0.2} className="mt-4">
+      <Reveal delay={0.2} className="mt-8">
         <OpsPanel title="Order pipeline" description="Tap a stage to see only those orders." to={opsHref("ALL")} toLabel="All orders">
           <OrderPipeline counts={counts} loading={appr.isLoading} stages={OPS_STAGES} hrefFor={opsHref} />
         </OpsPanel>
       </Reveal>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Reveal delay={0.3}>
           <OpsPanel title="Waiting for approval" description="Newest first. Open an order to check stock and decide." loading={appr.isLoading} to={d.pending.length > 5 ? opsHref(QUEUE) : null} toLabel={`View all (${d.pending.length})`}>
             {d.pending.length === 0 ? (

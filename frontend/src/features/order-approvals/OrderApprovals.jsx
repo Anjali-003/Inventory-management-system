@@ -19,7 +19,9 @@ import {
   StageChips,
   StageTile,
   StatusPill,
+  StatusSelect,
 } from "@/features/marketing-orders/mktKit";
+import { stagger } from "@/features/marketing-orders/mktMotion";
 import {
   OrderProgress,
   countByStatus,
@@ -38,8 +40,7 @@ import DecisionModal from "./DecisionModal";
 import OrderPlanModal from "./OrderPlanModal";
 import PlanSummary from "./PlanSummary";
 import {
-  ApprovalCard,
-  CardList,
+  ApprovalPageCard,
   DecisionCell,
   OPS_ALL,
   OPS_STAGES,
@@ -58,8 +59,9 @@ const QUEUE = "PENDING_APPROVAL";
   of it can be built from the stock on the shelf. "Check stock & send" opens the plan: the producible list goes to
   the Production Manager and the list of missing components goes to the Purchase Manager. Reject needs a reason.
 
-  Same layout as the Marketing Orders page: from `lg` up the orders are a table; below that each order is a card.
-  The status filter is a row of colour tiles from `md` up and a scrolling row of chips on a phone.
+  Same layout as the Marketing Orders page: the orders are a table while the list box is 1024px wide or more,
+  otherwise each order is a card (container query, so it follows the room the list really has next to the sidebar).
+  The status filter is a scrolling row of chips on a phone, colour tiles on a tablet and a dropdown on a desktop (lg+).
 
   The page state lives in the URL, so a link (or a click on a dashboard figure) opens it already set up:
     ?status=PENDING_APPROVAL | APPROVED | REJECTED | ALL   filter (no status = the waiting queue)
@@ -69,9 +71,9 @@ const QUEUE = "PENDING_APPROVAL";
 
 function CardsSkeleton() {
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="grid gap-3 @2xl:grid-cols-2">
       {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="space-y-3 rounded-xl border bg-card p-4">
+        <div key={i} className="space-y-3 rounded-2xl border bg-card p-4">
           <div className="flex justify-between">
             <Skeleton className="h-5 w-28" />
             <Skeleton className="h-6 w-20 rounded-full" />
@@ -193,8 +195,8 @@ export default function OrderApprovals() {
         </div>
       )}
 
-      {/* filter: tiles on md+, chips on a phone */}
-      <div className="hidden md:block">
+      {/* filter: chips on a phone, tiles on tablets, a dropdown (in the bar below) on desktop */}
+      <div className="hidden md:block lg:hidden">
         <OpsTileGrid>
           {filters.map((f) => (
             <StageTile
@@ -223,12 +225,25 @@ export default function OrderApprovals() {
 
       {/* search: stays under the top bar while a phone scrolls. On a phone the bar stays one line tall:
           the count and the removable filter tag are for bigger screens (the chips already show the filter). */}
-      <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-5 md:bg-transparent md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
+      <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-8 md:bg-transparent lg:mt-0 md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
         <SearchField
           className="min-w-0 flex-1 sm:max-w-xs sm:flex-none"
           value={query}
           onChange={(v) => patch({ q: v }, true)}
           placeholder="Search order, product or who raised it..."
+        />
+        <StatusSelect
+          className="hidden shrink-0 lg:block"
+          label="Filter orders by status"
+          items={filters.map((f) => ({
+            key: f.key,
+            label: f.stage.label,
+            short: f.stage.short,
+            value: f.value,
+            dot: f.stage.dot,
+            active: f.active,
+            onClick: f.onClick,
+          }))}
         />
         <div
           className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground sm:min-h-8 sm:flex-1 sm:flex-wrap sm:justify-end"
@@ -238,13 +253,13 @@ export default function OrderApprovals() {
             Showing {shown.length} of {counts.total}
           </span>
           {status && (
-            <span className="hidden sm:inline-flex">
+            <span className="hidden sm:inline-flex lg:hidden">
               <motion.span
                 key={status}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full py-1 pl-2.5 pr-1 font-semibold ring-1 ring-inset",
+                  "inline-flex items-center gap-1 rounded-full py-1 ps-2.5 pe-1 font-semibold ring-1 ring-inset",
                   stageOf(status).s.pill,
                 )}
               >
@@ -272,12 +287,14 @@ export default function OrderApprovals() {
         </div>
       </div>
 
+      {/* the list follows the width of its own box (not the screen), so the table is never squeezed */}
+      <div className="@container">
       {isLoading ? (
         <>
-          <div className="lg:hidden">
+          <div className="@5xl:hidden">
             <CardsSkeleton />
           </div>
-          <Card className="hidden overflow-hidden lg:block">
+          <Card className="hidden overflow-hidden @5xl:block">
             <TableSkeleton />
           </Card>
         </>
@@ -306,25 +323,27 @@ export default function OrderApprovals() {
       ) : (
         <>
           {/* phones + tablets: cards. Keyed by the filter so they rise in again whenever it changes. */}
-          <CardList
+          <motion.div
             key={`cards-${status ?? "all"}`}
-            className="md:grid-cols-2 lg:hidden"
+            variants={stagger(0.045)}
+            initial="hidden"
+            animate="show"
+            className="grid gap-3 @2xl:grid-cols-2 @5xl:hidden"
           >
             {shown.map((o) => (
-              <ApprovalCard
+              <ApprovalPageCard
                 key={o.id}
                 order={o}
                 canAct={editable}
-                showPlan
-                onOpen={() => openOrder(o)}
-                onReject={() => askReject(o)}
-                onPlan={() => setPlanning(o)}
+                onOpen={openOrder}
+                onReject={askReject}
+                onPlan={setPlanning}
               />
             ))}
-          </CardList>
+          </motion.div>
 
           {/* desktop: table */}
-          <Card className="hidden overflow-hidden lg:block">
+          <Card className="hidden overflow-hidden @5xl:block">
             <Table data-cards="off">
               <TableHeader>
                 <TableRow>
@@ -354,7 +373,7 @@ export default function OrderApprovals() {
                       <TableCell className="min-w-44">
                         <button
                           type="button"
-                          className="block text-left font-semibold tabular-nums outline-none transition-colors hover:text-primary focus-visible:text-primary focus-visible:underline"
+                          className="block text-start font-semibold tabular-nums outline-none transition-colors hover:text-primary focus-visible:text-primary focus-visible:underline"
                         >
                           {o.order_number}
                         </button>
@@ -399,7 +418,7 @@ export default function OrderApprovals() {
                       <TableCell className="min-w-44">
                         <DecisionCell order={o} />
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-end">
                         {editable && pending && (
                           <div className="flex justify-end gap-2">
                             <MktBtn
@@ -433,6 +452,7 @@ export default function OrderApprovals() {
           </Card>
         </>
       )}
+      </div>
 
       {selected && !deciding && !planning && (
         <ApprovalDetailModal

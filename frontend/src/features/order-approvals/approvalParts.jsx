@@ -22,7 +22,7 @@ export function OrderLines({ items }) {
         <TableHeader>
           <TableRow>
             <TableHead>Product</TableHead>
-            <TableHead className="text-right">Quantity</TableHead>
+            <TableHead className="text-end">Quantity</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -32,7 +32,7 @@ export function OrderLines({ items }) {
                 <p className="font-medium">{it.name}</p>
                 {it.sku && <p className="text-xs text-muted-foreground">{it.sku}</p>}
               </TableCell>
-              <TableCell className="text-right tabular-nums">{fmtQty(it.quantity)}</TableCell>
+              <TableCell className="text-end tabular-nums">{fmtQty(it.quantity)}</TableCell>
             </TableRow>
           ))}
         </TableBody>

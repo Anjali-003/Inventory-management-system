@@ -63,7 +63,7 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
           description={`${plural(order.items.length, "product")} · ${fmtQty(units)} units`}
           footer={
             <>
-              <MktBtn onClick={onClose} data-autofocus className="sm:mr-auto">Close</MktBtn>
+              <MktBtn onClick={onClose} data-autofocus className="sm:me-auto">Close</MktBtn>
               {editable && pending && (
                 <>
                   <MktBtn variant="danger" onClick={() => setDeciding(true)}><X /> Reject</MktBtn>
@@ -81,7 +81,7 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
                 animate={{ opacity: 1, scale: 1, transition: SPRING_SOFT }}
                 className={cn("relative overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg", stage.s.grad, stage.s.glow)}
               >
-                <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
+                <span aria-hidden className="pointer-events-none absolute -end-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
                 <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/60" />
                 <div className="relative flex items-center gap-3.5">
                   <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/20 ring-1 ring-inset ring-white/30">
@@ -91,7 +91,7 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
                     <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">{stage.short === "Pending" ? "Waiting for your decision" : stage.short}</p>
                     <p className="mt-0.5 text-xs text-white/80">Raised by {order.created_by_name || "-"}</p>
                   </div>
-                  <div className="shrink-0 text-right">
+                  <div className="shrink-0 text-end">
                     <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(units)}</p>
                     <p className="mt-1 text-[11px] text-white/80">units</p>
                   </div>

@@ -79,7 +79,7 @@ export default function DecisionModal({ order, mode, onClose }) {
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
             placeholder={isReject ? "e.g. Quantity too high, confirm with the customer first" : "Anything the Purchase Manager should know"}
-            className="w-full rounded-[8px] border border-cf-line-strong bg-card px-3 py-2 text-[13px] outline-none transition-shadow placeholder:text-cf-faint focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15"
+            className="w-full rounded-[10px] border border-cf-line-strong bg-card px-3 py-2 text-base outline-none sm:text-[13px] transition-shadow placeholder:text-cf-faint focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15"
           />
         </Field>
       </div>
