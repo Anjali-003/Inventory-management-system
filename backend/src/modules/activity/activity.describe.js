@@ -17,6 +17,9 @@ const LABELS = {
     purchase: "purchase",
     iqc: "purchase",
     "incoming-stock": "purchase",
+    "marketing-orders": "marketing order",
+    "order-approvals": "order",
+    "approved-orders": "order",
     employees: "employee",
     attendance: "attendance",
     "super-admins": "super admin"

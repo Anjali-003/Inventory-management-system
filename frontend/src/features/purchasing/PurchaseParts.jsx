@@ -57,7 +57,7 @@ export function PurchaseDetailModal({ purchase, onClose }) {
       onClose={onClose}
       size="lg"
       title={`${purchase.po_number} · ${purchase.supplier}`}
-      description={purchase.notes || undefined}
+      description={[purchase.order_number && `For order ${purchase.order_number}`, purchase.notes].filter(Boolean).join(" · ") || undefined}
       footer={
         <>
           {rejectedLines(purchase).length > 0 && (

@@ -27,6 +27,18 @@ const PORTAL_CARDS = [
     icon: ShieldCheck,
   },
   {
+    portal: LOGIN_PORTALS.MARKETING_MANAGER,
+    label: "Marketing Manager",
+    note: "Prepare orders and send them for approval",
+    icon: Activity,
+  },
+  {
+    portal: LOGIN_PORTALS.OPERATIONS_ADMIN,
+    label: "Operations Admin",
+    note: "Approve or reject incoming orders",
+    icon: Factory,
+  },
+  {
     portal: LOGIN_PORTALS.STORE_MANAGER,
     label: "Store Manager",
     note: "Stock in and out, incoming stock, finished goods",
@@ -69,8 +81,8 @@ const FLOW = [
 const ACCESS_ROWS = [
   { role: "Super Admin", edit: "All modules", view: "None" },
   { role: "Store Manager", edit: "Inventory, inventory history, finished goods, incoming stock", view: "IQC, purchase" },
-  { role: "IQC Manager", edit: "IQC", view: "None" },
-  { role: "Purchase Manager", edit: "Purchase", view: "None" },
+  { role: "IQC Manager", edit: "IQC", view: "Purchase, inventory, inventory history, finished goods, incoming stock" },
+  { role: "Purchase Manager", edit: "Purchase", view: "IQC, inventory, inventory history, finished goods, incoming stock" },
 ];
 
 /* ---------- shared Tailwind class sets ---------- */
@@ -285,7 +297,7 @@ export default function Landing() {
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-lp-line bg-white">
-            <table className="w-full min-w-[620px] border-collapse text-[0.97rem]">
+            <table data-cards="off" className="w-full min-w-[620px] border-collapse text-[0.97rem]">
               <thead>
                 <tr className="border-b border-lp-line">
                   {["Role", "Can edit", "Can only view"].map((h) => (

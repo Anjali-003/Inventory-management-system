@@ -113,11 +113,13 @@ export function ShortfallDetail({ balance }) {
       {/* ------------------------------------------------------------ summary */}
       <ShortfallSummary balance={balance} explained={explained} inProduction={inProduction} missing={missing} open={open} segments={segments} segTotal={segTotal} status={status} unexplained={unexplained} />
 
+      <div id="shortfall-list" className="scroll-mt-4">
       {/* ------------------------------------------------------------ toolbar */}
       <ShortfallToolbar byComponent={byComponent} find={find} open={open} setFind={setFind} setView={setView} sf={sf} view={view} />
 
       {/* ------------------------------------------------------------ cards */}
       <ShortfallList byComponent={byComponent} comps={comps} find={find} open={open} reasons={reasons} sf={sf} />
+      </div>
 
       {/* ------------------------------------------------------------ pop-ups */}
       <EntriesDialog dDesc={dDesc} dialog={dialog} dq={dq} dRows={dRows} dTitle={dTitle} setDialog={setDialog} setDq={setDq} />

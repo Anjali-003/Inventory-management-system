@@ -11,10 +11,6 @@ async function getOne(req, res) {
     res.json(await service.getPurchase(parseId(req.params.id, "purchase ID")));
 }
 
-async function componentOptions(req, res) {
-    res.json(await service.componentOptions(req.query));
-}
-
 async function receive(req, res) {
     res.json(await service.markReceived(parseId(req.params.id, "purchase ID"), req.user.id));
 }
@@ -30,7 +26,6 @@ async function create(req, res) {
 module.exports = {
     list: asyncHandler(list, { message: "Failed to fetch purchases" }),
     getOne: asyncHandler(getOne, { message: "Failed to fetch the purchase" }),
-    componentOptions: asyncHandler(componentOptions, { message: "Failed to search components" }),
     create: asyncHandler(create, { message: "Failed to save the purchase" }),
     receive: asyncHandler(receive, { message: "Failed to mark the purchase as received" }),
     sendToIqc: asyncHandler(sendToIqc, { message: "Failed to send the purchase to IQC" }),

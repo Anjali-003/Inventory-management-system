@@ -108,6 +108,20 @@ async function startPartialProduction(req, res) {
     const orderId = orderIdOf(req);
     const quantity = parsePositiveInt(req.body?.quantity, "Production quantity must be a positive integer");
 
+    // production starts only after the Operations Admin has approved the order
+    const approval = await orderService.getApprovalStatus(orderId);
+    if (approval === null) throw AppError.notFound("Order not found");
+    if (approval !== "APPROVED") {
+        throw AppError.conflict(
+            approval === "REJECTED"
+                ? "This order was rejected by the Operations Admin, so production cannot start."
+                : approval === "DRAFT"
+                    ? "This order is still a draft with the Marketing Manager. It has not been sent for approval yet."
+                    : "This order is waiting for Operations Admin approval. Production can start once it is approved.",
+            "NOT_APPROVED"
+        );
+    }
+
     // req.user is set by authMiddleware + resolveUser (see order.routes.js)
     const result = await startProduction(orderId, quantity, req.user.id);
 

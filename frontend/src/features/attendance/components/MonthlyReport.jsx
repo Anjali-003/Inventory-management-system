@@ -120,14 +120,15 @@ export function MonthlyReport() {
       <Card className="overflow-hidden">
         <StatStrip
           cols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
+          layoutId="att-report-stat"
           items={[
-            { key: "emp", label: "Employees", value: totals.employees, tone: "neutral" },
-            { key: "avg", label: "Average attendance", value: totals.avg === null ? "-" : `${totals.avg}%`, tone: "info" },
+            { key: "name", label: "Employees", value: totals.employees, tone: "neutral" },
+            { key: "pct", label: "Average attendance", value: totals.avg === null ? "-" : `${totals.avg}%`, tone: "info" },
             { key: "present", label: "Present days", value: totals.present, tone: "success" },
             { key: "half", label: "Half days", value: totals.half, tone: "warning" },
             { key: "absent", label: "Absent days", value: totals.absent, tone: "danger" },
             { key: "leave", label: "Leave days", value: totals.leave, tone: "info" },
-          ]}
+          ].map((it) => ({ ...it, active: sort.key === it.key, onClick: () => onSort(it.key) }))}
         />
       </Card>
 

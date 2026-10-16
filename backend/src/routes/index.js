@@ -28,6 +28,9 @@ const finishedGoodsRoutes = require("../modules/finished-goods/finished-goods.ro
 const purchaseRoutes = require("../modules/purchase/purchase.routes");
 const iqcRoutes = require("../modules/iqc/iqc.routes");
 const incomingStockRoutes = require("../modules/incoming-stock/incoming-stock.routes");
+const marketingOrderRoutes = require("../modules/marketing-orders/marketing-order.routes");
+const orderApprovalRoutes = require("../modules/order-approvals/order-approval.routes");
+const approvedOrdersRoutes = require("../modules/order-approvals/approved-orders.routes");
 const employeeRoutes = require("../modules/employees/employee.routes");
 const attendanceRoutes = require("../modules/attendance/attendance.routes");
 const superAdminRoutes = require("../modules/super-admins/super-admin.routes");
@@ -55,6 +58,11 @@ const MODULES = [
     { path: "/purchase", router: purchaseRoutes, resource: "purchase", guards: [permit("purchase")] },
     { path: "/iqc", router: iqcRoutes, resource: "iqc", guards: [permit("iqc")] },
     { path: "/incoming-stock", router: incomingStockRoutes, resource: "incoming-stock", guards: [permit("incomingStock")] },
+
+    // Order approval:  order raised -> Operations Admin approves / rejects -> approved orders go to the Purchase Manager
+    { path: "/marketing-orders", router: marketingOrderRoutes, resource: "marketing-orders", guards: [permit("marketingOrders")] },
+    { path: "/order-approvals", router: orderApprovalRoutes, resource: "order-approvals", guards: [permit("orderApprovals")] },
+    { path: "/approved-orders", router: approvedOrdersRoutes, resource: "approved-orders", guards: [permit("approvedOrders")] },
 
     { path: "/employees", router: employeeRoutes, resource: "employees", guards: [permit("employees")] },
     { path: "/attendance", router: attendanceRoutes, resource: "attendance", guards: [permit("attendance")] },

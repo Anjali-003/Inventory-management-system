@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, AnimatePresence, motion } from "motion/react";
+import { ArrowUpRight } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { fmtQty } from "@/lib/stock";
@@ -181,15 +182,19 @@ export function StatCard({
   index = 0,
   format = fmtQty,
   badge,
+  onClick,
+  active,
 }) {
   const [tile, detailCls, accent, valueCls] = STAT_TONE[tone] || STAT_TONE.blue;
+  const Tag = onClick ? motion.button : motion.div;
   return (
-    <motion.div
+    <Tag
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.07, duration: 0.4, ease: EASE }}
       whileHover={{ y: -2 }}
-      className="group relative min-h-[122px] overflow-hidden rounded-[13px] border border-slate-200/80 bg-gradient-to-br from-white via-white to-slate-50/80 py-5 pl-[68px] pr-5 shadow-[0_2px_5px_rgba(22,34,30,0.045),0_8px_22px_rgba(22,34,30,0.04)] transition-[transform,box-shadow,border-color] duration-200 hover:border-slate-300 hover:shadow-[0_6px_12px_rgba(22,34,30,0.055),0_16px_32px_rgba(22,34,30,0.09)] max-sm:min-h-[142px] max-sm:pl-4 max-sm:pt-[61px]"
+      {...(onClick ? { type: "button", onClick, "aria-pressed": active } : {})}
+      className={cn("group relative min-h-[122px] overflow-hidden rounded-[13px] border border-slate-200/80 bg-gradient-to-br from-white via-white to-slate-50/80 py-5 pl-[68px] pr-5 shadow-[0_2px_5px_rgba(22,34,30,0.045),0_8px_22px_rgba(22,34,30,0.04)] transition-[transform,box-shadow,border-color] duration-200 hover:border-slate-300 hover:shadow-[0_6px_12px_rgba(22,34,30,0.055),0_16px_32px_rgba(22,34,30,0.09)] max-sm:min-h-[142px] max-sm:pl-4 max-sm:pt-[61px]", onClick && "w-full cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/60", active && "border-primary/60 ring-2 ring-primary/25")}
     >
       <span
         aria-hidden
@@ -202,6 +207,12 @@ export function StatCard({
           accent,
         )}
       />
+      {onClick && (
+        <ArrowUpRight
+          aria-hidden
+          className="absolute right-3.5 top-4 size-4 text-slate-400 opacity-60 transition-[transform,opacity,color] duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary group-hover:opacity-100 group-focus-visible:text-primary group-focus-visible:opacity-100"
+        />
+      )}
       <span
         className={cn(
           "absolute left-4 top-5 grid size-10 place-items-center rounded-[11px] ring-1 ring-white/20 transition-transform duration-200 group-hover:scale-105 max-sm:top-3.5",
@@ -235,7 +246,7 @@ export function StatCard({
           {detail && <p className={cn("text-[10px]", detailCls)}>{detail}</p>}
         </div>
       )}
-    </motion.div>
+    </Tag>
   );
 }
 

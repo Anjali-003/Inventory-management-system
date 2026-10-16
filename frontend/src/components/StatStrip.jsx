@@ -28,7 +28,7 @@ export default function StatStrip({ items, cols = "grid-cols-2 lg:grid-cols-4", 
             {it.hint && <span className="mt-0.5 block text-[11px] text-cf-faint">{it.hint}</span>}
           </>
         )
-        const cell = "relative block px-5 py-4 text-left"
+        const cell = cn("relative block px-5 py-4 text-left", it.className)
         return it.onClick ? (
           <button
             key={it.key}

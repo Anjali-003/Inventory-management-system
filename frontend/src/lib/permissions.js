@@ -15,24 +15,33 @@
   TO ADD A NEW PAGE LATER: add the module key to MODULE_PATHS, put the page in
   Layout.jsx GROUPS with `module: "iqc"`, wrap its <Route> in <RequireAccess module="iqc"> in App.jsx,
   and use usePermissions().canEdit("iqc") inside the page to hide edit buttons.
-  IQC_MANAGER owns "iqc", PURCHASE_MANAGER owns "purchase"; Store Manager has "iqc: view" and "purchase: view" below, so those pages will be read-only for them automatically.
+  IQC_MANAGER owns "iqc", PURCHASE_MANAGER owns "purchase", STORE_MANAGER owns the store pages (inventory, inventory history, finished goods, incoming stock).
+  Every one of these 3 roles has "view" on the other two departments' pages, so those pages open read-only for them automatically.
+  OPERATIONS_ADMIN has "view" on all three departments (store, IQC, purchase), so it can watch them without changing anything.
 
   NOTE: this only controls what the UI shows. The backend enforces the same rules in backend/src/middleware/permissions.js (keep both in sync).
 */
 
 // Same strings as users.role in the database (uppercase). Keep in sync with backend/src/middleware/permissions.js
+//program mein comparison aur logic ke liye.
+// code aur role checks ke liye ek consistent identifier.
 export const ROLES = {
   SUPER_ADMIN: "SUPER_ADMIN",
   STORE_MANAGER: "STORE_MANAGER",
   IQC_MANAGER: "IQC_MANAGER",
   PURCHASE_MANAGER: "PURCHASE_MANAGER",
+  OPERATIONS_ADMIN: "OPERATIONS_ADMIN",
+  MARKETING_MANAGER: "MARKETING_MANAGER",
 }
 
+//user ko readable naam dikhane ke liye.
 export const ROLE_LABELS = {
   SUPER_ADMIN: "Super Admin",
   STORE_MANAGER: "Store Manager",
   IQC_MANAGER: "IQC Manager",
   PURCHASE_MANAGER: "Purchase Manager",
+  OPERATIONS_ADMIN: "Operations Admin",
+  MARKETING_MANAGER: "Marketing Manager",
 }
 
 const norm = (role) => String(role || "").toUpperCase()
@@ -46,6 +55,8 @@ export const LOGIN_PORTALS = {
   STORE_MANAGER: { role: "STORE_MANAGER", path: "/store-manager/login", api: "/auth/store-manager/login", title: "Store Manager Login" },
   IQC_MANAGER: { role: "IQC_MANAGER", path: "/iqc-manager/login", api: "/auth/iqc-manager/login", title: "IQC Manager Login" },
   PURCHASE_MANAGER: { role: "PURCHASE_MANAGER", path: "/purchase-manager/login", api: "/auth/purchase-manager/login", title: "Purchase Manager Login" },
+  OPERATIONS_ADMIN: { role: "OPERATIONS_ADMIN", path: "/operations-admin/login", api: "/auth/operations-admin/login", title: "Operations Admin Login" },
+  MARKETING_MANAGER: { role: "MARKETING_MANAGER", path: "/marketing-manager/login", api: "/auth/marketing-manager/login", title: "Marketing Manager Login" },
 }
 
 export const loginPathFor = (role) => LOGIN_PORTALS[norm(role)]?.path || "/login"
@@ -93,12 +104,17 @@ export const MODULE_PATHS = {
   // IQC dashboard and Purchase page (see features/iqc and features/purchase)
   iqc: "/iqc",
   purchase: "/purchase",
+  // Operations Admin approves incoming orders; the Purchase Manager sees the approved ones
+  marketingOrders: "/marketing-orders", // Marketing Manager prepares orders and sends them to the Operations Admin
+  orderApprovals: "/order-approvals",
+  approvedOrders: "/approved-orders",
 }
 
 const ACCESS = {
   SUPER_ADMIN: "*", // everything, editable
 
   STORE_MANAGER: {
+    dashboard: "view", // own dashboard (features/dashboard/roles)
     inventory: "edit",
     inventoryHistory: "edit",
     finishedGoods: "edit",
@@ -108,8 +124,51 @@ const ACCESS = {
     purchase: "view",
   },
 
-  IQC_MANAGER: { iqc: "edit" },
-  PURCHASE_MANAGER: { purchase: "edit" },
+  // prepares orders and sends them to the Operations Admin
+  MARKETING_MANAGER: {
+    dashboard: "view", // own dashboard (features/dashboard/roles)
+    marketingOrders: "edit",
+  },
+
+  // reviews incoming orders (e.g. from marketing): sees what can be built right now, then dispatches the
+  // producible list to the Production Manager and the missing-components list to the Purchase Manager.
+  // Can also LOOK at (never change) the Store, IQC and Purchase manager pages.
+  OPERATIONS_ADMIN: {
+    dashboard: "view", // own dashboard (features/dashboard/roles)
+    orderApprovals: "edit",
+    approvedOrders: "view",
+    // store manager pages
+    inventory: "view",
+    inventoryHistory: "view",
+    finishedGoods: "view",
+    incomingStock: "view",
+    // IQC manager + purchase manager pages
+    iqc: "view",
+    purchase: "view",
+  },
+
+  // edits IQC; views purchase + the store pages
+  IQC_MANAGER: {
+    dashboard: "view", // own dashboard (features/dashboard/roles)
+    iqc: "edit",
+    purchase: "view",
+    inventory: "view",
+    inventoryHistory: "view",
+    finishedGoods: "view",
+    incomingStock: "view",
+  },
+
+  // edits purchase; views IQC + the store pages
+  PURCHASE_MANAGER: {
+    dashboard: "view", // own dashboard (features/dashboard/roles)
+    purchase: "edit",
+    approvedOrders: "view", // orders approved by the Operations Admin
+    iqc: "view",
+    inventory: "view",
+    inventoryHistory: "view",
+    finishedGoods: "view",
+    incomingStock: "view",
+  },
 }
 
 const levelOf = (role, module) => {
@@ -122,8 +181,11 @@ const levelOf = (role, module) => {
 export const canView = (role, module) => levelOf(role, module) !== null
 export const canEdit = (role, module) => levelOf(role, module) === "edit"
 
-// first page this role is allowed to open (null when the role has no module at all)
+// first page this role lands on: everybody starts on their own dashboard; a role without one (none today) falls back to
+// the first page it can EDIT, then the first it can view.
 export const homePathFor = (role) => {
-  const m = Object.keys(MODULE_PATHS).find((k) => canView(role, k))
+  if (canView(role, "dashboard")) return MODULE_PATHS.dashboard
+  const keys = Object.keys(MODULE_PATHS)
+  const m = keys.find((k) => canEdit(role, k)) || keys.find((k) => canView(role, k))
   return m ? MODULE_PATHS[m] : null
 }

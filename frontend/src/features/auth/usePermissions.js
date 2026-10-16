@@ -19,3 +19,26 @@ export function usePermissions() {
     homePath: homePathFor(role),
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// http://localhost:5173/inventory?page=2&sort=price#details
+
+// {
+//   pathname: "/inventory",
+//   search: "?page=2&sort=price",
+//   hash: "#details",
+//   state: null,
+//   key: "some-key"
+// }
