@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { motion } from "motion/react"
 import { Loader2, Factory, ShoppingCart } from "lucide-react"
 import { Modal } from "@/components/Modal"
@@ -50,14 +50,27 @@ export default function OrderPlanModal({ order, onClose }) {
   const [dispatch, { isLoading: sending }] = useDispatchOrderMutation()
   const [remarks, setRemarks] = useState("")
   const [serverError, setServerError] = useState("")
+  const [productionQuantities, setProductionQuantities] = useState({})
 
   const names = Object.fromEntries(order.items.map((i) => [i.product_id, i]))
   const lines = plan?.lines || []
   const shortages = plan?.shortages || []
-  const toProduction = lines.filter((l) => Number(l.can_make) > 0)
-  const { ordered, canMake, remaining } = planTotals(plan)
+  useEffect(() => {
+    if (!plan) return
+    setProductionQuantities(Object.fromEntries(plan.lines.map((line) => [
+      line.product_id,
+      String(Math.floor(Number(line.can_make))),
+    ])))
+  }, [plan])
+
+  const quantityFor = (line) => Number(productionQuantities[line.product_id] ?? 0)
+  const toProduction = lines
+    .filter((line) => quantityFor(line) > 0)
+    .map((line) => ({ ...line, approved_quantity: quantityFor(line) }))
+  const { ordered, canMake } = planTotals(plan)
+  const selectedTotal = toProduction.reduce((sum, line) => sum + line.approved_quantity, 0)
   const verdict = plan ? planVerdict(plan) : null
-  const nothingToSend = toProduction.length === 0 && shortages.length === 0
+  const nothingToSend = selectedTotal === 0 && shortages.length === 0
 
   const submit = async (e) => {
     e.preventDefault()
@@ -66,13 +79,13 @@ export default function OrderPlanModal({ order, onClose }) {
       await dispatch({
         id: order.id,
         remarks: remarks.trim(),
-        production_items: toProduction.map((l) => ({ product_id: l.product_id, quantity: l.can_make })),
+        production_items: toProduction.map((l) => ({ product_id: l.product_id, quantity: l.approved_quantity })),
         purchase_items: shortages.map((s) => ({ component_id: s.component_id, quantity: s.shortage })),
       }).unwrap()
       const parts = []
       if (toProduction.length) parts.push("Production Manager")
       if (shortages.length) parts.push("Purchase Manager")
-      toast.success(`${order.order_number} approved. Sent to ${parts.join(" and ")}.`)
+      toast.success(`${order.order_number} approved. ${selectedTotal} product units selected; corresponding BOM issued to inventory. Sent to ${parts.join(" and ")}.`)
       onClose()
     } catch (err) {
       setServerError(errorMessage(err, "Could not send this order."))
@@ -91,7 +104,7 @@ export default function OrderPlanModal({ order, onClose }) {
       busy={sending}
       size="xl"
       title={`${order.order_number} · stock check`}
-      description="Checked against the stock available right now (on hand minus what is reserved for production)."
+      description="Choose how many units of each product to start now. Only the selected quantity's BOM will be issued from inventory."
       footer={
         <>
           <MktBtn onClick={onClose} disabled={sending}>Close</MktBtn>
@@ -128,25 +141,26 @@ export default function OrderPlanModal({ order, onClose }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">{verdict.label}</p>
                   <p className="mt-0.5 text-xs text-white/80">
-                    {remaining > 0 ? `${fmtQty(remaining)} units waiting for components` : "Every unit is covered by stock"}
+                    {`${fmtQty(Math.max(0, ordered - selectedTotal))} ordered units not selected for production now`}
                   </p>
                 </div>
                 <div className="shrink-0 text-end">
-                  <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(canMake)}</p>
-                  <p className="mt-1 text-[11px] text-white/80">of {fmtQty(ordered)} units now</p>
+                  <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(selectedTotal)}</p>
+                  <p className="mt-1 text-[11px] text-white/80">selected · up to {fmtQty(canMake)} possible</p>
                 </div>
               </div>
             </motion.div>
 
-            <Section icon={Factory} title="Can be made now: goes to the Production Manager" hint="Quantities that the current stock fully covers.">
+            <Section icon={Factory} title="Select quantity to make now" hint="Choose up to the stock-covered maximum for each product. Inventory issues only the selected quantities' BOM.">
               <div className="overflow-x-auto rounded-2xl border">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Product</TableHead>
                       <TableHead className="text-end">Ordered</TableHead>
-                      <TableHead className="text-end">Can make now</TableHead>
-                      <TableHead className="text-end">Still short</TableHead>
+                      <TableHead className="text-end">Available now</TableHead>
+                      <TableHead className="text-end">Make now</TableHead>
+                      <TableHead className="text-end">Not selected</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -158,6 +172,24 @@ export default function OrderPlanModal({ order, onClose }) {
                         </TableCell>
                         <TableCell className="text-end tabular-nums">{fmtQty(l.ordered)}</TableCell>
                         <TableCell className={cn("text-end font-semibold tabular-nums", l.can_make > 0 ? "text-primary" : "text-destructive")}>{fmtQty(l.can_make)}</TableCell>
+                        <TableCell className="text-end">
+                          <input
+                            aria-label={`Quantity of ${l.name} to make now`}
+                            className="h-9 w-24 rounded-md border bg-background px-2 text-end tabular-nums"
+                            type="number"
+                            min="0"
+                            max={Math.floor(Number(l.can_make))}
+                            step="1"
+                            value={productionQuantities[l.product_id] ?? "0"}
+                            disabled={sending || Number(l.can_make) < 1}
+                            onChange={(event) => setProductionQuantities((current) => ({
+                              ...current,
+                              [l.product_id]: event.target.value,
+                            }))}
+                          />
+                          <p className="mt-1 text-[11px] text-muted-foreground">max {fmtQty(Math.floor(Number(l.can_make)))}</p>
+                        </TableCell>
+                        <TableCell className="text-end tabular-nums">{fmtQty(Math.max(0, Number(l.ordered) - quantityFor(l)))}</TableCell>
                         <TableCell className="text-end tabular-nums">{fmtQty(l.remaining)}</TableCell>
                       </TableRow>
                     ))}
@@ -166,7 +198,7 @@ export default function OrderPlanModal({ order, onClose }) {
               </div>
             </Section>
 
-            <Section icon={ShoppingCart} title="Components short: goes to the Purchase Manager" hint="Only what is missing for the units that cannot be made yet.">
+            <Section icon={ShoppingCart} title="Components short: goes to the Purchase Manager" hint="Estimated shortage for the order after current free stock; inventory issue is calculated from your production selection.">
               {shortages.length === 0 ? (
                 <p className="rounded-xl border bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">
                   {plan.missing_bom?.length ? "No shortage can be worked out until the BOM is completed." : "Nothing to buy: every component is in stock."}

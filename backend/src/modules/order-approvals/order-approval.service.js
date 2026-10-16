@@ -154,8 +154,17 @@ async function decide(orderId, decision, body, userId) {
             throw AppError.conflict("This order has already been decided. Refresh the page.", "ALREADY_DECIDED");
         }
 
+        if (decision === "APPROVED") {
+            const plan = await computePlan(conn, orderId, { lock: true });
+            const producible = await saveApprovalRequests(conn, orderId, plan, userId);
+            await issueApprovedMaterials(conn, orderId, producible, userId);
+        }
+
         await conn.query(
-            `UPDATE orders SET approval_status = ?, approval_remarks = ?, approved_by = ?, approved_at = NOW() WHERE id = ?`,
+            `UPDATE orders
+             SET approval_status = ?, approval_remarks = ?, approved_by = ?, approved_at = NOW(),
+                 inventory_issued_at = ${decision === "APPROVED" ? "NOW()" : "NULL"}
+             WHERE id = ?`,
             [decision, remarks, userId, orderId]
         );
         return getOrder(orderId, conn);
@@ -188,7 +197,8 @@ async function computePlan(conn, orderId, { lock = false } = {}) {
     const [bomRows] = await conn.query(
         `SELECT pb.product_id, pb.component_id, pb.quantity_required, c.sku, c.name, c.unit
          FROM product_bom pb JOIN components c ON c.id = pb.component_id
-         WHERE pb.product_id IN (?)`,
+         WHERE pb.product_id IN (?)
+         ORDER BY pb.component_id, pb.product_id${lock ? " FOR UPDATE" : ""}`,
         [items.map((i) => i.product_id)]
     );
 
@@ -203,11 +213,11 @@ async function computePlan(conn, orderId, { lock = false } = {}) {
     }
     for (const id of incomplete) bomByProduct[id] = [];
 
-    const componentIds = Object.keys(componentInfo).map(Number);
+    const componentIds = Object.keys(componentInfo).map(Number).sort((a, b) => a - b);
     const availableByComp = {};
     if (componentIds.length) {
         const [stock] = await conn.query(
-            `SELECT component_id, quantity_on_hand, quantity_reserved FROM inventory WHERE component_id IN (?)${lock ? " FOR UPDATE" : ""}`,
+            `SELECT component_id, quantity_on_hand, quantity_reserved FROM inventory WHERE component_id IN (?) ORDER BY component_id${lock ? " FOR UPDATE" : ""}`,
             [componentIds]
         );
         for (const r of stock) availableByComp[r.component_id] = Number(r.quantity_on_hand) - Number(r.quantity_reserved);
@@ -238,6 +248,72 @@ async function getPlan(orderId, conn = db) {
         throw AppError.conflict("This order has already been decided. Refresh the page.", "ALREADY_DECIDED");
     }
     return computePlan(conn, orderId);
+}
+
+async function issueApprovedMaterials(conn, orderId, productionLines, userId) {
+    if (!productionLines.length) return;
+
+    const [bomRows] = await conn.query(
+        `SELECT pb.product_id, pb.component_id, pb.quantity_required
+         FROM product_bom pb
+         WHERE pb.product_id IN (?)
+         ORDER BY pb.component_id, pb.product_id`,
+        [productionLines.map((line) => line.product_id)]
+    );
+    const quantitiesByComponent = new Map();
+    for (const row of bomRows) {
+        const line = productionLines.find((item) => item.product_id === row.product_id);
+        if (!line || row.quantity_required === null || Number(row.quantity_required) <= 0) continue;
+        const cents = toCents(Number(row.quantity_required) * Number(line.can_make));
+        quantitiesByComponent.set(row.component_id, (quantitiesByComponent.get(row.component_id) || 0) + cents);
+    }
+
+    for (const [componentId, cents] of [...quantitiesByComponent].sort(([a], [b]) => a - b)) {
+        if (cents <= 0) continue;
+        const quantity = (cents / 100).toFixed(2);
+        const [updated] = await conn.query(
+            `UPDATE inventory
+             SET quantity_on_hand = quantity_on_hand - ?
+             WHERE component_id = ? AND quantity_on_hand - quantity_reserved >= ?`,
+            [quantity, componentId, quantity]
+        );
+        if (updated.affectedRows !== 1) {
+            throw AppError.conflict("Stock changed while approving this order. Refresh the stock plan and try again.", "STALE_PLAN");
+        }
+        const [stock] = await conn.query(`SELECT quantity_on_hand FROM inventory WHERE component_id = ?`, [componentId]);
+        const [result] = await conn.query(
+            `INSERT INTO inventory_transactions
+                (component_id, transaction_type, direction, quantity, balance_after, reason, reason_code, reference_type, reference_id, created_by, order_id, idempotency_key)
+             VALUES (?, 'CONSUMED', 'OUT', ?, ?, ?, 'ISSUED_TO_PRODUCTION', 'ORDER_APPROVAL', ?, ?, ?, ?)`,
+            [
+                componentId,
+                quantity,
+                stock[0].quantity_on_hand,
+                `Issued to production for order #${orderId}`,
+                orderId,
+                userId,
+                orderId,
+                `approval-${orderId}-${componentId}`,
+            ]
+        );
+        if (!result.insertId) throw new Error(`Failed to record inventory issue for component ${componentId}`);
+    }
+}
+
+async function saveApprovalRequests(conn, orderId, plan, userId, producible = plan.lines.filter((line) => line.can_make > 0)) {
+    if (producible.length) {
+        await conn.query(
+            `INSERT INTO order_production_items (order_id, product_id, quantity, sent_by) VALUES ?`,
+            [producible.map((line) => [orderId, line.product_id, line.can_make, userId])]
+        );
+    }
+    if (plan.shortages.length) {
+        await conn.query(
+            `INSERT INTO order_purchase_items (order_id, component_id, quantity, sent_by) VALUES ?`,
+            [plan.shortages.map((shortage) => [orderId, shortage.component_id, shortage.shortage, userId])]
+        );
+    }
+    return producible;
 }
 
 /* [{ <idField>, quantity }] from the request -> Map(id -> cents). Rejects bad ids / quantities and duplicates. */
@@ -281,33 +357,40 @@ async function dispatch(orderId, body, userId) {
         }
 
         const plan = await computePlan(conn, orderId, { lock: true });
-        const producible = plan.lines.filter((l) => l.can_make > 0);
-        const expectedProduction = new Map(producible.map((l) => [l.product_id, toCents(l.can_make)]));
         const expectedPurchase = new Map(plan.shortages.map((s) => [s.component_id, toCents(s.shortage)]));
 
-        if (!sameList(sentProduction, expectedProduction) || !sameList(sentPurchase, expectedPurchase)) {
+        const availableByProduct = new Map(plan.lines.map((line) => [line.product_id, line]));
+        const selectedProduction = [];
+        for (const [productId, quantityCents] of sentProduction) {
+            const line = availableByProduct.get(productId);
+            if (!line || quantityCents % 100 !== 0) {
+                throw new AppError(422, "Selected production quantity must be a whole number within the available stock plan.", "VALIDATION", { field: "production_items" });
+            }
+            if (quantityCents > toCents(line.can_make)) {
+                throw AppError.conflict(
+                    "Stock changed while you were reviewing this order. The plan has been refreshed: check it and send again.",
+                    "STALE_PLAN"
+                );
+            }
+            selectedProduction.push({ ...line, can_make: quantityCents / 100 });
+        }
+
+        if (!sameList(sentPurchase, expectedPurchase)) {
             throw AppError.conflict(
                 "Stock changed while you were reviewing this order. The plan has been refreshed: check it and send again.",
                 "STALE_PLAN"
             );
         }
 
+        await saveApprovalRequests(conn, orderId, plan, userId, selectedProduction);
+        await issueApprovedMaterials(conn, orderId, selectedProduction, userId);
         await conn.query(
-            `UPDATE orders SET approval_status = 'APPROVED', approval_remarks = ?, approved_by = ?, approved_at = NOW() WHERE id = ?`,
+            `UPDATE orders
+             SET approval_status = 'APPROVED', approval_remarks = ?, approved_by = ?, approved_at = NOW(),
+                 inventory_issued_at = NOW()
+             WHERE id = ?`,
             [remarks, userId, orderId]
         );
-        if (producible.length) {
-            await conn.query(
-                `INSERT INTO order_production_items (order_id, product_id, quantity, sent_by) VALUES ?`,
-                [producible.map((l) => [orderId, l.product_id, l.can_make, userId])]
-            );
-        }
-        if (plan.shortages.length) {
-            await conn.query(
-                `INSERT INTO order_purchase_items (order_id, component_id, quantity, sent_by) VALUES ?`,
-                [plan.shortages.map((s) => [orderId, s.component_id, s.shortage, userId])]
-            );
-        }
         return getOrder(orderId, conn);
     });
 }

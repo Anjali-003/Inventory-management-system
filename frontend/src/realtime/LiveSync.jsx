@@ -32,7 +32,7 @@ const TAGS = {
   iqc: ["Purchases"],
   "incoming-stock": ["Purchases", "Inventory"],
   // order approval: both screens (Operations Admin + Purchase Manager) and the Orders page refresh together
-  "order-approvals": ["OrderApprovals", "Orders", "MarketingOrders", "Production", "Purchases"],
+  "order-approvals": ["OrderApprovals", "Orders", "MarketingOrders", "Production", "Purchases", "Inventory"],
   "marketing-orders": ["MarketingOrders", "OrderApprovals", "Orders"],
   "approved-orders": ["OrderApprovals"],
 };

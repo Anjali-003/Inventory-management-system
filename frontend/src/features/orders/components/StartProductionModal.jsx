@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { errorMessage } from "@/lib/stock"
 import { isPositiveInteger, toInt } from "@/lib/numbers"
 
-const NO_STOCK = "No additional quantity can currently be started from available inventory."
+const NO_STOCK = "No additional quantity is currently approved or available to start."
 
 // Mounted only while an order is selected (see Orders.jsx), so state resets per order.
 export default function StartProductionModal({ order, onClose, onStarted }) {
@@ -106,7 +106,7 @@ export default function StartProductionModal({ order, onClose, onStarted }) {
 
               <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium">Max from current inventory</p>
+                  <p className="text-sm font-medium">{info.materialsIssued ? "Approved quantity remaining" : "Max from current inventory"}</p>
                   <p className="text-2xl font-bold tabular-nums">{Number.isFinite(max) ? max : 0}</p>
                 </div>
                 <Button type="button" variant="outline" size="lg" disabled={!canStart} onClick={() => { setQty(String(max)); setError("") }}>
