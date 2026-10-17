@@ -28,11 +28,11 @@ export default function ProductionWorkQueue({ items, loading, onCheck, onStart }
   const queue = getWorkQueue(items).slice(0, 6)
 
   return (
-    <Card className="min-w-0 overflow-hidden">
+    <Card className="min-w-0 overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader className="flex-row items-center justify-between gap-3">
         <div>
           <CardTitle>Today's production tasks</CardTitle>
-          <CardDescription>Orders to start, continue, or unblock. Material issues are shown first.</CardDescription>
+          <CardDescription>Start work when materials are ready, continue active work, or resolve missing material details first.</CardDescription>
         </div>
         <Button variant="outline" size="sm" className="shrink-0" onClick={() => navigate("/production")}>
           View all <ArrowRight />

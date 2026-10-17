@@ -1,9 +1,8 @@
 import { useCallback, useMemo } from "react"
 import { ClipboardCheck, Factory, PackageCheck, RefreshCw, RotateCcw, Truck, XCircle } from "lucide-react"
 import { useNavigate } from "react-router-dom"
-import PageHeader from "@/components/PageHeader"
+import { HeroButton, MktHero, MktBtn } from "@/features/marketing-orders/mktKit"
 import { Notice } from "@/components/feedback"
-import { Button } from "@/components/ui/button"
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { useGetQualityControlQuery } from "@/features/quality-control/qualityControlApi"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
@@ -47,18 +46,17 @@ export default function QualityFinishedGoodsDashboard() {
 
   return (
     <>
-      <PageHeader
-        title={user?.name ? `Hello, ${user.name}` : "Quality & Finished Goods dashboard"}
-        description="Make one final QC decision for completed batches, manage Finished Goods, and view production progress."
+      <MktHero
+        eyebrow="Quality & release dashboard"
+        title={user?.name ? `Hello, ${user.name}` : "Quality & Finished Goods"}
+        description="See which completed batches need a QC decision, which batches need correction, and which finished goods need to move forward."
       >
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => navigate("/quality-control")}><ClipboardCheck /> Open Quality Control</Button>
-          <Button variant="outline" onClick={() => navigate("/finished-goods")}><PackageCheck /> Open Finished Goods</Button>
-          <Button variant="outline" onClick={refresh} disabled={qcQuery.isFetching || finishedQuery.isFetching || productionQuery.isFetching}>
-            <RefreshCw className={qcQuery.isFetching || finishedQuery.isFetching || productionQuery.isFetching ? "animate-spin" : ""} /> Refresh
-          </Button>
-        </div>
-      </PageHeader>
+        <HeroButton onClick={() => navigate("/quality-control")}><ClipboardCheck /> Open Quality Control</HeroButton>
+        <HeroButton variant="glass" onClick={() => navigate("/finished-goods")}><PackageCheck /> Open Finished Goods</HeroButton>
+        <HeroButton variant="glass" onClick={refresh} disabled={qcQuery.isFetching || finishedQuery.isFetching || productionQuery.isFetching}>
+          <RefreshCw className={qcQuery.isFetching || finishedQuery.isFetching || productionQuery.isFetching ? "animate-spin" : ""} /> Refresh
+        </HeroButton>
+      </MktHero>
 
       {(qcError || finishedError || productionError) && (
         <div className="mb-4 space-y-2">
@@ -70,8 +68,8 @@ export default function QualityFinishedGoodsDashboard() {
 
       <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <DashboardMetricCard index={0} to="/quality-control" icon={ClipboardCheck} tone={qcPendingCount ? "amber" : "green"} label="Pending QC decisions" value={qcPendingCount} loading={qcQuery.isLoading} detail="Fully completed batches awaiting Pass / Fail" />
-        <DashboardMetricCard index={1} to="/quality-control" icon={XCircle} tone={qcFailedCount ? "red" : "green"} label="Failed / rework" value={qcFailedCount} loading={qcQuery.isLoading} detail="Waiting for repair or retest submission" />
-        <DashboardMetricCard index={2} to="/quality-control" icon={RotateCcw} tone={qcRetestCount ? "blue" : "green"} label="Ready for retest" value={qcRetestCount} loading={qcQuery.isLoading} detail="Production has resubmitted these batches" />
+        <DashboardMetricCard index={1} to="/qc-failed" icon={XCircle} tone={qcFailedCount ? "red" : "green"} label="Failed / needs correction" value={qcFailedCount} loading={qcQuery.isLoading} detail="Open QC Failed to record the repair" />
+        <DashboardMetricCard index={2} to="/qc-failed" icon={RotateCcw} tone={qcRetestCount ? "blue" : "green"} label="Ready for QC retest" value={qcRetestCount} loading={qcQuery.isLoading} detail="Open QC Failed to review submitted repairs" />
         <DashboardMetricCard index={3} to="/finished-goods" icon={PackageCheck} tone={packagingCount ? "amber" : "green"} label="Packaging queue" value={packagingCount} loading={finishedQuery.isLoading} detail="Passed QC and ready to dispatch" />
         <DashboardMetricCard index={4} to="/finished-goods" icon={Truck} tone={dispatchedCount ? "blue" : "green"} label="Dispatched batches" value={dispatchedCount} loading={finishedQuery.isLoading} detail="Waiting for final completion" />
       </div>
@@ -89,15 +87,16 @@ export default function QualityFinishedGoodsDashboard() {
         <div className="min-w-0 xl:col-span-2">
           <ProductionReadOnlyPanel items={productionItems} loading={productionQuery.isLoading} />
         </div>
-        <div className="min-w-0 rounded-[14px] border border-[#dce5e0]/90 bg-gradient-to-br from-white via-white to-slate-50/80 p-5 shadow-[0_1px_2px_rgba(22,34,30,0.035),0_10px_28px_rgba(22,34,30,0.045)]">
-          <h2 className="flex items-center gap-2.5 text-sm font-bold before:h-4 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-emerald-400 before:to-primary">Useful shortcuts</h2>
-          <p className="mt-1 pl-[13px] text-xs text-muted-foreground">Only actions for your role.</p>
+        <div className="min-w-0 rounded-2xl border border-[#dce5e0] bg-gradient-to-br from-white via-white to-slate-50/80 p-5 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+          <h2 className="flex items-center gap-2.5 text-sm font-bold before:h-4 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-emerald-400 before:to-primary">What should I do next?</h2>
+          <p className="mt-1 pl-[13px] text-xs leading-relaxed text-muted-foreground">Choose the task that matches the batch status. Each button opens the right workspace.</p>
           <div className="mt-4 grid gap-2">
-            <Button className="w-full justify-start" onClick={() => navigate("/quality-control")}><ClipboardCheck /> Review pending batches and decide Pass / Fail</Button>
-            <Button variant="outline" className="w-full justify-start" onClick={() => navigate("/finished-goods")}><PackageCheck /> Dispatch or complete a batch</Button>
-            <Button variant="outline" className="w-full justify-start" onClick={() => navigate("/production")}><Factory /> View production progress (read-only)</Button>
+            <MktBtn variant="primary" className="h-auto min-h-11 w-full justify-start whitespace-normal py-3 text-left sm:h-auto" onClick={() => navigate("/quality-control")}><ClipboardCheck /> Decide whether completed batches Pass or Fail</MktBtn>
+            <MktBtn variant="outline" className="h-auto min-h-11 w-full justify-start whitespace-normal py-3 text-left sm:h-auto" onClick={() => navigate("/qc-failed")}><XCircle /> Record a correction for a failed batch</MktBtn>
+            <MktBtn variant="outline" className="h-auto min-h-11 w-full justify-start whitespace-normal py-3 text-left sm:h-auto" onClick={() => navigate("/finished-goods")}><PackageCheck /> Move packed goods to dispatch or completion</MktBtn>
+            <MktBtn variant="outline" className="h-auto min-h-11 w-full justify-start whitespace-normal py-3 text-left sm:h-auto" onClick={() => navigate("/production")}><Factory /> Check production progress (view only)</MktBtn>
           </div>
-          <p className="mt-4 rounded-lg bg-muted/50 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">Production is view-only in this workspace. Starting production and updating quantities remain restricted to the Production role.</p>
+          <p className="mt-4 rounded-xl border border-[#dce5e0] bg-slate-50/80 px-3 py-2.5 text-xs leading-relaxed text-slate-600">A batch enters Finished Goods only after it passes QC. A failed batch stays in QC Failed until the repair is submitted for another QC decision.</p>
         </div>
       </div>
     </>

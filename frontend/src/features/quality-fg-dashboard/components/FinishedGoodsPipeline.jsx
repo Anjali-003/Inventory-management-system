@@ -16,11 +16,11 @@ export default function FinishedGoodsPipeline({ items = [], loading }) {
   const completed = countFinishedGoods(items, "COMPLETED")
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader>
         <div>
           <CardTitle>Finished Goods pipeline</CardTitle>
-          <CardDescription>Approved batches moving through packaging, dispatch and completion.</CardDescription>
+          <CardDescription>Batches that passed QC move through these steps: pack them, mark them dispatched, then mark them complete.</CardDescription>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate("/finished-goods")}>View all <ArrowRight /></Button>
       </CardHeader>

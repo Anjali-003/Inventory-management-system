@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { CheckCircle2, ClipboardCheck, PackageCheck, RefreshCw, XCircle } from "lucide-react"
 import { useDispatch } from "react-redux"
 import { useToast } from "@/components/toast"
@@ -15,6 +16,7 @@ const asArray = (value) => Array.isArray(value) ? value : []
 const searchText = (item) => `${item.orderNumber || ""} ${item.productName || ""} ${item.productSku || ""} ${item.decisionRemarks || ""} ${(item.decisionHistory || []).map((attempt) => `${attempt.remarks || ""} ${attempt.reworkRemarks || ""}`).join(" ")}`.toLowerCase()
 
 export default function QualityControl() {
+  const navigate = useNavigate()
   const dispatch = useDispatch()
   const toast = useToast()
   const { canEdit } = usePermissions()
@@ -144,25 +146,38 @@ export default function QualityControl() {
             rose: { edge: "bg-gradient-to-r from-rose-500 to-red-700", icon: "bg-gradient-to-br from-rose-500 to-red-700", text: "text-rose-800" },
             teal: { edge: "bg-gradient-to-r from-teal-500 to-cyan-700", icon: "bg-gradient-to-br from-teal-500 to-cyan-700", text: "text-teal-800" },
           }[tone]
+          const openSummary = () => {
+            if (key === "pending") setActiveView("pending")
+            else if (key === "passed") setActiveView("history")
+            else if (key === "failed") navigate("/qc-failed")
+            else navigate("/finished-goods")
+          }
           return (
-            <article key={key} className="relative min-w-0 overflow-hidden rounded-2xl border border-[#dce5e0] bg-white p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] sm:p-5">
+            <button
+              key={key}
+              type="button"
+              onClick={openSummary}
+              aria-label={`${label}: ${loading ? "loading" : value}. Open related work.`}
+              className="group relative min-w-0 overflow-hidden rounded-2xl border border-[#dce5e0] bg-white p-4 text-left shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-[#c3d1ca] hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/40 sm:p-5"
+            >
               <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${toneStyles.edge}`} />
               <div className="flex min-w-0 items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold leading-snug text-slate-700 sm:text-sm">{label}</p>
                   <p className={`mt-3 text-3xl font-extrabold leading-none tabular-nums sm:text-4xl ${toneStyles.text}`}>{loading ? "—" : value}</p>
                 </div>
-                <span className={`grid size-9 shrink-0 place-items-center rounded-xl text-white shadow-sm sm:size-11 ${toneStyles.icon}`}>
+                <span className={`grid size-9 shrink-0 place-items-center rounded-xl text-white shadow-sm transition-transform group-hover:scale-105 sm:size-11 ${toneStyles.icon}`}>
                   <Icon className="size-5 sm:size-6" aria-hidden />
                 </span>
               </div>
               <p className="mt-3 text-[11px] leading-snug text-slate-600 sm:text-xs">{hint}</p>
-            </article>
+              <span className="mt-3 inline-flex items-center text-[11px] font-semibold text-primary">Open details <span aria-hidden className="ml-1">→</span></span>
+            </button>
           )
         })}
       </section>
 
-      <section aria-label="Quality Control views" className="grid min-w-0 grid-cols-1 gap-2 rounded-2xl border-2 border-slate-300 bg-slate-50 p-2 sm:grid-cols-2">
+      <section aria-label="Quality Control views" className="grid min-w-0 grid-cols-1 gap-2 rounded-2xl border border-[#dce5e0] bg-white p-1.5 sm:grid-cols-2 sm:p-2">
         <button
           type="button"
           role="tab"
@@ -191,7 +206,7 @@ export default function QualityControl() {
         </button>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border-2 border-slate-300 bg-white p-3 shadow-sm sm:p-4">
+      <section className="overflow-hidden rounded-2xl border border-[#dce5e0] bg-white p-3 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] sm:p-4">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1 sm:max-w-sm">
             <SearchField value={query} onChange={setQuery} placeholder="Search order, product or SKU..." />

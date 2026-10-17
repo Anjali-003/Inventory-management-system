@@ -15,18 +15,18 @@ export default function QualityWorkQueue({ items = [], loading, onOpen }) {
   const rows = getActionableQcItems(items).slice(0, 5)
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader>
         <div>
           <CardTitle>Quality work queue</CardTitle>
-          <CardDescription>Fully completed production batches awaiting one Pass/Fail decision.</CardDescription>
+          <CardDescription>These batches are fully made and waiting for you to choose Pass or Fail.</CardDescription>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate("/quality-control")}>View all <ArrowRight /></Button>
       </CardHeader>
 
       {loading ? <TableSkeleton rows={4} /> : rows.length === 0 ? (
         <EmptyState icon={ClipboardCheck} title="No quality actions waiting">
-          Only batches with the entire ordered quantity completed appear here.
+          A batch appears here only after every ordered unit has been produced.
         </EmptyState>
       ) : (
         <div className="divide-y">

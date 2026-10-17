@@ -1,9 +1,8 @@
 import { useCallback, useState } from "react"
-import { RefreshCw } from "lucide-react"
+import { Factory, RefreshCw } from "lucide-react"
 import { useNavigate } from "react-router-dom"
-import PageHeader from "@/components/PageHeader"
+import { HeroButton, MktHero } from "@/features/marketing-orders/mktKit"
 import { Notice } from "@/components/feedback"
-import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/toast"
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
@@ -57,19 +56,16 @@ export default function ProductionDashboard() {
 
   return (
     <>
-      <PageHeader
-        title={user?.name ? `Hello, ${user.name}` : "Production dashboard"}
-        description="Today's production priorities, material readiness and work progress."
+      <MktHero
+        eyebrow="Production dashboard"
+        title={user?.name ? `Hello, ${user.name}` : "Production overview"}
+        description="See what is running, what is blocked by missing materials, and which batches need a correction or QC retest."
       >
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => navigate("/production")}>
-            Open production
-          </Button>
-          <Button variant="outline" onClick={refresh} disabled={productionQuery.isFetching || inventoryQuery.isFetching}>
-            <RefreshCw className={productionQuery.isFetching || inventoryQuery.isFetching ? "animate-spin" : ""} /> Refresh
-          </Button>
-        </div>
-      </PageHeader>
+        <HeroButton onClick={() => navigate("/production")}><Factory /> Open production</HeroButton>
+        <HeroButton variant="glass" onClick={refresh} disabled={productionQuery.isFetching || inventoryQuery.isFetching}>
+          <RefreshCw className={productionQuery.isFetching || inventoryQuery.isFetching ? "animate-spin" : ""} /> Refresh
+        </HeroButton>
+      </MktHero>
 
       {productionError && <div className="mb-4"><Notice title="Production data unavailable">{productionError}</Notice></div>}
       {inventoryError && <div className="mb-4"><Notice title="Inventory data unavailable">{inventoryError}</Notice></div>}

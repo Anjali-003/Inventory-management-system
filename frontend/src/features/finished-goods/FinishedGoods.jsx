@@ -3,8 +3,7 @@ import { CheckCircle2, PackageCheck, RefreshCw, Truck } from "lucide-react"
 import { finishedGoodsService } from "@/features/finished-goods/finishedGoodsService"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
 import { errorMessage } from "@/lib/stock"
-import PageHeader from "@/components/PageHeader"
-import SearchBar from "@/components/SearchBar"
+import { HeroButton, MktHero, SearchField } from "@/features/marketing-orders/mktKit"
 import StatStrip from "@/components/StatStrip"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { Button } from "@/components/ui/button"
@@ -20,6 +19,13 @@ const actorOf = (item) =>
   item.status === "COMPLETED" && item.completedByName ? { name: item.completedByName, sub: "Completed" }
   : item.dispatchedByName && item.status !== "PACKAGING" ? { name: item.dispatchedByName, sub: "Dispatched" }
   : { name: item.createdByName, sub: item.createdByName ? "Added" : null }
+
+function nextStepText(status) {
+  if (status === "PACKAGING") return "Next: mark dispatched when packaging is finished."
+  if (status === "DISPATCHED") return "Next: confirm completion after handover."
+  if (status === "COMPLETED") return "All Finished Goods steps are complete."
+  return "Check the batch status before taking action."
+}
 
 function Status({ value }) {
   const [variant, label] = value === "PACKAGING" ? ["warning", "Packaging"] : value === "DISPATCHED" ? ["info", "Dispatched"] : value === "COMPLETED" ? ["success", "Completed"] : ["neutral", value || "Unknown"]
@@ -50,7 +56,7 @@ function Confirm({ item, action, busy, onClose, onConfirm }) {
 
 function ItemCard({ item, onAction, editable }) {
   return (
-    <div className="rounded-xl border bg-card p-4">
+    <div className="rounded-2xl border border-[#dce5e0] bg-white p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.04)] transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="break-words font-medium tabular-nums">{item.orderNumber || "-"}</p>
@@ -63,11 +69,15 @@ function ItemCard({ item, onAction, editable }) {
         <div className="bg-card py-2.5"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Quantity</p><p className="font-semibold tabular-nums">{item.quantity ?? 0}</p></div>
         <div className="bg-card py-2.5"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Batch</p><p className="font-semibold tabular-nums">#{item.id}</p></div>
       </div>
+      <div className="mt-3 rounded-xl border border-[#dce5e0] bg-slate-50/80 px-3 py-2.5">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">What happens next</p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-700">{nextStepText(item.status)}</p>
+      </div>
       <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>Last action</span>
         <UserCell {...actorOf(item)} className="text-foreground" />
       </div>
-      <div className="mt-3 flex justify-end border-t pt-3">
+      <div className="mt-3 flex justify-end border-t border-[#e7eee9] pt-3">
         {editable && item.status === "PACKAGING" && <Button size="sm" onClick={() => onAction(item, "DISPATCH")}><Truck /> Mark dispatched</Button>}
         {editable && item.status === "DISPATCHED" && <Button size="sm" onClick={() => onAction(item, "COMPLETE")}><CheckCircle2 /> Mark completed</Button>}
         {(!editable || item.status === "COMPLETED") && <span className="text-xs text-muted-foreground">{editable ? "No action" : "View only"}</span>}
@@ -126,13 +136,15 @@ export default function FinishedGoods() {
 
   return (
     <>
-      <PageHeader title="Finished Goods" description="Manage approved batches through packaging and completion.">
-        <Button variant="outline" onClick={load} disabled={loading}><RefreshCw /> Refresh</Button>
-      </PageHeader>
+      <MktHero eyebrow="Quality & release" title="Finished Goods" description="Move batches that passed Quality Control through packaging, dispatch and final completion.">
+        <HeroButton variant="glass" onClick={load} disabled={loading} aria-label="Refresh finished goods">
+          <RefreshCw className={loading ? "animate-spin" : ""} /> Refresh
+        </HeroButton>
+      </MktHero>
 
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
         <StatStrip
           layoutId="finished-goods-status"
           cols="grid-cols-2 md:grid-cols-4"
@@ -143,7 +155,7 @@ export default function FinishedGoods() {
             { key: "total", label: "Total batches", value: items.length, tone: "neutral", active: status === "all", onClick: () => setStatus("all") },
           ]}
         />
-        <div className="flex items-center gap-3 border-b px-4 py-3 sm:px-5"><SearchBar value={query} onChange={setQuery} placeholder="Search order, product, SKU or person..." /></div>
+        <div className="flex items-center gap-3 border-b border-[#e7eee9] px-4 py-3 sm:px-5"><SearchField className="min-w-0 flex-1 sm:max-w-md" value={query} onChange={setQuery} placeholder="Search order, product, SKU or person..." /><span className="shrink-0 text-xs text-muted-foreground">{rows.length} batch{rows.length === 1 ? "" : "es"}</span></div>
 
         {loading ? <TableSkeleton rows={6} /> : rows.length === 0 ? (
           <EmptyState icon={PackageCheck} title={query || status !== "all" ? "No matching finished goods" : "No finished goods yet"}>
@@ -162,11 +174,11 @@ export default function FinishedGoods() {
                     <TableCell>{item.productName || "-"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{item.productSku || "-"}</TableCell>
                     <TableCell className="tabular-nums">{item.quantity ?? 0}</TableCell>
-                    <TableCell><Status value={item.status} /></TableCell>
+                    <TableCell><Status value={item.status} /><p className="mt-1 max-w-44 text-xs leading-snug text-muted-foreground">{nextStepText(item.status)}</p></TableCell>
                     <TableCell className="min-w-40"><UserCell {...actorOf(item)} /></TableCell>
                     <TableCell className="text-right">
-                      {editable && item.status === "PACKAGING" && <Button size="sm" onClick={() => confirm(item, "DISPATCH")}><Truck /> Dispatched</Button>}
-                      {editable && item.status === "DISPATCHED" && <Button size="sm" onClick={() => confirm(item, "COMPLETE")}><CheckCircle2 /> Completed</Button>}
+                      {editable && item.status === "PACKAGING" && <Button size="sm" onClick={() => confirm(item, "DISPATCH")}><Truck /> Mark dispatched</Button>}
+                      {editable && item.status === "DISPATCHED" && <Button size="sm" onClick={() => confirm(item, "COMPLETE")}><CheckCircle2 /> Mark completed</Button>}
                       {item.status === "COMPLETED" && <span className="text-sm text-muted-foreground">Done</span>}
                       {!editable && item.status !== "COMPLETED" && <span className="text-sm text-muted-foreground">View only</span>}
                     </TableCell>

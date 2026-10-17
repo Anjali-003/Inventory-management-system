@@ -7,7 +7,7 @@ export default function DashboardMetricCard({ to, label, value, detail, icon, to
     <Link
       to={to}
       aria-label={`${label}: ${loading ? "loading" : value}. Open related page.`}
-      className="block rounded-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="group block rounded-2xl outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <StatCard
         index={index}
