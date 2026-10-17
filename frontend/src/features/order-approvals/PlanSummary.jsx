@@ -28,14 +28,14 @@ export default function PlanSummary({ orderId, items = [] }) {
               {fmtQty(l.can_make)}
             </span>
             <span className="text-muted-foreground">
-              {l.already_approved > 0 ? ` of the remaining ${fmtQty(l.ordered)} can be made` : ` of ${fmtQty(l.ordered)} can be made`}
+              {` of ${fmtQty(l.ordered)} can be made`}
             </span>
           </li>
         ))}
       </ul>
       {plan.shortages?.length > 0 && (
         <p className="text-xs text-destructive">
-          {plan.shortages.length} component{plan.shortages.length > 1 ? "s" : ""} short for the rest{plan.reapproval ? " (already requested)" : ""}
+          {plan.shortages.length} component{plan.shortages.length > 1 ? "s" : ""} short for the rest
         </p>
       )}
     </div>

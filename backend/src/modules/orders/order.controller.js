@@ -113,7 +113,7 @@ async function startPartialProduction(req, res) {
     // production starts only after the Operations Admin has approved the order
     const approval = await orderService.getApprovalStatus(orderId);
     if (approval === null) throw AppError.notFound("Order not found");
-    if (!["APPROVED", "PARTIALLY_APPROVED"].includes(approval)) {
+    if (approval !== "APPROVED") {
         throw AppError.conflict(
             approval === "REJECTED"
                 ? "This order was rejected by the Operations Admin, so production cannot start."

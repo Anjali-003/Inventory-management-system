@@ -82,14 +82,9 @@ export default function OrderDetailModal({ order, editable, busy, onClose, onSen
         {order.production_request?.items?.length > 0 && (
           <section className="space-y-2.5">
             <h3 className="text-sm font-semibold">
-              {order.approval_status === "PARTIALLY_APPROVED" ? "Approved quantities (partial)" : "Approved quantities"}
+              Sent to production
             </h3>
             <OrderItems items={order.production_request.items} />
-            {order.approval_status === "PARTIALLY_APPROVED" && (
-              <p className="text-xs text-muted-foreground">
-                The remaining ordered quantities were not approved for production now.
-              </p>
-            )}
           </section>
         )}
       </div>

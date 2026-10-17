@@ -156,7 +156,7 @@ async function createPurchase(body, userId) {
     return inventory.inTransaction(async (conn) => {
         const [orders] = await conn.query(`SELECT id, approval_status FROM orders WHERE id = ? FOR UPDATE`, [orderId]);
         if (orders.length === 0) throw AppError.notFound("Order not found", "NOT_FOUND");
-        if (!["APPROVED", "PARTIALLY_APPROVED"].includes(orders[0].approval_status)) {
+        if (orders[0].approval_status !== "APPROVED") {
             throw AppError.conflict("This order is not approved, so nothing can be bought for it.", "NOT_APPROVED");
         }
 

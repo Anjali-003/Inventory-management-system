@@ -6,7 +6,6 @@ import { fmtQty } from "@/lib/stock"
 export const APPROVAL_META = {
   DRAFT: { variant: "neutral", label: "Draft" },
   PENDING_APPROVAL: { variant: "warning", label: "Waiting for approval" },
-  PARTIALLY_APPROVED: { variant: "warning", label: "Partially approved" },
   APPROVED: { variant: "success", label: "Approved" },
   REJECTED: { variant: "danger", label: "Rejected" },
 }
@@ -45,11 +44,10 @@ export function OrderLines({ items }) {
 
 /* ---------- order planning (what can be built now / what is short) ---------- */
 
-/** An order can be (further) approved while it waits, or after it was only partly approved. Only a waiting order can be rejected. */
+/** Only an order that waits for a decision can be approved (as a whole) or rejected. */
 export const isWaiting = (o) => o?.approval_status === "PENDING_APPROVAL"
-export const isPartial = (o) => o?.approval_status === "PARTIALLY_APPROVED"
-export const canApprove = (o) => isWaiting(o) || isPartial(o)
-export const approveLabel = (o) => (isPartial(o) ? "Approve the rest" : "Check stock & send")
+export const canApprove = (o) => isWaiting(o)
+export const approveLabel = () => "Check stock & send"
 
 /** Totals of one plan: how many units can be made now, how many are left over. */
 export function planTotals(plan) {

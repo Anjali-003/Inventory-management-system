@@ -28,7 +28,6 @@ import { approveLabel, canApprove } from "./approvalParts"
 
 const HINT = {
   PENDING_APPROVAL: "Needs your decision",
-  PARTIALLY_APPROVED: "Selected product quantities approved",
   APPROVED: "Lists sent to Production / Purchase",
   REJECTED: "With the reason you gave",
 }
@@ -51,7 +50,7 @@ export function opsHref(status, extra = {}) {
 
 export const productsSummary = (items = []) => (items.length === 0 ? "No products" : items.length === 1 ? items[0].name : `${items[0].name} + ${items.length - 1} more`)
 export const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
-export const isDecided = (o) => ["PARTIALLY_APPROVED", "APPROVED", "REJECTED"].includes(o.approval_status)
+export const isDecided = (o) => ["APPROVED", "REJECTED"].includes(o.approval_status)
 
 /* -------------------------------------------------------------------- tiles */
 

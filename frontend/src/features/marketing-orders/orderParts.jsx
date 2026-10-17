@@ -15,7 +15,7 @@ import { SPRING, SPRING_SOFT } from "./mktMotion"
   dashboard can simply link to ordersHref("APPROVED") and the page opens already filtered.
 
   Every stage has ONE colour family, used everywhere (tiles, chips, pills, bars, timeline):
-    Draft = amber   Waiting = sky   Partial = orange   Approved = emerald   Rejected = rose   All = violet
+    Draft = amber   Waiting = sky   Approved = emerald   Rejected = rose   All = violet
   `s` holds the full Tailwind class strings (kept whole, so Tailwind can see them).
 */
 
@@ -35,14 +35,6 @@ export const STAGES = [
     s: {
       grad: "from-sky-400 to-blue-600", glow: "shadow-blue-500/30", soft: "bg-sky-50 ring-sky-200/70",
       pill: "bg-sky-50 text-sky-800 ring-sky-200", ink: "text-sky-700",
-    },
-  },
-  {
-    status: "PARTIALLY_APPROVED", label: "PARTIALLY APPROVED BY OPERATIONS ADMIN", short: "Partially approved", icon: CircleDot, tone: "amber", dotTone: "warning",
-    bar: "bg-gradient-to-r from-amber-400 to-orange-500", dot: "bg-orange-500", hint: "Only selected product quantities are approved",
-    s: {
-      grad: "from-amber-400 to-orange-600", glow: "shadow-orange-500/30", soft: "bg-orange-50 ring-orange-200/70",
-      pill: "bg-orange-50 text-orange-800 ring-orange-200", ink: "text-orange-700",
     },
   },
   {
@@ -181,8 +173,6 @@ export function orderSteps(status) {
   switch (status) {
     case "PENDING_APPROVAL":
       return [["Created", "done"], ["Sent to admin", "done"], ["Decision", "current"]]
-    case "PARTIALLY_APPROVED":
-      return [["Created", "done"], ["Sent to admin", "done"], ["Partially approved", "current"]]
     case "APPROVED":
       return [["Created", "done"], ["Sent to admin", "done"], ["Approved", "done"]]
     case "REJECTED":
@@ -255,7 +245,7 @@ const MARK = {
 export function OrderTimeline({ order }) {
   const status = order.approval_status
   const steps = orderSteps(status)
-  const decided = ["PARTIALLY_APPROVED", "APPROVED", "REJECTED"].includes(status)
+  const decided = ["APPROVED", "REJECTED"].includes(status)
 
   const rows = [
     {
@@ -311,3 +301,41 @@ export function OrderTimeline({ order }) {
     </ol>
   )
 }
+
+/* ------------------------------------------------------------ review numbers (table + drawer) */
+
+export const DECIDED_STATUSES = ["APPROVED", "REJECTED"]
+export const sumQty = (lines = []) => lines.reduce((s, l) => s + Number(l.quantity || 0), 0)
+
+/*
+  What the Operations Admin decided, in numbers. There is no partial approval: an approved order is approved as a
+  whole (approved = requested) and a rejected one has 0 approved.
+  What the stock could cover at that moment goes to production: see sentToProduction().
+*/
+export function reviewOf(o) {
+  const requested = o.totals?.quantity ?? sumQty(o.items)
+  const approved = o.approval_status === "APPROVED" ? requested : 0
+  return { requested, approved, ratio: requested > 0 ? Math.min(approved / requested, 1) : 0 }
+}
+
+/* Approved quantity of ONE product line. null while the order has no decision yet. */
+export function approvedFor(o, line) {
+  if (!DECIDED_STATUSES.includes(o.approval_status)) return null
+  return o.approval_status === "APPROVED" ? Number(line.quantity) : 0
+}
+
+/* Units of ONE product line the admin sent to production when approving. null when nothing was sent. */
+export function sentToProduction(o, line) {
+  if (!o.production_request) return null
+  const hit = o.production_request.items.find((i) => i.product_id === line.product_id)
+  return hit ? Number(hit.quantity) : 0
+}
+
+/* ------------------------------------------------------------ order drawer tabs */
+
+export const DRAWER_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "items", label: "Items & Quantities" },
+  { id: "timeline", label: "Timeline" },
+]
+export const isDrawerTab = (value) => DRAWER_TABS.some((t) => t.id === value)

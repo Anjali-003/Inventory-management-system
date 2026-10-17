@@ -14,7 +14,7 @@ async function list(req, res) {
 
 /* GET /approved-orders  (Purchase Manager: only what the Operations Admin approved) */
 async function listApproved(req, res) {
-    res.json(await service.listOrders({ statuses: ["APPROVED", "PARTIALLY_APPROVED"] }));
+    res.json(await service.listOrders({ statuses: ["APPROVED"] }));
 }
 
 async function getOne(req, res) {

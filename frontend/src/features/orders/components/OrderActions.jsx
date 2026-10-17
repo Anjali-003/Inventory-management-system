@@ -10,21 +10,12 @@ export default function OrderActions({ order, onCheck, onStart, className }) {
   const started = Number(order?.quantity_to_produce ?? 0)
 
   // production starts only after the Operations Admin approved the order
-  if (order?.approval_status && !["APPROVED", "PARTIALLY_APPROVED"].includes(order.approval_status)) {
+  if (order?.approval_status && order.approval_status !== "APPROVED") {
     return (
       <div className={className ?? "flex justify-end"}>
         <span className="text-sm text-muted-foreground">
           {order.approval_status === "REJECTED" ? "Rejected by Operations Admin" : order.approval_status === "DRAFT" ? "Draft with Marketing" : "Waiting for Operations Admin approval"}
         </span>
-      </div>
-    )
-  }
-
-  // partly approved order: this product's units have not been approved yet (Operations approves the rest later)
-  if (order?.approval_status === "PARTIALLY_APPROVED" && Number(order?.approved_quantity ?? 0) === 0) {
-    return (
-      <div className={className ?? "flex justify-end"}>
-        <span className="text-sm text-muted-foreground">Not approved yet</span>
       </div>
     )
   }

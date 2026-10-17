@@ -15,7 +15,7 @@ const productsText = (items = []) => items.map((i) => `${i.name} × ${fmtQty(i.q
 
 /* Popup for a marketing / approval order: who raised it, the decision, and its product lines. */
 export function OrderInfoModal({ order, onClose }) {
-  const decided = ["PARTIALLY_APPROVED", "APPROVED", "REJECTED"].includes(order.approval_status)
+  const decided = ["APPROVED", "REJECTED"].includes(order.approval_status)
   return (
     <Modal
       open

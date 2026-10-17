@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 let s;
 
 const fresh = () => ({
-  order: { id: 12, order_number: "ORD-012", status: "PENDING", approval_status: "PARTIALLY_APPROVED", inventory_issued_at: "2026-10-16 12:00:00" },
+  order: { id: 12, order_number: "ORD-012", status: "PENDING", approval_status: "APPROVED", inventory_issued_at: "2026-10-16 12:00:00" },
   lines: [
     { product_id: 1, ordered_quantity: "5.00", product_sku: "PRD-001", product_name: "Controller" },
     { product_id: 2, ordered_quantity: "4.00", product_sku: "PRD-002", product_name: "Sensor" },

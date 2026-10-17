@@ -24,7 +24,6 @@ const EMPTY = []
 /* Plain-language line under "Hello": the one thing worth doing next. */
 function nudge(counts) {
   if (counts.REJECTED) return `${plural(counts.REJECTED, "order")} rejected. Open it to read the admin's remarks.`
-  if (counts.PARTIALLY_APPROVED) return `${plural(counts.PARTIALLY_APPROVED, "order")} partially approved. Open it to see the approved quantities.`
   if (counts.DRAFT) return `${plural(counts.DRAFT, "draft")} ready to send to the Operations Admin.`
   if (counts.PENDING_APPROVAL) return `${plural(counts.PENDING_APPROVAL, "order")} waiting for the Operations Admin.`
   return "Where your orders stand with the Operations Admin."

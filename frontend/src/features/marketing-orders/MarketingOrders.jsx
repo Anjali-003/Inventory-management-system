@@ -8,22 +8,22 @@ import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { useToast } from "@/components/toast"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import NewOrderModal from "./NewOrderModal"
-import OrderDetailModal from "./OrderDetailModal"
+import OrderDrawer from "./OrderDrawer"
+import OrdersTable from "./OrdersTable"
 import { HeroButton, MktBtn, MktHero, NewOrderFab, SearchField, StageChips, StageTile, StatusSelect, StatusPill, TileGrid } from "./mktKit"
 import { PRESS_SOFT, rise, stagger } from "./mktMotion"
-import { ALL_STAGE, OrderProgress, OrderSteps, STAGES, countByStatus, isStatus, newestFirst, plural, stageOf } from "./orderParts"
+import { ALL_STAGE, OrderSteps, STAGES, countByStatus, isDrawerTab, isStatus, newestFirst, plural, stageOf } from "./orderParts"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "./marketingOrdersApi"
 
 const EMPTY = []
 const SHOW_LINES = 2
 
-const isDecided = (o) => ["PARTIALLY_APPROVED", "APPROVED", "REJECTED"].includes(o.approval_status)
+const isDecided = (o) => ["APPROVED", "REJECTED"].includes(o.approval_status)
 
 /*
   Marketing Manager: build an order (Draft), press Send to hand it to the Operations Admin.
@@ -130,6 +130,7 @@ export default function MarketingOrders() {
   const status = isStatus(params.get("status")) ? params.get("status") : null
   const query = params.get("q") ?? ""
   const orderId = params.get("order")
+  const tab = isDrawerTab(params.get("tab")) ? params.get("tab") : "overview"
   const adding = editable && params.get("new") === "1"
 
   // `replace` keeps typing in the search box from filling the browser history.
@@ -167,7 +168,8 @@ export default function MarketingOrders() {
   const filtered = !!(status || query.trim())
   const clearFilters = () => patch({ status: null, q: null })
   const openNew = () => patch({ new: "1" })
-  const openOrder = (o) => patch({ order: o.id })
+  const openOrder = (o, drawerTab) => patch({ order: o.id, tab: drawerTab && drawerTab !== "overview" ? drawerTab : null })
+  const closeOrder = () => patch({ order: null, tab: null }, true)
 
   const sendOrder = async (o) => {
     setBusyId(o.id)
@@ -186,7 +188,7 @@ export default function MarketingOrders() {
     try {
       await remove(o.id).unwrap()
       toast.success(`${o.order_number} deleted`)
-      if (String(o.id) === orderId) patch({ order: null }, true)
+      if (String(o.id) === orderId) closeOrder()
     } catch (err) {
       toast.error(errorMessage(err, "Could not delete this order."))
     } finally {
@@ -308,77 +310,18 @@ export default function MarketingOrders() {
             ))}
           </motion.div>
 
-          {/* desktop: table */}
-          <Card className="hidden overflow-hidden @5xl:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Products</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Admin decision</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              {/* keyed by the filter so the rows glide in again whenever the filter changes */}
-              <TableBody key={status ?? "all"}>
-                {shown.map((o, i) => {
-                  const extra = o.items.length - SHOW_LINES
-                  return (
-                    <TableRow
-                      key={o.id}
-                      onClick={() => openOrder(o)}
-                      style={{ animationDelay: `${Math.min(i, 8) * 30}ms`, animationFillMode: "backwards" }}
-                      className="cursor-pointer motion-reduce:animate-none"
-                    >
-                      <TableCell className="min-w-40">
-                        <button type="button" className="block text-start font-semibold tabular-nums outline-none transition-colors hover:text-primary focus-visible:text-primary focus-visible:underline">
-                          {o.order_number}
-                        </button>
-                        <span className="block text-xs text-muted-foreground" title={fmtDateTime(o.created_at)}>
-                          {o.created_by_name ? `${o.created_by_name} · ` : ""}{timeAgo(o.created_at)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="min-w-48">
-                        <ul className="space-y-0.5">
-                          {o.items.slice(0, SHOW_LINES).map((it) => (
-                            <li key={it.product_id} className="text-sm">{it.name} <span className="text-muted-foreground">× {fmtQty(it.quantity)}</span></li>
-                          ))}
-                          {extra > 0 && <li className="text-xs font-semibold text-primary">+ {plural(extra, "more product")}</li>}
-                        </ul>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col items-start gap-2">
-                          <StatusPill value={o.approval_status} />
-                          <OrderProgress status={o.approval_status} />
-                        </div>
-                      </TableCell>
-                      <TableCell className="min-w-40">
-                        {isDecided(o) ? (
-                          <div className="space-y-0.5">
-                            <UserCell name={o.approved_by_name} sub={fmtDateTime(o.approved_at)} />
-                            {o.approval_remarks && <p className="line-clamp-2 max-w-64 whitespace-normal text-xs text-muted-foreground">{o.approval_remarks}</p>}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-end">
-                        {editable && o.approval_status === "DRAFT" && (
-                          <div className="flex justify-end gap-2">
-                            <MktBtn variant="danger" size="icon" aria-label={`Delete draft ${o.order_number}`} onClick={(e) => { e.stopPropagation(); setConfirmDelete(o) }}><Trash2 /></MktBtn>
-                            <MktBtn variant="primary" disabled={busyId === o.id} onClick={(e) => { e.stopPropagation(); sendOrder(o) }}>
-                              {busyId === o.id ? <Loader2 className="animate-spin" /> : <Send />} Send to admin
-                            </MktBtn>
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </Card>
+          {/* desktop: table (4 columns: Order ID, Order Items, Order Status, Operations Review) */}
+          <OrdersTable
+            className="hidden @5xl:block"
+            orders={shown}
+            filterKey={status ?? "all"}
+            editable={editable}
+            busyId={busyId}
+            onOpen={openOrder}
+            onViewItems={(o) => openOrder(o, "items")}
+            onSend={sendOrder}
+            onDelete={setConfirmDelete}
+          />
         </>
       )}
       </div>
@@ -386,16 +329,16 @@ export default function MarketingOrders() {
       {editable && <NewOrderFab onClick={openNew} />}
 
       {adding && <NewOrderModal onClose={() => patch({ new: null }, true)} />}
-      {selected && !confirmDelete && (
-        <OrderDetailModal
-          order={selected}
-          editable={editable}
-          busy={busyId === selected.id}
-          onClose={() => patch({ order: null }, true)}
-          onSend={sendOrder}
-          onDelete={setConfirmDelete}
-        />
-      )}
+      <OrderDrawer
+        order={selected && !confirmDelete ? selected : null}
+        tab={tab}
+        onTab={(t) => patch({ tab: t === "overview" ? null : t }, true)}
+        editable={editable}
+        busy={selected ? busyId === selected.id : false}
+        onClose={closeOrder}
+        onSend={sendOrder}
+        onDelete={setConfirmDelete}
+      />
       <ConfirmDialog
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}

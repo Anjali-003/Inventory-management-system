@@ -118,7 +118,7 @@ async function checkProductionMaterials(orderId, quantity, productId) {
 const START_ALLOWED = ["PENDING", "IN_PRODUCTION", "TESTING", "PACKAGING", "DISPATCHED"]
 
 /* Production may only start on an order Operations has approved (the controller checks this too). */
-const APPROVED_FOR_PRODUCTION = ["APPROVED", "PARTIALLY_APPROVED"]
+const APPROVED_FOR_PRODUCTION = ["APPROVED"]
 function assertApprovedForProduction(order) {
   if (!APPROVED_FOR_PRODUCTION.includes(order.approval_status)) {
     throw new AppError(409, "This order has not been approved for production yet")
