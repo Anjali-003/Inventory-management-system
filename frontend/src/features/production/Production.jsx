@@ -17,6 +17,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input, Label } from "@/components/ui/input"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import ListViewControls from "@/components/ListViewControls"
+import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import MaterialCheckModal from "@/features/orders/components/MaterialCheckModal"
 import StartProductionModal from "@/features/orders/components/StartProductionModal"
 
@@ -152,6 +155,12 @@ export default function Production() {
   const error = actionError || (loadError ? errorMessage(loadError, "Failed to load production orders.") : "")
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("all")
+  const [productFilter, setProductFilter] = useState("all")
+  const [orderStatusFilter, setOrderStatusFilter] = useState("all")
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
+  const [sortBy, setSortBy] = useState("newest")
+  const [view, setView] = useState("cards")
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState(null)
   const [checkFor, setCheckFor] = useState(null)
@@ -176,19 +185,53 @@ export default function Production() {
     history: items.filter((item) => item.status === "COMPLETED" || item.qc_decision === "PASS").length,
   }), [items])
 
+  const productOptions = useMemo(() => uniqueStringOptions(items, (item) => item.product_name), [items])
+  const statusOptions = useMemo(() => uniqueStringOptions(items, (item) => item.order_status || item.status, "All order statuses"), [items])
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return items.filter((item) => {
+    const filtered = items.filter((item) => {
       if (filter === "shortage" && !(item.material_status === "SHORTAGE" && remainingToStart(item) > 0)) return false
       if (filter === "active" && !(item.status === "IN_PRODUCTION" && (inProduction(item) > 0 || remainingToStart(item) > 0))) return false
       if (filter === "history" && !(item.status === "COMPLETED" || item.qc_decision === "PASS" || item.qc_decision === "FAIL")) return false
-      return !q || `${item.order_number} ${item.product_name || ""} ${item.order_status || ""} ${item.status || ""} ${item.started_by_name || ""} ${item.updated_by_name || ""} ${item.qc_remarks || ""} ${item.rework_remarks || ""}`.toLowerCase().includes(q)
+      if (productFilter !== "all" && item.product_name !== productFilter) return false
+      if (orderStatusFilter !== "all" && (item.order_status || item.status) !== orderStatusFilter) return false
+      if (!isWithinDateRange(item.started_at || item.order_created_at || item.completed_at, fromDate, toDate)) return false
+      return !q || `${item.order_number} ${item.product_name || ""} ${item.product_sku || ""} ${item.order_status || ""} ${item.status || ""} ${item.started_by_name || ""} ${item.updated_by_name || ""} ${item.qc_remarks || ""} ${item.rework_remarks || ""}`.toLowerCase().includes(q)
     })
-  }, [items, query, filter])
+    return filtered.sort((a, b) => {
+      const aCreated = recordTimestamp(a.order_created_at || a.started_at || a.completed_at)
+      const bCreated = recordTimestamp(b.order_created_at || b.started_at || b.completed_at)
+      const aWaiting = recordTimestamp(a.started_at || a.order_created_at || a.completed_at)
+      const bWaiting = recordTimestamp(b.started_at || b.order_created_at || b.completed_at)
+      const aProgress = num(a.ordered_quantity) ? num(a.quantity_completed) / num(a.ordered_quantity) : 0
+      const bProgress = num(b.ordered_quantity) ? num(b.quantity_completed) / num(b.ordered_quantity) : 0
+      if (sortBy === "oldest") return aCreated - bCreated
+      if (sortBy === "waiting") return aWaiting - bWaiting
+      if (sortBy === "most-progress") return bProgress - aProgress
+      if (sortBy === "least-progress") return aProgress - bProgress
+      if (sortBy === "shortage") return Number(b.material_status === "SHORTAGE") - Number(a.material_status === "SHORTAGE") || bCreated - aCreated
+      return bCreated - aCreated
+    })
+  }, [items, query, filter, productFilter, orderStatusFilter, fromDate, toDate, sortBy])
 
   const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const setFilterAndReset = (value) => { setFilter(value); setPage(1) }
   const setQueryAndReset = (value) => { setQuery(value); setPage(1) }
+  const clearToolbarFilters = () => { setProductFilter("all"); setOrderStatusFilter("all"); setFromDate(""); setToDate(""); setFilterAndReset("all") }
+  const toolbarFilters = [
+    { key: "product", label: "Product", value: productFilter, options: productOptions, onChange: (value) => { setProductFilter(value); setPage(1) } },
+    { key: "status", label: "Order status", value: orderStatusFilter, options: statusOptions, onChange: (value) => { setOrderStatusFilter(value); setPage(1) } },
+    { key: "from-date", label: "Order / start date from", type: "date", value: fromDate, onChange: (value) => { setFromDate(value); setPage(1) } },
+    { key: "to-date", label: "Order / start date to", type: "date", value: toDate, onChange: (value) => { setToDate(value); setPage(1) } },
+  ]
+  const sortOptions = [
+    { value: "newest", label: "Newest orders first" },
+    { value: "oldest", label: "Oldest orders first" },
+    { value: "waiting", label: "Waiting longest" },
+    { value: "shortage", label: "Material shortages first" },
+    { value: "least-progress", label: "Lowest progress first" },
+    { value: "most-progress", label: "Highest progress first" },
+  ]
 
   // Keep this page focused on normal Production Orders; QC recovery has a separate page.
   const stats = [
@@ -279,6 +322,7 @@ export default function Production() {
           <SearchBar value={query} onChange={setQueryAndReset} placeholder="Search order, product or person..." />
         </div>
         <p className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-slate-600">{rows.length} result{rows.length === 1 ? "" : "s"}</p>
+        <ListViewControls view={view} onViewChange={setView} sortBy={sortBy} onSortChange={(value) => { setSortBy(value); setPage(1) }} sortOptions={sortOptions} filters={toolbarFilters} onClearFilters={clearToolbarFilters} hasActiveFilters={productFilter !== "all" || orderStatusFilter !== "all" || !!fromDate || !!toDate || filter !== "all"} />
       </div>
 
       {loading ? (
@@ -289,13 +333,13 @@ export default function Production() {
           <div className="lg:hidden"><TableSkeleton rows={7} /></div>
         </>
       ) : rows.length === 0 ? (
-        <EmptyState icon={Factory} title={query || filter !== "all" ? "No matching production orders" : "No production orders yet"}>
-          {query || filter !== "all" ? "Try another search or select another production filter." : "Orders ready to start and existing production runs will appear here."}
+        <EmptyState icon={Factory} title={query || filter !== "all" || productFilter !== "all" || orderStatusFilter !== "all" || fromDate || toDate ? "No matching production orders" : "No production orders yet"}>
+          {query || filter !== "all" || productFilter !== "all" || orderStatusFilter !== "all" || fromDate || toDate ? "Try another search or clear one or more filters." : "Orders ready to start and existing production runs will appear here."}
         </EmptyState>
       ) : (
         <>
-          {/* Desktop gets spacious order cards in the Marketing style; mobile/tablet retain the original compact cards. */}
-          <div className="hidden min-w-0 grid-cols-2 gap-4 p-4 lg:grid 2xl:grid-cols-3">
+          {/* Desktop can switch between cards and a fixed-layout table. Phones keep cards to avoid horizontal scrolling. */}
+          <div className={`hidden min-w-0 grid-cols-2 gap-4 p-4 2xl:grid-cols-3 ${view === "cards" ? "lg:grid" : "lg:hidden"}`}>
             {pageRows.map((item) => (
               <ProductionOrderCard
                 key={item.order_id}
@@ -306,9 +350,33 @@ export default function Production() {
             ))}
           </div>
 
+          <div className={`hidden min-w-0 overflow-hidden ${view === "table" ? "lg:block" : "lg:hidden"}`}>
+            <Table className="w-full table-fixed">
+              <TableHeader><TableRow>
+                <TableHead className="w-[17%] whitespace-normal">Order</TableHead>
+                <TableHead className="w-[17%] whitespace-normal">Product</TableHead>
+                <TableHead className="w-[19%] whitespace-normal">Progress</TableHead>
+                <TableHead className="w-[18%] whitespace-normal">Material readiness</TableHead>
+                <TableHead className="w-[11%] whitespace-normal">Started / ordered</TableHead>
+                <TableHead className="w-[18%] whitespace-normal">Actions</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>{pageRows.map((item) => (
+                <TableRow key={item.order_id}>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><p className="break-words font-semibold tabular-nums">{item.order_number || `Order #${item.order_id}`}</p><p className="mt-1 break-words text-xs text-muted-foreground">{item.order_status || item.status || "Unknown status"}</p></TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><p className="break-words font-medium">{item.product_name || "Product unavailable"}</p><p className="mt-1 break-words text-xs text-muted-foreground">SKU {item.product_sku || "—"}</p></TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><Progress done={num(item.quantity_completed)} total={num(item.ordered_quantity)} /></TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><MaterialReadiness item={item} /></TableCell>
+                  <TableCell className="whitespace-normal align-top text-xs text-muted-foreground">{date(item.started_at || item.order_created_at)}</TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><ProductionActions item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} compact marketing /></TableCell>
+                </TableRow>
+              ))}</TableBody>
+            </Table>
+          </div>
+
           <div className="grid min-w-0 gap-3 p-3 lg:hidden">
             {pageRows.map((item) => <ProductionCard key={item.order_id} item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} />)}
           </div>
+
           <Pagination page={page} pageSize={PAGE_SIZE} total={rows.length} onPage={setPage} noun="production orders" />
         </>
       )}

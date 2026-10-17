@@ -2,6 +2,10 @@ import { useMemo, useState } from "react"
 import { AlertTriangle, ArrowRight, ClipboardCheck, Clock3, PackageCheck, Wrench } from "lucide-react"
 import { MktBtn } from "@/features/marketing-orders/mktKit"
 import { EmptyState } from "@/components/feedback"
+import { SearchField } from "@/features/marketing-orders/mktKit"
+import ListViewControls from "@/components/ListViewControls"
+import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 
 const STAGES = [
@@ -91,7 +95,7 @@ function ReworkCard({ item, editable, busy, onSubmit }) {
   )
 }
 
-function StageSection({ stage, items, loading, editable, busy, onSubmit }) {
+function StageSection({ stage, items, loading, editable, busy, onSubmit, view = "cards" }) {
   const Icon = stage.icon
 
   return (
@@ -123,9 +127,34 @@ function StageSection({ stage, items, loading, editable, busy, onSubmit }) {
             : "After the correction is submitted, the batch appears here while it waits for the QC team to make the next Pass/Fail decision."}
         </EmptyState>
       ) : (
-        <div className="grid min-w-0 gap-3 p-3 sm:p-4 xl:grid-cols-2">
-          {items.map((item) => <ReworkCard key={item.id} item={item} editable={editable} busy={busy} onSubmit={onSubmit} />)}
-        </div>
+        <>
+          <div className={`hidden min-w-0 overflow-hidden ${view === "table" ? "xl:block" : "xl:hidden"}`}>
+            <Table className="w-full table-fixed">
+              <TableHeader><TableRow>
+                <TableHead className="w-[22%] whitespace-normal">Order / Product</TableHead>
+                <TableHead className="w-[11%] whitespace-normal">Completed / Ordered</TableHead>
+                <TableHead className="w-[14%] whitespace-normal">Current stage</TableHead>
+                <TableHead className="w-[30%] whitespace-normal">Failure / correction notes</TableHead>
+                <TableHead className="w-[23%] whitespace-normal">Next action</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>{items.map((item) => {
+                const status = item.rework_status
+                const canSubmit = editable && (status === "NEEDS_REWORK" || status === "IN_PROGRESS")
+                const attempt = Number(item.rework_attempt_number || item.qc_attempt_number || 1)
+                return <TableRow key={item.id}>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><p className="break-words font-semibold tabular-nums">{item.order_number || `Production #${item.id}`}</p><p className="mt-1 break-words text-sm font-medium">{item.product_name || "Product unavailable"}</p><p className="mt-1 break-words text-xs text-muted-foreground">{item.product_sku || "SKU unavailable"}</p></TableCell>
+                  <TableCell className="whitespace-normal align-top"><p className="font-semibold tabular-nums">{Number(item.quantity_completed || 0).toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">of {Number(item.ordered_quantity || 0).toLocaleString()}</p></TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><StageBadge status={status} /><p className="mt-2 text-xs text-muted-foreground">{status === "READY_FOR_QC" ? `Retest attempt ${attempt + 1}` : `QC attempt ${attempt}`}</p></TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><p className="text-[10px] font-bold uppercase tracking-wide text-rose-800">Original failure</p><p className="mt-1 break-words whitespace-pre-wrap text-sm leading-relaxed">{item.qc_remarks || "No failure remark recorded."}</p>{status !== "NEEDS_REWORK" && <><p className="mt-3 text-[10px] font-bold uppercase tracking-wide text-emerald-800">Correction notes</p><p className="mt-1 break-words whitespace-pre-wrap text-sm leading-relaxed">{item.rework_remarks || "No repair notes recorded yet."}</p></>}</TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><p className="mb-2 break-words text-xs text-muted-foreground">{status === "READY_FOR_QC" ? `Submitted ${formatWhen(item.rework_submitted_at)}` : status === "IN_PROGRESS" ? `Started ${formatWhen(item.rework_started_at)}` : `Failed ${formatWhen(item.qc_decided_at)}`}</p>{canSubmit ? <MktBtn type="button" variant="primary" size="sm" className="whitespace-normal" onClick={() => onSubmit(item)} disabled={busy}><Wrench className="size-3.5" /> Record fix &amp; submit</MktBtn> : status === "READY_FOR_QC" ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800"><PackageCheck className="size-4" /> Waiting for QC</span> : <span className="text-xs font-semibold text-slate-600">View only</span>}</TableCell>
+                </TableRow>
+              })}</TableBody>
+            </Table>
+          </div>
+          <div className={`grid min-w-0 gap-3 p-3 sm:p-4 xl:grid-cols-2 ${view === "table" ? "xl:hidden" : "xl:grid"}`}>
+            {items.map((item) => <ReworkCard key={item.id} item={item} editable={editable} busy={busy} onSubmit={onSubmit} />)}
+          </div>
+        </>
       )}
     </section>
   )
@@ -133,13 +162,46 @@ function StageSection({ stage, items, loading, editable, busy, onSubmit }) {
 
 export default function ReworkWorkspace({ items = [], loading = false, editable = true, busy = false, onSubmitRework }) {
   const [activeStage, setActiveStage] = useState("failed")
-  const groups = useMemo(() => ({
-    // Keep interrupted submissions visible so staff can retry without a hidden stage.
-    failed: items.filter((item) => item.rework_status === "NEEDS_REWORK" || item.rework_status === "IN_PROGRESS"),
-    ready: items.filter((item) => item.rework_status === "READY_FOR_QC"),
-  }), [items])
+  const [query, setQuery] = useState("")
+  const [productFilter, setProductFilter] = useState("all")
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
+  const [sortBy, setSortBy] = useState("oldest")
+  const [view, setView] = useState("cards")
+  const productOptions = useMemo(() => uniqueStringOptions(items, (item) => item.product_name), [items])
+  const groups = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const matches = (item) => {
+      if (productFilter !== "all" && item.product_name !== productFilter) return false
+      return !q || `${item.order_number || ""} ${item.id || ""} ${item.product_name || ""} ${item.product_sku || ""} ${item.qc_remarks || ""} ${item.rework_remarks || ""} ${item.rework_status || ""} ${item.rework_started_by_name || ""} ${item.rework_submitted_by_name || ""}`.toLowerCase().includes(q)
+    }
+    const failed = items.filter((item) => (item.rework_status === "NEEDS_REWORK" || item.rework_status === "IN_PROGRESS") && matches(item) && isWithinDateRange(item.qc_decided_at, fromDate, toDate))
+    const ready = items.filter((item) => item.rework_status === "READY_FOR_QC" && matches(item) && isWithinDateRange(item.rework_submitted_at || item.qc_decided_at, fromDate, toDate))
+    const sort = (list) => list.sort((a, b) => {
+      if (sortBy === "retest") return Number(b.rework_attempt_number || b.qc_attempt_number || 1) - Number(a.rework_attempt_number || a.qc_attempt_number || 1)
+      const at = recordTimestamp(a.rework_status === "READY_FOR_QC" ? a.rework_submitted_at || a.qc_decided_at : a.qc_decided_at)
+      const bt = recordTimestamp(b.rework_status === "READY_FOR_QC" ? b.rework_submitted_at || b.qc_decided_at : b.qc_decided_at)
+      return sortBy === "newest" ? bt - at : at - bt
+    })
+    return { failed: sort(failed), ready: sort(ready) }
+  }, [items, query, productFilter, fromDate, toDate, sortBy])
   const openTasks = groups.failed.length + groups.ready.length
   const currentStage = STAGES.find((stage) => stage.key === activeStage) || STAGES[0]
+  const clearToolbarFilters = () => { setProductFilter("all"); setFromDate(""); setToDate("") }
+  const toolbarFilters = [
+    { key: "product", label: "Product", value: productFilter, options: productOptions, onChange: setProductFilter },
+    { key: "from-date", label: "Failure / submission date from", type: "date", value: fromDate, onChange: setFromDate },
+    { key: "to-date", label: "Failure / submission date to", type: "date", value: toDate, onChange: setToDate },
+  ]
+  const sortOptions = currentStage.key === "ready" ? [
+    { value: "oldest", label: "Waiting longest for QC" },
+    { value: "newest", label: "Recently submitted for QC" },
+    { value: "retest", label: "Highest retest attempt" },
+  ] : [
+    { value: "oldest", label: "Oldest failure first" },
+    { value: "newest", label: "Newest failures first" },
+    { value: "retest", label: "Highest retest attempt" },
+  ]
 
   return (
     <div className="min-w-0 space-y-5">
@@ -166,35 +228,23 @@ export default function ReworkWorkspace({ items = [], loading = false, editable 
                 ? "border-rose-700 bg-rose-700 text-white shadow-sm"
                 : "border-emerald-700 bg-emerald-700 text-white shadow-sm"
               return (
-                <button
-                  key={stage.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => setActiveStage(stage.key)}
-                  className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${selected ? activeStyle : "border-slate-200 bg-white text-slate-800 hover:bg-slate-100"}`}
-                >
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    <Icon className="size-5 shrink-0" aria-hidden />
-                    <span className="text-sm font-extrabold sm:text-base">{stage.label}</span>
-                  </span>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold tabular-nums ${selected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"}`}>
-                    {loading ? "…" : groups[stage.key].length}
-                  </span>
+                <button key={stage.key} type="button" role="tab" aria-selected={selected} onClick={() => setActiveStage(stage.key)} className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${selected ? activeStyle : "border-slate-200 bg-white text-slate-800 hover:bg-slate-100"}`}>
+                  <span className="flex min-w-0 items-center gap-2.5"><Icon className="size-5 shrink-0" aria-hidden /><span className="text-sm font-extrabold sm:text-base">{stage.label}</span></span>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold tabular-nums ${selected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"}`}>{loading ? "…" : groups[stage.key].length}</span>
                 </button>
               )
             })}
           </div>
         </div>
+        <div className="border-b border-slate-200 bg-slate-50/70 px-3 py-3 sm:px-5">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1 sm:max-w-md"><SearchField value={query} onChange={setQuery} placeholder="Search order, product, SKU or failure remark..." /></div>
+            <p className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-slate-600">{groups[currentStage.key].length} batch{groups[currentStage.key].length === 1 ? "" : "es"}</p>
+            <ListViewControls view={view} onViewChange={setView} sortBy={sortBy} onSortChange={setSortBy} sortOptions={sortOptions} filters={toolbarFilters} onClearFilters={clearToolbarFilters} hasActiveFilters={productFilter !== "all" || !!fromDate || !!toDate} />
+          </div>
+        </div>
         <div className="space-y-5 p-3 sm:p-5">
-          <StageSection
-            stage={currentStage}
-            items={groups[currentStage.key]}
-            loading={loading}
-            editable={editable}
-            busy={busy}
-            onSubmit={onSubmitRework}
-          />
+          <StageSection stage={currentStage} items={groups[currentStage.key]} loading={loading} editable={editable} busy={busy} onSubmit={onSubmitRework} view={view} />
         </div>
       </section>
     </div>

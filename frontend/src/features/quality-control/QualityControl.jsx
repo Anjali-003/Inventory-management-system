@@ -4,6 +4,8 @@ import { CheckCircle2, ClipboardCheck, PackageCheck, RefreshCw, XCircle } from "
 import { useDispatch } from "react-redux"
 import { useToast } from "@/components/toast"
 import { HeroButton, MktHero, SearchField } from "@/features/marketing-orders/mktKit"
+import ListViewControls from "@/components/ListViewControls"
+import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useGetQualityControlQuery } from "@/features/quality-control/qualityControlApi"
 import { qualityControlService } from "@/features/quality-control/qualityControlService"
@@ -24,6 +26,11 @@ export default function QualityControl() {
   const { data: items = [], isLoading: loading, isFetching, error: loadError, refetch } = useGetQualityControlQuery()
   const [query, setQuery] = useState("")
   const [activeView, setActiveView] = useState("pending")
+  const [productFilter, setProductFilter] = useState("all")
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
+  const [sortBy, setSortBy] = useState("newest")
+  const [view, setView] = useState("table")
   const [selected, setSelected] = useState(null)
   const [decision, setDecision] = useState(null)
   const [remarks, setRemarks] = useState("")
@@ -32,12 +39,21 @@ export default function QualityControl() {
 
   const rows = asArray(items)
   const error = actionError || (loadError ? errorMessage(loadError, "Failed to load completed production batches.") : "")
+  const productOptions = useMemo(() => uniqueStringOptions(rows, (item) => item.productName), [rows])
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return rows.filter((item) => !q || searchText(item).includes(q))
-  }, [rows, query])
-  const pendingRows = useMemo(() => filtered.filter((item) => !item.batchDecision), [filtered])
-  const historyRows = useMemo(() => filtered.flatMap((item) => {
+    return rows.filter((item) => {
+      if (productFilter !== "all" && item.productName !== productFilter) return false
+      return !q || searchText(item).includes(q)
+    })
+  }, [rows, query, productFilter])
+  const pendingRows = useMemo(() => filtered.filter((item) => !item.batchDecision && isWithinDateRange(item.completedAt, fromDate, toDate)).sort((a, b) => {
+    if (sortBy === "retest") return Number(b.attemptNumber || 1) - Number(a.attemptNumber || 1)
+    const at = recordTimestamp(a.completedAt)
+    const bt = recordTimestamp(b.completedAt)
+    return sortBy === "oldest" || sortBy === "waiting" ? at - bt : bt - at
+  }), [filtered, fromDate, toDate, sortBy])
+  const allHistoryRows = useMemo(() => filtered.flatMap((item) => {
     const attempts = Array.isArray(item.decisionHistory) ? item.decisionHistory : []
     if (attempts.length) {
       return attempts.map((attempt) => ({
@@ -58,12 +74,41 @@ export default function QualityControl() {
     // Preserve visibility of older batches released before batch-decision history existed.
     return item.batchDecision ? [{ ...item, id: `${item.id}-legacy`, productionId: item.id, attemptNumber: 1 }] : []
   }), [filtered])
+  const historyRows = useMemo(() => allHistoryRows
+    .filter((item) => isWithinDateRange(item.decisionAt || item.completedAt, fromDate, toDate))
+    .sort((a, b) => {
+      if (sortBy === "retest") return Number(b.attemptNumber || 1) - Number(a.attemptNumber || 1)
+      const at = recordTimestamp(a.decisionAt || a.completedAt)
+      const bt = recordTimestamp(b.decisionAt || b.completedAt)
+      return sortBy === "oldest" || sortBy === "waiting" ? at - bt : bt - at
+    }), [allHistoryRows, fromDate, toDate, sortBy])
+  const clearToolbarFilters = () => { setProductFilter("all"); setFromDate(""); setToDate("") }
+  const toolbarFilters = [
+    { key: "product", label: "Product", value: productFilter, options: productOptions, onChange: setProductFilter },
+    { key: "from-date", label: activeView === "pending" ? "Completed date from" : "Decision date from", type: "date", value: fromDate, onChange: setFromDate },
+    { key: "to-date", label: activeView === "pending" ? "Completed date to" : "Decision date to", type: "date", value: toDate, onChange: setToDate },
+  ]
+  const sortOptions = activeView === "pending" ? [
+    { value: "newest", label: "Recently completed first" },
+    { value: "oldest", label: "Oldest completed first" },
+    { value: "waiting", label: "Waiting longest" },
+    { value: "retest", label: "Highest retest attempt" },
+  ] : [
+    { value: "newest", label: "Most recent QC decision" },
+    { value: "oldest", label: "Oldest QC decision first" },
+    { value: "retest", label: "Highest retest attempt" },
+  ]
   const counts = useMemo(() => ({
     pending: rows.filter((item) => !item.batchDecision).length,
     passed: rows.filter((item) => item.latestDecision === "PASS" || item.legacyFinishedGoodsPass).length,
     failed: rows.filter((item) => item.latestDecision === "FAIL" && item.reworkStatus !== "READY_FOR_QC").length,
     released: rows.filter((item) => item.finishedGoodsId).length,
   }), [rows])
+
+  const switchActiveView = (nextView) => {
+    setActiveView(nextView)
+    if (nextView === "history" && sortBy === "waiting") setSortBy("oldest")
+  }
 
   const summaryCards = [
     { key: "pending", label: "Pending QC", value: counts.pending, hint: "Completed batches awaiting decision", icon: ClipboardCheck, tone: "amber" },
@@ -147,8 +192,8 @@ export default function QualityControl() {
             teal: { edge: "bg-gradient-to-r from-teal-500 to-cyan-700", icon: "bg-gradient-to-br from-teal-500 to-cyan-700", text: "text-teal-800" },
           }[tone]
           const openSummary = () => {
-            if (key === "pending") setActiveView("pending")
-            else if (key === "passed") setActiveView("history")
+            if (key === "pending") switchActiveView("pending")
+            else if (key === "passed") switchActiveView("history")
             else if (key === "failed") navigate("/qc-failed")
             else navigate("/finished-goods")
           }
@@ -182,7 +227,7 @@ export default function QualityControl() {
           type="button"
           role="tab"
           aria-selected={activeView === "pending"}
-          onClick={() => setActiveView("pending")}
+          onClick={() => switchActiveView("pending")}
           className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${activeView === "pending" ? "border-emerald-700 bg-emerald-700 text-white shadow-sm" : "border-slate-200 bg-white text-slate-800 hover:bg-emerald-50"}`}
         >
           <span className="flex min-w-0 items-center gap-2.5">
@@ -195,7 +240,7 @@ export default function QualityControl() {
           type="button"
           role="tab"
           aria-selected={activeView === "history"}
-          onClick={() => setActiveView("history")}
+          onClick={() => switchActiveView("history")}
           className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${activeView === "history" ? "border-emerald-700 bg-emerald-700 text-white shadow-sm" : "border-slate-200 bg-white text-slate-800 hover:bg-emerald-50"}`}
         >
           <span className="flex min-w-0 items-center gap-2.5">
@@ -211,7 +256,8 @@ export default function QualityControl() {
           <div className="min-w-0 flex-1 sm:max-w-sm">
             <SearchField value={query} onChange={setQuery} placeholder="Search order, product or SKU..." />
           </div>
-          <p className="text-xs font-semibold text-slate-600">{filtered.length} result{filtered.length === 1 ? "" : "s"}</p>
+          <p className="ml-auto shrink-0 text-xs font-semibold text-slate-600">{(activeView === "pending" ? pendingRows : historyRows).length} result{(activeView === "pending" ? pendingRows : historyRows).length === 1 ? "" : "s"}</p>
+          <ListViewControls view={view} onViewChange={setView} sortBy={sortBy} onSortChange={setSortBy} sortOptions={sortOptions} filters={toolbarFilters} onClearFilters={clearToolbarFilters} hasActiveFilters={productFilter !== "all" || !!fromDate || !!toDate} />
         </div>
         <p className="mt-3 text-xs leading-relaxed text-slate-600">Only batches where completed production meets the full ordered quantity are listed.</p>
       </section>
@@ -227,6 +273,7 @@ export default function QualityControl() {
           query={query}
           editable={editable}
           onDecide={askDecision}
+          view={view}
         />
       ) : (
         <QcBatchSection
@@ -238,6 +285,7 @@ export default function QualityControl() {
           loading={loading}
           query={query}
           editable={false}
+          view={view}
         />
       )}
 

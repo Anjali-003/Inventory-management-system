@@ -7,6 +7,9 @@ import { HeroButton, MktHero, SearchField, StageTile, TileGrid, StageChips } fro
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import ListViewControls from "@/components/ListViewControls"
+import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import { Badge } from "@/components/ui/badge"
 import UserCell from "@/components/UserCell"
 import { usePermissions } from "@/features/auth/usePermissions"
@@ -93,6 +96,11 @@ export default function FinishedGoods() {
   const error = actionError || (loadError ? errorMessage(loadError, "Failed to load finished goods.") : "")
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState("all") // set by clicking a figure in the strip
+  const [productFilter, setProductFilter] = useState("all")
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
+  const [sortBy, setSortBy] = useState("newest")
+  const [view, setView] = useState("table")
   const [selected, setSelected] = useState(null)
   const [action, setAction] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -102,10 +110,35 @@ export default function FinishedGoods() {
     await refetch()
   }, [refetch])
 
+  const productOptions = useMemo(() => uniqueStringOptions(items, (item) => item.productName), [items])
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return items.filter((item) => (status === "all" || item.status === status) && (!q || `${item.orderNumber} ${item.productName} ${item.productSku} ${item.status} ${item.createdByName || ""} ${item.dispatchedByName || ""} ${item.completedByName || ""}`.toLowerCase().includes(q)))
-  }, [items, query, status])
+    const filtered = items.filter((item) => {
+      if (status !== "all" && item.status !== status) return false
+      if (productFilter !== "all" && item.productName !== productFilter) return false
+      if (!isWithinDateRange(item.createdAt, fromDate, toDate)) return false
+      return !q || `${item.orderNumber} ${item.id} ${item.productionId || ""} ${item.orderId || ""} ${item.productName} ${item.productSku} ${item.status} ${item.createdByName || ""} ${item.dispatchedByName || ""} ${item.completedByName || ""}`.toLowerCase().includes(q)
+    })
+    const waitingTime = (item) => recordTimestamp(item.status === "PACKAGING" ? item.createdAt : item.status === "DISPATCHED" ? item.dispatchedAt || item.createdAt : item.completedAt || item.dispatchedAt || item.createdAt)
+    return filtered.sort((a, b) => {
+      if (sortBy === "oldest") return recordTimestamp(a.createdAt) - recordTimestamp(b.createdAt)
+      if (sortBy === "waiting") return waitingTime(a) - waitingTime(b)
+      if (sortBy === "dispatched") return recordTimestamp(b.dispatchedAt) - recordTimestamp(a.dispatchedAt)
+      return recordTimestamp(b.createdAt) - recordTimestamp(a.createdAt)
+    })
+  }, [items, query, status, productFilter, fromDate, toDate, sortBy])
+  const clearToolbarFilters = () => { setProductFilter("all"); setFromDate(""); setToDate(""); setStatus("all") }
+  const toolbarFilters = [
+    { key: "product", label: "Product", value: productFilter, options: productOptions, onChange: setProductFilter },
+    { key: "from-date", label: "Created date from", type: "date", value: fromDate, onChange: setFromDate },
+    { key: "to-date", label: "Created date to", type: "date", value: toDate, onChange: setToDate },
+  ]
+  const sortOptions = [
+    { value: "newest", label: "Newest batches first" },
+    { value: "oldest", label: "Oldest batches first" },
+    { value: "waiting", label: "Waiting longest" },
+    { value: "dispatched", label: "Recently dispatched" },
+  ]
 
   const counts = useMemo(() => ({
     packaging: items.filter((x) => x.status === "PACKAGING").length,
@@ -166,15 +199,43 @@ export default function FinishedGoods() {
           <div className="flex min-w-0 flex-wrap items-center gap-3 border-b border-[#e7eee9] bg-slate-50/70 px-3 py-3 sm:px-5">
             <SearchField className="min-w-0 flex-1 sm:max-w-md" value={query} onChange={setQuery} placeholder="Search order, product, SKU or person..." />
             <span className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{rows.length} batch{rows.length === 1 ? "" : "es"}</span>
+            <ListViewControls view={view} onViewChange={setView} sortBy={sortBy} onSortChange={setSortBy} sortOptions={sortOptions} filters={toolbarFilters} onClearFilters={clearToolbarFilters} hasActiveFilters={productFilter !== "all" || !!fromDate || !!toDate || status !== "all"} />
           </div>
           {loading ? <div className="p-3"><TableSkeleton rows={4} /></div> : rows.length === 0 ? (
-            <EmptyState icon={PackageCheck} title={query || status !== "all" ? "No matching finished goods" : "No finished goods yet"}>
-              {query || status !== "all" ? "Try another search or select another status filter." : "Approved products will appear here after Quality Control."}
+            <EmptyState icon={PackageCheck} title={query || status !== "all" || productFilter !== "all" || fromDate || toDate ? "No matching finished goods" : "No finished goods yet"}>
+              {query || status !== "all" || productFilter !== "all" || fromDate || toDate ? "Try another search or clear one or more filters." : "Approved products will appear here after Quality Control."}
             </EmptyState>
           ) : (
-            <div className="grid min-w-0 grid-cols-1 gap-3 p-3 sm:p-4 lg:grid-cols-2 2xl:grid-cols-3">
-              {rows.map((item) => <ItemCard key={item.id} item={item} onAction={confirm} editable={editable} />)}
-            </div>
+            <>
+              <div className={`hidden min-w-0 grid-cols-2 gap-3 p-3 sm:p-4 2xl:grid-cols-3 ${view === "cards" ? "lg:grid" : "lg:hidden"}`}>
+                {rows.map((item) => <ItemCard key={item.id} item={item} onAction={confirm} editable={editable} />)}
+              </div>
+              <div className={`hidden min-w-0 overflow-hidden ${view === "table" ? "lg:block" : "lg:hidden"}`}>
+                <Table className="w-full table-fixed">
+                  <TableHeader><TableRow>
+                    <TableHead className="w-[18%] whitespace-normal">Order / Batch</TableHead>
+                    <TableHead className="w-[22%] whitespace-normal">Product / SKU</TableHead>
+                    <TableHead className="w-[9%] whitespace-normal">Quantity</TableHead>
+                    <TableHead className="w-[21%] whitespace-normal">Status / Next step</TableHead>
+                    <TableHead className="w-[15%] whitespace-normal">Last action by</TableHead>
+                    <TableHead className="w-[15%] whitespace-normal text-right">Action</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>{rows.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="min-w-0 whitespace-normal align-top"><p className="break-words font-semibold tabular-nums">{item.orderNumber || "—"}</p><p className="mt-1 break-words text-xs text-muted-foreground">Batch #{item.id}</p></TableCell>
+                      <TableCell className="min-w-0 whitespace-normal align-top"><p className="break-words font-medium">{item.productName || "Product unavailable"}</p><p className="mt-1 break-words text-xs text-muted-foreground">{item.productSku || "SKU unavailable"}</p></TableCell>
+                      <TableCell className="whitespace-normal align-top font-semibold tabular-nums">{Number(item.quantity || 0).toLocaleString()}</TableCell>
+                      <TableCell className="min-w-0 whitespace-normal align-top"><Status value={item.status} /><p className="mt-1 break-words text-xs leading-relaxed text-slate-600">{nextStepText(item.status)}</p></TableCell>
+                      <TableCell className="min-w-0 whitespace-normal align-top"><UserCell {...actorOf(item)} className="min-w-0 max-w-full text-foreground" /></TableCell>
+                      <TableCell className="min-w-0 whitespace-normal align-top text-right"><div className="flex min-w-0 flex-wrap justify-end gap-1.5">{editable && item.status === "PACKAGING" && <Button size="sm" onClick={() => confirm(item, "DISPATCH")}><Truck /> Dispatch</Button>}{editable && item.status === "DISPATCHED" && <Button size="sm" onClick={() => confirm(item, "COMPLETE")}><CheckCircle2 /> Complete</Button>}{(!editable || item.status === "COMPLETED") && <span className="text-xs text-muted-foreground">{editable ? "No action" : "View only"}</span>}</div></TableCell>
+                    </TableRow>
+                  ))}</TableBody>
+                </Table>
+              </div>
+              <div className="grid min-w-0 gap-3 p-3 lg:hidden">
+                {rows.map((item) => <ItemCard key={item.id} item={item} onAction={confirm} editable={editable} />)}
+              </div>
+            </>
           )}
         </Card>
       </div>

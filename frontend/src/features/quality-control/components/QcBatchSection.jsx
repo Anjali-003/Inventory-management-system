@@ -101,7 +101,7 @@ function BatchCard({ item, kind, onDecide, editable, navigate }) {
   )
 }
 
-export default function QcBatchSection({ title, description, icon: Icon, kind, items = [], loading, query, editable, onDecide }) {
+export default function QcBatchSection({ title, description, icon: Icon, kind, items = [], loading, query, editable, onDecide, view = "table" }) {
   const navigate = useNavigate()
   const history = kind === "history"
   const emptyTitle = query
@@ -125,7 +125,7 @@ export default function QcBatchSection({ title, description, icon: Icon, kind, i
         <EmptyState icon={history ? CheckCircle2 : Icon} title={emptyTitle}>{emptyDescription}</EmptyState>
       ) : (
         <>
-          <div className="hidden min-w-0 overflow-hidden xl:block">
+          <div className={`hidden min-w-0 overflow-hidden ${view === "table" ? "xl:block" : "xl:hidden"}`}>
             <Table className="w-full table-fixed">
               <TableHeader><TableRow>
                 <TableHead className="w-[20%]">Order / Product</TableHead>
@@ -167,7 +167,7 @@ export default function QcBatchSection({ title, description, icon: Icon, kind, i
               )})}</TableBody>
             </Table>
           </div>
-          <div className="grid min-w-0 gap-3 p-3 xl:hidden">
+          <div className={`grid min-w-0 gap-3 p-3 ${view === "table" ? "xl:hidden" : "xl:grid"}`}>
             {items.map((item) => <BatchCard key={item.id} item={item} kind={kind} onDecide={onDecide} editable={editable} navigate={navigate} />)}
           </div>
         </>
