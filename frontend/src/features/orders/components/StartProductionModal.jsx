@@ -21,7 +21,7 @@ export default function StartProductionModal({ order, onClose, onStarted }) {
 
   useEffect(() => {
     let stale = false
-    ordersService.productionInfo(order.id)
+    ordersService.productionInfo(order.id, order.product_id)
       .then((r) => {
         if (stale) return
         setInfo(r.data)
@@ -45,7 +45,7 @@ export default function StartProductionModal({ order, onClose, onStarted }) {
     setSaving(true)
     setError("")
     try {
-      const { data } = await ordersService.startProduction(order.id, n)
+      const { data } = await ordersService.startProduction(order.id, n, order.product_id)
       onStarted(n, data.orderNumber)
     } catch (err) {
       const shortages = err.response?.data?.shortages

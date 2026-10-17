@@ -27,12 +27,16 @@ export default function PlanSummary({ orderId, items = [] }) {
             <span className={cn("font-semibold tabular-nums", l.can_make === 0 ? "text-destructive" : l.remaining > 0 ? "text-warning" : "text-primary")}>
               {fmtQty(l.can_make)}
             </span>
-            <span className="text-muted-foreground"> of {fmtQty(l.ordered)} can be made</span>
+            <span className="text-muted-foreground">
+              {l.already_approved > 0 ? ` of the remaining ${fmtQty(l.ordered)} can be made` : ` of ${fmtQty(l.ordered)} can be made`}
+            </span>
           </li>
         ))}
       </ul>
       {plan.shortages?.length > 0 && (
-        <p className="text-xs text-destructive">{plan.shortages.length} component{plan.shortages.length > 1 ? "s" : ""} short for the rest</p>
+        <p className="text-xs text-destructive">
+          {plan.shortages.length} component{plan.shortages.length > 1 ? "s" : ""} short for the rest{plan.reapproval ? " (already requested)" : ""}
+        </p>
       )}
     </div>
   )

@@ -47,6 +47,7 @@ import {
   OpsTileGrid,
   isOpsStatus,
 } from "./opsKit";
+import { approveLabel, canApprove } from "./approvalParts";
 import { useGetOrderApprovalsQuery } from "./orderApprovalsApi";
 
 const EMPTY = [];
@@ -360,6 +361,7 @@ export default function OrderApprovals() {
                 {shown.map((o, i) => {
                   const extra = o.items.length - SHOW_LINES;
                   const pending = o.approval_status === QUEUE;
+                  const approvable = canApprove(o); // waiting, or partly approved and open for the rest
                   return (
                     <TableRow
                       key={o.id}
@@ -409,7 +411,7 @@ export default function OrderApprovals() {
                         </div>
                       </TableCell>
                       <TableCell className="min-w-52 whitespace-normal">
-                        {pending ? (
+                        {approvable ? (
                           <PlanSummary orderId={o.id} items={o.items} />
                         ) : (
                           <span className="text-muted-foreground">-</span>
@@ -419,27 +421,29 @@ export default function OrderApprovals() {
                         <DecisionCell order={o} />
                       </TableCell>
                       <TableCell className="text-end">
-                        {editable && pending && (
+                        {editable && approvable && (
                           <div className="flex justify-end gap-2">
-                            <MktBtn
-                              variant="danger"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                askReject(o);
-                              }}
-                              aria-label={`Reject ${o.order_number}`}
-                            >
-                              <X /> Reject
-                            </MktBtn>
+                            {pending && (
+                              <MktBtn
+                                variant="danger"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  askReject(o);
+                                }}
+                                aria-label={`Reject ${o.order_number}`}
+                              >
+                                <X /> Reject
+                              </MktBtn>
+                            )}
                             <MktBtn
                               variant="primary"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setPlanning(o);
                               }}
-                              aria-label={`Check stock and send ${o.order_number}`}
+                              aria-label={`${approveLabel(o)} ${o.order_number}`}
                             >
-                              <PackageCheck /> Check stock &amp; send
+                              <PackageCheck /> {approveLabel(o)}
                             </MktBtn>
                           </div>
                         )}

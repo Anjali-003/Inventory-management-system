@@ -10,7 +10,7 @@ export default function OrderActions({ order, onCheck, onStart, className }) {
   const started = Number(order?.quantity_to_produce ?? 0)
 
   // production starts only after the Operations Admin approved the order
-  if (order?.approval_status && order.approval_status !== "APPROVED") {
+  if (order?.approval_status && !["APPROVED", "PARTIALLY_APPROVED"].includes(order.approval_status)) {
     return (
       <div className={className ?? "flex justify-end"}>
         <span className="text-sm text-muted-foreground">
@@ -20,7 +20,16 @@ export default function OrderActions({ order, onCheck, onStart, className }) {
     )
   }
 
-  if (remainingToStart > 0 && ["PENDING", "IN_PRODUCTION", "TESTING"].includes(status)) {
+  // partly approved order: this product's units have not been approved yet (Operations approves the rest later)
+  if (order?.approval_status === "PARTIALLY_APPROVED" && Number(order?.approved_quantity ?? 0) === 0) {
+    return (
+      <div className={className ?? "flex justify-end"}>
+        <span className="text-sm text-muted-foreground">Not approved yet</span>
+      </div>
+    )
+  }
+
+  if (remainingToStart > 0 && ["PENDING", "IN_PRODUCTION", "TESTING", "PACKAGING", "DISPATCHED"].includes(status)) {
     return (
       <div className={baseClass}>
         <Button variant="outline" size="sm" onClick={() => onCheck(order)}>

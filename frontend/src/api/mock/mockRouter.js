@@ -651,6 +651,7 @@ const ROUTES = [
   ["GET", /^\/iqc$/, (m, q) => ok(purList(q.status).filter((p) => ["PENDING_IQC", "PENDING_STORE", "STORED", "REJECTED"].includes(p.status)))],
   ["GET", /^\/iqc\/(\d+)$/, (m) => ok(purView(purGet(m[1])))],
   ["POST", /^\/iqc\/(\d+)\/inspect$/, (m, q, b) => ok(inspectPurchase(m[1], b))],
+  ["GET", /^\/notifications$/, () => ok([])],
   ["GET", /^\/incoming-stock$/, () => ok(purList("PENDING_STORE,STORED"))],
   ["POST", /^\/incoming-stock\/(\d+)\/accept$/, (m) => ok(acceptPurchase(m[1]))],
   ["GET", /^\/orders$/, () => ok(orderRows())],

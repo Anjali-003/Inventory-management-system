@@ -1,15 +1,17 @@
 const db = require("../../config/db")
 const AppError = require("../../shared/AppError")
+const { targetQuantitySql } = require("../production/production-target")
+const { refreshOrderStatus } = require("../orders/order-status")
 
 const selectSql = `
   SELECT fg.id, fg.production_id, fg.order_id, fg.quantity, fg.status,
          fg.created_at, fg.dispatched_at, fg.completed_at,
-         o.order_number, oi.product_id, p.sku AS product_sku, p.name AS product_name,
+         o.order_number, po.product_id, p.sku AS product_sku, p.name AS product_name,
          cu.name AS created_by_name, du.name AS dispatched_by_name, xu.name AS completed_by_name
   FROM finished_goods fg
   JOIN orders o ON o.id = fg.order_id
-  JOIN order_items oi ON oi.order_id = o.id
-  JOIN products p ON p.id = oi.product_id
+  JOIN production_orders po ON po.id = fg.production_id
+  JOIN products p ON p.id = po.product_id
   LEFT JOIN users cu ON cu.id = fg.created_by
   LEFT JOIN users du ON du.id = fg.dispatched_by
   LEFT JOIN users xu ON xu.id = fg.completed_by
@@ -40,9 +42,9 @@ async function createFinishedGood(productionId, orderId, quantity, connection = 
   try {
     if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new AppError(400, "Finished goods quantity must be a positive integer")
     const [production] = await connection.query(`
-      SELECT po.id, po.order_id, po.quantity_completed, oi.quantity AS ordered_quantity
+      SELECT po.id, po.order_id, po.quantity_completed, ${targetQuantitySql("po", "o")} AS ordered_quantity
       FROM production_orders po
-      JOIN order_items oi ON oi.order_id = po.order_id
+      JOIN orders o ON o.id = po.order_id
       WHERE po.id = ?
       LIMIT 1
     `, [productionId])
@@ -69,12 +71,15 @@ async function createFinishedGood(productionId, orderId, quantity, connection = 
     if (Number(testing[0].tested) < ordered || Number(testing[0].failed) > 0) throw new AppError(409, "Finished goods require all units to pass testing")
     if (Number(qc[0].inspected) < ordered || Number(qc[0].approved) < ordered) throw new AppError(409, "Finished goods require full QC approval")
 
-    const [existing] = await connection.query(`SELECT id FROM finished_goods WHERE order_id = ? LIMIT 1`, [orderId])
-    if (existing.length) return { success: true, finishedGoodsId: existing[0].id, productionId, orderId, quantity, status: "PACKAGING", message: "Finished goods already exist for this order" }
+    // finished goods are boxed per production run (= per product); a run approved in several passes gets one batch per pass
+    const [existing] = await connection.query(`SELECT id, quantity FROM finished_goods WHERE production_id = ? ORDER BY id DESC`, [productionId])
+    const alreadyBoxed = existing.reduce((sum, row) => sum + Number(row.quantity), 0)
+    if (alreadyBoxed >= ordered) return { success: true, finishedGoodsId: existing[0].id, productionId, orderId, quantity: alreadyBoxed, status: "PACKAGING", message: "Finished goods already exist for this product" }
+    const boxQuantity = Math.min(quantity, ordered - alreadyBoxed)
 
-    const [result] = await connection.query(`INSERT INTO finished_goods (production_id, order_id, quantity, status, created_by) VALUES (?, ?, ?, 'PACKAGING', ?)`, [productionId, orderId, quantity, userId])
-    await connection.query(`UPDATE orders SET status = 'PACKAGING', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN ('COMPLETED')`, [orderId])
-    return { success: true, finishedGoodsId: result.insertId, productionId, orderId, quantity, status: "PACKAGING", message: "Finished goods created successfully" }
+    const [result] = await connection.query(`INSERT INTO finished_goods (production_id, order_id, quantity, status, created_by) VALUES (?, ?, ?, 'PACKAGING', ?)`, [productionId, orderId, boxQuantity, userId])
+    await refreshOrderStatus(connection, orderId)
+    return { success: true, finishedGoodsId: result.insertId, productionId, orderId, quantity: boxQuantity, status: "PACKAGING", message: "Finished goods created successfully" }
   } finally {
     if (own) connection.release()
   }
@@ -89,14 +94,18 @@ async function transition(id, from, to, timestampColumn, userColumn, userId) {
     if (rows[0].status !== from) throw new AppError(409, `Cannot ${to === "DISPATCHED" ? "dispatch" : "complete"} finished goods with status ${rows[0].status}`)
     await connection.query(`UPDATE finished_goods SET status = ?, ${timestampColumn} = CURRENT_TIMESTAMP, ${userColumn} = ? WHERE id = ?`, [to, userId, id])
     if (to === "DISPATCHED") {
-      await connection.query(`UPDATE orders SET status = 'DISPATCHED', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [rows[0].order_id])
+      // the order counts as dispatched only when every product's boxes have gone out
+      await refreshOrderStatus(connection, rows[0].order_id)
     } else {
       const [totals] = await connection.query(`
         SELECT COALESCE((SELECT SUM(quantity) FROM order_items WHERE order_id = ?),0) AS ordered,
                COALESCE((SELECT SUM(quantity) FROM finished_goods WHERE order_id = ? AND status = 'COMPLETED'),0) AS completed
       `, [rows[0].order_id, rows[0].order_id])
-      const status = Number(totals[0].completed) >= Number(totals[0].ordered) ? "COMPLETED" : "PACKAGING"
-      await connection.query(`UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [status, rows[0].order_id])
+      if (Number(totals[0].completed) >= Number(totals[0].ordered)) {
+        await connection.query(`UPDATE orders SET status = 'COMPLETED', updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [rows[0].order_id])
+      } else {
+        await refreshOrderStatus(connection, rows[0].order_id)
+      }
     }
     await connection.commit()
     return { success: true, finishedGoodsId: id, status: to, message: `Finished goods marked as ${to.toLowerCase()} successfully` }

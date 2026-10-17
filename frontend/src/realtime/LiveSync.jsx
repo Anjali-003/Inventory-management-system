@@ -87,6 +87,16 @@ export default function LiveSync() {
       } catch { /* ignore malformed event */ }
     });
 
+    // targeted notification (sent by the backend only after its DB transaction committed)
+    es.addEventListener("notify", (e) => {
+      try {
+        const evt = JSON.parse(e.data);
+        if (evt.message) toastRef.current.success(evt.message);
+        // the dashboard list of "components to issue" (and the stock figures) refresh at once
+        dispatch(baseApi.util.invalidateTags(["Notifications", "Inventory"]));
+      } catch { /* ignore malformed event */ }
+    });
+
     // this account was deactivated by another super admin
     es.addEventListener("logout", () => {
       es.close();

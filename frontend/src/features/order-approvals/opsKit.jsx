@@ -13,6 +13,7 @@ import { timeAgo } from "@/features/activity/time"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import PlanSummary from "./PlanSummary"
+import { approveLabel, canApprove } from "./approvalParts"
 
 /*
   Building blocks for the Operations Admin screens (dashboard + Order Approvals), made from the same
@@ -27,6 +28,7 @@ import PlanSummary from "./PlanSummary"
 
 const HINT = {
   PENDING_APPROVAL: "Needs your decision",
+  PARTIALLY_APPROVED: "Selected product quantities approved",
   APPROVED: "Lists sent to Production / Purchase",
   REJECTED: "With the reason you gave",
 }
@@ -49,7 +51,7 @@ export function opsHref(status, extra = {}) {
 
 export const productsSummary = (items = []) => (items.length === 0 ? "No products" : items.length === 1 ? items[0].name : `${items[0].name} + ${items.length - 1} more`)
 export const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
-export const isDecided = (o) => o.approval_status === "APPROVED" || o.approval_status === "REJECTED"
+export const isDecided = (o) => ["PARTIALLY_APPROVED", "APPROVED", "REJECTED"].includes(o.approval_status)
 
 /* -------------------------------------------------------------------- tiles */
 
@@ -97,6 +99,7 @@ export const CardList = ({ children, className }) => (
 export function ApprovalCard({ order, canAct, showPlan, busy, onOpen, onReject, onPlan }) {
   const items = order.items ?? []
   const pending = order.approval_status === "PENDING_APPROVAL"
+  const approvable = canApprove(order)
   const rejected = order.approval_status === "REJECTED"
 
   return (
@@ -121,7 +124,7 @@ export function ApprovalCard({ order, canAct, showPlan, busy, onOpen, onReject, 
           <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         </div>
 
-        {showPlan && pending && (
+        {showPlan && approvable && (
           <div className="mt-3 rounded-xl border border-[#dce5e0] px-3 py-2.5">
             <PlanSummary orderId={order.id} items={items} />
           </div>
@@ -134,11 +137,11 @@ export function ApprovalCard({ order, canAct, showPlan, busy, onOpen, onReject, 
         )}
       </div>
 
-      {canAct && pending && (
+      {canAct && approvable && (
         <div className="relative flex gap-2 border-t border-dashed p-3">
-          <MktBtn variant="danger" disabled={busy} onClick={onReject} aria-label={`Reject ${order.order_number}`}><X /> Reject</MktBtn>
-          <MktBtn variant="primary" className="flex-1" disabled={busy} onClick={onPlan} aria-label={`Check stock and send ${order.order_number}`}>
-            {busy ? <Loader2 className="animate-spin" /> : <PackageCheck />} Check stock &amp; send
+          {pending && <MktBtn variant="danger" disabled={busy} onClick={onReject} aria-label={`Reject ${order.order_number}`}><X /> Reject</MktBtn>}
+          <MktBtn variant="primary" className="flex-1" disabled={busy} onClick={onPlan} aria-label={`${approveLabel(order)} ${order.order_number}`}>
+            {busy ? <Loader2 className="animate-spin" /> : <PackageCheck />} {approveLabel(order)}
           </MktBtn>
         </div>
       )}
@@ -156,6 +159,7 @@ export function ApprovalPageCard({ order: o, canAct, busy, onOpen, onReject, onP
   const stage = stageOf(o.approval_status)
   const items = o.items ?? []
   const pending = o.approval_status === "PENDING_APPROVAL"
+  const approvable = canApprove(o)
   const extra = items.length - SHOW_LINES
 
   return (
@@ -196,7 +200,7 @@ export function ApprovalPageCard({ order: o, canAct, busy, onOpen, onReject, onP
           {extra > 0 && <li className="text-xs font-semibold text-primary">+ {plural(extra, "more product")}</li>}
         </ul>
 
-        {pending && (
+        {approvable && (
           <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
             <PlanSummary orderId={o.id} items={items} />
           </div>
@@ -212,11 +216,11 @@ export function ApprovalPageCard({ order: o, canAct, busy, onOpen, onReject, onP
         )}
       </motion.div>
 
-      {canAct && pending && (
+      {canAct && approvable && (
         <div className="flex gap-2 border-t bg-cf-head/70 px-4 py-3 ps-5">
-          <MktBtn variant="danger" disabled={busy} onClick={() => onReject(o)} aria-label={`Reject ${o.order_number}`}><X /> Reject</MktBtn>
-          <MktBtn variant="primary" className="flex-1" disabled={busy} onClick={() => onPlan(o)} aria-label={`Check stock and send ${o.order_number}`}>
-            {busy ? <Loader2 className="animate-spin" /> : <PackageCheck />} Check stock &amp; send
+          {pending && <MktBtn variant="danger" disabled={busy} onClick={() => onReject(o)} aria-label={`Reject ${o.order_number}`}><X /> Reject</MktBtn>}
+          <MktBtn variant="primary" className="flex-1" disabled={busy} onClick={() => onPlan(o)} aria-label={`${approveLabel(o)} ${o.order_number}`}>
+            {busy ? <Loader2 className="animate-spin" /> : <PackageCheck />} {approveLabel(o)}
           </MktBtn>
         </div>
       )}

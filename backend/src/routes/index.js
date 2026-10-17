@@ -35,6 +35,7 @@ const employeeRoutes = require("../modules/employees/employee.routes");
 const attendanceRoutes = require("../modules/attendance/attendance.routes");
 const superAdminRoutes = require("../modules/super-admins/super-admin.routes");
 const activityRoutes = require("../modules/activity/activity.routes");
+const notificationRoutes = require("../modules/notifications/notification.routes");
 const eventsRoutes = require("../realtime/events.routes");
 
 const MODULES = [
@@ -70,6 +71,9 @@ const MODULES = [
     // super admins only (requireRole is also applied inside super-admin.routes.js)
     { path: "/super-admins", router: superAdminRoutes, resource: "super-admins" },
     { path: "/activity", router: activityRoutes, guards: [requireRole("SUPER_ADMIN")] },
+
+    // dashboard notifications (Store Manager: components to issue). No broadcastChanges: the service pushes its own live event after commit.
+    { path: "/notifications", router: notificationRoutes, guards: [permit("notifications")] },
 
     // live updates (Server-Sent Events)
     { path: "/events", router: eventsRoutes },

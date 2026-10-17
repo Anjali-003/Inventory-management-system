@@ -33,6 +33,16 @@ function broadcast(data) {
     }
 }
 
+/*
+    Targeted notification: only the open tabs of ONE role hear it (e.g. "STORE_MANAGER").
+    Call it from conn.afterCommit(...) so nobody is told about something that was rolled back.
+*/
+function notifyRole(role, data) {
+    for (const c of clients) {
+        if (c.role === role) send(c, "notify", { ...data, at: Date.now() });
+    }
+}
+
 /* Used when a super admin is deactivated: tell their open tabs to log out, then close. */
 function disconnectUser(userId) {
     for (const c of [...clients]) {
@@ -49,4 +59,4 @@ setInterval(() => {
     }
 }, 25000).unref();
 
-module.exports = { addClient, broadcast, disconnectUser };
+module.exports = { addClient, broadcast, notifyRole, disconnectUser };

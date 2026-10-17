@@ -161,13 +161,32 @@ function parseId(raw, name = "id") {
 }
 
 /* Runs fn inside a transaction; retries on deadlock / lock-wait timeout. */
+/*
+    inTransaction(fn) runs fn(conn) in one DB transaction (commit, or rollback on any error; deadlocks retry).
+
+    conn.afterCommit(callback) lets fn queue side effects (notifications, live events ...) that must only
+    happen once the data is really saved. The callbacks run AFTER conn.commit() succeeds, in the order queued.
+    They are dropped when the transaction rolls back or is retried, and a callback that throws is only logged:
+    the data is already committed, so it must never turn the request into an error.
+*/
 async function inTransaction(fn) {
     for (let attempt = 1; ; attempt++) {
         const conn = await db.getConnection();
+        const afterCommit = [];
+        conn.afterCommit = (callback) => {
+            afterCommit.push(callback);
+        };
         try {
             await conn.beginTransaction();
             const result = await fn(conn);
             await conn.commit();
+            for (const callback of afterCommit) {
+                try {
+                    await callback(result);
+                } catch (hookError) {
+                    console.error("after-commit hook failed:", hookError.message);
+                }
+            }
             return result;
         } catch (error) {
             try {

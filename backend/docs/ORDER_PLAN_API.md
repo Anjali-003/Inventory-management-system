@@ -11,9 +11,9 @@ Run `npm run migrate` (adds migrations `022_order_dispatch.sql` and
 | `middleware/permissions.js` | `OPERATIONS_ADMIN` can now VIEW inventory, inventoryHistory, finishedGoods, incomingStock, iqc and purchase (GET only). Same change is in `frontend/src/lib/permissions.js`. |
 | `modules/order-approvals/order-planner.js` | Pure function `planOrder()`: what can be built now, what is short. |
 | `GET /order-approvals/:id/plan` | Plan for a waiting order (409 `ALREADY_DECIDED` if it was decided). |
-| `POST /order-approvals/:id/dispatch` | Rechecks stock under inventory row locks, deducts BOM materials for approved production quantities, and saves both request lists in one transaction. |
+| `POST /order-approvals/:id/dispatch` | Rechecks stock under inventory row locks, deducts BOM materials for selected production quantities, and saves both request lists in one transaction. |
 | `POST /order-approvals/:id/approve` | Uses the same locked stock plan and material issue flow without client-supplied lists. |
-| `GET /order-approvals`, `GET /approved-orders` | Every order now has `production_request` and `purchase_request` (`null` when nothing was sent). |
+| `GET /order-approvals`, `GET /approved-orders` | Every order now has `production_request` and `purchase_request` (`null` when nothing was sent). Both fully and partially approved orders appear in approved orders. |
 
 ## Plan response
 ```json
@@ -38,6 +38,9 @@ The lists are what the admin saw. The plan is recalculated with the stock rows l
 match, the answer is **409 `STALE_PLAN`** and nothing is saved (the frontend refetches the plan). The admin may
 select any whole-number production quantity from zero up to each product's `can_make`; the purchase list must
 still match the current shortage plan. At least one production or purchase line must be non-empty.
+The order status is `APPROVED` only when the approved production quantities cover every ordered unit;
+otherwise it is `PARTIALLY_APPROVED`. Marketing can see the partial-approval count and approved product
+quantities in the order detail.
 
 Materials for each approved product quantity are deducted immediately from on-hand stock and recorded as
 `CONSUMED` / `OUT` ledger movements with reason `ISSUED_TO_PRODUCTION`, linked to the order. Shared components are totaled across all approved

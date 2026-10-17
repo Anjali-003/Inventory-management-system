@@ -15,7 +15,7 @@ const productsText = (items = []) => items.map((i) => `${i.name} × ${fmtQty(i.q
 
 /* Popup for a marketing / approval order: who raised it, the decision, and its product lines. */
 export function OrderInfoModal({ order, onClose }) {
-  const decided = order.approval_status === "APPROVED" || order.approval_status === "REJECTED"
+  const decided = ["PARTIALLY_APPROVED", "APPROVED", "REJECTED"].includes(order.approval_status)
   return (
     <Modal
       open
@@ -36,7 +36,7 @@ export function OrderInfoModal({ order, onClose }) {
           </div>
           {decided && (
             <div>
-              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{order.approval_status === "APPROVED" ? "Approved by" : "Rejected by"}</p>
+              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{order.approval_status === "REJECTED" ? "Rejected by" : "Approved by"}</p>
               <UserCell name={order.approved_by_name} sub={fmtDateTime(order.approved_at)} />
             </div>
           )}
@@ -45,6 +45,12 @@ export function OrderInfoModal({ order, onClose }) {
           <h3 className="text-sm font-semibold">Products</h3>
           <OrderLines items={order.items} />
         </section>
+        {order.production_request?.items?.length > 0 && (
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold">Approved to produce</h3>
+            <OrderLines items={order.production_request.items} />
+          </section>
+        )}
       </div>
     </Modal>
   )

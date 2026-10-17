@@ -6,6 +6,7 @@ import { MktBtn, OrderItems } from "@/features/marketing-orders/mktKit"
 import { Field } from "@/components/FormField"
 import { useToast } from "@/components/toast"
 import { errorMessage } from "@/lib/stock"
+import { useIdempotentSubmit } from "@/lib/useIdempotentSubmit"
 import { useApproveOrderMutation, useRejectOrderMutation } from "./orderApprovalsApi"
 
 /*
@@ -18,6 +19,7 @@ export default function DecisionModal({ order, mode, onClose }) {
   const [reject, { isLoading: rejecting }] = useRejectOrderMutation()
   const busy = approving || rejecting
   const isReject = mode === "reject"
+  const guarded = useIdempotentSubmit()
 
   const [remarks, setRemarks] = useState("")
   const [showError, setShowError] = useState(false)
@@ -30,7 +32,12 @@ export default function DecisionModal({ order, mode, onClose }) {
     setServerError("")
     if (isReject && remarks.trim().length < 3) { setShowError(true); return }
     try {
-      await (isReject ? reject : approve)({ id: order.id, remarks: remarks.trim() }).unwrap()
+      const done = await guarded((key) =>
+        isReject
+          ? reject({ id: order.id, remarks: remarks.trim() }).unwrap()
+          : approve({ id: order.id, remarks: remarks.trim(), idempotency_key: key, expected_round: Number(order.approval_round) || 0 }).unwrap()
+      )
+      if (done === undefined) return // a request is already in flight
       toast.success(isReject ? `${order.order_number} rejected` : `${order.order_number} approved and sent to the Purchase Manager`)
       onClose()
     } catch (err) {

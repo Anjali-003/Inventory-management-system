@@ -14,7 +14,7 @@ async function list(req, res) {
 
 /* GET /approved-orders  (Purchase Manager: only what the Operations Admin approved) */
 async function listApproved(req, res) {
-    res.json(await service.listOrders({ statuses: ["APPROVED"] }));
+    res.json(await service.listOrders({ statuses: ["APPROVED", "PARTIALLY_APPROVED"] }));
 }
 
 async function getOne(req, res) {
@@ -24,8 +24,16 @@ async function getOne(req, res) {
     res.json(order);
 }
 
+/*
+    approve and dispatch move stock, so they need an idempotency key (see shared/idempotency.js). It may arrive as the
+    standard `Idempotency-Key` header or as `idempotency_key` in the body, like the inventory API. When the request was
+    already applied the original response is returned and `Idempotent-Replayed: true` is set.
+*/
+const guardedBody = (req) => ({ ...req.body, idempotency_key: req.get("Idempotency-Key") || (req.body && req.body.idempotency_key) });
+const replayFlag = (res) => ({ onReplay: () => res.set("Idempotent-Replayed", "true") });
+
 async function approve(req, res) {
-    res.json(await service.approve(idOf(req), req.body, req.user.id));
+    res.json(await service.approve(idOf(req), guardedBody(req), req.user.id, replayFlag(res)));
 }
 
 async function reject(req, res) {
@@ -39,7 +47,7 @@ async function plan(req, res) {
 
 /* POST /order-approvals/:id/dispatch: approve + send the producible list (Production) and the shortage list (Purchase) */
 async function dispatch(req, res) {
-    res.json(await service.dispatch(idOf(req), req.body, req.user.id));
+    res.json(await service.dispatch(idOf(req), guardedBody(req), req.user.id, replayFlag(res)));
 }
 
 module.exports = {

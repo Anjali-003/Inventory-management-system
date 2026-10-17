@@ -1,6 +1,7 @@
 const AppError = require("../../shared/AppError");
 const inventory = require("../inventory/inventory.service");
 const purchases = require("../purchase/purchase.service");
+const hub = require("../../realtime/hub");
 
 /*
     IQC (incoming quality control). For every purchased component the IQC manager records
@@ -64,7 +65,7 @@ async function inspect(purchaseId, body, userId) {
     const { items, remarks } = parseInspection(body || {});
 
     return inventory.inTransaction(async (conn) => {
-        const [rows] = await conn.query(`SELECT id, status FROM purchase_orders WHERE id = ? FOR UPDATE`, [purchaseId]);
+        const [rows] = await conn.query(`SELECT id, po_number, status FROM purchase_orders WHERE id = ? FOR UPDATE`, [purchaseId]);
         if (rows.length === 0) throw AppError.notFound("Purchase not found", "NOT_FOUND");
         if (rows[0].status !== "PENDING_IQC") {
             throw AppError.conflict("This purchase has already been inspected. Refresh the page.", "ALREADY_INSPECTED");
@@ -94,6 +95,18 @@ async function inspect(purchaseId, body, userId) {
               WHERE id = ?`,
             [approvedTotal > 0 ? "PENDING_STORE" : "REJECTED", userId, remarks, purchaseId]
         );
+
+        // Tell the Store Manager ONLY after the transaction has committed (never for a rolled-back inspection)
+        if (approvedTotal > 0) {
+            conn.afterCommit(() =>
+                hub.notifyRole("STORE_MANAGER", {
+                    type: "PURCHASE_READY_FOR_STORE",
+                    purchaseId,
+                    poNumber: rows[0].po_number,
+                    message: `${rows[0].po_number || "A purchase"} passed IQC and is waiting to be accepted into stock`
+                })
+            );
+        }
 
         return purchases.getPurchase(purchaseId, conn);
     });

@@ -3,6 +3,7 @@ import { AlertTriangle, PackageCheck, Truck, Warehouse } from "lucide-react"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
 import { useGetIncomingStockQuery } from "@/features/purchasing/purchasingApi"
+import IssueComponentsPanel from "@/features/notifications/IssueComponentsPanel"
 import { Greeting, ListPanel, StatRow, useDrill } from "../DashboardKit"
 import { finishedRow, incomingRow, stockRow } from "../rows"
 
@@ -25,6 +26,7 @@ export default function StoreView() {
   return (
     <>
       <Greeting description="What is waiting for the store today." />
+      <IssueComponentsPanel />
       <StatRow
         drill={drill}
         stats={[

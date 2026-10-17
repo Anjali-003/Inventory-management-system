@@ -9,6 +9,7 @@ import { MktBtn } from "@/features/marketing-orders/mktKit"
 import { SPRING_SOFT } from "@/features/marketing-orders/mktMotion"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { errorMessage, fmtQty } from "@/lib/stock"
+import { useIdempotentSubmit } from "@/lib/useIdempotentSubmit"
 import { cn } from "@/lib/utils"
 import { planTotals, planVerdict } from "./approvalParts"
 import { BomBlockModal } from "./BomWarning"
@@ -48,6 +49,7 @@ export default function OrderPlanModal({ order, onClose }) {
   const toast = useToast()
   const { data: plan, isLoading, isFetching, error, refetch } = useGetOrderPlanQuery(order.id)
   const [dispatch, { isLoading: sending }] = useDispatchOrderMutation()
+  const guarded = useIdempotentSubmit()
   const [remarks, setRemarks] = useState("")
   const [serverError, setServerError] = useState("")
   const [productionQuantities, setProductionQuantities] = useState({})
@@ -70,22 +72,32 @@ export default function OrderPlanModal({ order, onClose }) {
   const { ordered, canMake } = planTotals(plan)
   const selectedTotal = toProduction.reduce((sum, line) => sum + line.approved_quantity, 0)
   const verdict = plan ? planVerdict(plan) : null
-  const nothingToSend = selectedTotal === 0 && shortages.length === 0
+  // Approving the rest of a partly approved order: only production quantities are sent now. The components that were
+  // short were already requested from the Purchase Manager the first time, so they are shown for information only.
+  const reapproval = Boolean(plan?.reapproval) || order.approval_status === "PARTIALLY_APPROVED"
+  const nothingToSend = reapproval ? selectedTotal === 0 : selectedTotal === 0 && shortages.length === 0
 
   const submit = async (e) => {
     e.preventDefault()
     setServerError("")
     try {
-      await dispatch({
+      const done = await guarded((key) => dispatch({
         id: order.id,
+        idempotency_key: key,
+        expected_round: Number(plan?.approval_round ?? order.approval_round) || 0,
         remarks: remarks.trim(),
         production_items: toProduction.map((l) => ({ product_id: l.product_id, quantity: l.approved_quantity })),
-        purchase_items: shortages.map((s) => ({ component_id: s.component_id, quantity: s.shortage })),
-      }).unwrap()
+        purchase_items: reapproval ? [] : shortages.map((s) => ({ component_id: s.component_id, quantity: s.shortage })),
+      }).unwrap())
+      if (done === undefined) return // a request is already in flight
       const parts = []
       if (toProduction.length) parts.push("Production Manager")
-      if (shortages.length) parts.push("Purchase Manager")
-      toast.success(`${order.order_number} approved. ${selectedTotal} product units selected; corresponding BOM issued to inventory. Sent to ${parts.join(" and ")}.`)
+      if (!reapproval && shortages.length) parts.push("Purchase Manager")
+      toast.success(
+        reapproval
+          ? `${order.order_number}: ${selectedTotal} more product units approved; corresponding BOM issued to inventory. Sent to ${parts.join(" and ")}.`
+          : `${order.order_number} approved. ${selectedTotal} product units selected; corresponding BOM issued to inventory. Sent to ${parts.join(" and ")}.`
+      )
       onClose()
     } catch (err) {
       setServerError(errorMessage(err, "Could not send this order."))
@@ -103,14 +115,18 @@ export default function OrderPlanModal({ order, onClose }) {
       onSubmit={submit}
       busy={sending}
       size="xl"
-      title={`${order.order_number} · stock check`}
-      description="Choose how many units of each product to start now. Only the selected quantity's BOM will be issued from inventory."
+      title={`${order.order_number} · ${reapproval ? "approve the rest" : "stock check"}`}
+      description={
+        reapproval
+          ? "These units were not approved the first time. Choose how many of each product to approve now; only the selected quantity's BOM is issued from inventory."
+          : "Choose how many units of each product to start now. Only the selected quantity's BOM will be issued from inventory."
+      }
       footer={
         <>
           <MktBtn onClick={onClose} disabled={sending}>Close</MktBtn>
           <MktBtn type="submit" variant="primary" disabled={sending || isLoading || isFetching || !plan || nothingToSend}>
             {sending && <Loader2 className="animate-spin" />}
-            Approve &amp; send lists
+            {reapproval ? "Approve the rest" : "Approve & send lists"}
           </MktBtn>
         </>
       }
@@ -141,7 +157,7 @@ export default function OrderPlanModal({ order, onClose }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">{verdict.label}</p>
                   <p className="mt-0.5 text-xs text-white/80">
-                    {`${fmtQty(Math.max(0, ordered - selectedTotal))} ordered units not selected for production now`}
+                    {`${fmtQty(Math.max(0, ordered - selectedTotal))} ${reapproval ? "units still to approve after this" : "ordered units not selected for production now"}`}
                   </p>
                 </div>
                 <div className="shrink-0 text-end">
@@ -157,10 +173,11 @@ export default function OrderPlanModal({ order, onClose }) {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Product</TableHead>
-                      <TableHead className="text-end">Ordered</TableHead>
+                      <TableHead className="text-end">{reapproval ? "To approve" : "Ordered"}</TableHead>
                       <TableHead className="text-end">Available now</TableHead>
                       <TableHead className="text-end">Make now</TableHead>
                       <TableHead className="text-end">Not selected</TableHead>
+                      <TableHead className="text-end">Short on stock</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -170,7 +187,12 @@ export default function OrderPlanModal({ order, onClose }) {
                           <p className="font-medium">{names[l.product_id]?.name || `#${l.product_id}`}</p>
                           {names[l.product_id]?.sku && <p className="text-xs text-muted-foreground">{names[l.product_id].sku}</p>}
                         </TableCell>
-                        <TableCell className="text-end tabular-nums">{fmtQty(l.ordered)}</TableCell>
+                        <TableCell className="text-end tabular-nums">
+                          {fmtQty(l.ordered)}
+                          {l.already_approved > 0 && (
+                            <p className="text-[11px] text-muted-foreground">of {fmtQty(l.ordered_total)} · {fmtQty(l.already_approved)} already approved</p>
+                          )}
+                        </TableCell>
                         <TableCell className={cn("text-end font-semibold tabular-nums", l.can_make > 0 ? "text-primary" : "text-destructive")}>{fmtQty(l.can_make)}</TableCell>
                         <TableCell className="text-end">
                           <input
@@ -198,7 +220,13 @@ export default function OrderPlanModal({ order, onClose }) {
               </div>
             </Section>
 
-            <Section icon={ShoppingCart} title="Components short: goes to the Purchase Manager" hint="Estimated shortage for the order after current free stock; inventory issue is calculated from your production selection.">
+            <Section
+              icon={ShoppingCart}
+              title={reapproval ? "Components still short (already requested)" : "Components short: goes to the Purchase Manager"}
+              hint={reapproval
+                ? "These were sent to the Purchase Manager when the first part was approved. Nothing new is sent to them now."
+                : "Estimated shortage for the order after current free stock; inventory issue is calculated from your production selection."}
+            >
               {shortages.length === 0 ? (
                 <p className="rounded-xl border bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">
                   {plan.missing_bom?.length ? "No shortage can be worked out until the BOM is completed." : "Nothing to buy: every component is in stock."}

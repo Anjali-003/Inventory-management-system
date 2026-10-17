@@ -12,6 +12,7 @@ import DecisionModal from "./DecisionModal"
 import OrderPlanModal from "./OrderPlanModal"
 import { BomBlockModal } from "./BomWarning"
 import PlanSummary from "./PlanSummary"
+import { approveLabel, canApprove } from "./approvalParts"
 import { useGetOrderApprovalsQuery, useGetOrderPlanQuery } from "./orderApprovalsApi"
 
 const EMPTY = []
@@ -31,14 +32,15 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
 
   const order = data.find((o) => o.id === orderId)
   const pending = order?.approval_status === "PENDING_APPROVAL"
+  const approvable = canApprove(order) // waiting, or partly approved and open for the rest
   // the same plan the stock check below uses (one request, cached): its BOM problems are shown first
-  const { data: plan, isLoading: planLoading } = useGetOrderPlanQuery(orderId, { skip: !pending })
+  const { data: plan, isLoading: planLoading } = useGetOrderPlanQuery(orderId, { skip: !approvable })
   if (!order) return null
 
   // An order with an incomplete BOM opens the blocking warning popup first, and nothing else.
   const idle = !deciding && !planning
-  const checking = pending && idle && planLoading
-  const blocked = pending && idle && !planLoading && plan?.missing_bom?.length > 0
+  const checking = approvable && idle && planLoading
+  const blocked = approvable && idle && !planLoading && plan?.missing_bom?.length > 0
 
   const stage = stageOf(order.approval_status)
   const units = order.items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
@@ -64,10 +66,10 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
           footer={
             <>
               <MktBtn onClick={onClose} data-autofocus className="sm:me-auto">Close</MktBtn>
-              {editable && pending && (
+              {editable && approvable && (
                 <>
-                  <MktBtn variant="danger" onClick={() => setDeciding(true)}><X /> Reject</MktBtn>
-                  <MktBtn variant="primary" onClick={() => setPlanning(true)}><PackageCheck /> Check stock &amp; send</MktBtn>
+                  {pending && <MktBtn variant="danger" onClick={() => setDeciding(true)}><X /> Reject</MktBtn>}
+                  <MktBtn variant="primary" onClick={() => setPlanning(true)}><PackageCheck /> {approveLabel(order)}</MktBtn>
                 </>
               )}
             </>
@@ -99,9 +101,9 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
               </motion.div>
             )}
 
-            {pending && (
+            {approvable && (
               <section className="space-y-2.5">
-                <h3 className="text-sm font-semibold">Stock check</h3>
+                <h3 className="text-sm font-semibold">{pending ? "Stock check" : "Stock check for the units not approved yet"}</h3>
                 <div className="rounded-xl border border-[#dce5e0] p-3.5">
                   <PlanSummary orderId={order.id} items={order.items} />
                 </div>

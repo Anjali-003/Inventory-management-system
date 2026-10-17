@@ -2,7 +2,7 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { motion } from "motion/react"
-import { Check, CheckCircle2, ClipboardList, FilePen, Hourglass, X, XCircle } from "lucide-react"
+import { Check, CheckCircle2, CircleDot, ClipboardList, FilePen, Hourglass, X, XCircle } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fmtDateTime } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -15,7 +15,7 @@ import { SPRING, SPRING_SOFT } from "./mktMotion"
   dashboard can simply link to ordersHref("APPROVED") and the page opens already filtered.
 
   Every stage has ONE colour family, used everywhere (tiles, chips, pills, bars, timeline):
-    Draft = amber   Waiting = sky   Approved = emerald   Rejected = rose   All = violet
+    Draft = amber   Waiting = sky   Partial = orange   Approved = emerald   Rejected = rose   All = violet
   `s` holds the full Tailwind class strings (kept whole, so Tailwind can see them).
 */
 
@@ -35,6 +35,14 @@ export const STAGES = [
     s: {
       grad: "from-sky-400 to-blue-600", glow: "shadow-blue-500/30", soft: "bg-sky-50 ring-sky-200/70",
       pill: "bg-sky-50 text-sky-800 ring-sky-200", ink: "text-sky-700",
+    },
+  },
+  {
+    status: "PARTIALLY_APPROVED", label: "PARTIALLY APPROVED BY OPERATIONS ADMIN", short: "Partially approved", icon: CircleDot, tone: "amber", dotTone: "warning",
+    bar: "bg-gradient-to-r from-amber-400 to-orange-500", dot: "bg-orange-500", hint: "Only selected product quantities are approved",
+    s: {
+      grad: "from-amber-400 to-orange-600", glow: "shadow-orange-500/30", soft: "bg-orange-50 ring-orange-200/70",
+      pill: "bg-orange-50 text-orange-800 ring-orange-200", ink: "text-orange-700",
     },
   },
   {
@@ -173,6 +181,8 @@ export function orderSteps(status) {
   switch (status) {
     case "PENDING_APPROVAL":
       return [["Created", "done"], ["Sent to admin", "done"], ["Decision", "current"]]
+    case "PARTIALLY_APPROVED":
+      return [["Created", "done"], ["Sent to admin", "done"], ["Partially approved", "current"]]
     case "APPROVED":
       return [["Created", "done"], ["Sent to admin", "done"], ["Approved", "done"]]
     case "REJECTED":
@@ -245,7 +255,7 @@ const MARK = {
 export function OrderTimeline({ order }) {
   const status = order.approval_status
   const steps = orderSteps(status)
-  const decided = status === "APPROVED" || status === "REJECTED"
+  const decided = ["PARTIALLY_APPROVED", "APPROVED", "REJECTED"].includes(status)
 
   const rows = [
     {

@@ -23,7 +23,7 @@ import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMar
 const EMPTY = []
 const SHOW_LINES = 2
 
-const isDecided = (o) => o.approval_status === "APPROVED" || o.approval_status === "REJECTED"
+const isDecided = (o) => ["PARTIALLY_APPROVED", "APPROVED", "REJECTED"].includes(o.approval_status)
 
 /*
   Marketing Manager: build an order (Draft), press Send to hand it to the Operations Admin.
