@@ -1,16 +1,14 @@
 import { useCallback, useMemo, useState } from "react"
-import { CheckCircle2, PackageCheck, RefreshCw, Truck } from "lucide-react"
+import { CheckCircle2, PackageCheck, RefreshCw, Truck, Package, CircleCheck } from "lucide-react"
 import { finishedGoodsService } from "@/features/finished-goods/finishedGoodsService"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
 import { errorMessage } from "@/lib/stock"
-import { HeroButton, MktHero, SearchField } from "@/features/marketing-orders/mktKit"
-import StatStrip from "@/components/StatStrip"
+import { HeroButton, MktHero, SearchField, StageTile, TileGrid, StageChips } from "@/features/marketing-orders/mktKit"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import UserCell from "@/components/UserCell"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { usePermissions } from "@/features/auth/usePermissions"
 
 
@@ -56,11 +54,11 @@ function Confirm({ item, action, busy, onClose, onConfirm }) {
 
 function ItemCard({ item, onAction, editable }) {
   return (
-    <div className="rounded-2xl border border-[#dce5e0] bg-white p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.04)] transition-shadow hover:shadow-md">
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-[#dce5e0] bg-white p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.04)] transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="break-words font-medium tabular-nums">{item.orderNumber || "-"}</p>
-          <p className="mt-0.5 text-sm text-muted-foreground">{item.productName || "-"}</p>
+          <p className="break-all font-medium tabular-nums">{item.orderNumber || "-"}</p>
+          <p className="mt-0.5 break-words text-sm text-muted-foreground">{item.productName || "-"}</p>
           <p className="text-xs text-muted-foreground">{item.productSku || "-"}</p>
         </div>
         <Status value={item.status} />
@@ -77,7 +75,7 @@ function ItemCard({ item, onAction, editable }) {
         <span>Last action</span>
         <UserCell {...actorOf(item)} className="text-foreground" />
       </div>
-      <div className="mt-3 flex justify-end border-t border-[#e7eee9] pt-3">
+      <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-[#e7eee9] pt-3">
         {editable && item.status === "PACKAGING" && <Button size="sm" onClick={() => onAction(item, "DISPATCH")}><Truck /> Mark dispatched</Button>}
         {editable && item.status === "DISPATCHED" && <Button size="sm" onClick={() => onAction(item, "COMPLETE")}><CheckCircle2 /> Mark completed</Button>}
         {(!editable || item.status === "COMPLETED") && <span className="text-xs text-muted-foreground">{editable ? "No action" : "View only"}</span>}
@@ -144,52 +142,42 @@ export default function FinishedGoods() {
 
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
-      <Card className="overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
-        <StatStrip
-          layoutId="finished-goods-status"
-          cols="grid-cols-2 md:grid-cols-4"
-          items={[
-            { key: "packaging", label: "Packaging", value: counts.packaging, tone: "warning", active: status === "PACKAGING", onClick: () => setStatus(status === "PACKAGING" ? "all" : "PACKAGING") },
-            { key: "dispatched", label: "Dispatched", value: counts.dispatched, tone: "info", active: status === "DISPATCHED", onClick: () => setStatus(status === "DISPATCHED" ? "all" : "DISPATCHED") },
-            { key: "completed", label: "Completed", value: counts.completed, tone: "success", active: status === "COMPLETED", onClick: () => setStatus(status === "COMPLETED" ? "all" : "COMPLETED") },
-            { key: "total", label: "Total batches", value: items.length, tone: "neutral", active: status === "all", onClick: () => setStatus("all") },
-          ]}
-        />
-        <div className="flex items-center gap-3 border-b border-[#e7eee9] px-4 py-3 sm:px-5"><SearchField className="min-w-0 flex-1 sm:max-w-md" value={query} onChange={setQuery} placeholder="Search order, product, SKU or person..." /><span className="shrink-0 text-xs text-muted-foreground">{rows.length} batch{rows.length === 1 ? "" : "es"}</span></div>
-
-        {loading ? <TableSkeleton rows={6} /> : rows.length === 0 ? (
-          <EmptyState icon={PackageCheck} title={query || status !== "all" ? "No matching finished goods" : "No finished goods yet"}>
-            Approved products will appear here after Quality Control.
-          </EmptyState>
-        ) : (
-          <>
-            <div className="hidden md:block">
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>Order</TableHead><TableHead>Product</TableHead><TableHead>SKU</TableHead><TableHead>Qty</TableHead><TableHead>Status</TableHead><TableHead>Last action by</TableHead><TableHead className="text-right">Action</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>{rows.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium tabular-nums">{item.orderNumber || "-"}</TableCell>
-                    <TableCell>{item.productName || "-"}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{item.productSku || "-"}</TableCell>
-                    <TableCell className="tabular-nums">{item.quantity ?? 0}</TableCell>
-                    <TableCell><Status value={item.status} /><p className="mt-1 max-w-44 text-xs leading-snug text-muted-foreground">{nextStepText(item.status)}</p></TableCell>
-                    <TableCell className="min-w-40"><UserCell {...actorOf(item)} /></TableCell>
-                    <TableCell className="text-right">
-                      {editable && item.status === "PACKAGING" && <Button size="sm" onClick={() => confirm(item, "DISPATCH")}><Truck /> Mark dispatched</Button>}
-                      {editable && item.status === "DISPATCHED" && <Button size="sm" onClick={() => confirm(item, "COMPLETE")}><CheckCircle2 /> Mark completed</Button>}
-                      {item.status === "COMPLETED" && <span className="text-sm text-muted-foreground">Done</span>}
-                      {!editable && item.status !== "COMPLETED" && <span className="text-sm text-muted-foreground">View only</span>}
-                    </TableCell>
-                  </TableRow>
-                ))}</TableBody>
-              </Table>
+      <div className="min-w-0 space-y-4">
+        {(() => {
+          const filters = [
+            { key: "PACKAGING", label: "Packaging", hint: "Ready to be dispatched", icon: Package, dot: "bg-amber-500", s: { grad: "from-amber-500 to-orange-600", glow: "shadow-amber-500/20" }, value: counts.packaging, tone: "warning", active: status === "PACKAGING", onClick: () => setStatus(status === "PACKAGING" ? "all" : "PACKAGING") },
+            { key: "DISPATCHED", label: "Dispatched", hint: "Awaiting final completion", icon: Truck, dot: "bg-blue-500", s: { grad: "from-blue-500 to-indigo-700", glow: "shadow-blue-500/20" }, value: counts.dispatched, tone: "info", active: status === "DISPATCHED", onClick: () => setStatus(status === "DISPATCHED" ? "all" : "DISPATCHED") },
+            { key: "COMPLETED", label: "Completed", hint: "All steps finished", icon: CircleCheck, dot: "bg-emerald-500", s: { grad: "from-emerald-500 to-teal-700", glow: "shadow-emerald-500/20" }, value: counts.completed, tone: "success", active: status === "COMPLETED", onClick: () => setStatus(status === "COMPLETED" ? "all" : "COMPLETED") },
+            { key: "all", label: "Total batches", hint: "Every finished-goods batch", icon: PackageCheck, dot: "bg-slate-400", s: { grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/20" }, value: items.length, tone: "neutral", active: status === "all", onClick: () => setStatus("all") },
+          ]
+          return <>
+            <div className="hidden min-w-0 md:block">
+              <TileGrid className="md:grid-cols-4 xl:grid-cols-4">
+                {filters.map((item) => <StageTile key={item.key} stage={item} value={item.value} loading={loading} active={item.active} onClick={item.onClick} />)}
+              </TileGrid>
             </div>
-            <div className="grid gap-3 p-3 md:hidden">{rows.map((item) => <ItemCard key={item.id} item={item} onAction={confirm} editable={editable} />)}</div>
+            <div className="md:hidden">
+              <StageChips label="Finished goods status filters" items={filters.map((item) => ({ key: item.key, label: item.label, value: item.value, grad: item.s.grad, dot: item.dot, active: item.active, onClick: item.onClick }))} />
+            </div>
           </>
-        )}
-      </Card>
+        })()}
+
+        <Card className="min-w-0 overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+          <div className="flex min-w-0 flex-wrap items-center gap-3 border-b border-[#e7eee9] bg-slate-50/70 px-3 py-3 sm:px-5">
+            <SearchField className="min-w-0 flex-1 sm:max-w-md" value={query} onChange={setQuery} placeholder="Search order, product, SKU or person..." />
+            <span className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{rows.length} batch{rows.length === 1 ? "" : "es"}</span>
+          </div>
+          {loading ? <div className="p-3"><TableSkeleton rows={4} /></div> : rows.length === 0 ? (
+            <EmptyState icon={PackageCheck} title={query || status !== "all" ? "No matching finished goods" : "No finished goods yet"}>
+              {query || status !== "all" ? "Try another search or select another status filter." : "Approved products will appear here after Quality Control."}
+            </EmptyState>
+          ) : (
+            <div className="grid min-w-0 grid-cols-1 gap-3 p-3 sm:p-4 lg:grid-cols-2 2xl:grid-cols-3">
+              {rows.map((item) => <ItemCard key={item.id} item={item} onAction={confirm} editable={editable} />)}
+            </div>
+          )}
+        </Card>
+      </div>
 
       {editable && <Confirm item={selected} action={action} busy={busy} onClose={close} onConfirm={submit} />}
     </>
