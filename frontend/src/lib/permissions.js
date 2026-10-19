@@ -275,7 +275,9 @@ const ACCESS = {
     dashboard: "view",
     production: "edit",
     qcFailed: "edit",
-    inventory: "view",
+    inventory: "edit",
+    qualityControl: "view",
+    finishedGoods: "view",
   },
 
   // Quality Control & Finished Goods workspace.

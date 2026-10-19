@@ -76,12 +76,14 @@ const ACCESS = {
         purchase: "edit"
     },
 
-    // Production can update production runs and view inventory without changing stock.
+    // Production can update production runs and inventory, and view QC / finished goods.
     PRODUCTION_MANAGER: {
         dashboard: "view",
         production: "edit",
         qcFailed: "edit",
-        inventory: "view"
+        inventory: "edit",
+        qualityControl: "view",
+        finishedGoods: "view"
     },
 
     // Quality Control can record test/QC results and manage finished-goods transitions;

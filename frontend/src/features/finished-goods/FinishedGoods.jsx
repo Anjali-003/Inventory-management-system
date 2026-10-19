@@ -178,10 +178,10 @@ export default function FinishedGoods() {
       <div className="min-w-0 space-y-4">
         {(() => {
           const filters = [
+            { key: "all", label: "Total batches", hint: "Every finished-goods batch", icon: PackageCheck, dot: "bg-slate-400", s: { grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/20" }, value: items.length, tone: "neutral", active: status === "all", onClick: () => setStatus("all") },
             { key: "PACKAGING", label: "Packaging", hint: "Ready to be dispatched", icon: Package, dot: "bg-amber-500", s: { grad: "from-amber-500 to-orange-600", glow: "shadow-amber-500/20" }, value: counts.packaging, tone: "warning", active: status === "PACKAGING", onClick: () => setStatus(status === "PACKAGING" ? "all" : "PACKAGING") },
             { key: "DISPATCHED", label: "Dispatched", hint: "Awaiting final completion", icon: Truck, dot: "bg-blue-500", s: { grad: "from-blue-500 to-indigo-700", glow: "shadow-blue-500/20" }, value: counts.dispatched, tone: "info", active: status === "DISPATCHED", onClick: () => setStatus(status === "DISPATCHED" ? "all" : "DISPATCHED") },
             { key: "COMPLETED", label: "Completed", hint: "All steps finished", icon: CircleCheck, dot: "bg-emerald-500", s: { grad: "from-emerald-500 to-teal-700", glow: "shadow-emerald-500/20" }, value: counts.completed, tone: "success", active: status === "COMPLETED", onClick: () => setStatus(status === "COMPLETED" ? "all" : "COMPLETED") },
-            { key: "all", label: "Total batches", hint: "Every finished-goods batch", icon: PackageCheck, dot: "bg-slate-400", s: { grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/20" }, value: items.length, tone: "neutral", active: status === "all", onClick: () => setStatus("all") },
           ]
           return <>
             <div className="hidden min-w-0 md:block">
