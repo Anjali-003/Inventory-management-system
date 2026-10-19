@@ -15,6 +15,7 @@ import OperationsView from "./roles/OperationsView";
 import PurchaseView from "./roles/PurchaseView";
 import StoreView from "./roles/StoreView";
 import SuperAdminView from "./roles/SuperAdminView";
+import HRView from "./roles/HRView";
 
 /*
   One dashboard per role, all on /dashboard.
@@ -37,6 +38,7 @@ const VIEWS = {
   [ROLES.PURCHASE_MANAGER]: PurchaseView,
   [ROLES.OPERATIONS_ADMIN]: OperationsView,
   [ROLES.MARKETING_MANAGER]: MarketingView,
+  [ROLES.HR_MANAGER]: HRView,
 };
 
 export default function Dashboard() {

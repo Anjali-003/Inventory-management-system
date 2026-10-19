@@ -33,6 +33,13 @@ const ACCESS = {
         marketingOrders: "edit"
     },
 
+    // HR owns employee records and attendance.
+    HR_MANAGER: {
+        dashboard: "view",
+        employees: "edit",
+        attendance: "edit"
+    },
+
     // Operations Admin: reviews the orders that come in (e.g. from marketing): sees what can be built from the
     // current stock, then approves the order and sends the producible list to the Production Manager and the list
     // of missing components to the Purchase Manager (POST /order-approvals/:id/dispatch), or rejects it.
@@ -111,7 +118,8 @@ const LOGIN_ROUTES = {
     PRODUCTION_MANAGER: "/production-manager/login",
     QUALITY_FG_MANAGER: "/quality-fg-manager/login",
     OPERATIONS_ADMIN: "/operations-admin/login",
-    MARKETING_MANAGER: "/marketing-manager/login"
+    MARKETING_MANAGER: "/marketing-manager/login",
+    HR_MANAGER: "/hr-manager/login"
 };
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);

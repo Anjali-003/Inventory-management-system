@@ -13,6 +13,7 @@ import {
   Users,
   Activity,
   History,
+  UserCog,
 } from "lucide-react";
 
 import { LOGIN_PORTALS, setActiveRole } from "@/lib/permissions";
@@ -67,6 +68,12 @@ const PORTAL_CARDS = [
     label: "Quality Control & Finished Goods",
     note: "Review completed batches, record Pass/Fail decisions, manage rework and release finished goods",
     icon: PackageCheck,
+  },
+  {
+    portal: LOGIN_PORTALS.HR_MANAGER,
+    label: "HR Manager",
+    note: "Manage employee records and daily attendance",
+    icon: UserCog,
   },
 ];
 
@@ -134,6 +141,11 @@ const ACCESS_ROWS = [
     role: "Quality Control & Finished Goods",
     edit: "Quality Control, finished goods",
     view: "Dashboard, production",
+  },
+  {
+    role: "HR Manager",
+    edit: "Employees, attendance",
+    view: "Dashboard",
   },
 ];
 

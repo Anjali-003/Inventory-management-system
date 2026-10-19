@@ -44,6 +44,7 @@ export const ROLES = {
   QUALITY_FG_MANAGER: "QUALITY_FG_MANAGER",
   OPERATIONS_ADMIN: "OPERATIONS_ADMIN",
   MARKETING_MANAGER: "MARKETING_MANAGER",
+  HR_MANAGER: "HR_MANAGER",
 };
 
 // Human-readable role names for the UI.
@@ -56,6 +57,7 @@ export const ROLE_LABELS = {
   QUALITY_FG_MANAGER: "Quality Control & Finished Goods",
   OPERATIONS_ADMIN: "Operations Admin",
   MARKETING_MANAGER: "Marketing Manager",
+  HR_MANAGER: "HR Manager",
 };
 
 const norm = (role) => String(role || "").toUpperCase();
@@ -124,6 +126,13 @@ export const LOGIN_PORTALS = {
     path: "/marketing-manager/login",
     api: "/auth/marketing-manager/login",
     title: "Marketing Manager Login",
+  },
+
+  HR_MANAGER: {
+    role: "HR_MANAGER",
+    path: "/hr-manager/login",
+    api: "/auth/hr-manager/login",
+    title: "HR Manager Login",
   },
 };
 
@@ -282,6 +291,13 @@ const ACCESS = {
   MARKETING_MANAGER: {
     dashboard: "view",
     marketingOrders: "edit",
+  },
+
+  // HR owns employee records and attendance.
+  HR_MANAGER: {
+    dashboard: "view",
+    employees: "edit",
+    attendance: "edit",
   },
 
   // Operations Admin reviews and approves orders.
