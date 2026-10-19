@@ -19,6 +19,7 @@ import { Card } from "@/components/ui/card"
 import { Input, Label } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import ListViewControls from "@/components/ListViewControls"
+import OrderDisplayNumber from "@/components/OrderDisplayNumber"
 import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import MaterialCheckModal from "@/features/orders/components/MaterialCheckModal"
 import StartProductionModal from "@/features/orders/components/StartProductionModal"
@@ -104,7 +105,7 @@ function ProductionCard({ item, onUpdate, onCheck, onStart, editable }) {
     <div className="min-w-0 rounded-xl border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="break-words font-medium tabular-nums">{item.order_number}</p>
+          <OrderDisplayNumber orderNumber={item.order_number} itemCount={item.item_count} itemIndex={item.item_index} className="break-words font-medium tabular-nums" />
           <p className="mt-0.5 truncate text-sm text-muted-foreground">{item.product_name || "-"}</p>
         </div>
         <div className="shrink-0"><MaterialReadiness item={item} /></div>
@@ -135,7 +136,11 @@ function ProductionCard({ item, onUpdate, onCheck, onStart, editable }) {
 function toOrder(item) {
   return {
     id: item.order_id,
+    order_id: item.order_id,
+    order_item_id: item.order_item_id,
     order_number: item.order_number,
+    item_count: item.item_count,
+    item_index: item.item_index,
     product_name: item.product_name,
     quantity: num(item.ordered_quantity),
     status: item.order_status,
@@ -342,7 +347,7 @@ export default function Production() {
           <div className={`hidden min-w-0 grid-cols-2 gap-4 p-4 2xl:grid-cols-3 ${view === "cards" ? "lg:grid" : "lg:hidden"}`}>
             {pageRows.map((item) => (
               <ProductionOrderCard
-                key={item.order_id}
+                key={item.order_item_id}
                 item={item}
                 readiness={<MaterialReadiness item={item} />}
                 actions={<ProductionActions item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} marketing />}
@@ -361,8 +366,8 @@ export default function Production() {
                 <TableHead className="w-[18%] whitespace-normal">Actions</TableHead>
               </TableRow></TableHeader>
               <TableBody>{pageRows.map((item) => (
-                <TableRow key={item.order_id}>
-                  <TableCell className="min-w-0 whitespace-normal align-top"><p className="break-words font-semibold tabular-nums">{item.order_number || `Order #${item.order_id}`}</p><p className="mt-1 break-words text-xs text-muted-foreground">{item.order_status || item.status || "Unknown status"}</p></TableCell>
+                <TableRow key={item.order_item_id}>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><OrderDisplayNumber orderNumber={item.order_number} itemCount={item.item_count} itemIndex={item.item_index} fallback={`Order #${item.order_id}`} className="break-words font-semibold tabular-nums" /><p className="mt-1 break-words text-xs text-muted-foreground">{item.order_status || item.status || "Unknown status"}</p></TableCell>
                   <TableCell className="min-w-0 whitespace-normal align-top"><p className="break-words font-medium">{item.product_name || "Product unavailable"}</p><p className="mt-1 break-words text-xs text-muted-foreground">SKU {item.product_sku || "—"}</p></TableCell>
                   <TableCell className="min-w-0 whitespace-normal align-top"><Progress done={num(item.quantity_completed)} total={num(item.ordered_quantity)} /></TableCell>
                   <TableCell className="min-w-0 whitespace-normal align-top"><MaterialReadiness item={item} /></TableCell>
@@ -374,7 +379,7 @@ export default function Production() {
           </div>
 
           <div className="grid min-w-0 gap-3 p-3 lg:hidden">
-            {pageRows.map((item) => <ProductionCard key={item.order_id} item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} />)}
+            {pageRows.map((item) => <ProductionCard key={item.order_item_id} item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} />)}
           </div>
 
           <Pagination page={page} pageSize={PAGE_SIZE} total={rows.length} onPage={setPage} noun="production orders" />
@@ -391,7 +396,7 @@ export default function Production() {
           <div className="w-full max-w-md rounded-2xl border bg-background shadow-2xl">
             <div className="border-b px-5 py-4">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Production update</p>
-              <h2 className="mt-1 text-lg font-semibold">{selected.order_number}</h2>
+              <OrderDisplayNumber orderNumber={selected.order_number} itemCount={selected.item_count} itemIndex={selected.item_index} className="mt-1 text-lg font-semibold" />
               <p className="text-sm text-muted-foreground">{selected.product_name || "-"}</p>
             </div>
 

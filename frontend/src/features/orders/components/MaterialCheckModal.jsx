@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { errorMessage } from "@/lib/stock"
 import { cn } from "@/lib/utils"
+import OrderDisplayNumber from "@/components/OrderDisplayNumber"
 
 function Verdict({ ok }) {
   return (
@@ -84,17 +85,19 @@ export default function MaterialCheckModal({ order, onClose, onStart, partialPro
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
+  const orderItemId = order.order_item_id ?? order.id
+
   useEffect(() => {
     let stale = false
     const request = partialProduction
-      ? ordersService.productionCheck(order.id, Number(order.remaining_to_start))
-      : ordersService.materialCheck(order.id)
+      ? ordersService.productionCheck(orderItemId, Number(order.remaining_to_start))
+      : ordersService.materialCheck(order.order_id ?? order.id)
     request
       .then((r) => !stale && setResult(r.data))
       .catch((e) => !stale && setError(errorMessage(e, "Failed to check materials")))
       .finally(() => !stale && setLoading(false))
     return () => { stale = true }
-  }, [order, partialProduction])
+  }, [orderItemId, order.order_id, order.remaining_to_start, partialProduction])
 
   return (
     <Modal
@@ -113,7 +116,7 @@ export default function MaterialCheckModal({ order, onClose, onStart, partialPro
       <div className="space-y-5">
           <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/30 p-4">
             <div className="min-w-0">
-              <p className="font-semibold tabular-nums">{order.order_number}</p>
+              <OrderDisplayNumber orderNumber={order.order_number} itemCount={order.item_count} itemIndex={order.item_index} className="font-semibold tabular-nums" />
               <p className="truncate text-sm text-muted-foreground">{order.product_name}</p>
             </div>
             <div className="text-right">

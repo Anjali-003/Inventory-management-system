@@ -4,12 +4,21 @@ const AppError = require("../../shared/AppError")
 const selectSql = `
   SELECT fg.id, fg.production_id, fg.order_id, fg.quantity, fg.status,
          fg.created_at, fg.dispatched_at, fg.completed_at,
-         o.order_number, oi.product_id, p.sku AS product_sku, p.name AS product_name,
+         o.order_number, products.product_id, products.product_sku, products.product_name,
+         products.product_count,
          cu.name AS created_by_name, du.name AS dispatched_by_name, xu.name AS completed_by_name
   FROM finished_goods fg
   JOIN orders o ON o.id = fg.order_id
-  JOIN order_items oi ON oi.order_id = o.id
-  JOIN products p ON p.id = oi.product_id
+  JOIN (
+    SELECT oi.order_id,
+           MIN(oi.product_id) AS product_id,
+           GROUP_CONCAT(p.sku ORDER BY oi.id SEPARATOR ', ') AS product_sku,
+           GROUP_CONCAT(p.name ORDER BY oi.id SEPARATOR ' + ') AS product_name,
+           COUNT(*) AS product_count
+    FROM order_items oi
+    JOIN products p ON p.id = oi.product_id
+    GROUP BY oi.order_id
+  ) products ON products.order_id = fg.order_id
   LEFT JOIN users cu ON cu.id = fg.created_by
   LEFT JOIN users du ON du.id = fg.dispatched_by
   LEFT JOIN users xu ON xu.id = fg.completed_by
@@ -18,6 +27,7 @@ const selectSql = `
 const mapRow = (r) => ({
   id: r.id, productionId: r.production_id, orderId: r.order_id, orderNumber: r.order_number,
   productId: r.product_id, productSku: r.product_sku, productName: r.product_name,
+  productCount: Number(r.product_count || 1),
   quantity: Number(r.quantity), status: r.status, createdAt: r.created_at,
   dispatchedAt: r.dispatched_at, completedAt: r.completed_at,
   createdByName: r.created_by_name, dispatchedByName: r.dispatched_by_name, completedByName: r.completed_by_name,
@@ -38,55 +48,101 @@ async function createFinishedGood(productionId, orderId, quantity, connection = 
   const own = !connection
   connection ??= await db.getConnection()
   try {
-    if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new AppError(400, "Finished goods quantity must be a positive integer")
-    const [production] = await connection.query(`
-      SELECT po.id, po.order_id, po.quantity_completed, oi.quantity AS ordered_quantity
-      FROM production_orders po
-      JOIN order_items oi ON oi.order_id = po.order_id
-      WHERE po.id = ?
-      LIMIT 1
-    `, [productionId])
-    if (!production.length) throw new AppError(404, "Production order not found")
-    if (Number(production[0].order_id) !== Number(orderId)) throw new AppError(400, "Production order does not belong to the specified order")
-
-    const [order] = await connection.query(`SELECT id, status FROM orders WHERE id = ? LIMIT 1`, [orderId])
-    if (!order.length) throw new AppError(404, "Order not found")
-
-    const [testing] = await connection.query(`
-      SELECT COALESCE(SUM(quantity_tested), 0) AS tested,
-             COALESCE(SUM(quantity_failed), 0) AS failed
-      FROM testing_records WHERE production_id = ?
-    `, [productionId])
-
-    const [qc] = await connection.query(`
-      SELECT COALESCE(SUM(quantity_inspected), 0) AS inspected,
-             COALESCE(SUM(quantity_approved), 0) AS approved
-      FROM quality_control_records WHERE production_id = ?
-    `, [productionId])
-
-    const ordered = Number(production[0].ordered_quantity)
-    if (Number(production[0].quantity_completed) < ordered) throw new AppError(409, "Finished goods can only be created after full production is completed")
-
-    // New QC flow: an explicit batch PASS is the single release gate.
-    // Older batches still pass through the original testing + QC checks below.
-    const [decisions] = await connection.query(
-      `SELECT decision FROM quality_control_batch_decisions
-       WHERE production_id = ? ORDER BY attempt_number DESC LIMIT 1`,
-      [productionId],
-    )
-    const batchDecision = decisions[0]?.decision || null
-    if (batchDecision === "FAIL") throw new AppError(409, "A batch that failed Quality Control cannot enter Finished Goods")
-    if (batchDecision !== "PASS") {
-      if (Number(testing[0].tested) < ordered || Number(testing[0].failed) > 0) throw new AppError(409, "Finished goods require all units to pass testing")
-      if (Number(qc[0].inspected) < ordered || Number(qc[0].approved) < ordered) throw new AppError(409, "Finished goods require full QC approval")
+    if (!Number.isSafeInteger(Number(quantity)) || Number(quantity) <= 0) {
+      throw new AppError(400, "Finished goods quantity must be a positive integer")
     }
 
-    const [existing] = await connection.query(`SELECT id FROM finished_goods WHERE order_id = ? LIMIT 1`, [orderId])
-    if (existing.length) return { success: true, finishedGoodsId: existing[0].id, productionId, orderId, quantity, status: "PACKAGING", message: "Finished goods already exist for this order" }
+    const [production] = await connection.query(`
+      SELECT po.id, po.order_id, po.order_item_id, po.quantity_completed,
+             oi.quantity AS ordered_quantity
+      FROM production_orders po
+      JOIN order_items oi ON oi.id = po.order_item_id
+      WHERE po.id = ? LIMIT 1
+    `, [productionId])
+    if (!production.length) throw new AppError(404, "Production order not found")
+    if (Number(production[0].order_id) !== Number(orderId)) {
+      throw new AppError(400, "Production order does not belong to the specified order")
+    }
 
-    const [result] = await connection.query(`INSERT INTO finished_goods (production_id, order_id, quantity, status, created_by) VALUES (?, ?, ?, 'PACKAGING', ?)`, [productionId, orderId, quantity, userId])
+    const [order] = await connection.query(`SELECT id, status FROM orders WHERE id = ? LIMIT 1 FOR UPDATE`, [orderId])
+    if (!order.length) throw new AppError(404, "Order not found")
+
+    // Finished Goods has one parent-order record. Every ordered product line must
+    // be complete and have passed the current QC attempt before that record exists.
+    const [productLines] = await connection.query(`
+      SELECT oi.id AS order_item_id, oi.quantity AS ordered_quantity,
+             po.id AS production_id, po.quantity_completed,
+             latest.decision AS batch_decision,
+             COALESCE(testing.quantity_tested, 0) AS quantity_tested,
+             COALESCE(testing.quantity_failed, 0) AS quantity_failed,
+             COALESCE(qc.quantity_inspected, 0) AS quantity_inspected,
+             COALESCE(qc.quantity_approved, 0) AS quantity_approved,
+             COALESCE(qc.quantity_rejected, 0) AS quantity_rejected
+      FROM order_items oi
+      LEFT JOIN production_orders po ON po.order_item_id = oi.id
+      LEFT JOIN quality_control_batch_decisions latest ON latest.id = (
+        SELECT d.id FROM quality_control_batch_decisions d
+        WHERE d.production_id = po.id ORDER BY d.attempt_number DESC LIMIT 1
+      )
+      LEFT JOIN (
+        SELECT production_id, SUM(quantity_tested) AS quantity_tested,
+               SUM(quantity_failed) AS quantity_failed
+        FROM testing_records GROUP BY production_id
+      ) testing ON testing.production_id = po.id
+      LEFT JOIN (
+        SELECT production_id, SUM(quantity_inspected) AS quantity_inspected,
+               SUM(quantity_approved) AS quantity_approved,
+               SUM(quantity_rejected) AS quantity_rejected
+        FROM quality_control_records GROUP BY production_id
+      ) qc ON qc.production_id = po.id
+      WHERE oi.order_id = ?
+      ORDER BY oi.id
+    `, [orderId])
+
+    if (!productLines.length) throw new AppError(409, "The order has no product lines")
+    const allProductsReady = productLines.every((line) => {
+      const ordered = Number(line.ordered_quantity)
+      const completed = Number(line.quantity_completed || 0)
+      if (!line.production_id || ordered <= 0 || completed < ordered) return false
+      if (line.batch_decision) return line.batch_decision === "PASS"
+      // Preserve compatibility with the legacy quantity-based QC workflow.
+      return Number(line.quantity_tested) >= ordered && Number(line.quantity_failed) === 0 &&
+        Number(line.quantity_inspected) >= ordered && Number(line.quantity_approved) >= ordered &&
+        Number(line.quantity_rejected) === 0
+    })
+
+    if (!allProductsReady) {
+      return {
+        success: true, readyForFinishedGoods: false, finishedGoodsId: null,
+        productionId, orderId, status: null,
+        message: "Waiting for every product in the order to complete production and pass Quality Control",
+      }
+    }
+
+    const totalQuantity = productLines.reduce((sum, line) => sum + Number(line.ordered_quantity), 0)
+    if (!Number.isSafeInteger(totalQuantity) || totalQuantity <= 0) {
+      throw new AppError(409, "The total ordered quantity is not a valid whole number")
+    }
+
+    const [existing] = await connection.query(`SELECT id, status, quantity FROM finished_goods WHERE order_id = ? LIMIT 1 FOR UPDATE`, [orderId])
+    if (existing.length) {
+      return {
+        success: true, readyForFinishedGoods: true, finishedGoodsId: existing[0].id,
+        productionId, orderId, quantity: Number(existing[0].quantity), status: existing[0].status,
+        message: "Finished goods already exist for this order",
+      }
+    }
+
+    const [result] = await connection.query(`
+      INSERT INTO finished_goods (production_id, order_id, quantity, status, created_by)
+      VALUES (?, ?, ?, 'PACKAGING', ?)
+    `, [productionId, orderId, totalQuantity, userId])
     await connection.query(`UPDATE orders SET status = 'PACKAGING', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN ('COMPLETED')`, [orderId])
-    return { success: true, finishedGoodsId: result.insertId, productionId, orderId, quantity, status: "PACKAGING", message: "Finished goods created successfully" }
+    return {
+      success: true, readyForFinishedGoods: true, finishedGoodsId: result.insertId,
+      productionId, orderId, quantity: totalQuantity, status: "PACKAGING",
+      message: "All products passed Quality Control. The order is ready for packaging.",
+    }
   } finally {
     if (own) connection.release()
   }

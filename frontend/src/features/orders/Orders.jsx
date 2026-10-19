@@ -116,7 +116,7 @@ export default function Orders() {
                 </TableHeader>
                 <TableBody>
                   {pageRows.map((o) => (
-                    <TableRow key={`${o.id}-${o.product_id}`}>
+                    <TableRow key={o.order_item_id}>
                       <TableCell className="font-medium tabular-nums">{o.order_number}</TableCell>
                       <TableCell>{o.product_name}</TableCell>
                       <TableCell className="text-right tabular-nums">{Number(o.quantity)}</TableCell>
@@ -133,7 +133,7 @@ export default function Orders() {
             {/* phones: one card per order, nothing scrolls sideways */}
             <ul className="grid gap-3 p-3 md:hidden">
               {pageRows.map((o) => (
-                <li key={`${o.id}-${o.product_id}`} className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+                <li key={o.order_item_id} className="flex flex-col gap-3 rounded-xl border bg-card p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="break-all font-medium leading-snug tabular-nums">{o.order_number}</p>
@@ -160,7 +160,7 @@ export default function Orders() {
       </Card>
 
       {creating && <CreateOrderModal onClose={() => setCreating(false)} onCreated={created} />}
-      {checkFor && <MaterialCheckModal order={checkFor} onClose={() => setCheckFor(null)} onStart={startFromCheck} />}
+      {checkFor && <MaterialCheckModal order={checkFor} onClose={() => setCheckFor(null)} onStart={startFromCheck} partialProduction />}
       {startFor && <StartProductionModal order={startFor} onClose={() => setStartFor(null)} onStarted={started} />}
     </>
   )

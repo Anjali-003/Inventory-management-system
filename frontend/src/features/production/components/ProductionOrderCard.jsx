@@ -1,6 +1,7 @@
 import { motion } from "motion/react"
 import { CalendarClock, Factory } from "lucide-react"
 import { cn } from "@/lib/utils"
+import OrderDisplayNumber from "@/components/OrderDisplayNumber"
 
 const number = (value) => Math.max(0, Number(value || 0))
 const formatDate = (value) => (value
@@ -65,9 +66,13 @@ export default function ProductionOrderCard({ item, readiness, actions }) {
       <div className="min-w-0 p-4 pl-5 sm:p-5 sm:pl-6">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="break-words text-[15px] font-extrabold leading-snug tracking-[-0.01em] text-slate-950 tabular-nums">
-              {item.order_number || `Order #${item.order_id}`}
-            </p>
+            <OrderDisplayNumber
+              orderNumber={item.order_number}
+              itemCount={item.item_count}
+              itemIndex={item.item_index}
+              fallback={`Order #${item.order_id}`}
+              className="break-words text-[15px] font-extrabold leading-snug tracking-[-0.01em] text-slate-950 tabular-nums"
+            />
             <p className="mt-1 break-words text-sm font-medium leading-snug text-slate-800">
               {item.product_name || "Product unavailable"}
             </p>

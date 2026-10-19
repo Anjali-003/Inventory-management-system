@@ -7,6 +7,7 @@ import ListViewControls from "@/components/ListViewControls"
 import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import OrderDisplayNumber from "@/components/OrderDisplayNumber"
 
 const STAGES = [
   { key: "failed", status: "NEEDS_REWORK", label: "QC Failed", description: "Review the original QC failure, record the fix and submit the batch for retesting.", tone: "danger", icon: AlertTriangle },
@@ -51,7 +52,7 @@ function ReworkCard({ item, editable, busy, onSubmit }) {
       <div className="min-w-0 p-4 pl-5 sm:p-5 sm:pl-6">
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="break-words text-[15px] font-extrabold leading-snug tracking-[-0.01em] text-slate-950 tabular-nums">{item.order_number || `Production #${item.id}`}</p>
+            <OrderDisplayNumber orderNumber={item.order_number} itemCount={item.item_count} itemIndex={item.item_index} fallback={`Production #${item.id}`} className="break-words text-[15px] font-extrabold leading-snug tracking-[-0.01em] text-slate-950 tabular-nums" />
             <p className="mt-1 break-words text-sm font-medium leading-snug text-slate-800">{item.product_name || "Product unavailable"}</p>
             {item.product_sku && <p className="mt-1 break-words text-xs text-slate-600">{item.product_sku}</p>}
             <p className="mt-2 text-xs text-slate-600">{Number(item.quantity_completed || 0).toLocaleString()} / {Number(item.ordered_quantity || 0).toLocaleString()} units completed · {attemptLabel}</p>
@@ -142,7 +143,7 @@ function StageSection({ stage, items, loading, editable, busy, onSubmit, view = 
                 const canSubmit = editable && (status === "NEEDS_REWORK" || status === "IN_PROGRESS")
                 const attempt = Number(item.rework_attempt_number || item.qc_attempt_number || 1)
                 return <TableRow key={item.id}>
-                  <TableCell className="min-w-0 whitespace-normal align-top"><p className="break-words font-semibold tabular-nums">{item.order_number || `Production #${item.id}`}</p><p className="mt-1 break-words text-sm font-medium">{item.product_name || "Product unavailable"}</p><p className="mt-1 break-words text-xs text-muted-foreground">{item.product_sku || "SKU unavailable"}</p></TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><OrderDisplayNumber orderNumber={item.order_number} itemCount={item.item_count} itemIndex={item.item_index} fallback={`Production #${item.id}`} className="break-words font-semibold tabular-nums" /><p className="mt-1 break-words text-sm font-medium">{item.product_name || "Product unavailable"}</p><p className="mt-1 break-words text-xs text-muted-foreground">{item.product_sku || "SKU unavailable"}</p></TableCell>
                   <TableCell className="whitespace-normal align-top"><p className="font-semibold tabular-nums">{Number(item.quantity_completed || 0).toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">of {Number(item.ordered_quantity || 0).toLocaleString()}</p></TableCell>
                   <TableCell className="min-w-0 whitespace-normal align-top"><StageBadge status={status} /><p className="mt-2 text-xs text-muted-foreground">{status === "READY_FOR_QC" ? `Retest attempt ${attempt + 1}` : `QC attempt ${attempt}`}</p></TableCell>
                   <TableCell className="min-w-0 whitespace-normal align-top"><p className="text-[10px] font-bold uppercase tracking-wide text-rose-800">Original failure</p><p className="mt-1 break-words whitespace-pre-wrap text-sm leading-relaxed">{item.qc_remarks || "No failure remark recorded."}</p>{status !== "NEEDS_REWORK" && <><p className="mt-3 text-[10px] font-bold uppercase tracking-wide text-emerald-800">Correction notes</p><p className="mt-1 break-words whitespace-pre-wrap text-sm leading-relaxed">{item.rework_remarks || "No repair notes recorded yet."}</p></>}</TableCell>

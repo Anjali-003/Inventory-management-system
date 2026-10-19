@@ -78,38 +78,39 @@ async function materialCheck(req, res) {
 /*
     GET PARTIAL PRODUCTION INFORMATION
 
-    GET /api/v1/orders/15/production-info
+    GET /api/v1/orders/:orderItemId/production-info (parameter is an order_items.id)
     Returns: ordered, started, completed, in production,
     remaining to start, maximum from inventory.
 */
 async function productionInfo(req, res) {
-    res.json(await getProductionInfo(orderIdOf(req)));
+    const orderItemId = orderIdOf(req);
+    res.json(await getProductionInfo(orderItemId));
 }
 
 /*
     CHECK MATERIALS FOR PARTIAL QUANTITY
 
-    GET /api/v1/orders/15/production-check?quantity=20
+    GET /api/v1/orders/:orderItemId/production-check?quantity=20
 */
 async function productionCheck(req, res) {
-    const orderId = orderIdOf(req);
+    const orderItemId = orderIdOf(req);
     const quantity = parsePositiveInt(req.query.quantity, "Quantity must be a positive integer");
 
-    res.json(await checkProductionMaterials(orderId, quantity));
+    res.json(await checkProductionMaterials(orderItemId, quantity));
 }
 
 /*
     START PARTIAL PRODUCTION
 
-    POST /api/v1/orders/:id/start-production
+    POST /api/v1/orders/:orderItemId/start-production
     Body: { "quantity": 20 }
 */
 async function startPartialProduction(req, res) {
-    const orderId = orderIdOf(req);
+    const orderItemId = orderIdOf(req);
     const quantity = parsePositiveInt(req.body?.quantity, "Production quantity must be a positive integer");
 
-    // production starts only after the Operations Admin has approved the order
-    const approval = await orderService.getApprovalStatus(orderId);
+    // Resolve approval through the parent marketing order for this product line.
+    const approval = await orderService.getApprovalStatusForOrderItem(orderItemId);
     if (approval === null) throw AppError.notFound("Order not found");
     if (approval !== "APPROVED") {
         throw AppError.conflict(
@@ -123,7 +124,7 @@ async function startPartialProduction(req, res) {
     }
 
     // req.user is set by authMiddleware + resolveUser (see order.routes.js)
-    const result = await startProduction(orderId, quantity, req.user.id);
+    const result = await startProduction(orderItemId, quantity, req.user.id);
 
     // Material shortage: a normal answer (the dialog shows what is missing), not an exception
     if (!result.success) return res.status(409).json(result);

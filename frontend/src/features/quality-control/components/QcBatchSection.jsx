@@ -6,6 +6,7 @@ import { MktBtn } from "@/features/marketing-orders/mktKit"
 import { EmptyState, TableSkeleton } from "@/components/feedback"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import UserCell from "@/components/UserCell"
+import OrderDisplayNumber from "@/components/OrderDisplayNumber"
 
 function dateLabel(value) {
   if (!value) return "—"
@@ -24,7 +25,7 @@ function ResultBadge({ decision }) {
 function BatchIdentity({ item }) {
   return (
     <div className="min-w-0">
-      <p className="break-words font-semibold tabular-nums">{item.orderNumber || `Production #${item.productionId || item.id}`}</p>
+      <OrderDisplayNumber orderNumber={item.orderNumber} itemCount={item.itemCount} itemIndex={item.itemIndex} fallback={`Production #${item.productionId || item.id}`} className="break-words font-semibold tabular-nums" />
       <p className="mt-1 break-words text-sm text-foreground">{item.productName || "Product unavailable"}</p>
       <p className="break-words text-xs text-muted-foreground">{item.productSku || "SKU unavailable"}</p>
     </div>

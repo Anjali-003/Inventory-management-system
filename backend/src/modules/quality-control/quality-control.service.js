@@ -3,15 +3,17 @@ const AppError = require("../../shared/AppError");
 const { createFinishedGood } = require("../finished-goods/finished-goods.service");
 
 const productionQuery = `
-  SELECT po.id, po.order_id, po.status, po.quantity_to_produce, po.quantity_completed,
+  SELECT po.id, po.order_id, po.order_item_id, po.status, po.quantity_to_produce, po.quantity_completed,
          o.order_number, o.status AS order_status, oi.product_id, oi.quantity AS ordered_quantity,
-         p.sku AS product_sku, p.name AS product_name
+         p.sku AS product_sku, p.name AS product_name,
+         (SELECT COUNT(*) FROM order_items siblings WHERE siblings.order_id = o.id) AS item_count,
+         (SELECT COUNT(*) FROM order_items previous WHERE previous.order_id = o.id AND previous.id <= oi.id) AS item_index
   FROM production_orders po
   JOIN orders o ON o.id = po.order_id
-  JOIN order_items oi ON oi.order_id = o.id
+  JOIN order_items oi ON oi.id = po.order_item_id
   JOIN products p ON p.id = oi.product_id
-  WHERE po.id = ? ORDER BY oi.id LIMIT 1
-`;
+  WHERE po.id = ?
+`
 
 async function getProductionOrder(connection, productionId) {
   const [rows] = await connection.query(productionQuery, [productionId]);
@@ -100,6 +102,8 @@ async function getQualityControlInfo(productionId) {
         productId: production.product_id,
         productSku: production.product_sku,
         productName: production.product_name,
+        itemCount: Number(production.item_count || 1),
+        itemIndex: Number(production.item_index || 1),
         orderedQuantity: Number(production.ordered_quantity),
         quantityCompleted: Number(production.quantity_completed),
         status: production.order_status || production.status,
@@ -308,54 +312,33 @@ async function finishOrderIfReady(
   qualityControl,
   userId = null,
 ) {
-  const ordered = Number(production.ordered_quantity);
-  const ready =
+  const ordered = Number(production.ordered_quantity)
+  const itemReady =
     Number(production.quantity_completed) >= ordered &&
     Number(testing.remainingToTest) === 0 &&
     Number(testing.quantityFailed) === 0 &&
     Number(qualityControl.quantityInspected) >= ordered &&
     Number(qualityControl.quantityApproved) >= ordered &&
-    Number(qualityControl.quantityRejected) === 0;
+    Number(qualityControl.quantityRejected) === 0
 
-  if (!ready) {
-    const status =
-      Number(production.quantity_completed) < ordered
-        ? "IN_PRODUCTION"
-        : "TESTING";
-    await connection.query(
-      `UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN ('COMPLETED')`,
-      [status, production.order_id],
-    );
-    return null;
+  if (!itemReady) {
+    return { readyForFinishedGoods: false, finishedGoodsId: null }
   }
 
-  const [rows] = await connection.query(
-    `SELECT COALESCE(SUM(quantity), 0) AS quantity FROM finished_goods WHERE order_id = ?`,
-    [production.order_id],
-  );
-  const existing = Number(rows[0].quantity);
-  const missing = Math.max(0, ordered - existing);
-
-  let finishedGoods = null;
-  if (missing > 0) {
-    finishedGoods = await createFinishedGood(
-      production.id,
-      production.order_id,
-      missing,
-      connection,
-      userId,
-    );
-  } else {
-    await connection.query(
-      `UPDATE orders SET status = 'PACKAGING', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN ('COMPLETED')`,
-      [production.order_id],
-    );
-  }
+  // Finished Goods is a single parent-order record. The service releases it only
+  // when every product line in the marketing order has completed production and QC.
+  const finishedGoods = await createFinishedGood(
+    production.id,
+    production.order_id,
+    ordered,
+    connection,
+    userId,
+  )
 
   return {
-    readyForFinishedGoods: true,
+    readyForFinishedGoods: !!finishedGoods?.readyForFinishedGoods,
     finishedGoodsId: finishedGoods?.finishedGoodsId || null,
-  };
+  }
 }
 
 async function redoQualityControl(productionId, redoApproved, userId) {
@@ -559,10 +542,19 @@ async function decideBatch(productionId, decision, remarks, userId) {
 
     // Serialize decisions and rework transitions for this production batch.
     const [locked] = await connection.query(
-      "SELECT id FROM production_orders WHERE id = ? FOR UPDATE",
+      "SELECT id, order_id FROM production_orders WHERE id = ? FOR UPDATE",
       [productionId],
     );
     if (!locked.length) throw new AppError(404, "Production batch not found");
+
+    // Serialize QC decisions belonging to the same parent order. Lock the parent
+    // before the first consistent read so the final product PASS sees any sibling
+    // decision committed while it was waiting for this lock.
+    const [parentOrder] = await connection.query(
+      "SELECT id FROM orders WHERE id = ? FOR UPDATE",
+      [locked[0].order_id],
+    );
+    if (!parentOrder.length) throw new AppError(404, "Order not found");
 
     const production = await getProductionOrder(connection, productionId);
     const completed = Number(production.quantity_completed);
@@ -655,9 +647,12 @@ async function decideBatch(productionId, decision, remarks, userId) {
       remarks: cleanRemarks || null,
       finishedGoodsId: finishedGoods?.finishedGoodsId || null,
       finishedGoodsStatus: finishedGoods?.status || null,
+      readyForFinishedGoods: !!finishedGoods?.readyForFinishedGoods,
       message: decision === "PASS"
-        ? `Batch passed QC on attempt ${attemptNumber} and was sent to Finished Goods`
-        : `Batch failed QC on attempt ${attemptNumber}; Production has been assigned rework`,
+        ? finishedGoods?.readyForFinishedGoods
+          ? `Product passed QC on attempt ${attemptNumber}. The full order is ready for Finished Goods.`
+          : `Product passed QC on attempt ${attemptNumber}. Finished Goods will appear after every product in this order passes QC.`
+        : `Product failed QC on attempt ${attemptNumber}; Production has been assigned rework`,
     };
   } catch (error) {
     await connection.rollback();
@@ -668,13 +663,14 @@ async function decideBatch(productionId, decision, remarks, userId) {
 }
 
 async function getQualityControlOrders() {
-  const connection = await db.getConnection();
+  const connection = await db.getConnection()
 
   try {
     const [rows] = await connection.query(`
       SELECT
         po.id,
         po.order_id,
+        po.order_item_id,
         o.status AS order_status,
         po.quantity_to_produce,
         po.quantity_completed,
@@ -684,6 +680,8 @@ async function getQualityControlOrders() {
         oi.quantity AS ordered_quantity,
         p.name AS product_name,
         p.sku AS product_sku,
+        (SELECT COUNT(*) FROM order_items siblings WHERE siblings.order_id = o.id) AS item_count,
+        (SELECT COUNT(*) FROM order_items previous WHERE previous.order_id = o.id AND previous.id <= oi.id) AS item_index,
         COALESCE((SELECT SUM(t.quantity_tested) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_tested,
         COALESCE((SELECT SUM(t.quantity_passed) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_passed,
         COALESCE((SELECT SUM(t.quantity_failed) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_failed,
@@ -710,7 +708,7 @@ async function getQualityControlOrders() {
         fg.status AS finished_goods_status
       FROM production_orders po
       JOIN orders o ON o.id = po.order_id
-      JOIN order_items oi ON oi.order_id = o.id
+      JOIN order_items oi ON oi.id = po.order_item_id
       JOIN products p ON p.id = oi.product_id
       LEFT JOIN quality_control_batch_decisions qbd ON qbd.id = (
         SELECT d.id FROM quality_control_batch_decisions d
@@ -725,7 +723,7 @@ async function getQualityControlOrders() {
       )
       LEFT JOIN users rework_started_user ON rework_started_user.id = rc.started_by
       LEFT JOIN users rework_submitted_user ON rework_submitted_user.id = rc.submitted_by
-      LEFT JOIN finished_goods fg ON fg.production_id = po.id
+      LEFT JOIN finished_goods fg ON fg.order_id = o.id
       LEFT JOIN users fg_user ON fg_user.id = fg.created_by
       WHERE oi.quantity > 0 AND po.quantity_completed >= oi.quantity
       ORDER BY
@@ -736,7 +734,7 @@ async function getQualityControlOrders() {
         END,
         COALESCE(qbd.decided_at, fg.created_at, po.completed_at) DESC,
         po.id DESC
-    `);
+    `)
 
     const [historyRows] = await connection.query(`
       SELECT d.id, d.production_id, d.attempt_number, d.decision, d.remarks,
@@ -749,11 +747,11 @@ async function getQualityControlOrders() {
         ON r.production_id = d.production_id
        AND r.failed_attempt_number = d.attempt_number
       ORDER BY d.production_id, d.attempt_number
-    `);
-    const historyByProduction = new Map();
+    `)
+    const historyByProduction = new Map()
     for (const entry of historyRows) {
-      const key = Number(entry.production_id);
-      if (!historyByProduction.has(key)) historyByProduction.set(key, []);
+      const key = Number(entry.production_id)
+      if (!historyByProduction.has(key)) historyByProduction.set(key, [])
       historyByProduction.get(key).push({
         id: entry.id,
         attemptNumber: Number(entry.attempt_number),
@@ -765,36 +763,38 @@ async function getQualityControlOrders() {
         reworkRemarks: entry.rework_remarks || null,
         reworkStartedAt: entry.rework_started_at || null,
         reworkSubmittedAt: entry.rework_submitted_at || null,
-      });
+      })
     }
 
     return rows.map((row) => {
-      const ordered = Number(row.ordered_quantity);
-      const completed = Number(row.quantity_completed);
-      const tested = Number(row.quantity_tested);
-      const passed = Number(row.quantity_passed);
-      const failed = Number(row.quantity_failed);
-      const inspected = Number(row.quantity_inspected);
-      const approved = Number(row.quantity_approved);
-      const rejected = Number(row.quantity_rejected);
-      const remainingToTest = Math.max(0, completed - tested);
-      const availableForQC = Math.max(0, passed - inspected);
-      const latestDecision = row.recorded_batch_decision || (row.finished_goods_id ? "PASS" : null);
-      const pendingRetest = latestDecision === "FAIL" && row.rework_status === "READY_FOR_QC";
-      // A submitted rework batch appears in the pending queue again; the old FAIL remains in attempt history.
-      const batchDecision = pendingRetest ? null : latestDecision;
-      const decisionAt = row.batch_decided_at || row.finished_goods_created_at || null;
-      const decisionByName = row.batch_decided_by_name || row.finished_goods_created_by_name || null;
-      const legacyFinishedGoodsPass = !row.recorded_batch_decision && !!row.finished_goods_id;
-      const readyForFinishedGoods = latestDecision === "PASS" || (!latestDecision && (
-        completed >= ordered && remainingToTest === 0 && failed === 0 &&
-        inspected >= ordered && approved >= ordered && rejected === 0
-      ));
+      const ordered = Number(row.ordered_quantity)
+      const completed = Number(row.quantity_completed)
+      const tested = Number(row.quantity_tested)
+      const passed = Number(row.quantity_passed)
+      const failed = Number(row.quantity_failed)
+      const inspected = Number(row.quantity_inspected)
+      const approved = Number(row.quantity_approved)
+      const rejected = Number(row.quantity_rejected)
+      const remainingToTest = Math.max(0, completed - tested)
+      const availableForQC = Math.max(0, passed - inspected)
+      const latestDecision = row.recorded_batch_decision || (row.finished_goods_id ? "PASS" : null)
+      const pendingRetest = latestDecision === "FAIL" && row.rework_status === "READY_FOR_QC"
+      const batchDecision = pendingRetest ? null : latestDecision
+      const decisionAt = row.batch_decided_at || row.finished_goods_created_at || null
+      const decisionByName = row.batch_decided_by_name || row.finished_goods_created_by_name || null
+      const legacyFinishedGoodsPass = !row.recorded_batch_decision && !!row.finished_goods_id
+      // A product-level PASS is not enough to release the parent order. The
+      // parent Finished Goods record is created only after every product line
+      // has completed production and QC, so it is the authoritative release flag.
+      const readyForFinishedGoods = !!row.finished_goods_id
 
       return {
         id: row.id,
         orderId: row.order_id,
+        orderItemId: row.order_item_id,
         orderNumber: row.order_number,
+        itemCount: Number(row.item_count || 1),
+        itemIndex: Number(row.item_index || 1),
         productName: row.product_name,
         productSku: row.product_sku,
         orderedQuantity: ordered,
@@ -829,10 +829,10 @@ async function getQualityControlOrders() {
         status: row.order_status,
         startedAt: row.started_at,
         completedAt: row.completed_at,
-      };
-    });
+      }
+    })
   } finally {
-    connection.release();
+    connection.release()
   }
 }
 

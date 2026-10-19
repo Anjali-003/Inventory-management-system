@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { ordersService } from "@/features/orders/ordersService"
+import OrderDisplayNumber from "@/components/OrderDisplayNumber"
 import { Modal } from "@/components/Modal"
 import { Field, TextInput } from "@/components/FormField"
 import { Notice } from "@/components/feedback"
@@ -19,9 +20,11 @@ export default function StartProductionModal({ order, onClose, onStarted }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
+  const orderItemId = order.order_item_id ?? order.id
+
   useEffect(() => {
     let stale = false
-    ordersService.productionInfo(order.id)
+    ordersService.productionInfo(orderItemId)
       .then((r) => {
         if (stale) return
         setInfo(r.data)
@@ -30,7 +33,7 @@ export default function StartProductionModal({ order, onClose, onStarted }) {
       .catch((e) => !stale && setError(errorMessage(e, "Failed to load production information")))
       .finally(() => !stale && setLoading(false))
     return () => { stale = true }
-  }, [order])
+  }, [orderItemId])
 
   const max = Number(info?.maxProductionQuantity)
   const canStart = Number.isSafeInteger(max) && max > 0
@@ -45,7 +48,7 @@ export default function StartProductionModal({ order, onClose, onStarted }) {
     setSaving(true)
     setError("")
     try {
-      const { data } = await ordersService.startProduction(order.id, n)
+      const { data } = await ordersService.startProduction(orderItemId, n)
       onStarted(n, data.orderNumber)
     } catch (err) {
       const shortages = err.response?.data?.shortages
@@ -80,7 +83,7 @@ export default function StartProductionModal({ order, onClose, onStarted }) {
     >
       <div className="space-y-5">
           <div className="rounded-lg border bg-muted/30 p-4">
-            <p className="font-semibold tabular-nums">{order.order_number}</p>
+            <OrderDisplayNumber orderNumber={order.order_number} itemCount={order.item_count} itemIndex={order.item_index} className="font-semibold tabular-nums" />
             <p className="text-sm text-muted-foreground">{order.product_name}</p>
           </div>
 

@@ -37,6 +37,9 @@ async function listOrders() {
         `
         SELECT
             o.id,
+            oi.id AS order_item_id,
+            (SELECT COUNT(*) FROM order_items siblings WHERE siblings.order_id = o.id) AS item_count,
+            (SELECT COUNT(*) FROM order_items previous WHERE previous.order_id = o.id AND previous.id <= oi.id) AS item_index,
             o.order_number,
             o.status,
             o.approval_status,
@@ -55,7 +58,7 @@ async function listOrders() {
         JOIN products p
             ON oi.product_id = p.id
         LEFT JOIN production_orders po
-            ON po.order_id = o.id
+            ON po.order_item_id = oi.id
         LEFT JOIN users cu
             ON cu.id = o.created_by
         ORDER BY o.id DESC
@@ -72,6 +75,16 @@ async function listOrders() {
 */
 async function getApprovalStatus(orderId) {
     const [rows] = await db.query("SELECT approval_status FROM orders WHERE id = ?", [orderId]);
+    return rows.length ? rows[0].approval_status : null;
+}
+
+
+/* Approval status for the specific product line used by Production start actions. */
+async function getApprovalStatusForOrderItem(orderItemId) {
+    const [rows] = await db.query(
+        `SELECT o.approval_status FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE oi.id = ? LIMIT 1`,
+        [orderItemId]
+    );
     return rows.length ? rows[0].approval_status : null;
 }
 
@@ -272,6 +285,7 @@ module.exports = {
     ORDER_STATUSES,
     listOrders,
     getApprovalStatus,
+    getApprovalStatusForOrderItem,
     getOrderById,
     updateOrderStatus,
     createOrder

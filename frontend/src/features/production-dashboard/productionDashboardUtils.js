@@ -18,7 +18,11 @@ export const hasMaterialIssue = (item) => isStartable(item) && ["SHORTAGE", "UNK
 
 export const toProductionOrder = (item) => ({
   id: item.order_id,
+  order_id: item.order_id,
+  order_item_id: item.order_item_id,
   order_number: item.order_number,
+  item_count: item.item_count,
+  item_index: item.item_index,
   product_name: item.product_name,
   quantity: qty(item.ordered_quantity),
   status: item.order_status,
