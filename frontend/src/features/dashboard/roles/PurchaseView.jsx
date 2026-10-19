@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { MotionConfig, motion } from "motion/react"
-import { AlertTriangle, CheckCircle2, PackageCheck, ShoppingCart, Truck } from "lucide-react"
+import { AlertTriangle, CheckCircle2, ChevronRight, PackageCheck, ShoppingCart, Truck } from "lucide-react"
 import { EmptyState } from "@/components/feedback"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -16,7 +16,7 @@ import { PurchaseTile, PurchaseTileGrid } from "@/features/purchasing/purchaseKi
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { InfoModal, ListPanel, useDrill } from "../DashboardKit"
-import OrderShortageModal from "../OrderShortageModal"
+import OrderShortageDrawer from "../OrderShortageDrawer"
 import { purchaseRow } from "../rows"
 
 const EMPTY = []
@@ -42,16 +42,16 @@ const tile = (label, icon, hint, family) => ({ label, icon, hint, s: FAMILY[fami
 
 /* Plain-language line under "Hello": the one thing worth doing next. */
 function nudge({ orders, received }) {
-  if (orders) return `${plural(orders, "approved order")} with components to buy.`
-  if (received) return `${plural(received, "purchase")} received. Send ${received === 1 ? "it" : "them"} to IQC.`
-  return "Every approved order, with the components we still have to buy."
+  if (orders) return `${plural(orders, "approved customer order")} with components to buy.`
+  if (received) return `${plural(received, "supplier purchase order")} received, not yet with IQC. Send ${received === 1 ? "it" : "them"} to IQC.`
+  return "Every approved customer order, with the components we still have to buy."
 }
 
 /* A purchase row for the dashboard lists: same row as everywhere, but it opens the new purchase popup. */
 const purchaseRowSheet = (p) => ({ ...purchaseRow(p), detail: (close) => <PurchaseDetailSheet purchase={p} onClose={close} /> })
 
 const SEG = [
-  { value: false, label: "All orders" },
+  { value: false, label: "All customer orders" },
   { value: true, label: "Needs purchase" },
 ]
 
@@ -62,6 +62,7 @@ const OK_PILL = "bg-emerald-50 text-emerald-800 ring-emerald-200"
 function OrderCard({ order, onOpen }) {
   const shortages = shortageOf(order)
   const short = shortages.length > 0
+  const ordered = (order.purchase_request?.items || EMPTY).length - shortages.length // short lines already on a supplier purchase order
   const items = order.items ?? []
   const extra = items.length - 2
   return (
@@ -85,20 +86,21 @@ function OrderCard({ order, onOpen }) {
           {extra > 0 && <li className="text-xs text-muted-foreground">+{extra} more product{extra > 1 ? "s" : ""}</li>}
         </ul>
         <div className="mt-auto border-t border-dashed pt-3">
-          {short ? (
-            <>
+          <div className="flex items-center justify-between gap-2">
+            {short ? (
               <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset", SHORT_PILL)}>
-                <AlertTriangle className="size-3.5" aria-hidden /> {shortages.length} component{shortages.length > 1 ? "s" : ""} short
+                <AlertTriangle className="size-3.5" aria-hidden /> {shortages.length} component{shortages.length > 1 ? "s" : ""} to buy
               </span>
-              <p className="mt-1.5 truncate text-xs text-muted-foreground">
-                {shortages.slice(0, 2).map((c) => c.name).join(", ")}{shortages.length > 2 && ` +${shortages.length - 2} more`}
-              </p>
-            </>
-          ) : (
-            <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset", OK_PILL)}>
-              <CheckCircle2 className="size-3.5" aria-hidden /> Nothing to buy
+            ) : (
+              <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset", OK_PILL)}>
+                <CheckCircle2 className="size-3.5" aria-hidden /> {ordered > 0 ? "All ordered" : "Nothing to buy"}
+              </span>
+            )}
+            <span className="inline-flex items-center gap-0.5 whitespace-nowrap text-xs font-semibold text-primary">
+              View Details <ChevronRight className="size-3.5" aria-hidden />
             </span>
-          )}
+          </div>
+          {short && ordered > 0 && <p className="mt-1.5 text-xs text-muted-foreground">{ordered} more already on a supplier purchase order</p>}
         </div>
       </div>
     </motion.li>
@@ -151,7 +153,7 @@ export default function PurchaseView() {
       title: o.order_number,
       sub: shortageOf(o).length ? shortageOf(o).map((c) => c.name).join(", ") : "Nothing to buy",
       badge: shortageOf(o).length ? { variant: "danger", label: `${shortageOf(o).length} short` } : { variant: "success", label: "In stock" },
-      detail: (close) => <OrderShortageModal order={o} onClose={close} canRaisePurchase={canRaise} />,
+      detail: (close) => <OrderShortageDrawer order={o} onClose={close} canRaisePurchase={canRaise} />,
     })
     // one row per short component, with the orders that need it
     const byComp = new Map()
@@ -184,10 +186,10 @@ export default function PurchaseView() {
 
   // Each figure opens a popup with the records behind it (and a button to the page).
   const tiles = [
-    { key: "orders", stage: tile("ORDERS HAVING SHORT COMPONENTS", ShoppingCart, "Having short components", d.withShort.length ? "amber" : "green"), value: d.withShort.length, drill: { title: "Orders with short components", rows: d.withShort, to: "/approved-orders?state=TO_ORDER", toLabel: "Open Approved Orders", empty: "Nothing to buy for any order" } },
-    { key: "comps", stage: tile("TYPES OF COMPONENTS SHORT", AlertTriangle, "Across all orders", d.comps.length ? "rose" : "green"), value: d.comps.length, drill: { title: "Short components", description: "Total to buy, summed over all approved orders.", rows: d.comps, to: "/purchase", toLabel: "Open Purchase", empty: "No component is short" } },
-    { key: "placed", stage: tile("NUMBER OF ORDERS PLACED", Truck, "Order placed", "blue"), value: d.placed.length, drill: { title: "Purchases waiting for goods", rows: d.placed, to: "/purchase?status=ORDER_PLACED", toLabel: "Open Purchase", empty: "No purchase waiting for goods" } },
-    { key: "received", stage: tile("NUMBER OF ORDERS RECEIVED", PackageCheck, "Send them to IQC", d.received.length ? "violet" : "green"), value: d.received.length, drill: { title: "Received, not sent to IQC", rows: d.received, to: "/purchase?status=RECEIVED", toLabel: "Open Purchase", empty: "Nothing to send to IQC" } },
+    { key: "orders", stage: tile("CUSTOMER ORDERS NEEDING PURCHASE", ShoppingCart, "Approved, components still to buy", d.withShort.length ? "amber" : "green"), value: d.withShort.length, drill: { title: "Customer orders with short components", rows: d.withShort, to: "/approved-orders?state=TO_ORDER", toLabel: "Open Approved Orders", empty: "Nothing to buy for any order" } },
+    { key: "comps", stage: tile("COMPONENTS STILL TO BUY", AlertTriangle, "Different components short, all orders", d.comps.length ? "rose" : "green"), value: d.comps.length, drill: { title: "Short components", description: "Total still to buy, summed over all approved customer orders.", rows: d.comps, to: "/purchase", toLabel: "Open Purchase", empty: "No component is short" } },
+    { key: "placed", stage: tile("SUPPLIER ORDERS AWAITING GOODS", Truck, "Purchase orders placed, not received", "blue"), value: d.placed.length, drill: { title: "Supplier purchase orders waiting for goods", rows: d.placed, to: "/purchase?status=ORDER_PLACED", toLabel: "Open Purchase", empty: "No purchase waiting for goods" } },
+    { key: "received", stage: tile("RECEIVED, NOT SENT TO IQC", PackageCheck, "Material in, not yet with IQC", d.received.length ? "violet" : "green"), value: d.received.length, drill: { title: "Supplier purchases received, not yet sent to IQC", rows: d.received, to: "/purchase?status=RECEIVED", toLabel: "Open Purchase", empty: "Nothing to send to IQC" } },
   ]
 
   return (
@@ -203,7 +205,7 @@ export default function PurchaseView() {
       </PurchaseTileGrid>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <SearchField className="min-w-0 flex-1 sm:max-w-xs sm:flex-none" value={query} onChange={setQuery} placeholder="Search order, product or component..." />
+        <SearchField className="min-w-0 flex-1 sm:max-w-xs sm:flex-none" value={query} onChange={setQuery} placeholder="Search customer order, product or component..." />
         <Segmented value={onlyShort} onChange={setOnlyShort} />
       </div>
 
@@ -212,7 +214,7 @@ export default function PurchaseView() {
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-44 rounded-xl" />)}</div>
         ) : shown.length === 0 ? (
           <Card>
-            <EmptyState icon={CheckCircle2} title={query || onlyShort ? "No order matches" : "No approved orders yet"}>
+            <EmptyState icon={CheckCircle2} title={query || onlyShort ? "No order matches" : "No approved customer orders yet"}>
               {query || onlyShort ? "Try a different search or filter." : "A card appears here as soon as the Operations Admin approves an order."}
             </EmptyState>
           </Card>
@@ -225,10 +227,10 @@ export default function PurchaseView() {
       </div>
 
       <div className="mt-4">
-        <ListPanel table drill={drill} loading={loading} title="My purchases in progress" description="Placed, received, with IQC or waiting for the store." rows={d.inProgress} to="/purchase" toLabel="Open Purchase" emptyIcon={ShoppingCart} empty="No purchase in progress" />
+        <ListPanel table drill={drill} loading={loading} title="My supplier purchases in progress" description="Placed with the supplier, received, with IQC or waiting for the store." rows={d.inProgress} to="/purchase" toLabel="Open Purchase" emptyIcon={ShoppingCart} empty="No supplier purchase in progress" />
       </div>
 
-      <OrderShortageModal order={opened} onClose={() => setOpenId(null)} canRaisePurchase={canRaise} />
+      <OrderShortageDrawer order={opened} onClose={() => setOpenId(null)} canRaisePurchase={canRaise} />
       {drill.host}
     </MotionConfig>
   )
