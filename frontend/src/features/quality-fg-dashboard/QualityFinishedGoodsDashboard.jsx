@@ -12,9 +12,70 @@ import DashboardMetricCard from "@/features/quality-fg-dashboard/components/Dash
 import QualityWorkQueue from "@/features/quality-fg-dashboard/components/QualityWorkQueue"
 import FinishedGoodsPipeline from "@/features/quality-fg-dashboard/components/FinishedGoodsPipeline"
 import ProductionReadOnlyPanel from "@/features/quality-fg-dashboard/components/ProductionReadOnlyPanel"
+import { InteractiveBarChart, InteractiveDonutChart } from "@/features/dashboard/components/InteractiveDashboardCharts"
 import { countFinishedGoods, getQcPendingBatches, getQcFailedBatches, getQcReadyForRetest } from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
 
 const asArray = (value) => Array.isArray(value) ? value : []
+
+const QC_CHART_CATEGORIES = [
+  { key: "pending", label: "Awaiting first QC", color: "#3478d4", to: "/quality-control" },
+  { key: "passed", label: "Passed QC", color: "#15966b", to: "/quality-control" },
+  { key: "failed", label: "Failed / correction", color: "#dc4545", to: "/qc-failed" },
+  { key: "retest", label: "Ready for retest", color: "#8358c9", to: "/qc-failed" },
+]
+
+function dateKey(date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function qcDecisionTrend(items, days) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const points = Array.from({ length: days }, (_, index) => {
+    const date = new Date(today)
+    date.setDate(today.getDate() - (days - index - 1))
+    const isoDate = dateKey(date)
+    return {
+      key: isoDate,
+      isoDate,
+      label: days === 7
+        ? date.toLocaleDateString(undefined, { weekday: "short" })
+        : date.toLocaleDateString(undefined, { day: "numeric", month: "short" }),
+      showLabel: days === 7 || index % 5 === 0 || index === days - 1,
+      fullLabel: date.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
+      values: { passed: 0, failed: 0 },
+      details: [],
+    }
+  })
+  const byDate = new Map(points.map((point) => [point.isoDate, point]))
+
+  items.forEach((item) => {
+    const decisionHistory = item.decisionHistory || []
+    decisionHistory.forEach((decision) => {
+      if (!decision.decidedAt) return
+      const date = new Date(decision.decidedAt)
+      if (Number.isNaN(date.getTime())) return
+      const point = byDate.get(dateKey(date))
+      if (!point) return
+      const outcome = String(decision.decision || "").toUpperCase()
+      if (outcome !== "PASS" && outcome !== "FAIL") return
+      const key = outcome === "PASS" ? "passed" : "failed"
+      const color = outcome === "PASS" ? "#15966b" : "#dc4545"
+      point.values[key] += 1
+      point.details.push({
+        id: `${item.id}-${decision.id}`,
+        title: item.orderNumber || `Production batch #${item.id}`,
+        subtitle: `${outcome} · Attempt ${Number(decision.attemptNumber || 1)} · ${item.productName || "Product unavailable"}${decision.remarks ? ` · ${decision.remarks}` : ""}`,
+        color,
+        to: outcome === "FAIL" ? "/qc-failed" : "/quality-control",
+      })
+    })
+  })
+  return points
+}
 
 export default function QualityFinishedGoodsDashboard() {
   const navigate = useNavigate()
@@ -43,6 +104,23 @@ export default function QualityFinishedGoodsDashboard() {
   const qcRetestCount = useMemo(() => getQcReadyForRetest(qcItems).length, [qcItems])
   const packagingCount = useMemo(() => countFinishedGoods(finishedItems, "PACKAGING"), [finishedItems])
   const dispatchedCount = useMemo(() => countFinishedGoods(finishedItems, "DISPATCHED"), [finishedItems])
+  const qcChartItems = useMemo(() => {
+    const retestItems = getQcReadyForRetest(qcItems)
+    const failedItems = getQcFailedBatches(qcItems)
+    const passedItems = qcItems.filter((item) => item.batchDecision === "PASS")
+    const pendingItems = getQcPendingBatches(qcItems).filter((item) => item.latestDecision !== "FAIL")
+    const values = {
+      pending: pendingItems.length,
+      passed: passedItems.length,
+      failed: failedItems.length,
+      retest: retestItems.length,
+    }
+    return QC_CHART_CATEGORIES.map((category) => ({ ...category, value: values[category.key] || 0 }))
+  }, [qcItems])
+  const qcTrendData = useMemo(() => ({
+    7: qcDecisionTrend(qcItems, 7),
+    30: qcDecisionTrend(qcItems, 30),
+  }), [qcItems])
 
   return (
     <>
@@ -66,7 +144,28 @@ export default function QualityFinishedGoodsDashboard() {
         </div>
       )}
 
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+        <InteractiveDonutChart
+          title="QC decision status"
+          description="See batches awaiting a first decision, passed batches, failures and retests. Select a category to open its records."
+          items={qcChartItems}
+          loading={qcQuery.isLoading}
+          emptyLabel="Completed production batches will appear here when QC data is available."
+        />
+        <InteractiveBarChart
+          title="QC decisions over time"
+          description="Recorded Pass and Fail decisions from inspection history. Select a date to review the decisions made."
+          dataByPeriod={qcTrendData}
+          series={[
+            { key: "passed", label: "Passed decisions", color: "#15966b" },
+            { key: "failed", label: "Failed decisions", color: "#dc4545" },
+          ]}
+          loading={qcQuery.isLoading}
+          emptyLabel="No QC decisions were recorded on this date."
+        />
+      </div>
+
+      <div className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <DashboardMetricCard index={0} to="/quality-control" icon={ClipboardCheck} tone={qcPendingCount ? "amber" : "green"} label="Pending QC decisions" value={qcPendingCount} loading={qcQuery.isLoading} detail="Fully completed batches awaiting Pass / Fail" />
         <DashboardMetricCard index={1} to="/qc-failed" icon={XCircle} tone={qcFailedCount ? "red" : "green"} label="Failed / needs correction" value={qcFailedCount} loading={qcQuery.isLoading} detail="Open QC Failed to record the repair" />
         <DashboardMetricCard index={2} to="/qc-failed" icon={RotateCcw} tone={qcRetestCount ? "blue" : "green"} label="Ready for QC retest" value={qcRetestCount} loading={qcQuery.isLoading} detail="Open QC Failed to review submitted repairs" />
