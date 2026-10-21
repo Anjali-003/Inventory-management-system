@@ -27,10 +27,10 @@ export default function IqcView() {
       <StatRow
         drill={drill}
         stats={[
+          { label: "Total inspected", value: inspected.length, icon: ClipboardList, tone: "blue", loading: isLoading, detail: "All time", to: "/iqc?status=INSPECTED" },
           { label: "Waiting for inspection", value: waiting.length, icon: ClipboardCheck, tone: waiting.length ? "amber" : "green", loading: isLoading, detail: "Sent by purchase", to: "/iqc?status=PENDING_IQC" },
           { label: "Approved", value: approved.length, icon: CheckCircle2, tone: "green", loading: isLoading, detail: "Passed inspection", to: "/iqc?status=APPROVED" },
           { label: "Rejected", value: rejected.length, icon: XCircle, tone: rejected.length ? "violet" : "green", loading: isLoading, detail: "Failed inspection", to: "/iqc?status=REJECTED" },
-          { label: "Total inspected", value: inspected.length, icon: ClipboardList, tone: "blue", loading: isLoading, detail: "All time", to: "/iqc?status=INSPECTED" },
         ]}
       />
       <div className="mt-4 grid gap-4 lg:grid-cols-2">

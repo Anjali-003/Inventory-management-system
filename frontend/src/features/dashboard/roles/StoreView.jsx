@@ -32,10 +32,10 @@ export default function StoreView({ readOnly = false }) {
       <StatRow
         drill={drill}
         stats={[
-          { label: "To accept into stock", value: waiting.length, icon: PackageCheck, tone: waiting.length ? "amber" : "green", loading, detail: "Approved by IQC", to: "/incoming-stock?status=PENDING_STORE" },
-          { label: "At or below minimum", value: low.length, icon: AlertTriangle, tone: low.length ? "amber" : "green", loading, detail: low.length ? "Needs reordering" : "All stocked up", to: "/inventory?filter=low" },
-          { label: "In packaging", value: packaging.length, icon: Warehouse, tone: "blue", loading, detail: "Ready to dispatch", to: "/finished-goods?status=PACKAGING" },
-          { label: "Dispatched", value: dispatched.length, icon: Truck, tone: "violet", loading, detail: "Waiting to be completed", to: "/finished-goods?status=DISPATCHED" },
+          { label: "To accept into stock", value: waiting.length, icon: PackageCheck, tone: waiting.length ? "amber" : "green", loading, detail: "Approved by IQC", to: "/store-status?status=ACCEPT" },
+          { label: "At or below minimum", value: low.length, icon: AlertTriangle, tone: low.length ? "amber" : "green", loading, detail: low.length ? "Needs reordering" : "All stocked up", to: "/store-status?status=LOW" },
+          { label: "In packaging", value: packaging.length, icon: Warehouse, tone: "blue", loading, detail: "Ready to dispatch", to: "/store-status?status=PACKAGING" },
+          { label: "Dispatched", value: dispatched.length, icon: Truck, tone: "violet", loading, detail: "Waiting to be completed", to: "/store-status?status=DISPATCHED" },
         ]}
       />
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
