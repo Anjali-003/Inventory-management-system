@@ -1,4 +1,6 @@
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback";
+import UserCell from "@/components/UserCell";
+import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -19,10 +21,13 @@ import {
   StageChips,
   StageTile,
   StatusPill,
+  StatusSelect,
 } from "@/features/marketing-orders/mktKit";
+import OrderDrawer from "@/features/marketing-orders/OrderDrawer";
+import { stagger } from "@/features/marketing-orders/mktMotion";
 import {
-  OrderProgress,
   countByStatus,
+  reviewOf,
   newestFirst,
   plural,
   stageOf,
@@ -33,20 +38,22 @@ import { ClipboardCheck, PackageCheck, RefreshCw, X } from "lucide-react";
 import { MotionConfig, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import ApprovalDetailModal from "./ApprovalDetailModal";
 import DecisionModal from "./DecisionModal";
 import OrderPlanModal from "./OrderPlanModal";
-import PlanSummary from "./PlanSummary";
+import OpsTimelineTab from "./OpsTimelineTab";
 import {
-  ApprovalCard,
-  CardList,
-  DecisionCell,
+  ApprovalPageCard,
   OPS_ALL,
   OPS_STAGES,
   OpsTileGrid,
+  isDecided,
   isOpsStatus,
 } from "./opsKit";
-import { useGetOrderApprovalsQuery } from "./orderApprovalsApi";
+import { approveLabel, canApprove, planTotals, planVerdict } from "./approvalParts";
+import {
+  useGetOrderApprovalsQuery,
+  useGetOrderPlanQuery,
+} from "./orderApprovalsApi";
 
 const EMPTY = [];
 const SHOW_LINES = 2;
@@ -58,8 +65,9 @@ const QUEUE = "PENDING_APPROVAL";
   of it can be built from the stock on the shelf. "Check stock & send" opens the plan: the producible list goes to
   the Production Manager and the list of missing components goes to the Purchase Manager. Reject needs a reason.
 
-  Same layout as the Marketing Orders page: from `lg` up the orders are a table; below that each order is a card.
-  The status filter is a row of colour tiles from `md` up and a scrolling row of chips on a phone.
+  Same layout as the Marketing Orders page: the orders are a table while the list box is 1024px wide or more,
+  otherwise each order is a card (container query, so it follows the room the list really has next to the sidebar).
+  The status filter is a scrolling row of chips on a phone, colour tiles on a tablet and a dropdown on a desktop (lg+).
 
   The page state lives in the URL, so a link (or a click on a dashboard figure) opens it already set up:
     ?status=PENDING_APPROVAL | APPROVED | REJECTED | ALL   filter (no status = the waiting queue)
@@ -67,11 +75,320 @@ const QUEUE = "PENDING_APPROVAL";
     ?order=12                                             that order's popup
 */
 
+/* Table-only cells, worded so each one reads on its own (the card view keeps its own wording). */
+function ProductsCell({ items }) {
+  const [open, setOpen] = useState(false);
+  const extra = items.length - SHOW_LINES;
+  const lines = open ? items : items.slice(0, SHOW_LINES);
+  return (
+    <ul className="space-y-0.5 text-sm leading-snug">
+      {lines.map((it) => (
+        <li key={it.product_id}>
+          {it.name}{" "}
+          <span className="font-medium tabular-nums text-muted-foreground">
+            × {fmtQty(it.quantity)}
+          </span>
+        </li>
+      ))}
+      {extra > 0 && (
+        <li>
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((v) => !v);
+            }}
+            className="text-xs font-semibold text-primary outline-none hover:underline focus-visible:underline"
+          >
+            {open ? "Show less" : `+${extra} more`}
+          </button>
+        </li>
+      )}
+    </ul>
+  );
+}
+
+function FeasibilityCell({ orderId }) {
+  const { data: plan, isLoading, error } = useGetOrderPlanQuery(orderId);
+  const [open, setOpen] = useState(false);
+  if (isLoading)
+    return <span className="text-xs text-muted-foreground">Checking stock...</span>;
+  if (error || !plan)
+    return <span className="text-xs text-muted-foreground">Stock check unavailable</span>;
+  const verdict = planVerdict(plan);
+  const { canMake } = planTotals(plan);
+  const shortages = plan.shortages || [];
+  return (
+    <div className="space-y-0.5 text-xs leading-snug">
+      <Badge variant={verdict.variant}>{verdict.label}</Badge>
+      <p>
+        <span className="text-muted-foreground">Feasible: </span>
+        <b className="font-semibold tabular-nums">{plural(canMake, "unit")}</b>
+      </p>
+      {shortages.length > 0 && (
+        <p className="flex flex-wrap items-center gap-x-2">
+          <span>
+            <span className="text-muted-foreground">Shortage: </span>
+            <b className="font-semibold tabular-nums text-destructive">
+              {plural(shortages.length, "component")}
+            </b>
+          </span>
+          <button
+            type="button"
+            aria-expanded={open}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen((v) => !v);
+            }}
+            className="font-semibold text-primary outline-none hover:underline focus-visible:underline"
+          >
+            {open ? "Hide Details" : "View Details"}
+          </button>
+        </p>
+      )}
+      {open && shortages.length > 0 && (
+        <ul className="space-y-0.5 border-s-2 border-destructive/30 ps-2">
+          {shortages.map((c) => (
+            <li key={c.component_id}>
+              {c.name || `Component #${c.component_id}`}:{" "}
+              <b className="font-semibold tabular-nums text-destructive">
+                {fmtQty(c.shortage)}
+                {c.unit ? ` ${c.unit}` : ""}
+              </b>
+              <span className="text-muted-foreground">
+                {" "}
+                (need {fmtQty(c.required)}, free {fmtQty(c.available)})
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ReviewCell({ order, actions }) {
+  if (!isDecided(order)) {
+    return (
+      <div className="space-y-1.5">
+        <span className="block text-xs font-semibold text-muted-foreground">
+          Awaiting review
+        </span>
+        {actions}
+      </div>
+    );
+  }
+  const approved = order.approval_status === "APPROVED";
+  const { requested } = reviewOf(order);
+  const sent = order.production_request?.items ?? [];
+  const sentUnits = sent.reduce((n, i) => n + Number(i.quantity || 0), 0);
+  return (
+    <div className="space-y-0.5">
+      <span
+        className={cn(
+          "block text-[11px] font-bold uppercase tracking-wide",
+          approved ? "text-emerald-700" : "text-rose-700",
+        )}
+      >
+        {approved ? "Approved" : "Rejected"}
+      </span>
+      <UserCell
+        name={order.approved_by_name}
+        sub={fmtDateTime(order.approved_at)}
+      />
+      {approved && (
+        <p className="text-xs text-muted-foreground">
+          Approved:{" "}
+          <b className="font-semibold tabular-nums text-foreground">
+            {fmtQty(requested)}
+          </b>{" "}
+          units
+          {sent.length > 0 && (
+            <>
+              {" · "}
+              <span className="tabular-nums">{fmtQty(sentUnits)}</span> to Production
+            </>
+          )}
+        </p>
+      )}
+      {order.approval_remarks && (
+        <p className="line-clamp-2 max-w-64 whitespace-normal text-xs text-muted-foreground">
+          {approved ? "Remarks" : "Reason"}: {order.approval_remarks}
+        </p>
+      )}
+    </div>
+  );
+}
+
+const OPS_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "items", label: "Products" },
+  { id: "feasibility", label: "Feasibility" },
+  { id: "timeline", label: "Timeline" },
+];
+
+/* "Component Feasibility" tab: the live stock check while the order waits; what was handed over once it is decided. */
+function FeasibilityTab({ order }) {
+  const waiting = canApprove(order);
+  const { data: plan, isLoading, error } = useGetOrderPlanQuery(order.id, { skip: !waiting });
+  const names = Object.fromEntries(order.items.map((i) => [i.product_id, i.name]));
+  const Heading = ({ children }) => <h3 className="mb-2 text-sm font-semibold">{children}</h3>;
+  const Note = ({ children }) => (
+    <p className="rounded-xl border border-dashed px-3.5 py-3 text-sm text-muted-foreground">{children}</p>
+  );
+
+  if (!waiting) {
+    const prod = order.production_request;
+    const purch = order.purchase_request;
+    return (
+      <div className="space-y-5">
+        <section>
+          <Heading>Sent to Production</Heading>
+          {prod?.items?.length ? (
+            <ul className="space-y-1 rounded-xl border p-3 text-sm">
+              {prod.items.map((i) => (
+                <li key={i.product_id} className="flex justify-between gap-3">
+                  <span>{i.name}</span>
+                  <b className="tabular-nums">{fmtQty(i.quantity)}</b>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Note>Nothing was sent to Production.</Note>
+          )}
+        </section>
+        <section>
+          <Heading>Components sent to Purchase</Heading>
+          {purch?.items?.length ? (
+            <ul className="space-y-1 rounded-xl border p-3 text-sm">
+              {purch.items.map((i) => (
+                <li key={i.component_id} className="flex justify-between gap-3">
+                  <span>
+                    {i.name}
+                    {i.sku ? <span className="text-muted-foreground"> · {i.sku}</span> : null}
+                  </span>
+                  <b className="tabular-nums">
+                    {fmtQty(i.quantity)}
+                    {i.unit ? ` ${i.unit}` : ""}
+                  </b>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Note>No components were sent to Purchase.</Note>
+          )}
+        </section>
+      </div>
+    );
+  }
+
+  if (isLoading) return <Note>Checking stock...</Note>;
+  if (error || !plan) return <Note>Stock check unavailable.</Note>;
+  const verdict = planVerdict(plan);
+  const { ordered, canMake, remaining } = planTotals(plan);
+  const shortages = plan.shortages || [];
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        <Badge variant={verdict.variant}>{verdict.label}</Badge>
+        <span>
+          Requested <b className="tabular-nums">{fmtQty(ordered)}</b>
+        </span>
+        <span>
+          Feasible <b className="tabular-nums text-primary">{fmtQty(canMake)}</b>
+        </span>
+        <span>
+          Short{" "}
+          <b className={cn("tabular-nums", remaining > 0 && "text-destructive")}>{fmtQty(remaining)}</b>
+        </span>
+      </div>
+
+      <section>
+        <Heading>By product</Heading>
+        <div className="overflow-hidden rounded-xl border">
+          <Table data-cards="off">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="px-3! h-8!">Product</TableHead>
+                <TableHead className="px-3! h-8! text-end">Requested</TableHead>
+                <TableHead className="px-3! h-8! text-end">Feasible</TableHead>
+                <TableHead className="px-3! h-8! text-end">Short</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(plan.lines || []).map((l) => (
+                <TableRow key={l.product_id}>
+                  <TableCell className="px-3! py-1! whitespace-normal">
+                    {names[l.product_id] || `Product #${l.product_id}`}
+                  </TableCell>
+                  <TableCell className="px-3! py-1! text-end tabular-nums">{fmtQty(l.ordered)}</TableCell>
+                  <TableCell className={cn("px-3! py-1! text-end font-semibold tabular-nums", l.can_make > 0 ? "text-primary" : "text-destructive")}>
+                    {fmtQty(l.can_make)}
+                  </TableCell>
+                  <TableCell className={cn("px-3! py-1! text-end tabular-nums", Number(l.remaining) > 0 && "font-semibold text-destructive")}>
+                    {fmtQty(l.remaining)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        {plan.missing_bom?.length > 0 && (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Bill of materials missing for {plural(plan.missing_bom.length, "product")}.
+          </p>
+        )}
+      </section>
+
+      <section>
+        <Heading>Components short</Heading>
+        {shortages.length === 0 ? (
+          <Note>
+            {plan.missing_bom?.length
+              ? "No shortage can be worked out until the BOM is completed."
+              : "Nothing to buy: every component is in stock."}
+          </Note>
+        ) : (
+          <div className="overflow-hidden rounded-xl border">
+            <Table data-cards="off">
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="px-3! h-8!">Component</TableHead>
+                  <TableHead className="px-3! h-8! text-end">Needed</TableHead>
+                  <TableHead className="px-3! h-8! text-end">Free</TableHead>
+                  <TableHead className="px-3! h-8! text-end">Short</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {shortages.map((c) => (
+                  <TableRow key={c.component_id}>
+                    <TableCell className="px-3! py-1! whitespace-normal">
+                      {c.name}
+                      {c.sku ? <span className="block text-xs text-muted-foreground">{c.sku}</span> : null}
+                    </TableCell>
+                    <TableCell className="px-3! py-1! text-end tabular-nums">{fmtQty(c.required)}</TableCell>
+                    <TableCell className="px-3! py-1! text-end tabular-nums">{fmtQty(c.available)}</TableCell>
+                    <TableCell className="px-3! py-1! text-end font-semibold tabular-nums text-destructive">
+                      {fmtQty(c.shortage)}
+                      {c.unit ? ` ${c.unit}` : ""}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function CardsSkeleton() {
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="grid gap-3 @2xl:grid-cols-2">
       {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="space-y-3 rounded-xl border bg-card p-4">
+        <div key={i} className="space-y-3 rounded-2xl border bg-card p-4">
           <div className="flex justify-between">
             <Skeleton className="h-5 w-28" />
             <Skeleton className="h-6 w-20 rounded-full" />
@@ -95,6 +412,7 @@ export default function OrderApprovals() {
     rawStatus === "ALL" ? null : isOpsStatus(rawStatus) ? rawStatus : QUEUE; // null = every order
   const query = params.get("q") ?? "";
   const orderId = params.get("order");
+  const tab = OPS_TABS.some((t) => t.id === params.get("tab")) ? params.get("tab") : "overview";
 
   // `replace` keeps typing in the search box from filling the browser history.
   const patch = (changes, replace = false) =>
@@ -148,6 +466,7 @@ export default function OrderApprovals() {
   const filtered = !!(status || query.trim());
   const clearFilters = () => patch({ status: "ALL", q: null });
   const openOrder = (o) => patch({ order: o.id });
+  const closeOrder = () => patch({ order: null, tab: null }, true);
   const askReject = (order) => setDeciding({ order, mode: "reject" });
 
   // Same list feeds the tiles (md and up) and the chips (phones).
@@ -193,8 +512,8 @@ export default function OrderApprovals() {
         </div>
       )}
 
-      {/* filter: tiles on md+, chips on a phone */}
-      <div className="hidden md:block">
+      {/* filter: chips on a phone, tiles on tablets, a dropdown (in the bar below) on desktop */}
+      <div className="hidden md:block lg:hidden">
         <OpsTileGrid>
           {filters.map((f) => (
             <StageTile
@@ -223,12 +542,25 @@ export default function OrderApprovals() {
 
       {/* search: stays under the top bar while a phone scrolls. On a phone the bar stays one line tall:
           the count and the removable filter tag are for bigger screens (the chips already show the filter). */}
-      <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-5 md:bg-transparent md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
+      <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-8 md:bg-transparent lg:mt-0 md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
         <SearchField
           className="min-w-0 flex-1 sm:max-w-xs sm:flex-none"
           value={query}
           onChange={(v) => patch({ q: v }, true)}
           placeholder="Search order, product or who raised it..."
+        />
+        <StatusSelect
+          className="hidden shrink-0 lg:block"
+          label="Filter orders by status"
+          items={filters.map((f) => ({
+            key: f.key,
+            label: f.stage.label,
+            short: f.stage.short,
+            value: f.value,
+            dot: f.stage.dot,
+            active: f.active,
+            onClick: f.onClick,
+          }))}
         />
         <div
           className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground sm:min-h-8 sm:flex-1 sm:flex-wrap sm:justify-end"
@@ -238,13 +570,13 @@ export default function OrderApprovals() {
             Showing {shown.length} of {counts.total}
           </span>
           {status && (
-            <span className="hidden sm:inline-flex">
+            <span className="hidden sm:inline-flex lg:hidden">
               <motion.span
                 key={status}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full py-1 pl-2.5 pr-1 font-semibold ring-1 ring-inset",
+                  "inline-flex items-center gap-1 rounded-full py-1 ps-2.5 pe-1 font-semibold ring-1 ring-inset",
                   stageOf(status).s.pill,
                 )}
               >
@@ -272,12 +604,14 @@ export default function OrderApprovals() {
         </div>
       </div>
 
+      {/* the list follows the width of its own box (not the screen), so the table is never squeezed */}
+      <div className="@container">
       {isLoading ? (
         <>
-          <div className="lg:hidden">
+          <div className="@5xl:hidden">
             <CardsSkeleton />
           </div>
-          <Card className="hidden overflow-hidden lg:block">
+          <Card className="hidden overflow-hidden @5xl:block">
             <TableSkeleton />
           </Card>
         </>
@@ -306,41 +640,42 @@ export default function OrderApprovals() {
       ) : (
         <>
           {/* phones + tablets: cards. Keyed by the filter so they rise in again whenever it changes. */}
-          <CardList
+          <motion.div
             key={`cards-${status ?? "all"}`}
-            className="md:grid-cols-2 lg:hidden"
+            variants={stagger(0.045)}
+            initial="hidden"
+            animate="show"
+            className="grid gap-3 @2xl:grid-cols-2 @5xl:hidden"
           >
             {shown.map((o) => (
-              <ApprovalCard
+              <ApprovalPageCard
                 key={o.id}
                 order={o}
                 canAct={editable}
-                showPlan
-                onOpen={() => openOrder(o)}
-                onReject={() => askReject(o)}
-                onPlan={() => setPlanning(o)}
+                onOpen={openOrder}
+                onReject={askReject}
+                onPlan={setPlanning}
               />
             ))}
-          </CardList>
+          </motion.div>
 
           {/* desktop: table */}
-          <Card className="hidden overflow-hidden lg:block">
+          <Card className="hidden overflow-hidden @5xl:block">
             <Table data-cards="off">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Products</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Stock check</TableHead>
-                  <TableHead>Decision</TableHead>
-                  <TableHead />
+                  <TableHead className="h-8! px-3!">Order details</TableHead>
+                  <TableHead className="h-8! px-3!">Requested products</TableHead>
+                  <TableHead className="h-8! px-3!">Approval status</TableHead>
+                  <TableHead className="h-8! px-3!">Production feasibility</TableHead>
+                  <TableHead className="h-8! px-3!">Review &amp; actions</TableHead>
                 </TableRow>
               </TableHeader>
               {/* keyed by the filter so the rows glide in again whenever the filter changes */}
               <TableBody key={status ?? "all"}>
                 {shown.map((o, i) => {
-                  const extra = o.items.length - SHOW_LINES;
                   const pending = o.approval_status === QUEUE;
+                  const approvable = canApprove(o); // waiting, or partly approved and open for the rest
                   return (
                     <TableRow
                       key={o.id}
@@ -351,10 +686,10 @@ export default function OrderApprovals() {
                       }}
                       className="cursor-pointer motion-reduce:animate-none"
                     >
-                      <TableCell className="min-w-44">
+                      <TableCell className="px-3! py-1! align-top! min-w-44">
                         <button
                           type="button"
-                          className="block text-left font-semibold tabular-nums outline-none transition-colors hover:text-primary focus-visible:text-primary focus-visible:underline"
+                          className="block text-start font-semibold tabular-nums outline-none transition-colors hover:text-primary focus-visible:text-primary focus-visible:underline"
                         >
                           {o.order_number}
                         </button>
@@ -362,68 +697,60 @@ export default function OrderApprovals() {
                           className="block text-xs text-muted-foreground"
                           title={fmtDateTime(o.created_at)}
                         >
-                          {o.created_by_name ? `${o.created_by_name} · ` : ""}
+                          {o.created_by_name
+                            ? `Raised by ${o.created_by_name} · `
+                            : "Raised "}
                           {timeAgo(o.created_at)}
                         </span>
                       </TableCell>
-                      <TableCell className="min-w-56">
-                        <ul className="space-y-0.5">
-                          {o.items.slice(0, SHOW_LINES).map((it) => (
-                            <li key={it.product_id} className="text-sm">
-                              {it.name}{" "}
-                              <span className="text-muted-foreground">
-                                × {fmtQty(it.quantity)}
-                              </span>
-                            </li>
-                          ))}
-                          {extra > 0 && (
-                            <li className="text-xs font-semibold text-primary">
-                              + {plural(extra, "more product")}
-                            </li>
-                          )}
-                        </ul>
+                      <TableCell className="px-3! py-1! align-top! min-w-56">
+                        <ProductsCell items={o.items} />
                       </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col items-start gap-2">
-                          <StatusPill value={o.approval_status} />
-                          <OrderProgress status={o.approval_status} />
-                        </div>
+                      <TableCell className="px-3! py-1! align-top!">
+                        <StatusPill
+                          value={o.approval_status}
+                          className="px-2! py-0.5! text-[10px]!"
+                        />
                       </TableCell>
-                      <TableCell className="min-w-52 whitespace-normal">
-                        {pending ? (
-                          <PlanSummary orderId={o.id} items={o.items} />
+                      <TableCell className="px-3! py-1! align-top! min-w-52 whitespace-normal">
+                        {approvable ? (
+                          <FeasibilityCell orderId={o.id} />
                         ) : (
-                          <span className="text-muted-foreground">-</span>
+                          <span className="text-muted-foreground">Not required</span>
                         )}
                       </TableCell>
-                      <TableCell className="min-w-44">
-                        <DecisionCell order={o} />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {editable && pending && (
-                          <div className="flex justify-end gap-2">
-                            <MktBtn
-                              variant="danger"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                askReject(o);
-                              }}
-                              aria-label={`Reject ${o.order_number}`}
-                            >
-                              <X /> Reject
-                            </MktBtn>
-                            <MktBtn
-                              variant="primary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPlanning(o);
-                              }}
-                              aria-label={`Check stock and send ${o.order_number}`}
-                            >
-                              <PackageCheck /> Check stock &amp; send
-                            </MktBtn>
-                          </div>
-                        )}
+                      <TableCell className="px-3! py-1! align-top! min-w-60">
+                        <ReviewCell
+                          order={o}
+                          actions={
+                            editable && approvable ? (
+                              <div className="flex items-center gap-2">
+                                {pending && (
+                                  <MktBtn
+                                    variant="danger"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      askReject(o);
+                                    }}
+                                    aria-label={`Reject ${o.order_number}`}
+                                  >
+                                    <X /> Reject
+                                  </MktBtn>
+                                )}
+                                <MktBtn
+                                  variant="primary"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPlanning(o);
+                                  }}
+                                  aria-label={`${approveLabel(o)} ${o.order_number}`}
+                                >
+                                  <PackageCheck /> {approveLabel(o)}
+                                </MktBtn>
+                              </div>
+                            ) : null
+                          }
+                        />
                       </TableCell>
                     </TableRow>
                   );
@@ -433,13 +760,33 @@ export default function OrderApprovals() {
           </Card>
         </>
       )}
+      </div>
 
-      {selected && !deciding && !planning && (
-        <ApprovalDetailModal
-          orderId={selected.id}
-          onClose={() => patch({ order: null }, true)}
-        />
-      )}
+      {/* right-side details drawer (same one the Marketing page uses); hidden while a decision popup is open.
+          Its Reject / Check stock buttons stay disabled while the list is refetching, so right after a decision
+          the drawer cannot be used again on the old (still "waiting") copy of the order. */}
+      <OrderDrawer
+        order={selected && !deciding && !planning ? selected : null}
+        tab={tab}
+        onTab={(t) => patch({ tab: t === "overview" ? null : t }, true)}
+        onClose={closeOrder}
+        tabs={OPS_TABS}
+        tabContent={selected ? { feasibility: <FeasibilityTab order={selected} />, timeline: <OpsTimelineTab order={selected} /> } : undefined}
+        actions={
+          selected && editable && canApprove(selected) ? (
+            <>
+              {selected.approval_status === QUEUE && (
+                <MktBtn variant="danger" disabled={isFetching} onClick={() => askReject(selected)}>
+                  <X /> Reject
+                </MktBtn>
+              )}
+              <MktBtn variant="primary" disabled={isFetching} onClick={() => setPlanning(selected)}>
+                <PackageCheck /> {approveLabel(selected)}
+              </MktBtn>
+            </>
+          ) : null
+        }
+      />
       {deciding && (
         <DecisionModal
           order={deciding.order}

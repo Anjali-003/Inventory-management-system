@@ -8,29 +8,30 @@ import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { useToast } from "@/components/toast"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import NewOrderModal from "./NewOrderModal"
-import OrderDetailModal from "./OrderDetailModal"
-import { HeroButton, MktBtn, MktHero, NewOrderFab, SearchField, StageChips, StageTile, StatusPill, TileGrid } from "./mktKit"
+import OrderDrawer from "./OrderDrawer"
+import OrdersTable from "./OrdersTable"
+import { HeroButton, MktBtn, MktHero, NewOrderFab, SearchField, StageChips, StageTile, StatusSelect, StatusPill, TileGrid } from "./mktKit"
 import { PRESS_SOFT, rise, stagger } from "./mktMotion"
-import { ALL_STAGE, OrderProgress, OrderSteps, STAGES, countByStatus, isStatus, newestFirst, plural, stageOf } from "./orderParts"
+import { ALL_STAGE, OrderSteps, STAGES, countByStatus, isDrawerTab, isStatus, newestFirst, plural, stageOf } from "./orderParts"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "./marketingOrdersApi"
 
 const EMPTY = []
 const SHOW_LINES = 2
 
-const isDecided = (o) => o.approval_status === "APPROVED" || o.approval_status === "REJECTED"
+const isDecided = (o) => ["APPROVED", "REJECTED"].includes(o.approval_status)
 
 /*
   Marketing Manager: build an order (Draft), press Send to hand it to the Operations Admin.
   After that the admin's decision (and the reason, when rejected) shows here. Only drafts can still be deleted.
 
-  Layout: from `lg` up the orders are a table; below that (phones and tablets) each order is a card.
-  The status filter is a row of colour tiles from `md` up and a scrolling row of chips on a phone.
+  Layout: the orders are a table while the list box is 1024px wide or more, otherwise each order is a card
+  (container query, so it follows the room the list really has next to the sidebar).
+  The status filter is a scrolling row of chips on a phone, colour tiles on a tablet and a dropdown on a desktop (lg+).
 
   The page state lives in the URL, so a link (or a click on a dashboard figure) opens it already set up:
     ?status=DRAFT | PENDING_APPROVAL | APPROVED | REJECTED   filter
@@ -51,7 +52,7 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
       variants={rise}
       className="relative overflow-hidden rounded-2xl border border-[#dce5e0] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
     >
-      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1 bg-gradient-to-b", stage?.s.grad ?? "from-slate-300 to-slate-400")} />
+      <span aria-hidden className={cn("absolute inset-y-0 start-0 w-1 bg-gradient-to-b", stage?.s.grad ?? "from-slate-300 to-slate-400")} />
 
       <motion.div
         role="button"
@@ -61,7 +62,7 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(o) }
         }}
-        className="cursor-pointer p-4 pl-5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
+        className="cursor-pointer p-4 ps-5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -94,7 +95,7 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
       </motion.div>
 
       {editable && draft && (
-        <div className="flex gap-2 border-t bg-cf-head/70 px-4 py-3 pl-5">
+        <div className="flex gap-2 border-t bg-cf-head/70 px-4 py-3 ps-5">
           <MktBtn variant="danger" size="icon" aria-label={`Delete draft ${o.order_number}`} onClick={() => onDelete(o)}><Trash2 /></MktBtn>
           <MktBtn variant="primary" className="flex-1" disabled={busy} onClick={() => onSend(o)}>
             {busy ? <Loader2 className="animate-spin" /> : <Send />} Send to admin
@@ -107,7 +108,7 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
 
 function CardsSkeleton() {
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="grid gap-3 @2xl:grid-cols-2">
       {Array.from({ length: 3 }).map((_, i) => (
         <div key={i} className="space-y-3 rounded-2xl border bg-card p-4">
           <div className="flex justify-between"><Skeleton className="h-5 w-28" /><Skeleton className="h-6 w-20 rounded-full" /></div>
@@ -129,6 +130,7 @@ export default function MarketingOrders() {
   const status = isStatus(params.get("status")) ? params.get("status") : null
   const query = params.get("q") ?? ""
   const orderId = params.get("order")
+  const tab = isDrawerTab(params.get("tab")) ? params.get("tab") : "overview"
   const adding = editable && params.get("new") === "1"
 
   // `replace` keeps typing in the search box from filling the browser history.
@@ -166,7 +168,8 @@ export default function MarketingOrders() {
   const filtered = !!(status || query.trim())
   const clearFilters = () => patch({ status: null, q: null })
   const openNew = () => patch({ new: "1" })
-  const openOrder = (o) => patch({ order: o.id })
+  const openOrder = (o, drawerTab) => patch({ order: o.id, tab: drawerTab && drawerTab !== "overview" ? drawerTab : null })
+  const closeOrder = () => patch({ order: null, tab: null }, true)
 
   const sendOrder = async (o) => {
     setBusyId(o.id)
@@ -185,7 +188,7 @@ export default function MarketingOrders() {
     try {
       await remove(o.id).unwrap()
       toast.success(`${o.order_number} deleted`)
-      if (String(o.id) === orderId) patch({ order: null }, true)
+      if (String(o.id) === orderId) closeOrder()
     } catch (err) {
       toast.error(errorMessage(err, "Could not delete this order."))
     } finally {
@@ -220,8 +223,8 @@ export default function MarketingOrders() {
 
       {error && <div className="mb-4"><Notice title="Something went wrong">Could not load orders. Check that the server is running.</Notice></div>}
 
-      {/* filter: tiles on md+, chips on a phone */}
-      <div className="hidden md:block">
+      {/* filter: chips on a phone, tiles on tablets, a dropdown (in the bar below) on desktop */}
+      <div className="hidden md:block lg:hidden">
         <TileGrid>
           {filters.map((f) => (
             <StageTile
@@ -243,17 +246,22 @@ export default function MarketingOrders() {
 
       {/* search: stays under the top bar while a phone scrolls. On a phone the bar stays one line tall:
           the count and the removable filter tag are for bigger screens (the chips already show the filter). */}
-      <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-5 md:bg-transparent md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
+      <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-8 md:bg-transparent lg:mt-0 md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
         <SearchField className="min-w-0 flex-1 sm:max-w-xs sm:flex-none" value={query} onChange={(v) => patch({ q: v }, true)} placeholder="Search order or product..." />
+        <StatusSelect
+          className="hidden shrink-0 lg:block"
+          label="Filter orders by status"
+          items={filters.map((f) => ({ key: f.key, label: f.stage.label, short: f.stage.short, value: f.value, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
+        />
         <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground sm:min-h-8 sm:flex-1 sm:flex-wrap sm:justify-end" aria-live="polite">
           <span className="hidden tabular-nums sm:inline">Showing {shown.length} of {counts.total}</span>
           {status && (
-            <span className="hidden sm:inline-flex">
+            <span className="hidden sm:inline-flex lg:hidden">
               <motion.span
                 key={status}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className={cn("inline-flex items-center gap-1 rounded-full py-1 pl-2.5 pr-1 font-semibold ring-1 ring-inset", stageOf(status).s.pill)}
+                className={cn("inline-flex items-center gap-1 rounded-full py-1 ps-2.5 pe-1 font-semibold ring-1 ring-inset", stageOf(status).s.pill)}
               >
                 {stageOf(status).label}
                 <button type="button" aria-label={`Remove ${stageOf(status).label} filter`} onClick={() => patch({ status: null })} className="grid size-5 place-items-center rounded-full outline-none transition-colors hover:bg-black/10 focus-visible:ring-2 focus-visible:ring-ring/60">
@@ -266,10 +274,12 @@ export default function MarketingOrders() {
         </div>
       </div>
 
+      {/* the list follows the width of its own box (not the screen), so the table is never squeezed */}
+      <div className="@container">
       {isLoading ? (
         <>
-          <div className="lg:hidden"><CardsSkeleton /></div>
-          <Card className="hidden overflow-hidden lg:block"><TableSkeleton /></Card>
+          <div className="@5xl:hidden"><CardsSkeleton /></div>
+          <Card className="hidden overflow-hidden @5xl:block"><TableSkeleton /></Card>
         </>
       ) : shown.length === 0 ? (
         <Card>
@@ -293,100 +303,42 @@ export default function MarketingOrders() {
             variants={stagger(0.045)}
             initial="hidden"
             animate="show"
-            className="grid gap-3 md:grid-cols-2 lg:hidden"
+            className="grid gap-3 @2xl:grid-cols-2 @5xl:hidden"
           >
             {shown.map((o) => (
               <OrderCard key={o.id} o={o} editable={editable} busy={busyId === o.id} onOpen={openOrder} onSend={sendOrder} onDelete={setConfirmDelete} />
             ))}
           </motion.div>
 
-          {/* desktop: table */}
-          <Card className="hidden overflow-hidden lg:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Order</TableHead>
-                  <TableHead>Products</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Admin decision</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              {/* keyed by the filter so the rows glide in again whenever the filter changes */}
-              <TableBody key={status ?? "all"}>
-                {shown.map((o, i) => {
-                  const extra = o.items.length - SHOW_LINES
-                  return (
-                    <TableRow
-                      key={o.id}
-                      onClick={() => openOrder(o)}
-                      style={{ animationDelay: `${Math.min(i, 8) * 30}ms`, animationFillMode: "backwards" }}
-                      className="cursor-pointer motion-reduce:animate-none"
-                    >
-                      <TableCell className="min-w-44">
-                        <button type="button" className="block text-left font-semibold tabular-nums outline-none transition-colors hover:text-primary focus-visible:text-primary focus-visible:underline">
-                          {o.order_number}
-                        </button>
-                        <span className="block text-xs text-muted-foreground" title={fmtDateTime(o.created_at)}>
-                          {o.created_by_name ? `${o.created_by_name} · ` : ""}{timeAgo(o.created_at)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="min-w-56">
-                        <ul className="space-y-0.5">
-                          {o.items.slice(0, SHOW_LINES).map((it) => (
-                            <li key={it.product_id} className="text-sm">{it.name} <span className="text-muted-foreground">× {fmtQty(it.quantity)}</span></li>
-                          ))}
-                          {extra > 0 && <li className="text-xs font-semibold text-primary">+ {plural(extra, "more product")}</li>}
-                        </ul>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col items-start gap-2">
-                          <StatusPill value={o.approval_status} />
-                          <OrderProgress status={o.approval_status} />
-                        </div>
-                      </TableCell>
-                      <TableCell className="min-w-44">
-                        {isDecided(o) ? (
-                          <div className="space-y-0.5">
-                            <UserCell name={o.approved_by_name} sub={fmtDateTime(o.approved_at)} />
-                            {o.approval_remarks && <p className="line-clamp-2 max-w-64 whitespace-normal text-xs text-muted-foreground">{o.approval_remarks}</p>}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {editable && o.approval_status === "DRAFT" && (
-                          <div className="flex justify-end gap-2">
-                            <MktBtn variant="danger" size="icon" aria-label={`Delete draft ${o.order_number}`} onClick={(e) => { e.stopPropagation(); setConfirmDelete(o) }}><Trash2 /></MktBtn>
-                            <MktBtn variant="primary" disabled={busyId === o.id} onClick={(e) => { e.stopPropagation(); sendOrder(o) }}>
-                              {busyId === o.id ? <Loader2 className="animate-spin" /> : <Send />} Send to admin
-                            </MktBtn>
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </Card>
+          {/* desktop: table (4 columns: Order ID, Order Items, Order Status, Operations Review) */}
+          <OrdersTable
+            className="hidden @5xl:block"
+            orders={shown}
+            filterKey={status ?? "all"}
+            editable={editable}
+            busyId={busyId}
+            onOpen={openOrder}
+            onViewItems={(o) => openOrder(o, "items")}
+            onSend={sendOrder}
+            onDelete={setConfirmDelete}
+          />
         </>
       )}
+      </div>
 
       {editable && <NewOrderFab onClick={openNew} />}
 
       {adding && <NewOrderModal onClose={() => patch({ new: null }, true)} />}
-      {selected && !confirmDelete && (
-        <OrderDetailModal
-          order={selected}
-          editable={editable}
-          busy={busyId === selected.id}
-          onClose={() => patch({ order: null }, true)}
-          onSend={sendOrder}
-          onDelete={setConfirmDelete}
-        />
-      )}
+      <OrderDrawer
+        order={selected && !confirmDelete ? selected : null}
+        tab={tab}
+        onTab={(t) => patch({ tab: t === "overview" ? null : t }, true)}
+        editable={editable}
+        busy={selected ? busyId === selected.id : false}
+        onClose={closeOrder}
+        onSend={sendOrder}
+        onDelete={setConfirmDelete}
+      />
       <ConfirmDialog
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}

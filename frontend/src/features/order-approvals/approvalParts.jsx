@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { fmtQty } from "@/lib/stock"
@@ -22,7 +23,7 @@ export function OrderLines({ items }) {
         <TableHeader>
           <TableRow>
             <TableHead>Product</TableHead>
-            <TableHead className="text-right">Quantity</TableHead>
+            <TableHead className="text-end">Quantity</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -32,7 +33,7 @@ export function OrderLines({ items }) {
                 <p className="font-medium">{it.name}</p>
                 {it.sku && <p className="text-xs text-muted-foreground">{it.sku}</p>}
               </TableCell>
-              <TableCell className="text-right tabular-nums">{fmtQty(it.quantity)}</TableCell>
+              <TableCell className="text-end tabular-nums">{fmtQty(it.quantity)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -42,6 +43,11 @@ export function OrderLines({ items }) {
 }
 
 /* ---------- order planning (what can be built now / what is short) ---------- */
+
+/** Only an order that waits for a decision can be approved (as a whole) or rejected. */
+export const isWaiting = (o) => o?.approval_status === "PENDING_APPROVAL"
+export const canApprove = (o) => isWaiting(o)
+export const approveLabel = () => "Check stock & send"
 
 /** Totals of one plan: how many units can be made now, how many are left over. */
 export function planTotals(plan) {

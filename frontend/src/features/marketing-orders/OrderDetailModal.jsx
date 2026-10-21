@@ -29,7 +29,7 @@ export default function OrderDetailModal({ order, editable, busy, onClose, onSen
       footer={
         <>
           {editable && draft && (
-            <MktBtn variant="danger" className="sm:mr-auto" disabled={busy} onClick={() => onDelete(order)}>
+            <MktBtn variant="danger" className="sm:me-auto" disabled={busy} onClick={() => onDelete(order)}>
               <Trash2 /> Delete draft
             </MktBtn>
           )}
@@ -51,7 +51,7 @@ export default function OrderDetailModal({ order, editable, busy, onClose, onSen
             animate={{ opacity: 1, scale: 1, transition: SPRING_SOFT }}
             className={cn("relative overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg", stage.s.grad, stage.s.glow)}
           >
-            <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
+            <span aria-hidden className="pointer-events-none absolute -end-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
             <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/60" />
             <div className="relative flex items-center gap-3.5">
               <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/20 ring-1 ring-inset ring-white/30">
@@ -61,7 +61,7 @@ export default function OrderDetailModal({ order, editable, busy, onClose, onSen
                 <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">{stage.short === "Pending" ? "Waiting for approval" : stage.short}</p>
                 <p className="mt-0.5 text-xs text-white/80">{stage.hint}</p>
               </div>
-              <div className="shrink-0 text-right">
+              <div className="shrink-0 text-end">
                 <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(units)}</p>
                 <p className="mt-1 text-[11px] text-white/80">units</p>
               </div>
@@ -78,6 +78,15 @@ export default function OrderDetailModal({ order, editable, busy, onClose, onSen
           <h3 className="text-sm font-semibold">Products</h3>
           <OrderItems items={order.items} />
         </section>
+
+        {order.production_request?.items?.length > 0 && (
+          <section className="space-y-2.5">
+            <h3 className="text-sm font-semibold">
+              Sent to production
+            </h3>
+            <OrderItems items={order.production_request.items} />
+          </section>
+        )}
       </div>
     </Modal>
   )

@@ -1,16 +1,18 @@
 const db = require("../../config/db");
 const AppError = require("../../shared/AppError");
 const { createFinishedGood } = require("../finished-goods/finished-goods.service");
+const { targetQuantitySql } = require("../production/production-target");
+const { refreshOrderStatus } = require("../orders/order-status");
 
+// ordered_quantity = what this production run has to build for its product (approved quantity, see production-target.js)
 const productionQuery = `
   SELECT po.id, po.order_id, po.status, po.quantity_to_produce, po.quantity_completed,
-         o.order_number, o.status AS order_status, oi.product_id, oi.quantity AS ordered_quantity,
+         o.order_number, o.status AS order_status, po.product_id, ${targetQuantitySql("po", "o")} AS ordered_quantity,
          p.sku AS product_sku, p.name AS product_name
   FROM production_orders po
   JOIN orders o ON o.id = po.order_id
-  JOIN order_items oi ON oi.order_id = o.id
-  JOIN products p ON p.id = oi.product_id
-  WHERE po.id = ? ORDER BY oi.id LIMIT 1
+  JOIN products p ON p.id = po.product_id
+  WHERE po.id = ? LIMIT 1
 `;
 
 async function getProductionOrder(connection, productionId) {
@@ -318,20 +320,14 @@ async function finishOrderIfReady(
     Number(qualityControl.quantityRejected) === 0;
 
   if (!ready) {
-    const status =
-      Number(production.quantity_completed) < ordered
-        ? "IN_PRODUCTION"
-        : "TESTING";
-    await connection.query(
-      `UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN ('COMPLETED')`,
-      [status, production.order_id],
-    );
+    // the order's status follows ALL of its products, not just this one
+    await refreshOrderStatus(connection, production.order_id);
     return null;
   }
 
   const [rows] = await connection.query(
-    `SELECT COALESCE(SUM(quantity), 0) AS quantity FROM finished_goods WHERE order_id = ?`,
-    [production.order_id],
+    `SELECT COALESCE(SUM(quantity), 0) AS quantity FROM finished_goods WHERE production_id = ?`,
+    [production.id],
   );
   const existing = Number(rows[0].quantity);
   const missing = Math.max(0, ordered - existing);
@@ -346,10 +342,7 @@ async function finishOrderIfReady(
       userId,
     );
   } else {
-    await connection.query(
-      `UPDATE orders SET status = 'PACKAGING', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status NOT IN ('COMPLETED')`,
-      [production.order_id],
-    );
+    await refreshOrderStatus(connection, production.order_id);
   }
 
   return {
@@ -551,7 +544,7 @@ async function getQualityControlOrders() {
     o.status AS order_status,
     po.quantity_to_produce,
     po.quantity_completed,
-             po.started_at, po.completed_at, o.order_number, oi.quantity AS ordered_quantity,
+             po.started_at, po.completed_at, o.order_number, ${targetQuantitySql("po", "o")} AS ordered_quantity,
              p.name AS product_name, p.sku AS product_sku,
              COALESCE((SELECT SUM(t.quantity_tested) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_tested,
              COALESCE((SELECT SUM(t.quantity_passed) FROM testing_records t WHERE t.production_id = po.id),0) AS quantity_passed,
@@ -563,8 +556,7 @@ async function getQualityControlOrders() {
              (SELECT u.name FROM quality_control_records q JOIN users u ON u.id = q.checked_by WHERE q.production_id = po.id ORDER BY q.id DESC LIMIT 1) AS last_checked_by
       FROM production_orders po
       JOIN orders o ON o.id = po.order_id
-      JOIN order_items oi ON oi.order_id = o.id
-      JOIN products p ON p.id = oi.product_id
+      JOIN products p ON p.id = po.product_id
       WHERE po.quantity_completed > 0
       ORDER BY po.id DESC
     `);

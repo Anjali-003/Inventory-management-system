@@ -23,6 +23,8 @@ const ACCESS = {
         finishedGoods: "edit",
         // IQC-approved purchases waiting to be accepted into stock
         incomingStock: "edit",
+        // "issue these components" requests from approved orders (dashboard)
+        notifications: "edit",
         // can look at these, cannot change
         iqc: "view",
         purchase: "view"

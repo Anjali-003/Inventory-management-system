@@ -2,7 +2,7 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { motion } from "motion/react"
-import { Check, CheckCircle2, ClipboardList, FilePen, Hourglass, X, XCircle } from "lucide-react"
+import { Check, CheckCircle2, CircleDot, ClipboardList, FilePen, Hourglass, X, XCircle } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fmtDateTime } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -112,12 +112,12 @@ export function OrderPipeline({ counts, loading, stages = STAGES, hrefFor = orde
   })
 
   return (
-    <div className="px-4 py-5 sm:px-5">
+    <div className="@container px-4 py-5 sm:px-5">
       {counts.total === 0 ? (
         <div className="h-3.5 rounded-full bg-muted" aria-hidden />
       ) : (
         <motion.div
-          className="flex h-3.5 origin-left gap-1"
+          className="flex h-3.5 origin-left gap-1 rtl:origin-right"
           role="list"
           aria-label="Orders by stage"
           initial={{ scaleX: 0.15, opacity: 0 }}
@@ -142,20 +142,20 @@ export function OrderPipeline({ counts, loading, stages = STAGES, hrefFor = orde
         </motion.div>
       )}
 
-      <ul className={cn("mt-4 grid grid-cols-2 gap-2", stages.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-4")}>
+      <ul className={cn("mt-4 grid grid-cols-2 gap-2", stages.length === 3 ? "@2xl:grid-cols-3" : "@2xl:grid-cols-4")}>
         {stages.map((s) => (
           <li key={s.status}>
             <Link
               to={hrefFor(s.status)}
               className={cn(
-                "flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 outline-none transition-[background-color,opacity,transform] duration-150 hover:bg-muted active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring/60",
+                "flex items-start gap-2.5 rounded-xl px-2.5 py-2.5 outline-none transition-[background-color,opacity,transform] duration-150 hover:bg-muted active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring/60",
                 hover && hover !== s.status && "opacity-60"
               )}
               {...hoverProps(s.status)}
             >
-              <span className={cn("size-2.5 shrink-0 rounded-full", s.dot)} aria-hidden />
+              <span className={cn("mt-[3px] size-2.5 shrink-0 rounded-full", s.dot)} aria-hidden />
               <span className="min-w-0">
-                <span className="block truncate text-xs text-muted-foreground">{s.label}</span>
+                <span className="block break-words text-xs leading-snug text-muted-foreground">{s.label}</span>
                 <span className="block text-sm font-bold tabular-nums">{counts[s.status]}</span>
               </span>
             </Link>
@@ -219,13 +219,13 @@ export function OrderSteps({ status, className }) {
         <div key={label} className="min-w-0">
           <span className="block h-1.5 overflow-hidden rounded-full bg-slate-200/80">
             <motion.span
-              className={cn("block h-full origin-left rounded-full", state === "current" ? stage?.bar : FILL[state])}
+              className={cn("block h-full origin-left rounded-full rtl:origin-right", state === "current" ? stage?.bar : FILL[state])}
               initial={{ scaleX: 0 }}
               animate={{ scaleX: state === "todo" ? 0 : state === "current" ? 0.5 : 1 }}
               transition={{ ...SPRING_SOFT, delay: 0.08 * i }}
             />
           </span>
-          <span className={cn("mt-1.5 block truncate text-[10px] font-medium", state === "todo" ? "text-cf-faint" : state === "fail" ? "text-destructive" : "text-muted-foreground")}>
+          <span className={cn("mt-1.5 block text-[10px] font-medium leading-tight", state === "todo" ? "text-cf-faint" : state === "fail" ? "text-destructive" : "text-muted-foreground")}>
             {label}
           </span>
         </div>
@@ -245,7 +245,7 @@ const MARK = {
 export function OrderTimeline({ order }) {
   const status = order.approval_status
   const steps = orderSteps(status)
-  const decided = status === "APPROVED" || status === "REJECTED"
+  const decided = ["APPROVED", "REJECTED"].includes(status)
 
   const rows = [
     {
@@ -280,7 +280,7 @@ export function OrderTimeline({ order }) {
             animate={{ opacity: 1, x: 0 }}
             transition={{ ...SPRING, delay: 0.06 * i }}
           >
-            {!last && <span aria-hidden className={cn("absolute left-[13px] top-7 h-[calc(100%-1.75rem)] w-0.5 rounded-full", state === "done" ? "bg-emerald-300" : "bg-border")} />}
+            {!last && <span aria-hidden className={cn("absolute start-[13px] top-7 h-[calc(100%-1.75rem)] w-0.5 rounded-full", state === "done" ? "bg-emerald-300" : "bg-border")} />}
             <span className={cn("relative z-10 grid size-7 shrink-0 place-items-center rounded-full", MARK[state])}>
               {state === "done" && <Check className="size-4" strokeWidth={3} aria-hidden />}
               {state === "fail" && <X className="size-4" strokeWidth={3} aria-hidden />}
@@ -301,3 +301,41 @@ export function OrderTimeline({ order }) {
     </ol>
   )
 }
+
+/* ------------------------------------------------------------ review numbers (table + drawer) */
+
+export const DECIDED_STATUSES = ["APPROVED", "REJECTED"]
+export const sumQty = (lines = []) => lines.reduce((s, l) => s + Number(l.quantity || 0), 0)
+
+/*
+  What the Operations Admin decided, in numbers. There is no partial approval: an approved order is approved as a
+  whole (approved = requested) and a rejected one has 0 approved.
+  What the stock could cover at that moment goes to production: see sentToProduction().
+*/
+export function reviewOf(o) {
+  const requested = o.totals?.quantity ?? sumQty(o.items)
+  const approved = o.approval_status === "APPROVED" ? requested : 0
+  return { requested, approved, ratio: requested > 0 ? Math.min(approved / requested, 1) : 0 }
+}
+
+/* Approved quantity of ONE product line. null while the order has no decision yet. */
+export function approvedFor(o, line) {
+  if (!DECIDED_STATUSES.includes(o.approval_status)) return null
+  return o.approval_status === "APPROVED" ? Number(line.quantity) : 0
+}
+
+/* Units of ONE product line the admin sent to production when approving. null when nothing was sent. */
+export function sentToProduction(o, line) {
+  if (!o.production_request) return null
+  const hit = o.production_request.items.find((i) => i.product_id === line.product_id)
+  return hit ? Number(hit.quantity) : 0
+}
+
+/* ------------------------------------------------------------ order drawer tabs */
+
+export const DRAWER_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "items", label: "Items & Quantities" },
+  { id: "timeline", label: "Timeline" },
+]
+export const isDrawerTab = (value) => DRAWER_TABS.some((t) => t.id === value)

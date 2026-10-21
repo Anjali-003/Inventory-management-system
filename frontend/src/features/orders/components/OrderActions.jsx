@@ -20,7 +20,7 @@ export default function OrderActions({ order, onCheck, onStart, className }) {
     )
   }
 
-  if (remainingToStart > 0 && ["PENDING", "IN_PRODUCTION", "TESTING"].includes(status)) {
+  if (remainingToStart > 0 && ["PENDING", "IN_PRODUCTION", "TESTING", "PACKAGING", "DISPATCHED"].includes(status)) {
     return (
       <div className={baseClass}>
         <Button variant="outline" size="sm" onClick={() => onCheck(order)}>

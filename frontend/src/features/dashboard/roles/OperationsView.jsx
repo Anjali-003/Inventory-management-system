@@ -11,6 +11,7 @@ import { HeroLink, MktHero, StageTile } from "@/features/marketing-orders/mktKit
 import { OrderPipeline, countByStatus, newestFirst, plural } from "@/features/marketing-orders/orderParts"
 import { useGetPurchasesQuery } from "@/features/purchasing/purchasingApi"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
+import DepartmentOverview from "../DepartmentOverview"
 import { ListPanel, useDrill } from "../DashboardKit"
 import { purchaseRow, stockRow } from "../rows"
 
@@ -72,13 +73,7 @@ export default function OperationsView() {
         ))}
       </OpsTileGrid>
 
-      <Reveal delay={0.2} className="mt-4">
-        <OpsPanel title="Order pipeline" description="Tap a stage to see only those orders." to={opsHref("ALL")} toLabel="All orders">
-          <OrderPipeline counts={counts} loading={appr.isLoading} stages={OPS_STAGES} hrefFor={opsHref} />
-        </OpsPanel>
-      </Reveal>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Reveal delay={0.3}>
           <OpsPanel title="Waiting for approval" description="Newest first. Open an order to check stock and decide." loading={appr.isLoading} to={d.pending.length > 5 ? opsHref(QUEUE) : null} toLabel={`View all (${d.pending.length})`}>
             {d.pending.length === 0 ? (
@@ -104,6 +99,8 @@ export default function OperationsView() {
           <ListPanel table rightLabel="Available / min" drill={drill} loading={loading} title="Components to reorder" description="Available stock is at or below the minimum." rows={d.low} to="/inventory?filter=low" toLabel="Open Inventory" emptyIcon={d.low.length ? AlertTriangle : CheckCircle2} empty="All components are above minimum" />
         </Reveal>
       </div>
+
+      <DepartmentOverview className="mt-6" depts={["iqc", "store", "purchase"]} />
 
       {openedId != null && <ApprovalDetailModal orderId={openedId} onClose={() => setOpenedId(null)} />}
       {drill.host}
