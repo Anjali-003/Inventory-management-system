@@ -1,8 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
+import { useEffect, useId, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { Link } from "react-router-dom"
-import { motion } from "motion/react"
-import { ArrowUpRight, Minus, Plus, Search, X } from "lucide-react"
+import { AnimatePresence, motion } from "motion/react"
+import { ArrowUpRight, Check, ChevronDown, Minus, Plus, Search, X } from "lucide-react"
 import { CountUp } from "@/components/HistoryUI"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { fmtQty } from "@/lib/stock"
@@ -34,8 +35,8 @@ export function MktHero({ eyebrow, title, description, children, className }) {
         className
       )}
     >
-      <span aria-hidden className="pointer-events-none absolute -right-10 -top-16 size-52 rounded-full bg-white/15 blur-2xl" />
-      <span aria-hidden className="pointer-events-none absolute -bottom-24 left-1/3 size-52 rounded-full bg-amber-300/20 blur-3xl" />
+      <span aria-hidden className="pointer-events-none absolute -end-10 -top-16 size-52 rounded-full bg-white/15 blur-2xl" />
+      <span aria-hidden className="pointer-events-none absolute -bottom-24 start-1/3 size-52 rounded-full bg-amber-300/20 blur-3xl" />
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/50" />
       <div className="relative flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
@@ -94,7 +95,7 @@ export function NewOrderFab({ to, onClick }) {
         initial={{ opacity: 0, scale: 0.8, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0, transition: { ...SPRING_POP, delay: 0.3 } }}
         whileTap={PRESS}
-        className="fixed right-4 z-40 md:hidden"
+        className="fixed end-4 z-40 md:hidden"
         style={{ bottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
         {to ? (
@@ -142,7 +143,7 @@ export function StageTile({ stage, value, loading, active, solid, to, onClick, c
     <>
       {/* the colour layer fades, so toggling a filter never "flashes" */}
       <span aria-hidden className={cn("absolute inset-0 bg-gradient-to-br transition-opacity duration-300", stage.s.grad, on ? "opacity-100" : "opacity-0")} />
-      <span aria-hidden className={cn("pointer-events-none absolute -right-6 -top-8 size-24 rounded-full bg-white/25 blur-xl transition-opacity duration-300", on ? "opacity-100" : "opacity-0")} />
+      <span aria-hidden className={cn("pointer-events-none absolute -end-6 -top-8 size-24 rounded-full bg-white/25 blur-xl transition-opacity duration-300", on ? "opacity-100" : "opacity-0")} />
       <span aria-hidden className={cn("absolute inset-x-0 top-0 h-px bg-white/60 transition-opacity duration-300", on ? "opacity-100" : "opacity-0")} />
 
       <span className="relative flex items-start justify-between">
@@ -173,7 +174,7 @@ export function StageTile({ stage, value, loading, active, solid, to, onClick, c
   )
 
   const cls = cn(
-    "group relative block w-full overflow-hidden rounded-2xl border p-4 text-left outline-none transition-[box-shadow,border-color] duration-300 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2",
+    "group relative block w-full overflow-hidden rounded-2xl border p-4 text-start outline-none transition-[box-shadow,border-color] duration-300 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2",
     on ? cn("border-transparent shadow-lg", stage.s.glow) : "border-[#dce5e0] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] hover:shadow-md"
   )
 
@@ -227,8 +228,8 @@ export function StatusPill({ value, short, className }) {
   if (!stage) return <span className={cn("inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600", className)}>{value || "Unknown"}</span>
   const Icon = stage.icon
   return (
-    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset", stage.s.pill, className)}>
-      <Icon className="size-3.5 shrink-0" aria-hidden />
+    <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset", short ? "whitespace-nowrap rounded-full" : "max-w-60 whitespace-normal rounded-2xl text-start leading-snug", stage.s.pill, className)}>
+      <Icon className={cn("size-3.5 shrink-0", !short && "self-start")} aria-hidden />
       {short ? stage.short : stage.label}
     </span>
   )
@@ -240,21 +241,112 @@ export function StatusPill({ value, short, className }) {
 export function SearchField({ value, onChange, placeholder = "Search", className }) {
   return (
     <div className={cn("relative w-full", className)}>
-      <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-cf-faint" aria-hidden />
+      <Search className="pointer-events-none absolute start-3.5 top-1/2 size-4 -translate-y-1/2 text-cf-faint" aria-hidden />
       <input
         type="search"
         enterKeyHint="search"
-        className="h-11 w-full rounded-xl border border-cf-line-strong bg-card pl-10 pr-10 text-base outline-none transition-shadow placeholder:text-cf-faint focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15 sm:h-9 sm:text-[13px] [&::-webkit-search-cancel-button]:hidden"
+        className="h-11 w-full rounded-xl border border-cf-line-strong bg-card ps-10 pe-10 text-base outline-none transition-shadow placeholder:text-cf-faint focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15 sm:h-9 sm:text-[13px] [&::-webkit-search-cancel-button]:hidden"
         placeholder={placeholder}
         aria-label={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
       {value && (
-        <button type="button" aria-label="Clear search" onClick={() => onChange("")} className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-90 sm:size-7">
+        <button type="button" aria-label="Clear search" onClick={() => onChange("")} className="absolute end-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-90 sm:size-7">
           <X className="size-4" />
         </button>
       )}
+    </div>
+  )
+}
+
+
+/**
+  Status filter as a dropdown (desktop). `items` = [{ key, label, value, dot, active, onClick }].
+  Shows the selected status on the button; the list shows every status with its colour dot and count.
+  Keyboard: Enter / Space / arrows open it, arrows move, Enter picks, Esc closes.
+*/
+export function StatusSelect({ items, label = "Status", className }) {
+  const [open, setOpen] = useState(false)
+  const [cursor, setCursor] = useState(0)
+  const root = useRef(null)
+  const id = useId()
+  const current = items.find((i) => i.active) ?? items[0]
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e) => { if (!root.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener("pointerdown", onDown)
+    return () => document.removeEventListener("pointerdown", onDown)
+  }, [open])
+
+  const openList = () => {
+    setCursor(Math.max(0, items.findIndex((i) => i.active)))
+    setOpen(true)
+  }
+  const pick = (it) => { it.onClick(); setOpen(false) }
+
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") { setOpen(false); return }
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault()
+      if (!open) return openList()
+      setCursor((c) => (c + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length)
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      if (!open) openList()
+      else pick(items[cursor])
+    }
+  }
+
+  return (
+    <div ref={root} className={cn("relative", className)}>
+      <button
+        type="button"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={id}
+        aria-label={label}
+        onClick={() => (open ? setOpen(false) : openList())}
+        onKeyDown={onKeyDown}
+        className="flex h-9 w-full min-w-56 items-center gap-2 rounded-xl border border-cf-line-strong bg-card px-3 text-start text-[13px] outline-none transition-shadow focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15"
+      >
+        <span className={cn("size-2 shrink-0 rounded-full", current.dot)} aria-hidden />
+        <span className="min-w-0 flex-1 truncate font-medium">{current.short ?? current.label}</span>
+        <span className="rounded-full bg-slate-100 px-1.5 text-[11px] font-semibold tabular-nums text-slate-600">{current.value}</span>
+        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden />
+      </button>
+
+      <AnimatePresence>
+      {open && (
+        <motion.ul
+          id={id}
+          role="listbox"
+          aria-label={label}
+          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1, transition: SPRING }}
+          exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
+          className="absolute start-0 top-full z-30 mt-1.5 w-72 max-w-[calc(100vw-2rem)] origin-top overflow-hidden rounded-xl border border-cf-line-strong bg-card p-1 shadow-lg"
+        >
+          {items.map((it, i) => (
+            <li key={it.key} role="option" aria-selected={!!it.active}>
+              <button
+                type="button"
+                onClick={() => pick(it)}
+                onMouseEnter={() => setCursor(i)}
+                className={cn("flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-start text-[13px] outline-none transition-colors", i === cursor ? "bg-muted" : "bg-transparent")}
+              >
+                <span className={cn("size-2 shrink-0 rounded-full", it.dot)} aria-hidden />
+                <span className={cn("min-w-0 flex-1 truncate", it.active && "font-semibold")}>{it.short ?? it.label}</span>
+                <span className="text-xs font-semibold tabular-nums text-muted-foreground">{it.value}</span>
+                {it.active ? <Check className="size-4 text-primary" aria-hidden /> : <span className="size-4" aria-hidden />}
+              </button>
+            </li>
+          ))}
+        </motion.ul>
+      )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -299,7 +391,7 @@ export function OrderItems({ items }) {
           <TableHeader>
             <TableRow>
               <TableHead>Product</TableHead>
-              <TableHead className="text-right">Quantity</TableHead>
+              <TableHead className="text-end">Quantity</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -309,12 +401,12 @@ export function OrderItems({ items }) {
                   <p className="font-medium">{it.name}</p>
                   {it.sku && <p className="text-xs text-muted-foreground">{it.sku}</p>}
                 </TableCell>
-                <TableCell className="text-right font-semibold tabular-nums">{fmtQty(it.quantity)}</TableCell>
+                <TableCell className="text-end font-semibold tabular-nums">{fmtQty(it.quantity)}</TableCell>
               </TableRow>
             ))}
             <TableRow className="bg-cf-head">
               <TableCell className="text-xs font-semibold text-muted-foreground">Total</TableCell>
-              <TableCell className="text-right font-bold tabular-nums">{fmtQty(units)}</TableCell>
+              <TableCell className="text-end font-bold tabular-nums">{fmtQty(units)}</TableCell>
             </TableRow>
           </TableBody>
         </Table>

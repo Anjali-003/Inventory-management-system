@@ -1,5 +1,6 @@
 
-import { Navigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 
 import { useGetMeQuery } from "@/features/auth/authApi";
 import { usePermissions } from "@/features/auth/usePermissions";
@@ -41,10 +42,47 @@ const VIEWS = {
   [ROLES.HR_MANAGER]: HRView,
 };
 
+/*
+  A role can open another department's MAIN dashboard
+  in read-only mode using:
+  /dashboard?dept=iqc
+  /dashboard?dept=store
+  /dashboard?dept=purchase
+
+  Used by the Department Overview cards on the Purchase,
+  IQC and Store dashboards.
+
+  Access is allowed only if the role can view that department.
+*/
+const DEPT_VIEWS = {
+  iqc: {
+    label: "IQC",
+    module: "iqc",
+    View: IqcView,
+  },
+  store: {
+    label: "Store",
+    module: "inventory",
+    View: StoreView,
+  },
+  purchase: {
+    label: "Purchase",
+    module: "purchase",
+    View: PurchaseView,
+  },
+};
+
 export default function Dashboard() {
   const { data: user, isLoading: userLoading } = useGetMeQuery();
-  const { role: permissionRole, loading: permissionsLoading, homePath } =
-    usePermissions();
+
+  const {
+    role: permissionRole,
+    loading: permissionsLoading,
+    homePath,
+    canView,
+  } = usePermissions();
+
+  const [params] = useSearchParams();
 
   // Wait for authentication and permissions to load.
   if (userLoading || permissionsLoading) {
@@ -71,6 +109,27 @@ export default function Dashboard() {
   const role = String(
     permissionRole || user?.role || ""
   ).toUpperCase();
+
+  // Cross-department dashboard access in read-only mode.
+  const dept = DEPT_VIEWS[params.get("dept")];
+
+  if (dept && canView(dept.module)) {
+    const { View } = dept;
+
+    return (
+      <>
+        <Link
+          to="/dashboard"
+          className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
+        >
+          <ArrowLeft className="size-4" aria-hidden />
+          Back to my dashboard
+        </Link>
+
+        <View readOnly />
+      </>
+    );
+  }
 
   // Specialized dashboards.
   if (role === "PRODUCTION_MANAGER") {

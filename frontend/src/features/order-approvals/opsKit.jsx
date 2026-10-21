@@ -7,12 +7,13 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { MktBtn, StatusPill } from "@/features/marketing-orders/mktKit"
-import { rise, stagger } from "@/features/marketing-orders/mktMotion"
-import { ALL_STAGE, OrderSteps, STAGES, plural } from "@/features/marketing-orders/orderParts"
+import { PRESS_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
+import { ALL_STAGE, OrderSteps, STAGES, plural, stageOf } from "@/features/marketing-orders/orderParts"
 import { timeAgo } from "@/features/activity/time"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import PlanSummary from "./PlanSummary"
+import { approveLabel, canApprove } from "./approvalParts"
 
 /*
   Building blocks for the Operations Admin screens (dashboard + Order Approvals), made from the same
@@ -49,7 +50,7 @@ export function opsHref(status, extra = {}) {
 
 export const productsSummary = (items = []) => (items.length === 0 ? "No products" : items.length === 1 ? items[0].name : `${items[0].name} + ${items.length - 1} more`)
 export const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
-export const isDecided = (o) => o.approval_status === "APPROVED" || o.approval_status === "REJECTED"
+export const isDecided = (o) => ["APPROVED", "REJECTED"].includes(o.approval_status)
 
 /* -------------------------------------------------------------------- tiles */
 
@@ -73,7 +74,7 @@ export function OpsPanel({ title, description, to, toLabel, loading, children })
           <CardTitle>{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </div>
-        {to && <Link to={to} className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-soft focus-visible:ring-2 focus-visible:ring-ring/60">{toLabel}</Link>}
+        {to && <Link to={to} className="inline-flex h-9 shrink-0 items-center rounded-[10px] border border-cf-line-strong bg-card px-3 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-soft focus-visible:ring-2 focus-visible:ring-ring/60">{toLabel}</Link>}
       </CardHeader>
       {loading ? <div className="space-y-2 p-5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div> : children}
     </Card>
@@ -97,6 +98,7 @@ export const CardList = ({ children, className }) => (
 export function ApprovalCard({ order, canAct, showPlan, busy, onOpen, onReject, onPlan }) {
   const items = order.items ?? []
   const pending = order.approval_status === "PENDING_APPROVAL"
+  const approvable = canApprove(order)
   const rejected = order.approval_status === "REJECTED"
 
   return (
@@ -121,7 +123,7 @@ export function ApprovalCard({ order, canAct, showPlan, busy, onOpen, onReject, 
           <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         </div>
 
-        {showPlan && pending && (
+        {showPlan && approvable && (
           <div className="mt-3 rounded-xl border border-[#dce5e0] px-3 py-2.5">
             <PlanSummary orderId={order.id} items={items} />
           </div>
@@ -134,15 +136,94 @@ export function ApprovalCard({ order, canAct, showPlan, busy, onOpen, onReject, 
         )}
       </div>
 
-      {canAct && pending && (
+      {canAct && approvable && (
         <div className="relative flex gap-2 border-t border-dashed p-3">
-          <MktBtn variant="danger" disabled={busy} onClick={onReject} aria-label={`Reject ${order.order_number}`}><X /> Reject</MktBtn>
-          <MktBtn variant="primary" className="flex-1" disabled={busy} onClick={onPlan} aria-label={`Check stock and send ${order.order_number}`}>
-            {busy ? <Loader2 className="animate-spin" /> : <PackageCheck />} Check stock &amp; send
+          {pending && <MktBtn variant="danger" disabled={busy} onClick={onReject} aria-label={`Reject ${order.order_number}`}><X /> Reject</MktBtn>}
+          <MktBtn variant="primary" className="flex-1" disabled={busy} onClick={onPlan} aria-label={`${approveLabel(order)} ${order.order_number}`}>
+            {busy ? <Loader2 className="animate-spin" /> : <PackageCheck />} {approveLabel(order)}
           </MktBtn>
         </div>
       )}
     </motion.li>
+  )
+}
+
+/*
+  One order as the big card on the Order Approvals page (phones and tablets): the same card the Marketing Manager
+  sees on Marketing Orders (colour stripe, product lines, progress steps, decision box), plus the live stock check
+  and the Reject / Check stock & send buttons for an order that is waiting. The body opens the order; the buttons never do.
+*/
+const SHOW_LINES = 2
+export function ApprovalPageCard({ order: o, canAct, busy, onOpen, onReject, onPlan }) {
+  const stage = stageOf(o.approval_status)
+  const items = o.items ?? []
+  const pending = o.approval_status === "PENDING_APPROVAL"
+  const approvable = canApprove(o)
+  const extra = items.length - SHOW_LINES
+
+  return (
+    <motion.article
+      layout="position"
+      variants={rise}
+      className="relative overflow-hidden rounded-2xl border border-[#dce5e0] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
+    >
+      <span aria-hidden className={cn("absolute inset-y-0 start-0 w-1 bg-gradient-to-b", stage?.s.grad ?? "from-slate-300 to-slate-400")} />
+
+      <motion.div
+        role="button"
+        tabIndex={0}
+        whileTap={PRESS_SOFT}
+        onClick={() => onOpen(o)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(o) }
+        }}
+        className="cursor-pointer p-4 ps-5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-[15px] font-bold tabular-nums tracking-[-0.01em]">{o.order_number}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground" title={fmtDateTime(o.created_at)}>
+              {o.created_by_name ? `${o.created_by_name} · ` : ""}{timeAgo(o.created_at)}
+            </p>
+          </div>
+          <StatusPill value={o.approval_status} short />
+        </div>
+
+        <ul className="mt-3.5 space-y-1.5">
+          {items.slice(0, SHOW_LINES).map((it) => (
+            <li key={it.product_id} className="flex items-center justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate">{it.name}</span>
+              <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-slate-700">× {fmtQty(it.quantity)}</span>
+            </li>
+          ))}
+          {extra > 0 && <li className="text-xs font-semibold text-primary">+ {plural(extra, "more product")}</li>}
+        </ul>
+
+        {approvable && (
+          <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
+            <PlanSummary orderId={o.id} items={items} />
+          </div>
+        )}
+
+        <OrderSteps status={o.approval_status} className="mt-4" />
+
+        {isDecided(o) && (
+          <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
+            <UserCell name={o.approved_by_name} sub={fmtDateTime(o.approved_at)} />
+            {o.approval_remarks && <p className="mt-1.5 line-clamp-3 text-xs leading-snug text-foreground/80">{o.approval_remarks}</p>}
+          </div>
+        )}
+      </motion.div>
+
+      {canAct && approvable && (
+        <div className="flex gap-2 border-t bg-cf-head/70 px-4 py-3 ps-5">
+          {pending && <MktBtn variant="danger" disabled={busy} onClick={() => onReject(o)} aria-label={`Reject ${o.order_number}`}><X /> Reject</MktBtn>}
+          <MktBtn variant="primary" className="flex-1" disabled={busy} onClick={() => onPlan(o)} aria-label={`${approveLabel(o)} ${o.order_number}`}>
+            {busy ? <Loader2 className="animate-spin" /> : <PackageCheck />} {approveLabel(o)}
+          </MktBtn>
+        </div>
+      )}
+    </motion.article>
   )
 }
 
@@ -159,7 +240,7 @@ export function ApprovalList({ orders, onOpen }) {
               <TableHead>Order</TableHead>
               <TableHead>Products</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right"><span className="sr-only">Open</span></TableHead>
+              <TableHead className="text-end"><span className="sr-only">Open</span></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -176,7 +257,7 @@ export function ApprovalList({ orders, onOpen }) {
                     <p className="text-xs text-muted-foreground">{fmtQty(unitsOf(items))} units</p>
                   </TableCell>
                   <TableCell><StatusPill value={o.approval_status} short /></TableCell>
-                  <TableCell className="text-right"><ChevronRight className="ml-auto size-4 text-muted-foreground" aria-hidden /></TableCell>
+                  <TableCell className="text-end"><ChevronRight className="ms-auto size-4 text-muted-foreground rtl:-scale-x-100" aria-hidden /></TableCell>
                 </TableRow>
               )
             })}

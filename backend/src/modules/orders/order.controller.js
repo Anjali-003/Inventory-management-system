@@ -6,6 +6,8 @@ const asyncHandler = require("../../middleware/asyncHandler");
 const { parseId, parsePositiveInt } = require("../../shared/validators");
 
 const orderIdOf = (req) => parseId(req.params.id, "order ID");
+// optional: an order with one product does not need to name it; an order with several products must
+const productIdOf = (raw) => (raw === undefined || raw === null || raw === "" ? undefined : parseId(raw, "product ID"));
 
 /* GET ALL ORDERS */
 async function list(req, res) {
@@ -83,8 +85,7 @@ async function materialCheck(req, res) {
     remaining to start, maximum from inventory.
 */
 async function productionInfo(req, res) {
-    const orderItemId = orderIdOf(req);
-    res.json(await getProductionInfo(orderItemId));
+    res.json(await getProductionInfo(orderIdOf(req), productIdOf(req.query.product_id)));
 }
 
 /*
@@ -96,14 +97,14 @@ async function productionCheck(req, res) {
     const orderItemId = orderIdOf(req);
     const quantity = parsePositiveInt(req.query.quantity, "Quantity must be a positive integer");
 
-    res.json(await checkProductionMaterials(orderItemId, quantity));
+    res.json(await checkProductionMaterials(orderId, quantity, productIdOf(req.query.product_id)));
 }
 
 /*
     START PARTIAL PRODUCTION
 
-    POST /api/v1/orders/:orderItemId/start-production
-    Body: { "quantity": 20 }
+    POST /api/v1/orders/:id/start-production
+    Body: { "quantity": 20, "product_id": 3 }   (product_id is optional when the order has one product)
 */
 async function startPartialProduction(req, res) {
     const orderItemId = orderIdOf(req);
@@ -124,7 +125,7 @@ async function startPartialProduction(req, res) {
     }
 
     // req.user is set by authMiddleware + resolveUser (see order.routes.js)
-    const result = await startProduction(orderItemId, quantity, req.user.id);
+    const result = await startProduction(orderId, quantity, req.user.id, productIdOf(req.body?.product_id));
 
     // Material shortage: a normal answer (the dialog shows what is missing), not an exception
     if (!result.success) return res.status(409).json(result);

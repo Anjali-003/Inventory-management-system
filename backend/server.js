@@ -7,12 +7,16 @@ env.assertServerConfig();
 
 const db = require("./src/config/db");
 const { createApp } = require("./src/app");
+const { startPurgeJob } = require("./src/shared/idempotency");
 
 const app = createApp();
 
 const server = app.listen(env.port, "0.0.0.0", () => {
     console.log(`Server running on port ${env.port} (${env.nodeEnv})`);
 });
+
+// forget idempotency keys that are too old for any client to retry (keeps the table small)
+startPurgeJob(db);
 
 async function shutdown(signal) {
     console.log(`${signal} received, shutting down...`);

@@ -33,7 +33,7 @@ const TAGS = {
   iqc: ["Purchases"],
   "incoming-stock": ["Purchases", "Inventory"],
   // order approval: both screens (Operations Admin + Purchase Manager) and the Orders page refresh together
-  "order-approvals": ["OrderApprovals", "Orders", "MarketingOrders", "Production", "Purchases"],
+  "order-approvals": ["OrderApprovals", "Orders", "MarketingOrders", "Production", "Purchases", "Inventory"],
   "marketing-orders": ["MarketingOrders", "OrderApprovals", "Orders"],
   "approved-orders": ["OrderApprovals"],
 };
@@ -85,6 +85,16 @@ export default function LiveSync() {
         }
 
         if (!timer) timer = setTimeout(flush, 200);
+      } catch { /* ignore malformed event */ }
+    });
+
+    // targeted notification (sent by the backend only after its DB transaction committed)
+    es.addEventListener("notify", (e) => {
+      try {
+        const evt = JSON.parse(e.data);
+        if (evt.message) toastRef.current.success(evt.message);
+        // the dashboard list of "components to issue" (and the stock figures) refresh at once
+        dispatch(baseApi.util.invalidateTags(["Notifications", "Inventory"]));
       } catch { /* ignore malformed event */ }
     });
 

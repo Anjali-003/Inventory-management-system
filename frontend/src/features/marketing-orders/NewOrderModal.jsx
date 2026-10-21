@@ -16,7 +16,7 @@ const LABEL = "mb-1.5 block text-xs font-semibold text-muted-foreground"
 const ERR = "mt-1.5 text-xs font-medium text-destructive"
 // 16px + 44px tall on a phone, 13px + 36px with a mouse. (The shared Select is 36px / 13px only, so it is not used here.)
 const SELECT =
-  "h-11 w-full rounded-[10px] border bg-card px-3 pr-9 text-base outline-none transition-shadow focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15 sm:h-9 sm:text-[13px]"
+  "h-11 w-full rounded-[10px] border bg-card ps-3 pe-9 text-base outline-none transition-shadow focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15 sm:h-9 sm:text-[13px]"
 
 /*
   New order: one or more products with whole-number quantities. It is saved as a DRAFT; sending is a separate step.
@@ -107,13 +107,17 @@ export default function NewOrderModal({ onClose }) {
                   exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
                   className="rounded-2xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 shadow-[0_1px_2px_rgba(22,34,30,0.04)] sm:p-4"
                 >
+                  {/* the remove button lives in the card's own header, so it never has to line up with a field label */}
                   <div className="mb-3 flex items-center gap-2">
                     <span className="grid size-6 place-items-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 text-[11px] font-bold text-white">{i + 1}</span>
-                    <span className="text-xs font-semibold text-muted-foreground">Product {i + 1}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-muted-foreground">Product {i + 1}</span>
+                    <MktBtn variant="danger" size="icon" aria-label={`Remove product ${i + 1}`} disabled={rows.length === 1} onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
+                      <Trash2 />
+                    </MktBtn>
                   </div>
 
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 sm:grid-cols-[minmax(0,1fr)_11rem_auto]">
-                    <div className="col-span-2 sm:col-span-1">
+                  <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
+                    <div>
                       <label htmlFor={`mo-product-${r.key}`} className={LABEL}>Product</label>
                       <select
                         id={`mo-product-${r.key}`}
@@ -134,12 +138,6 @@ export default function NewOrderModal({ onClose }) {
                       <label htmlFor={`mo-qty-${r.key}`} className={LABEL}>Quantity</label>
                       <QtyStepper id={`mo-qty-${r.key}`} value={r.qty} invalid={qtyBad} onChange={(v) => set(r.key, { qty: v })} />
                       {qtyBad && <p className={ERR}>{err}</p>}
-                    </div>
-
-                    <div className="pt-[1.375rem]">
-                      <MktBtn variant="danger" size="icon" aria-label={`Remove product ${i + 1}`} disabled={rows.length === 1} onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
-                        <Trash2 />
-                      </MktBtn>
                     </div>
                   </div>
                 </motion.div>

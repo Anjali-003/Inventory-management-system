@@ -47,7 +47,7 @@ function OrderCard({ order, canSend, busy, onSend, onOpen }) {
       <div className="pointer-events-none relative p-4">
         <div className="flex items-start justify-between gap-3">
           <span className="min-w-0 break-all text-[15px] font-semibold leading-snug tabular-nums">{order.order_number}</span>
-          <StatusPill value={order.approval_status} className="shrink-0" />
+          <StatusPill value={order.approval_status} short className="shrink-0" />
         </div>
         <div className="mt-2 flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -80,7 +80,7 @@ function OrderTable({ orders, editable, busyId, onSend, onOpen }) {
           <TableHead>Order</TableHead>
           <TableHead>Products</TableHead>
           <TableHead>Status</TableHead>
-          <TableHead className="text-right"><span className="sr-only">Action</span></TableHead>
+          <TableHead className="text-end"><span className="sr-only">Action</span></TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -97,13 +97,13 @@ function OrderTable({ orders, editable, busyId, onSend, onOpen }) {
                 <p className="text-xs text-muted-foreground">{fmtQty(unitsOf(items))} units</p>
               </TableCell>
               <TableCell><StatusPill value={o.approval_status} short /></TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-end">
                 {editable && o.approval_status === "DRAFT" ? (
                   <MktBtn variant="primary" size="sm" disabled={busyId === o.id} onClick={(e) => { e.stopPropagation(); onSend(o) }} aria-label={`Send ${o.order_number} to the Operations Admin`}>
                     {busyId === o.id ? <Loader2 className="animate-spin" /> : <Send />} Send
                   </MktBtn>
                 ) : (
-                  <ChevronRight className="ml-auto size-4 text-muted-foreground" aria-hidden />
+                  <ChevronRight className="ms-auto size-4 text-muted-foreground rtl:-scale-x-100" aria-hidden />
                 )}
               </TableCell>
             </TableRow>
@@ -114,21 +114,22 @@ function OrderTable({ orders, editable, busyId, onSend, onOpen }) {
   )
 }
 
-/* Table from 768px up, cards below it. */
+/* Table once the panel itself is 512px wide, cards below that. It follows the panel, not the screen:
+   on a desktop the two panels sit side by side and are each narrower than a tablet screen. */
 function OrderList({ orders, editable, busyId, onSend, onOpen }) {
   return (
-    <>
-      <div className="hidden md:block">
+    <div className="@container">
+      <div className="hidden @lg:block">
         <OrderTable orders={orders} editable={editable} busyId={busyId} onSend={onSend} onOpen={onOpen} />
       </div>
-      <div className="md:hidden">
+      <div className="@lg:hidden">
         <RowList>
           {orders.map((o) => (
             <OrderCard key={o.id} order={o} canSend={editable && o.approval_status === "DRAFT"} busy={busyId === o.id} onSend={() => onSend(o)} onOpen={() => onOpen(o)} />
           ))}
         </RowList>
       </div>
-    </>
+    </div>
   )
 }
 
@@ -140,7 +141,7 @@ function Panel({ title, description, to, toLabel, loading, children }) {
           <CardTitle>{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </div>
-        {to && <Link to={to} className="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-soft focus-visible:ring-2 focus-visible:ring-ring/60">{toLabel}</Link>}
+        {to && <Link to={to} className="inline-flex h-9 shrink-0 items-center rounded-[10px] border border-cf-line-strong bg-card px-3 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-soft focus-visible:ring-2 focus-visible:ring-ring/60">{toLabel}</Link>}
       </CardHeader>
       {loading ? <div className="space-y-2 p-5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div> : children}
     </Card>
@@ -211,7 +212,7 @@ export default function MarketingView() {
   return (
     <MotionConfig reducedMotion="user">
       <MktHero eyebrow="Marketing dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={nudge(counts)}>
-        {editable && <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to={ordersHref(null, { new: 1 })}><Plus /> New order</HeroLink>}
+        {editable && <HeroLink wrap="hidden md:inline-flex" className="h-10" to={ordersHref(null, { new: 1 })}><Plus /> New order</HeroLink>}
       </MktHero>
 
       <TileGrid>
@@ -220,14 +221,8 @@ export default function MarketingView() {
         ))}
       </TileGrid>
 
-      <Reveal delay={0.2} className="mt-4">
-        <Panel title="Order pipeline" description="Tap a stage to see only those orders." to={ordersHref(null)} toLabel="All orders">
-          <OrderPipeline counts={counts} loading={isLoading} />
-        </Panel>
-      </Reveal>
-
       {!isLoading && counts.total === 0 ? (
-        <Reveal delay={0.3} className="mt-4">
+        <Reveal delay={0.3} className="mt-6">
           <Card>
             <EmptyState icon={ClipboardList} title="No orders yet">
               Prepare an order, save it as a draft, then send it to the Operations Admin when it is ready.
@@ -242,7 +237,7 @@ export default function MarketingView() {
           </Card>
         </Reveal>
       ) : (
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <Reveal delay={0.3}>
             <Panel title="Needs your attention" description="Rejected orders first, then drafts to send." loading={isLoading} to={attention.length > 5 ? ordersHref("DRAFT") : null} toLabel={`View all (${attention.length})`}>
               {attention.length === 0 ? (
