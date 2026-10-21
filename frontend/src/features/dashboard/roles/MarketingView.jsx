@@ -221,12 +221,6 @@ export default function MarketingView() {
         ))}
       </TileGrid>
 
-      <Reveal delay={0.2} className="mt-8">
-        <Panel title="Order pipeline" description="Tap a stage to see only those orders." to={ordersHref(null)} toLabel="All orders">
-          <OrderPipeline counts={counts} loading={isLoading} />
-        </Panel>
-      </Reveal>
-
       {!isLoading && counts.total === 0 ? (
         <Reveal delay={0.3} className="mt-6">
           <Card>

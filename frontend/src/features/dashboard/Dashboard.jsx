@@ -1,4 +1,5 @@
-import { Navigate } from "react-router-dom"
+import { ArrowLeft } from "lucide-react"
+import { Link, Navigate, useSearchParams } from "react-router-dom"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { ROLES } from "@/lib/permissions"
 import IqcView from "./roles/IqcView"
@@ -22,9 +23,32 @@ const VIEWS = {
   [ROLES.MARKETING_MANAGER]: MarketingView,
 }
 
+/*
+  A role can open another department's MAIN dashboard (read-only) with /dashboard?dept=iqc, ?dept=store or ?dept=purchase.
+  Used by the Department Overview cards on the Purchase, IQC and Store dashboards. Allowed only if the role may view that department's pages.
+*/
+const DEPT_VIEWS = {
+  iqc: { label: "IQC", module: "iqc", View: IqcView },
+  store: { label: "Store", module: "inventory", View: StoreView },
+  purchase: { label: "Purchase", module: "purchase", View: PurchaseView },
+}
+
 export default function Dashboard() {
-  const { role, loading, homePath } = usePermissions()
+  const { role, loading, homePath, canView } = usePermissions()
+  const [params] = useSearchParams()
   if (loading) return null
+  const dept = DEPT_VIEWS[params.get("dept")]
+  if (dept && canView(dept.module)) {
+    const { View } = dept
+    return (
+      <>
+        <Link to="/dashboard" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+          <ArrowLeft className="size-4" aria-hidden /> Back to my dashboard
+        </Link>
+        <View readOnly />
+      </>
+    )
+  }
   const View = VIEWS[String(role || "").toUpperCase()]
   if (!View) return homePath && homePath !== "/dashboard" ? <Navigate to={homePath} replace /> : null
   return <View />
