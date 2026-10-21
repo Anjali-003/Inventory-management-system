@@ -26,7 +26,7 @@ function nudge(counts) {
 
 /*
   Operations Admin dashboard, built like the Marketing Manager one: a hero, one colour tile per stage (each is a
-  link to Order Approvals with that filter on), the pipeline bar, then the lists. Clicking an order opens the full
+  link to Incoming Orders with that filter on), the pipeline bar, then the lists. Clicking an order opens the full
   Operations popup (stock check, progress, products, Reject / Check stock & send). The purchase and stock lists
   below keep the shared dashboard panels, because those records belong to other roles.
 */
@@ -53,7 +53,7 @@ export default function OperationsView() {
     }
   }, [orders, buys.data, inv.data])
 
-  // Every figure opens Order Approvals with that filter already on.
+  // Every figure opens Incoming Orders with that filter already on.
   const tiles = [
     { key: "ALL", stage: OPS_ALL, value: counts.total, to: opsHref("ALL") },
     ...OPS_STAGES.map((s) => ({ key: s.status, stage: s, value: counts[s.status], to: opsHref(s.status) })),
@@ -64,7 +64,7 @@ export default function OperationsView() {
   return (
     <MotionConfig reducedMotion="user">
       <MktHero eyebrow="Operations dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={nudge(counts)}>
-        <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to={opsHref(QUEUE)}><ClipboardCheck /> Open order approvals</HeroLink>
+        <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to={opsHref(QUEUE)}><ClipboardCheck /> Open incoming orders</HeroLink>
       </MktHero>
 
       <OpsTileGrid>

@@ -162,12 +162,12 @@ export default function Inventory() {
           <LedgerPanel componentFilter={ledgerFor} onClearComponent={() => setLedgerFor(null)} refreshToken={token} />
         ) : (
           <>
-            <StatStrip
+            <StatStrip dropdown="Filter components by stock"
               layoutId="inv-filter"
               cols="grid-cols-3"
               items={[
                 { key: "all", label: "Components", value: counts.all, tone: "info", active: filter === "all", onClick: () => setFilter("all") },
-                { key: "low", label: "Low stock", value: counts.low, tone: "warning", active: filter === "low", onClick: () => setFilter(filter === "low" ? "all" : "low") },
+                { key: "low", label: "At or below minimum", value: counts.low, tone: "warning", active: filter === "low", onClick: () => setFilter(filter === "low" ? "all" : "low") },
                 { key: "out", label: "Out of stock", value: counts.out, tone: "danger", active: filter === "out", onClick: () => setFilter(filter === "out" ? "all" : "out") },
               ]}
             />

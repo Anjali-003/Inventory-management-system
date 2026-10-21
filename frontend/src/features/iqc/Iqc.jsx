@@ -1,16 +1,16 @@
 import { useMemo, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { AlertTriangle, CheckCircle2, ClipboardCheck, ClipboardList, Download, PackageCheck, RefreshCw } from "lucide-react"
 import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
 import UserCell from "@/components/UserCell"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { StatCard } from "@/components/HistoryUI"
+import { StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useGetMeQuery } from "@/features/auth/authApi"
-import { useDrill } from "@/features/dashboard/DashboardKit"
-import { purchaseRow } from "@/features/dashboard/rows"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useGetIqcQueueQuery } from "@/features/purchasing/purchasingApi"
 import { PurchaseDetailModal, PurchaseStatus } from "@/features/purchasing/PurchaseParts"
@@ -19,6 +19,18 @@ import { fmtDateTime, fmtQty } from "@/lib/stock"
 import InspectModal from "./InspectModal"
 
 const EMPTY = []
+
+/*
+  /iqc?status=... is where the IQC dashboard figures lead. No status = the whole page (to inspect + inspected).
+    PENDING_IQC  only the "To inspect" list        APPROVED   inspected and passed (to store / in stock)
+    REJECTED     inspected and rejected            INSPECTED  everything inspected
+*/
+const VIEWS = {
+  PENDING_IQC: { label: "Waiting for inspection" },
+  APPROVED: { label: "Approved", title: "Approved", description: "Passed inspection: with the store or already in stock.", statuses: ["PENDING_STORE", "STORED"] },
+  REJECTED: { label: "Rejected", title: "Rejected", description: "Nothing from these purchases was approved.", statuses: ["REJECTED"] },
+  INSPECTED: { label: "Total inspected", title: "Inspected", description: "What happened to each purchase after the check." },
+}
 
 /*
   IQC dashboard (Incoming Quality Control).
@@ -33,7 +45,11 @@ export default function Iqc() {
 
   const { data = EMPTY, isLoading, isFetching, error, refetch } = useGetIqcQueueQuery()
   const [query, setQuery] = useState("")
-  const drill = useDrill() // clicking a figure opens a popup with the purchases behind it
+  const [params, setParams] = useSearchParams()
+  const view = VIEWS[params.get("status")] ? params.get("status") : null // set when a dashboard figure sent us here
+  const cfg = view ? VIEWS[view] : null
+  const showWaiting = !view || view === "PENDING_IQC"
+  const showInspected = !view || view !== "PENDING_IQC"
   const [inspecting, setInspecting] = useState(null) // purchase id (looked up again so the dialog always has fresh data)
   const [viewing, setViewing] = useState(null)
 
@@ -47,17 +63,21 @@ export default function Iqc() {
       p.items.some((i) => i.name.toLowerCase().includes(q) || i.sku.toLowerCase().includes(q))
   }
   const waitingShown = useMemo(() => waiting.filter(match), [waiting, query]) // eslint-disable-line react-hooks/exhaustive-deps
-  const inspectedShown = useMemo(() => inspected.filter(match), [inspected, query]) // eslint-disable-line react-hooks/exhaustive-deps
+  const inspectedShown = useMemo(() => inspected.filter((p) => (!cfg?.statuses || cfg.statuses.includes(p.status)) && match(p)), [inspected, query, cfg])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const toInspect = inspecting ? data.find((p) => p.id === inspecting && p.status === "PENDING_IQC") : null
   const first = (me?.name || "").split(/\s+/)[0]
 
-  // rows of the figure popups; a waiting purchase opens straight into the inspection when this user may inspect
-  const rowsFor = (list) => list.map((p) => {
-    const r = purchaseRow(p)
-    return p.status === "PENDING_IQC" && editable ? { ...r, detail: (close) => <InspectModal key={p.id} purchase={p} onClose={close} /> } : r
-  })
-  const open = (title, description, list, empty) => () => drill.openList({ title, description, rows: rowsFor(list), empty })
+
+  const approvedCount = data.filter((p) => ["PENDING_STORE", "STORED"].includes(p.status)).length
+  const pick = (k) => () => setParams(k === "ALL" || k === view ? {} : { status: k }, { replace: true })
+  const filters = [
+    { key: "ALL", label: "All purchases", value: data.length, icon: ClipboardList, tone: "violet", detail: "Everything sent to IQC", grad: "from-violet-400 to-purple-600", pill: "bg-violet-50 text-violet-800 ring-violet-200", dot: "bg-violet-500", active: !view, onClick: pick("ALL") },
+    { key: "PENDING_IQC", label: "Waiting for inspection", value: waiting.length, icon: ClipboardList, tone: "amber", detail: "Purchased, not checked yet", grad: "from-amber-400 to-orange-500", pill: "bg-amber-50 text-amber-800 ring-amber-200", dot: "bg-amber-500", active: view === "PENDING_IQC", onClick: pick("PENDING_IQC") },
+    { key: "APPROVED", label: "Approved", value: approvedCount, icon: CheckCircle2, tone: "green", detail: "Passed inspection", grad: "from-emerald-400 to-emerald-700", pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", dot: "bg-emerald-600", active: view === "APPROVED", onClick: pick("APPROVED") },
+    { key: "REJECTED", label: "Rejected", value: byStatus("REJECTED").length, icon: AlertTriangle, tone: "red", detail: "Nothing approved", grad: "from-rose-400 to-red-600", pill: "bg-rose-50 text-rose-800 ring-rose-200", dot: "bg-rose-500", active: view === "REJECTED", onClick: pick("REJECTED") },
+    { key: "INSPECTED", label: "Total inspected", value: inspected.length, icon: PackageCheck, tone: "blue", detail: "All time", grad: "from-sky-400 to-blue-600", pill: "bg-sky-50 text-sky-800 ring-sky-200", dot: "bg-sky-500", active: view === "INSPECTED", onClick: pick("INSPECTED") },
+  ]
 
   return (
     <>
@@ -80,13 +100,18 @@ export default function Iqc() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard index={0} icon={ClipboardList} tone={waiting.length ? "amber" : "green"} label="Waiting for inspection" value={waiting.length} loading={isLoading} detail="Purchased, not checked yet" onClick={open("Waiting for inspection", "Purchased, not checked yet.", waiting, "Nothing is waiting for inspection")} />
-        <StatCard index={1} icon={PackageCheck} tone="blue" label="Sent to store" value={byStatus("PENDING_STORE").length} loading={isLoading} detail="Approved, store must accept" onClick={open("Sent to store", "Approved by IQC, the store must accept them.", byStatus("PENDING_STORE"), "Nothing is with the store")} />
-        <StatCard index={2} icon={CheckCircle2} tone="green" label="Accepted into stock" value={byStatus("STORED").length} loading={isLoading} detail="Fully through the flow" onClick={open("Accepted into stock", "Fully through the flow.", byStatus("STORED"), "Nothing accepted yet")} />
-        <StatCard index={3} icon={AlertTriangle} tone={byStatus("REJECTED").length ? "red" : "violet"} label="Rejected" value={byStatus("REJECTED").length} loading={isLoading} detail="Nothing approved" onClick={open("Rejected", "Nothing from these purchases was approved.", byStatus("REJECTED"), "Nothing rejected")} />
+      {/* the figures are filters: chips on a phone, cards on a tablet, a dropdown on a PC. The chosen one matches the URL. */}
+      <div className="mb-4 hidden lg:block">
+        <StatusSelect className="w-64" portal label="Filter purchases" items={filters.map((f) => ({ key: f.key, label: f.label, value: f.value, dot: f.dot, active: f.active, onClick: f.onClick }))} />
+      </div>
+      <StageChips label="Filter purchases" items={filters} />
+      <div className="hidden gap-4 sm:grid-cols-2 xl:grid-cols-5 md:grid lg:hidden">
+        {filters.map((f, i) => (
+          <StatCard key={f.key} index={i} icon={f.icon} tone={f.tone} label={f.label} value={f.value} loading={isLoading} detail={f.detail} active={f.active} onClick={f.onClick} />
+        ))}
       </div>
 
+      {showWaiting && (
       <Card id="iqc-waiting" className="mt-4 scroll-mt-4 overflow-hidden">
         <CardHeader>
           <div>
@@ -138,18 +163,21 @@ export default function Iqc() {
         )}
       </Card>
 
+      )}
+
+      {showInspected && (
       <Card id="iqc-inspected" className="mt-4 scroll-mt-4 overflow-hidden">
         <CardHeader>
           <div>
-            <CardTitle>Inspected</CardTitle>
-            <CardDescription>What happened to each purchase after the check.</CardDescription>
+            <CardTitle>{cfg?.title || "Inspected"}</CardTitle>
+            <CardDescription>{cfg?.description || "What happened to each purchase after the check."}</CardDescription>
           </div>
         </CardHeader>
 
         {isLoading ? (
           <TableSkeleton rows={3} />
         ) : inspectedShown.length === 0 ? (
-          <EmptyState icon={ClipboardCheck} title="Nothing inspected yet">Inspected purchases and their result appear here.</EmptyState>
+          <EmptyState icon={ClipboardCheck} title={query ? "No purchase matches your search" : view ? `Nothing ${cfg.label.toLowerCase()}` : "Nothing inspected yet"}>{query ? "Try a different PO number, supplier or component." : "Inspected purchases and their result appear here."}</EmptyState>
         ) : (
           <div className="overflow-x-auto">
             <Table>
@@ -192,8 +220,8 @@ export default function Iqc() {
           </div>
         )}
       </Card>
+      )}
 
-      {drill.host}
       {toInspect && <InspectModal key={toInspect.id} purchase={toInspect} onClose={() => setInspecting(null)} />}
       <PurchaseDetailModal purchase={viewing && (data.find((p) => p.id === viewing.id) || viewing)} onClose={() => setViewing(null)} />
     </>

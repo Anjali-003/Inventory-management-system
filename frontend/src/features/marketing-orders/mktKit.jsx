@@ -191,7 +191,7 @@ export function StageTile({ stage, value, loading, active, solid, to, onClick, c
 
 /**
  * Phone version of the filter: one scrolling row of chips. The coloured "selected" chip slides to the new choice.
- * items: [{ key, label, value, grad, dot, active, onClick }]
+ * items: [{ key, label, value, grad, dot, pill, active, onClick }]  (pill = soft colour of an unselected chip)
  */
 export function StageChips({ items, label }) {
   return (
@@ -205,14 +205,14 @@ export function StageChips({ items, label }) {
           onClick={it.onClick}
           className={cn(
             "relative inline-flex h-10 shrink-0 snap-start items-center rounded-full border px-3.5 text-[13px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/60",
-            it.active ? "border-transparent text-white" : "border-slate-200 bg-white text-slate-700"
+            it.active ? "border-transparent text-white" : it.pill ? cn("border-transparent ring-1 ring-inset", it.pill) : "border-slate-200 bg-white text-slate-700"
           )}
         >
           {it.active && <motion.span layoutId="mkt-chip" transition={SPRING} className={cn("absolute inset-0 rounded-full bg-gradient-to-r shadow-md", it.grad)} />}
           <span className="relative flex items-center gap-2">
             <span className={cn("size-2 rounded-full", it.active ? "bg-white" : it.dot)} aria-hidden />
             {it.label}
-            <span className={cn("grid min-w-5 place-items-center rounded-full px-1.5 text-[11px] tabular-nums", it.active ? "bg-white/25" : "bg-slate-100 text-slate-600")}>{it.value}</span>
+            <span className={cn("grid min-w-5 place-items-center rounded-full px-1.5 text-[11px] tabular-nums", it.active ? "bg-white/25" : it.pill ? "bg-white/70" : "bg-slate-100 text-slate-600")}>{it.value}</span>
           </span>
         </motion.button>
       ))}
@@ -266,25 +266,34 @@ export function SearchField({ value, onChange, placeholder = "Search", className
   Shows the selected status on the button; the list shows every status with its colour dot and count.
   Keyboard: Enter / Space / arrows open it, arrows move, Enter picks, Esc closes.
 */
-export function StatusSelect({ items, label = "Status", className }) {
+export function StatusSelect({ items, label = "Status", className, portal = false, placeholder }) {
   const [open, setOpen] = useState(false)
   const [cursor, setCursor] = useState(0)
+  const [pos, setPos] = useState(null) // portal mode: where the list sits (viewport coordinates)
   const root = useRef(null)
+  const list = useRef(null)
   const id = useId()
-  const current = items.find((i) => i.active) ?? items[0]
+  const current = items.find((i) => i.active) ?? (placeholder ? null : items[0]) // placeholder: a menu of figures, nothing is "selected"
 
   useEffect(() => {
     if (!open) return
-    const onDown = (e) => { if (!root.current?.contains(e.target)) setOpen(false) }
+    const onDown = (e) => { if (!root.current?.contains(e.target) && !list.current?.contains(e.target)) setOpen(false) }
+    const close = () => setOpen(false)
     document.addEventListener("pointerdown", onDown)
-    return () => document.removeEventListener("pointerdown", onDown)
-  }, [open])
+    if (portal) { window.addEventListener("scroll", close, true); window.addEventListener("resize", close) }
+    return () => {
+      document.removeEventListener("pointerdown", onDown)
+      window.removeEventListener("scroll", close, true)
+      window.removeEventListener("resize", close)
+    }
+  }, [open, portal])
 
   const openList = () => {
     setCursor(Math.max(0, items.findIndex((i) => i.active)))
+    if (portal && root.current) { const r = root.current.getBoundingClientRect(); setPos({ top: r.bottom + 6, left: r.left }) }
     setOpen(true)
   }
-  const pick = (it) => { it.onClick(); setOpen(false) }
+  const pick = (it) => { it.onClick?.(); setOpen(false) }
 
   const onKeyDown = (e) => {
     if (e.key === "Escape") { setOpen(false); return }
@@ -312,22 +321,30 @@ export function StatusSelect({ items, label = "Status", className }) {
         onKeyDown={onKeyDown}
         className="flex h-9 w-full min-w-56 items-center gap-2 rounded-xl border border-cf-line-strong bg-card px-3 text-start text-[13px] outline-none transition-shadow focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15"
       >
-        <span className={cn("size-2 shrink-0 rounded-full", current.dot)} aria-hidden />
-        <span className="min-w-0 flex-1 truncate font-medium">{current.short ?? current.label}</span>
-        <span className="rounded-full bg-slate-100 px-1.5 text-[11px] font-semibold tabular-nums text-slate-600">{current.value}</span>
+        {current ? (
+          <>
+            <span className={cn("size-2 shrink-0 rounded-full", current.dot)} aria-hidden />
+            <span className="min-w-0 flex-1 truncate font-medium">{current.short ?? current.label}</span>
+            <span className="rounded-full bg-slate-100 px-1.5 text-[11px] font-semibold tabular-nums text-slate-600">{current.value}</span>
+          </>
+        ) : (
+          <span className="min-w-0 flex-1 truncate font-medium">{placeholder}</span>
+        )}
         <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden />
       </button>
 
-      <AnimatePresence>
-      {open && (
-        <motion.ul
+      {portal ? (
+        typeof document !== "undefined" && createPortal(<AnimatePresence>{open && pos && (
+<motion.ul
+          ref={list}
           id={id}
           role="listbox"
           aria-label={label}
           initial={{ opacity: 0, y: -6, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1, transition: SPRING }}
           exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
-          className="absolute start-0 top-full z-30 mt-1.5 w-72 max-w-[calc(100vw-2rem)] origin-top overflow-hidden rounded-xl border border-cf-line-strong bg-card p-1 shadow-lg"
+          style={portal && pos ? { position: "fixed", top: pos.top, left: pos.left } : undefined}
+          className={cn("z-30 w-72 max-w-[calc(100vw-2rem)] origin-top overflow-hidden rounded-xl border border-cf-line-strong bg-card p-1 shadow-lg", portal ? "z-50" : "absolute start-0 top-full mt-1.5")}
         >
           {items.map((it, i) => (
             <li key={it.key} role="option" aria-selected={!!it.active}>
@@ -345,8 +362,38 @@ export function StatusSelect({ items, label = "Status", className }) {
             </li>
           ))}
         </motion.ul>
+        )}</AnimatePresence>, document.body)
+      ) : (
+        <AnimatePresence>{open && (
+<motion.ul
+          ref={list}
+          id={id}
+          role="listbox"
+          aria-label={label}
+          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1, transition: SPRING }}
+          exit={{ opacity: 0, y: -4, transition: { duration: 0.12 } }}
+          style={portal && pos ? { position: "fixed", top: pos.top, left: pos.left } : undefined}
+          className={cn("z-30 w-72 max-w-[calc(100vw-2rem)] origin-top overflow-hidden rounded-xl border border-cf-line-strong bg-card p-1 shadow-lg", portal ? "z-50" : "absolute start-0 top-full mt-1.5")}
+        >
+          {items.map((it, i) => (
+            <li key={it.key} role="option" aria-selected={!!it.active}>
+              <button
+                type="button"
+                onClick={() => pick(it)}
+                onMouseEnter={() => setCursor(i)}
+                className={cn("flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-start text-[13px] outline-none transition-colors", i === cursor ? "bg-muted" : "bg-transparent")}
+              >
+                <span className={cn("size-2 shrink-0 rounded-full", it.dot)} aria-hidden />
+                <span className={cn("min-w-0 flex-1 truncate", it.active && "font-semibold")}>{it.short ?? it.label}</span>
+                <span className="text-xs font-semibold tabular-nums text-muted-foreground">{it.value}</span>
+                {it.active ? <Check className="size-4 text-primary" aria-hidden /> : <span className="size-4" aria-hidden />}
+              </button>
+            </li>
+          ))}
+        </motion.ul>
+        )}</AnimatePresence>
       )}
-      </AnimatePresence>
     </div>
   )
 }

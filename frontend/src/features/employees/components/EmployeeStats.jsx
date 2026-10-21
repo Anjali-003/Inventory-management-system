@@ -7,6 +7,7 @@ export default function EmployeeStats({
 }) {
   return (
     <StatStrip
+      dropdown="Filter employees by status"
       layoutId="emp-stat"
       cols="grid-cols-2 lg:grid-cols-4"
       items={[

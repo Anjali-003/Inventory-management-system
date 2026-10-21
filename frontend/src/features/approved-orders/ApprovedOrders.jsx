@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useGetApprovedOrdersQuery } from "@/features/order-approvals/orderApprovalsApi"
-import { HeroButton, MktBtn, MktHero, OrderItems, SearchField, StageChips } from "@/features/marketing-orders/mktKit"
+import { HeroButton, MktBtn, MktHero, OrderItems, SearchField, StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
 import { SPRING_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { plural } from "@/features/marketing-orders/orderParts"
 import { BUY_ALL, BUY_STAGES, BuyStatePill, PurchaseTile, PurchaseTileGrid, buyStageOf, buyState, isBuyState, openLinesOf } from "@/features/purchasing/purchaseKit"
@@ -203,8 +203,8 @@ export default function ApprovedOrders() {
 
       {error && <div className="mb-4"><Notice title="Something went wrong">Could not load approved orders. Check that the server is running.</Notice></div>}
 
-      {/* filter: tiles on md+, chips on a phone */}
-      <div className="hidden md:block">
+      {/* filter: chips on a phone, tiles on tablets, a dropdown (in the bar below) on desktop */}
+      <div className="hidden md:block lg:hidden">
         <PurchaseTileGrid className="md:grid-cols-4">
           {filters.map((f) => (
             <PurchaseTile key={f.key} toggle stage={f.stage} value={f.value} loading={isLoading} active={f.active} onClick={f.onClick} />
@@ -213,12 +213,17 @@ export default function ApprovedOrders() {
       </div>
       <StageChips
         label="Filter approved orders"
-        items={filters.map((f) => ({ key: f.key, label: f.stage.label, value: f.value, grad: f.stage.s.grad, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
+        items={filters.map((f) => ({ key: f.key, label: f.stage.label, value: f.value, grad: f.stage.s.grad, pill: f.stage.s.pill, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
       />
 
       {/* search: stays under the top bar while a phone scrolls (the chips already show the filter) */}
       <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-5 md:bg-transparent md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
         <SearchField className="min-w-0 flex-1 sm:max-w-xs sm:flex-none" value={query} onChange={(v) => patch({ q: v }, true)} placeholder="Search order, product or who raised it..." />
+        <StatusSelect
+          className="hidden shrink-0 lg:block"
+          label="Filter approved orders"
+          items={filters.map((f) => ({ key: f.key, label: f.stage.label, short: f.stage.short, value: f.value, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
+        />
         <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground sm:min-h-8 sm:flex-1 sm:flex-wrap sm:justify-end" aria-live="polite">
           <span className="hidden tabular-nums sm:inline">Showing {shown.length} of {counts.total}</span>
           {state && (

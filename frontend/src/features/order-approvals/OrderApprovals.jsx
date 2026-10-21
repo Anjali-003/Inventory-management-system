@@ -491,7 +491,7 @@ export default function OrderApprovals() {
     <MotionConfig reducedMotion="user">
       <MktHero
         eyebrow="Operations"
-        title="Order Approvals"
+        title="Incoming Orders"
         description="See what can be built from current stock, send the lists to Production and Purchase, or reject the order."
       >
         <HeroButton
@@ -534,6 +534,7 @@ export default function OrderApprovals() {
           label: f.stage.label,
           value: f.value,
           grad: f.stage.s.grad,
+          pill: f.stage.s.pill,
           dot: f.stage.dot,
           active: f.active,
           onClick: f.onClick,

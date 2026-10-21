@@ -32,10 +32,10 @@ export default function StoreView({ readOnly = false }) {
       <StatRow
         drill={drill}
         stats={[
-          { label: "To accept into stock", value: waiting.length, icon: PackageCheck, tone: waiting.length ? "amber" : "green", loading, detail: "Approved by IQC", drill: { title: "Waiting to be accepted", description: "IQC approved these purchases. Accept them into stock.", rows: waiting, to: "/incoming-stock", toLabel: "Open Incoming Stock", empty: "Nothing waiting for the store" } },
-          { label: "At or below minimum", value: low.length, icon: AlertTriangle, tone: low.length ? "amber" : "green", loading, detail: low.length ? "Needs reordering" : "All stocked up", drill: { title: "Components at or below minimum", rows: low, to: "/inventory?filter=low", toLabel: "Open Inventory", empty: "All components are above minimum" } },
-          { label: "In packaging", value: packaging.length, icon: Warehouse, tone: "blue", loading, detail: "Ready to dispatch", drill: { title: "Finished goods in packaging", rows: packaging, to: "/finished-goods", toLabel: "Open Finished Goods", empty: "No batch in packaging" } },
-          { label: "Dispatched", value: dispatched.length, icon: Truck, tone: "violet", loading, detail: "Waiting to be completed", drill: { title: "Dispatched batches", rows: dispatched, to: "/finished-goods", toLabel: "Open Finished Goods", empty: "No dispatched batch" } },
+          { label: "To accept into stock", value: waiting.length, icon: PackageCheck, tone: waiting.length ? "amber" : "green", loading, detail: "Approved by IQC", to: "/incoming-stock?status=PENDING_STORE" },
+          { label: "At or below minimum", value: low.length, icon: AlertTriangle, tone: low.length ? "amber" : "green", loading, detail: low.length ? "Needs reordering" : "All stocked up", to: "/inventory?filter=low" },
+          { label: "In packaging", value: packaging.length, icon: Warehouse, tone: "blue", loading, detail: "Ready to dispatch", to: "/finished-goods?status=PACKAGING" },
+          { label: "Dispatched", value: dispatched.length, icon: Truck, tone: "violet", loading, detail: "Waiting to be completed", to: "/finished-goods?status=DISPATCHED" },
         ]}
       />
       <div className="mt-4 grid gap-4 lg:grid-cols-2">

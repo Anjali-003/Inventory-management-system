@@ -241,7 +241,7 @@ export default function MarketingOrders() {
       </div>
       <StageChips
         label="Filter orders by status"
-        items={filters.map((f) => ({ key: f.key, label: f.stage.label, value: f.value, grad: f.stage.s.grad, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
+        items={filters.map((f) => ({ key: f.key, label: f.stage.label, value: f.value, grad: f.stage.s.grad, pill: f.stage.s.pill, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
       />
 
       {/* search: stays under the top bar while a phone scrolls. On a phone the bar stays one line tall:

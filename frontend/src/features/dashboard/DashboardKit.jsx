@@ -84,8 +84,9 @@ function DrillHost({ list, row, onOpenRow, onCloseList, onCloseRow }) {
   )
 }
 
-/* Top-of-page figures. Each one opens a popup with the records behind the number. */
+/* Top-of-page figures. Each one opens a popup with the records behind the number, or (with `to`) goes to that page. */
 export function StatRow({ stats, drill, cols = "sm:grid-cols-2 xl:grid-cols-4" }) {
+  const navigate = useNavigate()
   return (
     <div className={`grid gap-4 ${cols}`}>
       {stats.map((s, i) => (
@@ -98,7 +99,7 @@ export function StatRow({ stats, drill, cols = "sm:grid-cols-2 xl:grid-cols-4" }
           value={s.value}
           detail={s.detail}
           loading={s.loading}
-          onClick={() => drill.openList(s.drill)}
+          onClick={s.to ? () => navigate(s.to) : () => drill.openList(s.drill)}
         />
       ))}
     </div>
