@@ -5,7 +5,7 @@ import { Reveal } from "@/components/HistoryUI"
 import { EmptyState } from "@/components/feedback"
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { useGetOrderApprovalsQuery } from "@/features/order-approvals/orderApprovalsApi"
-import ApprovalDetailModal from "@/features/order-approvals/ApprovalDetailModal"
+import OpsOrderDrawer from "@/features/order-approvals/OpsOrderDrawer"
 import { ApprovalList, OPS_ALL, OPS_STAGES, OpsPanel, OpsTileGrid, opsHref } from "@/features/order-approvals/opsKit"
 import { HeroLink, MktHero, StageTile } from "@/features/marketing-orders/mktKit"
 import { OrderPipeline, countByStatus, newestFirst, plural } from "@/features/marketing-orders/orderParts"
@@ -37,7 +37,7 @@ export default function OperationsView() {
   const buys = useGetPurchasesQuery()
   const inv = useGetInventoryQuery("active")
   const loading = appr.isLoading || buys.isLoading || inv.isLoading
-  const [openedId, setOpenedId] = useState(null) // the order whose popup is open
+  const [openedId, setOpenedId] = useState(null) // the order whose side drawer is open
 
   const orders = appr.data ?? EMPTY
   const counts = useMemo(() => countByStatus(orders), [orders])
@@ -102,7 +102,7 @@ export default function OperationsView() {
 
       <DepartmentOverview className="mt-6" depts={["iqc", "store", "purchase"]} />
 
-      {openedId != null && <ApprovalDetailModal orderId={openedId} onClose={() => setOpenedId(null)} />}
+      <OpsOrderDrawer orderId={openedId} onClose={() => setOpenedId(null)} />
       {drill.host}
     </MotionConfig>
   )

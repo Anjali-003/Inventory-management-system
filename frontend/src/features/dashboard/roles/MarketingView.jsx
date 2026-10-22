@@ -19,7 +19,7 @@ import { rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { ALL_STAGE, OrderPipeline, STAGES, countByStatus, newestFirst, ordersHref, plural } from "@/features/marketing-orders/orderParts"
 import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtQty } from "@/lib/stock"
-import OrderDetailModal from "@/features/marketing-orders/OrderDetailModal"
+import OrderDrawer from "@/features/marketing-orders/OrderDrawer"
 
 const EMPTY = []
 
@@ -37,7 +37,7 @@ const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity
 
 /*
   Phone: a short card, only what matters at a glance (number, status, products in one line, units, age,
-  the rejection reason). Tapping anywhere on it opens the full details in a popup. The Send button
+  the rejection reason). Tapping anywhere on it opens the full details in the side drawer. The Send button
   sits above the tap area, so it only sends. Hairline border, no shadow (ChaiUI).
 */
 function OrderCard({ order, canSend, busy, onSend, onOpen }) {
@@ -73,7 +73,7 @@ function OrderCard({ order, canSend, busy, onSend, onOpen }) {
   )
 }
 
-/* Tablet and desktop: a compact table. Clicking a row opens the full details in a popup. */
+/* Tablet and desktop: a compact table. Clicking a row opens the full details in the side drawer. */
 function OrderTable({ orders, editable, busyId, onSend, onOpen }) {
   return (
     <Table data-cards="off">
@@ -167,7 +167,10 @@ export default function MarketingView() {
   const [send] = useSendMarketingOrderMutation()
   const [remove, { isLoading: deleting }] = useDeleteMarketingOrderMutation()
   const [busyId, setBusyId] = useState(null)
-  const [openedId, setOpenedId] = useState(null) // the order whose popup is open
+  const [openedId, setOpenedId] = useState(null) // the order whose side drawer is open
+  const [tab, setTab] = useState("overview")
+  const openOrder = (o) => { setOpenedId(o.id); setTab("overview") }
+  const closeOrder = () => { setOpenedId(null); setTab("overview") }
   const [confirmDelete, setConfirmDelete] = useState(null)
   const { data: notifications = [] } = useGetNotificationsQuery()
   const [markDone] = useMarkNotificationDoneMutation()
@@ -180,7 +183,7 @@ export default function MarketingView() {
     [latest]
   )
 
-  // read from the live list, so the popup moves on by itself once the order is sent or decided
+  // read from the live list, so the drawer moves on by itself once the order is sent or decided
   const opened = useMemo(() => data.find((o) => o.id === openedId) ?? null, [data, openedId])
 
   const doDelete = async () => {
@@ -275,21 +278,28 @@ export default function MarketingView() {
               {attention.length === 0 ? (
                 <EmptyState icon={CheckCircle2} title="Nothing needs attention">Every order has been sent and decided.</EmptyState>
               ) : (
-                <OrderList orders={attention.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={(o) => setOpenedId(o.id)} />
+                <OrderList orders={attention.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
               )}
             </Panel>
           </Reveal>
           <Reveal delay={0.4}>
             <Panel title="Latest orders" description="Newest first." loading={isLoading} to={ordersHref(null)} toLabel="View all">
-              <OrderList orders={latest.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={(o) => setOpenedId(o.id)} />
+              <OrderList orders={latest.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
             </Panel>
           </Reveal>
         </div>
       )}
 
-      {opened && !confirmDelete && (
-        <OrderDetailModal order={opened} editable={editable} busy={busyId === opened.id} onClose={() => setOpenedId(null)} onSend={sendOrder} onDelete={setConfirmDelete} />
-      )}
+      <OrderDrawer
+        order={opened && !confirmDelete ? opened : null}
+        tab={tab}
+        onTab={setTab}
+        editable={editable}
+        busy={opened ? busyId === opened.id : false}
+        onClose={closeOrder}
+        onSend={sendOrder}
+        onDelete={setConfirmDelete}
+      />
       <ConfirmDialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)} onConfirm={doDelete} busy={deleting} tone="danger" title="Delete this draft?" confirmLabel="Delete">
         {confirmDelete && <p>{confirmDelete.order_number} has not been sent yet. It will be removed permanently.</p>}
       </ConfirmDialog>

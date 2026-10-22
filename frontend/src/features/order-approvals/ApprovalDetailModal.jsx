@@ -31,6 +31,11 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
   const { data = EMPTY } = useGetOrderApprovalsQuery()
   const [deciding, setDeciding] = useState(false)
   const [planning, setPlanning] = useState(false)
+  const toast = useToast()
+  const [updateDeliveryDate, { isLoading: updatingDate }] = useUpdateDeliveryDateMutation()
+  const [isEditingDate, setIsEditingDate] = useState(false)
+  const [newDeliveryDate, setNewDeliveryDate] = useState("")
+  const [dateChangeReason, setDateChangeReason] = useState("")
 
   const order = data.find((o) => o.id === orderId)
   const pending = order?.approval_status === "PENDING_APPROVAL"
@@ -38,6 +43,22 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
   // the same plan the stock check below uses (one request, cached): its BOM problems are shown first
   const { data: plan, isLoading: planLoading } = useGetOrderPlanQuery(orderId, { skip: !approvable })
   if (!order) return null
+
+  const handleSaveDeliveryDate = async () => {
+    if (!newDeliveryDate) return
+    try {
+      await updateDeliveryDate({
+        id: order.id,
+        estimated_delivery_date: newDeliveryDate,
+        reason: dateChangeReason,
+      }).unwrap()
+      toast.success("Delivery date updated and Marketing Manager notified")
+      setIsEditingDate(false)
+      setDateChangeReason("")
+    } catch (err) {
+      toast.error(err?.data?.message || "Failed to update delivery date")
+    }
+  }
 
   // An order with an incomplete BOM opens the blocking warning popup first, and nothing else.
   const idle = !deciding && !planning

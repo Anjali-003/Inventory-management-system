@@ -1,18 +1,26 @@
-import { useMemo, useState } from "react"
-import { AlertOctagon, CheckCircle2, Download, ExternalLink, FileSpreadsheet, Filter, Search, X } from "lucide-react"
+import { Fragment, useMemo, useState } from "react"
+import { AlertOctagon, CheckCircle2, ChevronDown, Download, ExternalLink, FileSpreadsheet, Filter, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { EmptyState } from "@/components/feedback"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import PurchaseDrawer from "@/features/purchase/PurchaseDrawer"
+import RejectedPurchaseDrawer from "./RejectedPurchaseDrawer"
 import { downloadRejected } from "@/features/purchasing/purchasingUtils"
-import { fmtDateTime, fmtQty } from "@/lib/stock"
+import { fmtDateTime } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 
 export default function IqcRejectionsSection({ purchases = [] }) {
   const [selectedPurchase, setSelectedPurchase] = useState(null)
-  const [drawerTab, setDrawerTab] = useState("overview")
   const [query, setQuery] = useState("")
+  const [openPos, setOpenPos] = useState(() => new Set())
+
+  const togglePo = (id) =>
+    setOpenPos((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   // Extract all rejected lines from all purchases
   const rejectedItems = useMemo(() => {
@@ -69,6 +77,26 @@ export default function IqcRejectionsSection({ purchases = [] }) {
         r.reason?.toLowerCase().includes(q)
     )
   }, [rejectedItems, query])
+
+  // Group rejected components by PO (order follows latest inspection first)
+  const groups = useMemo(() => {
+    const map = new Map()
+    filtered.forEach((item) => {
+      if (!map.has(item.purchaseId)) {
+        map.set(item.purchaseId, {
+          purchaseId: item.purchaseId,
+          po_number: item.po_number,
+          supplier: item.supplier,
+          iqc_by: item.iqc_by,
+          iqc_at: item.iqc_at,
+          purchase: item.purchase,
+          items: [],
+        })
+      }
+      map.get(item.purchaseId).items.push(item)
+    })
+    return Array.from(map.values())
+  }, [filtered])
 
   if (rejectedItems.length === 0) {
     return (
@@ -130,123 +158,167 @@ export default function IqcRejectionsSection({ purchases = [] }) {
           <TableHeader>
             <TableRow>
               <TableHead>PO & Supplier</TableHead>
-              <TableHead>Rejected Component</TableHead>
-              <TableHead>Rejected Qty</TableHead>
-              <TableHead>IQC Rejection Remarks (Reason)</TableHead>
+              <TableHead>Rejected Components</TableHead>
               <TableHead>Inspected At</TableHead>
               <TableHead className="text-end">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((item) => (
-              <TableRow
-                key={item.id}
-                onClick={() => setSelectedPurchase(item.purchase)}
-                className="cursor-pointer hover:bg-muted/40 transition-colors"
-              >
-                <TableCell className="font-semibold">
-                  <p className="font-bold text-primary">{item.po_number}</p>
-                  <p className="text-xs text-muted-foreground font-normal">{item.supplier}</p>
-                </TableCell>
-
-                <TableCell className="min-w-44 whitespace-normal">
-                  <p className="text-xs font-bold leading-tight text-foreground">{item.component_name}</p>
-                  <p className="text-[11px] text-muted-foreground font-mono">{item.sku}</p>
-                </TableCell>
-
-                <TableCell>
-                  <span className="inline-flex items-center rounded-md bg-rose-100 text-rose-900 px-2 py-0.5 text-xs font-bold tabular-nums">
-                    {fmtQty(item.quantity)} {item.unit}
-                  </span>
-                </TableCell>
-
-                <TableCell className="min-w-56 whitespace-normal">
-                  <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-2.5 py-1.5 text-xs text-rose-900 dark:text-rose-200">
-                    <span className="font-semibold">Reason:</span> {item.reason}
-                  </div>
-                  <p className="mt-1 text-[11px] text-muted-foreground">Inspected by {item.iqc_by}</p>
-                </TableCell>
-
-                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                  {item.iqc_at ? fmtDateTime(item.iqc_at) : "-"}
-                </TableCell>
-
-                <TableCell className="text-end space-x-1.5">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      downloadRejected(item.purchase)
-                    }}
-                    title="Download rejection spreadsheet"
-                    className="inline-flex items-center gap-1 rounded-md border border-input bg-card px-2.5 py-1 text-xs font-semibold hover:bg-muted transition-colors"
+            {groups.map((group) => {
+              const isOpen = openPos.has(group.purchaseId)
+              return (
+                <Fragment key={group.purchaseId}>
+                  <TableRow
+                    onClick={() => togglePo(group.purchaseId)}
+                    className={cn("cursor-pointer hover:bg-muted/40 transition-colors", isOpen && "bg-muted/30")}
                   >
-                    <Download className="size-3" /> Slip
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedPurchase(item.purchase)
-                    }}
-                    className="inline-flex items-center gap-1 rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-primary hover:bg-muted/80 transition-colors"
-                  >
-                    View PO
-                  </button>
-                </TableCell>
-              </TableRow>
-            ))}
+                    <TableCell className="font-semibold">
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        className="flex items-center gap-2 text-left"
+                      >
+                        <ChevronDown
+                          className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-200", isOpen && "rotate-180")}
+                        />
+                        <span>
+                          <span className="block font-bold text-primary">{group.po_number}</span>
+                          <span className="block text-xs text-muted-foreground font-normal">{group.supplier}</span>
+                        </span>
+                      </button>
+                    </TableCell>
+
+                    <TableCell>
+                      <span className="inline-flex items-center rounded-md bg-rose-100 text-rose-900 px-2 py-0.5 text-xs font-bold tabular-nums">
+                        {group.items.length} {group.items.length === 1 ? "component" : "components"}
+                      </span>
+                    </TableCell>
+
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      {group.iqc_at ? fmtDateTime(group.iqc_at) : "-"}
+                      <p className="text-[11px]">by {group.iqc_by}</p>
+                    </TableCell>
+
+                    <TableCell className="text-end space-x-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          downloadRejected(group.purchase)
+                        }}
+                        title="Download rejection spreadsheet"
+                        className="inline-flex items-center gap-1 rounded-md border border-input bg-card px-2.5 py-1 text-xs font-semibold hover:bg-muted transition-colors"
+                      >
+                        <Download className="size-3" /> Slip
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedPurchase(group.purchase)
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md bg-muted px-2.5 py-1 text-xs font-semibold text-primary hover:bg-muted/80 transition-colors"
+                      >
+                        View PO
+                      </button>
+                    </TableCell>
+                  </TableRow>
+
+                  {isOpen && (
+                    <TableRow className="bg-rose-50/30 dark:bg-rose-950/10 hover:bg-rose-50/30">
+                      <TableCell colSpan={4} className="whitespace-normal p-0">
+                        <RejectedComponentList items={group.items} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              )
+            })}
           </TableBody>
         </Table>
       </div>
 
       {/* Mobile view */}
       <div className="divide-y md:hidden">
-        {filtered.map((item) => (
-          <div
-            key={item.id}
-            onClick={() => setSelectedPurchase(item.purchase)}
-            className="p-4 space-y-2 cursor-pointer hover:bg-muted/40 transition-colors"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="font-bold text-sm text-primary">{item.po_number}</p>
-                <p className="text-xs text-muted-foreground">{item.supplier}</p>
-              </div>
-              <span className="rounded-md bg-rose-100 text-rose-900 px-2 py-0.5 text-xs font-bold tabular-nums">
-                {fmtQty(item.quantity)} {item.unit} rejected
-              </span>
-            </div>
-
-            <p className="text-xs font-medium text-foreground">{item.component_name} ({item.sku})</p>
-
-            <div className="rounded-md bg-rose-50 border border-rose-200 p-2 text-xs text-rose-900">
-              <span className="font-semibold">Reason:</span> {item.reason}
-            </div>
-
-            <div className="flex justify-between items-center pt-1 text-xs text-muted-foreground">
-              <span>{item.iqc_at ? fmtDateTime(item.iqc_at) : ""}</span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  downloadRejected(item.purchase)
-                }}
-                className="text-primary font-semibold hover:underline"
+        {groups.map((group) => {
+          const isOpen = openPos.has(group.purchaseId)
+          return (
+            <div key={group.purchaseId}>
+              <div
+                onClick={() => togglePo(group.purchaseId)}
+                className="p-4 space-y-2 cursor-pointer hover:bg-muted/40 transition-colors"
               >
-                Download Rejection Slip
-              </button>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2">
+                    <ChevronDown
+                      className={cn("mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200", isOpen && "rotate-180")}
+                    />
+                    <div>
+                      <p className="font-bold text-sm text-primary">{group.po_number}</p>
+                      <p className="text-xs text-muted-foreground">{group.supplier}</p>
+                    </div>
+                  </div>
+                  <span className="rounded-md bg-rose-100 text-rose-900 px-2 py-0.5 text-xs font-bold tabular-nums">
+                    {group.items.length} {group.items.length === 1 ? "component" : "components"}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center pt-1 text-xs text-muted-foreground">
+                  <span>{group.iqc_at ? fmtDateTime(group.iqc_at) : ""}</span>
+                  <span className="space-x-3">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedPurchase(group.purchase)
+                      }}
+                      className="text-primary font-semibold hover:underline"
+                    >
+                      View PO
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        downloadRejected(group.purchase)
+                      }}
+                      className="text-primary font-semibold hover:underline"
+                    >
+                      Download Rejection Slip
+                    </button>
+                  </span>
+                </div>
+              </div>
+
+              {isOpen && (
+                <div className="bg-rose-50/30 dark:bg-rose-950/10">
+                  <RejectedComponentList items={group.items} />
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
-      <PurchaseDrawer
-        purchase={selectedPurchase}
-        tab={drawerTab}
-        onTab={setDrawerTab}
-        onClose={() => { setSelectedPurchase(null); setDrawerTab("overview") }}
-      />
+      <RejectedPurchaseDrawer purchase={selectedPurchase} onClose={() => setSelectedPurchase(null)} />
     </Card>
+  )
+}
+
+function RejectedComponentList({ items }) {
+  return (
+    <ul className="divide-y divide-rose-100 dark:divide-rose-900/30">
+      {items.map((item) => (
+        <li key={item.id} className="grid gap-2 px-4 py-3 pl-10 md:grid-cols-[minmax(11rem,1fr)_2fr] md:items-start">
+          <div>
+            <p className="text-xs font-bold leading-tight text-foreground">{item.component_name}</p>
+            <p className="text-[11px] text-muted-foreground font-mono">{item.sku}</p>
+          </div>
+          <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 px-2.5 py-1.5 text-xs text-rose-900 dark:text-rose-200">
+            <span className="font-semibold">Reason:</span> {item.reason}
+          </div>
+        </li>
+      ))}
+    </ul>
   )
 }

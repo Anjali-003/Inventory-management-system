@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback";
 import UserCell from "@/components/UserCell";
 import { Accordion } from "@/components/ui/accordion";
@@ -223,7 +224,7 @@ function ReviewCell({ order, actions }) {
   );
 }
 
-const OPS_TABS = [
+export const OPS_TABS = [
   { id: "overview", label: "Overview" },
   { id: "items", label: "Products" },
   { id: "feasibility", label: "Feasibility" },
@@ -231,7 +232,7 @@ const OPS_TABS = [
 ];
 
 /* "Component Feasibility" tab: the live stock check while the order waits; what was handed over once it is decided. */
-function FeasibilityTab({ order }) {
+export function FeasibilityTab({ order }) {
   const waiting = canApprove(order);
   const { data: plan, isLoading, error } = useGetOrderPlanQuery(order.id, { skip: !waiting });
   const names = Object.fromEntries(order.items.map((i) => [i.product_id, i.name]));

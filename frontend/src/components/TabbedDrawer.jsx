@@ -26,7 +26,7 @@ const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:n
     />
 */
 
-function Panel({ eyebrow, title, subtitle, tabs, tab, onTab, tabContent, actions, footerStart, onClose }) {
+function Panel({ eyebrow, title, subtitle, tabs = [], tab, onTab, tabContent, actions, footerStart, onClose }) {
   const ref = useRef(null)
   const bodyRef = useRef(null)
   const uid = useId()
@@ -123,6 +123,7 @@ function Panel({ eyebrow, title, subtitle, tabs, tab, onTab, tabContent, actions
           </button>
         </div>
 
+        {tabs.length > 0 && (
         <div role="tablist" aria-label="Sections" onKeyDown={onTabKey} className="flex gap-1 overflow-x-auto border-b px-3">
           {tabs.map((t) => {
             const active = t.id === tab
@@ -150,13 +151,14 @@ function Panel({ eyebrow, title, subtitle, tabs, tab, onTab, tabContent, actions
             )
           })}
         </div>
+        )}
 
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
           <motion.div
             key={tab}
             id={panelId(tab)}
-            role="tabpanel"
-            aria-labelledby={tabId(tab)}
+            role={tabs.length > 0 ? "tabpanel" : "region"}
+            aria-labelledby={tabs.length > 0 ? tabId(tab) : `${uid}-title`}
             tabIndex={0}
             className="outline-none"
             initial={{ opacity: 0, y: 8 }}
