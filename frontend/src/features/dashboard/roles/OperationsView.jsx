@@ -14,7 +14,7 @@ import { useGetPurchasesQuery } from "@/features/purchasing/purchasingApi"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
 import DepartmentOverview from "../DepartmentOverview"
 import { ListPanel, useDrill } from "../DashboardKit"
-import { purchaseRow, stockRow } from "../rows"
+import { isLowStock, onOrderByComponent, purchaseRow, stockRow } from "../rows"
 
 const EMPTY = []
 const QUEUE = "PENDING_APPROVAL"
@@ -54,12 +54,13 @@ export default function OperationsView() {
 
   const d = useMemo(() => {
     const latest = [...orders].sort(newestFirst)
+    const onOrder = onOrderByComponent(buys.data)
     const by = (s) => latest.filter((o) => o.approval_status === s)
     return {
       pending: by(QUEUE),
       rejected: by("REJECTED"),
       inProgress: (buys.data ?? EMPTY).filter((p) => p.status !== "STORED" && p.status !== "REJECTED").map((p) => ({ ...purchaseRow(p), detail: (close) => <OpsPurchaseDrawer purchaseId={p.id} onClose={close} /> })),
-      low: (inv.data ?? EMPTY).filter((i) => Number(i.available) <= Number(i.minimum_stock_level)).map(stockRow),
+      low: (inv.data ?? EMPTY).filter(isLowStock).map((i) => stockRow(i, onOrder.get(i.component_id))),
     }
   }, [orders, buys.data, inv.data])
 
@@ -106,7 +107,7 @@ export default function OperationsView() {
           </OpsPanel>
         </Reveal>
         <Reveal delay={0.5}>
-          <ListPanel table rightLabel="Available / min" drill={drill} loading={loading} title="Components to reorder" description="Available stock is at or below the minimum." rows={d.low} to="/inventory?filter=low" toLabel="Open Inventory" emptyIcon={d.low.length ? AlertTriangle : CheckCircle2} empty="All components are above minimum" />
+          <ListPanel table rightLabel="On hand / min" drill={drill} loading={loading} title="Components to reorder" description="Stock on hand is at or below the minimum." rows={d.low} to="/inventory?filter=low" toLabel="Open Inventory" emptyIcon={d.low.length ? AlertTriangle : CheckCircle2} empty="All components are above minimum" />
         </Reveal>
       </div>
 

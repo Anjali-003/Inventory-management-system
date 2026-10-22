@@ -75,22 +75,50 @@ export const purchaseRow = (p) => ({
 /* A purchase the IQC approved, waiting for the store: shows the approved quantity. */
 export const incomingRow = (p) => ({ ...purchaseRow(p), right: fmtQty(p.totals?.approved ?? 0) })
 
-export const stockRow = (i) => {
-  const avail = Number(i.available)
+/* Low stock = on hand at or below the minimum level. Approving an order takes the components out of stock
+   directly (there is no reserve step), so on hand is the real figure. */
+export const isLowStock = (i) => Number(i.quantity_on_hand) <= Number(i.minimum_stock_level)
+
+const ON_ORDER_STATUSES = ["ORDER_PLACED", "RECEIVED", "PENDING_IQC", "PENDING_STORE"]
+
+/* component_id -> quantity already ordered from suppliers and not in stock yet (lines IQC rejected do not count). */
+export function onOrderByComponent(purchases = []) {
+  const map = new Map()
+  for (const p of purchases || []) {
+    if (!ON_ORDER_STATUSES.includes(p.status)) continue
+    for (const it of p.items || []) {
+      if (it.iqc_decision === "REJECTED") continue
+      const qty = p.status === "PENDING_STORE" && it.quantity_approved != null ? it.quantity_approved : it.quantity_ordered
+      map.set(it.component_id, (map.get(it.component_id) || 0) + Number(qty || 0))
+    }
+  }
+  return map
+}
+
+/* `onOrder` (optional) = quantity already on order for this component, shown next to the SKU. */
+export const stockRow = (i, onOrder = 0) => {
+  const onHand = Number(i.quantity_on_hand)
   const min = Number(i.minimum_stock_level)
-  const badge = avail <= 0 ? { variant: "danger", label: "Out" } : avail <= min ? { variant: "warning", label: "Low" } : { variant: "success", label: "OK" }
+  const incoming = Number(onOrder) || 0
+  const badge = onHand <= 0 ? { variant: "danger", label: "Out" } : onHand <= min ? { variant: "warning", label: "Low" } : { variant: "success", label: "OK" }
+  const reserved = Number(i.quantity_reserved) > 0 // old data only: nothing is reserved any more
   return {
     id: `c${i.id}`,
     title: i.component_name,
-    sub: i.sku,
-    right: `${fmtQty(avail)} / ${fmtQty(min)}`,
+    sub: incoming > 0 ? `${i.sku} · ${fmtQty(incoming)} on order` : i.sku,
+    right: `${fmtQty(onHand)} / ${fmtQty(min)}`,
     badge,
     detail: (close) => (
       <InfoModal
         title={i.component_name}
         description={i.sku}
         badge={badge}
-        fields={[["On hand", fmtQty(i.quantity_on_hand)], ["Reserved", fmtQty(i.quantity_reserved)], ["Available", fmtQty(avail)], ["Minimum level", fmtQty(min)]]}
+        fields={[
+          ["On hand", fmtQty(onHand)],
+          ...(reserved ? [["Reserved", fmtQty(i.quantity_reserved)], ["Available", fmtQty(i.available)]] : []),
+          ["Minimum level", fmtQty(min)],
+          ...(incoming > 0 ? [["On order", fmtQty(incoming)]] : []),
+        ]}
         onClose={close}
       />
     ),

@@ -4,6 +4,7 @@ import { AlertTriangle, Boxes, ClipboardList, PackageCheck, Warehouse } from "lu
 import { useGetOrdersQuery } from "@/features/orders/ordersApi"
 import { useGetProductsQuery } from "@/features/products/productsApi"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
+import { useGetPurchasesQuery } from "@/features/purchasing/purchasingApi"
 import { useGetAttendanceQuery } from "@/features/attendance/attendanceApi"
 import RecentActivity from "@/features/activity/RecentActivity"
 import { Notice } from "@/components/feedback"
@@ -11,7 +12,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { Greeting, InfoModal, ListPanel, StatRow, useDrill } from "../DashboardKit"
-import { stockRow } from "../rows"
+import { isLowStock, onOrderByComponent, stockRow } from "../rows"
 
 const EMPTY = []
 const STATUSES = [
@@ -28,6 +29,7 @@ export default function SuperAdminView() {
   const productsQ = useGetProductsQuery()
   const inventoryQ = useGetInventoryQuery("active")
   const ordersQ = useGetOrdersQuery()
+  const purchasesQ = useGetPurchasesQuery() // only for the "on order" quantities, so it never blocks the page
   const loading = productsQ.isLoading || inventoryQ.isLoading || ordersQ.isLoading
   const failed = Boolean(productsQ.error || inventoryQ.error || ordersQ.error)
   const [today] = useState(() => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10) })
@@ -37,6 +39,8 @@ export default function SuperAdminView() {
     const products = failed ? EMPTY : productsQ.data ?? EMPTY
     const inventory = failed ? EMPTY : inventoryQ.data ?? EMPTY
     const lines = failed ? EMPTY : ordersQ.data ?? EMPTY
+    const onOrder = onOrderByComponent(purchasesQ.data)
+    const stockOf = (i) => stockRow(i, onOrder.get(i.component_id))
 
     // the orders API returns one row per product line; group them into one row per order
     const byId = new Map()
@@ -59,10 +63,10 @@ export default function SuperAdminView() {
       orders,
       openRows: orders.filter((o) => o.status !== "COMPLETED").map(orderRowOf),
       byStatus: (k) => orders.filter((o) => o.status === k).map(orderRowOf),
-      stockAll: inventory.map(stockRow),
-      low: inventory.filter((i) => Number(i.available) <= Number(i.minimum_stock_level)).map(stockRow),
+      stockAll: inventory.map(stockOf),
+      low: inventory.filter(isLowStock).map(stockOf),
     }
-  }, [failed, productsQ.data, inventoryQ.data, ordersQ.data])
+  }, [failed, productsQ.data, inventoryQ.data, ordersQ.data, purchasesQ.data])
 
   const attRows = (key, variant, label) => (att || []).filter((e) => e.status === key).map((e) => ({ id: `e${e.id ?? e.employee_id ?? e.name}`, title: e.name, sub: [e.employee_code, e.department].filter(Boolean).join(" · "), badge: { variant, label } }))
 
@@ -76,13 +80,13 @@ export default function SuperAdminView() {
         stats={[
           { label: "Products", value: d.productRows.length, icon: Boxes, tone: "blue", loading, detail: "In the catalog", drill: { title: "Products", rows: d.productRows, to: "/products", toLabel: "Open Products", empty: "No products yet" } },
           { label: "Open orders", value: d.openRows.length, icon: ClipboardList, tone: "green", loading, detail: "Not completed yet", drill: { title: "Open orders", rows: d.openRows, to: "/orders", toLabel: "Open Orders", empty: "No open orders" } },
-          { label: "Components tracked", value: d.stockAll.length, icon: Warehouse, tone: "violet", loading, detail: "In inventory", drill: { title: "Components in inventory", description: "Available / minimum level", rows: d.stockAll, to: "/inventory", toLabel: "Open Inventory", empty: "No components yet" } },
+          { label: "Components tracked", value: d.stockAll.length, icon: Warehouse, tone: "violet", loading, detail: "In inventory", drill: { title: "Components in inventory", description: "On hand / minimum level", rows: d.stockAll, to: "/inventory", toLabel: "Open Inventory", empty: "No components yet" } },
           { label: "At or below minimum", value: d.low.length, icon: AlertTriangle, tone: d.low.length ? "amber" : "green", loading, detail: d.low.length ? "Needs reordering" : "All stocked up", drill: { title: "Components at or below minimum", rows: d.low, to: "/inventory?filter=low", toLabel: "Open Inventory", empty: "All components are above minimum" } },
         ]}
       />
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <ListPanel drill={drill} loading={loading} className="lg:col-span-2" title="Components to reorder" description="Available stock is at or below the minimum level." rows={d.low} to="/inventory?filter=low" toLabel="Open Inventory" emptyIcon={PackageCheck} empty="All components are above minimum" />
+        <ListPanel drill={drill} loading={loading} className="lg:col-span-2" title="Components to reorder" description="Stock on hand is at or below the minimum level." rows={d.low} to="/inventory?filter=low" toLabel="Open Inventory" emptyIcon={PackageCheck} empty="All components are above minimum" />
 
         <Card className="self-start">
           <CardHeader><div><CardTitle>Orders by status</CardTitle><CardDescription>{d.orders.length} orders in total</CardDescription></div></CardHeader>

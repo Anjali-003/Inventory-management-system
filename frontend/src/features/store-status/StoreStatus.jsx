@@ -25,7 +25,7 @@ const EMPTY = []
 */
 const VIEWS = {
   ACCEPT: { label: "To accept into stock", detail: "Approved by IQC", description: "IQC approved these purchases. Accept them into stock.", to: "/incoming-stock?status=PENDING_STORE", toLabel: "Open Incoming Stock", icon: Truck, tone: "amber", grad: "from-amber-400 to-orange-500", pill: "bg-amber-50 text-amber-800 ring-amber-200", dot: "bg-amber-500" },
-  LOW: { label: "At or below minimum", detail: "Needs reordering", description: "Available stock is at or below the minimum level.", to: "/inventory?filter=low", toLabel: "Open Inventory", icon: AlertTriangle, tone: "amber", grad: "from-rose-400 to-red-600", pill: "bg-rose-50 text-rose-800 ring-rose-200", dot: "bg-rose-500" },
+  LOW: { label: "At or below minimum", detail: "Needs reordering", description: "Stock on hand is at or below the minimum level.", to: "/inventory?filter=low", toLabel: "Open Inventory", icon: AlertTriangle, tone: "amber", grad: "from-rose-400 to-red-600", pill: "bg-rose-50 text-rose-800 ring-rose-200", dot: "bg-rose-500" },
   PACKAGING: { label: "In packaging", detail: "Ready to dispatch", description: "Finished goods in packaging. Mark them dispatched from the Finished Goods page.", to: "/finished-goods?status=PACKAGING", toLabel: "Open Finished Goods", icon: Warehouse, tone: "blue", grad: "from-sky-400 to-blue-600", pill: "bg-sky-50 text-sky-800 ring-sky-200", dot: "bg-sky-500" },
   DISPATCHED: { label: "Dispatched", detail: "Waiting to be completed", description: "Dispatched batches that are not completed yet.", to: "/finished-goods?status=DISPATCHED", toLabel: "Open Finished Goods", icon: Truck, tone: "violet", grad: "from-violet-400 to-purple-600", pill: "bg-violet-50 text-violet-800 ring-violet-200", dot: "bg-violet-500" },
 }
@@ -41,7 +41,7 @@ export default function StoreStatus() {
 
   const lists = useMemo(() => ({
     ACCEPT: (inc.data ?? EMPTY).filter((p) => p.status === "PENDING_STORE"),
-    LOW: (inv.data ?? EMPTY).filter((i) => Number(i.available) <= Number(i.minimum_stock_level)),
+    LOW: (inv.data ?? EMPTY).filter((i) => Number(i.quantity_on_hand) <= Number(i.minimum_stock_level)),
     PACKAGING: (fg.data ?? EMPTY).filter((x) => x.status === "PACKAGING"),
     DISPATCHED: (fg.data ?? EMPTY).filter((x) => x.status === "DISPATCHED"),
   }), [inc.data, inv.data, fg.data])
@@ -113,13 +113,13 @@ export default function StoreStatus() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Component</TableHead><TableHead>SKU</TableHead><TableHead className="text-right">Available</TableHead><TableHead className="text-right">Minimum</TableHead><TableHead>Status</TableHead>
+                <TableHead>Component</TableHead><TableHead>SKU</TableHead><TableHead className="text-right">On hand</TableHead><TableHead className="text-right">Minimum</TableHead><TableHead>Status</TableHead>
               </TableRow></TableHeader>
               <TableBody>{rows.map((i) => (
                 <TableRow key={i.id}>
                   <TableCell className="font-medium">{i.component_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{i.sku}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">{fmtQty(i.available)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{fmtQty(i.quantity_on_hand)}</TableCell>
                   <TableCell className="text-right tabular-nums">{fmtQty(i.minimum_stock_level)}</TableCell>
                   <TableCell><StockBadge item={i} /></TableCell>
                 </TableRow>

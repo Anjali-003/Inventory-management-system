@@ -64,10 +64,10 @@ export default function ItemDetailModal({ open, itemId, refreshToken, onClose, o
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border sm:grid-cols-4">
+          <div className={`grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border ${Number(item.quantity_reserved) > 0 ? "sm:grid-cols-4" : "sm:grid-cols-2"}`}>
             <Tile label="On hand" value={fmtQty(item.quantity_on_hand)} />
-            <Tile label="Reserved" value={fmtQty(item.quantity_reserved)} sub="for production" />
-            <Tile label="Available" value={fmtQty(item.available)} />
+            {Number(item.quantity_reserved) > 0 && <Tile label="Reserved" value={fmtQty(item.quantity_reserved)} sub="for production" />}
+            {Number(item.quantity_reserved) > 0 && <Tile label="Available" value={fmtQty(item.available)} />}
             <Tile label="Minimum" value={fmtQty(item.minimum_stock_level)} sub="alert level" />
           </div>
 

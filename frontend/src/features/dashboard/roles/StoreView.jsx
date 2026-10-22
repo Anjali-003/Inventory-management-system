@@ -3,11 +3,11 @@ import { AlertTriangle, PackageCheck, Truck, Warehouse } from "lucide-react"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
-import { useGetIncomingStockQuery } from "@/features/purchasing/purchasingApi"
+import { useGetIncomingStockQuery, useGetPurchasesQuery } from "@/features/purchasing/purchasingApi"
 import IssueComponentsPanel from "@/features/notifications/IssueComponentsPanel"
 import DepartmentOverview from "../DepartmentOverview"
 import { Greeting, ListPanel, StatRow, useDrill } from "../DashboardKit"
-import { finishedRow, incomingRow, stockRow } from "../rows"
+import { finishedRow, incomingRow, isLowStock, onOrderByComponent, stockRow } from "../rows"
 
 const EMPTY = []
 const ACCEPT_PAGE = "/incoming-stock?status=PENDING_STORE" // the purchases waiting to be accepted, with their Accept buttons
@@ -20,14 +20,18 @@ export default function StoreView({ readOnly = false }) {
   const inv = useGetInventoryQuery("active")
   const fg = useGetFinishedGoodsQuery()
   const inc = useGetIncomingStockQuery()
+  const buys = useGetPurchasesQuery() // only for the "on order" quantities, so it never blocks the page
   const loading = inv.isLoading || fg.isLoading || inc.isLoading
 
-  const { low, waiting, packaging, dispatched } = useMemo(() => ({
-    low: (inv.data ?? EMPTY).filter((i) => Number(i.available) <= Number(i.minimum_stock_level)).map(stockRow),
+  const { low, waiting, packaging, dispatched } = useMemo(() => {
+    const onOrder = onOrderByComponent(buys.data)
+    return {
+    low: (inv.data ?? EMPTY).filter(isLowStock).map((i) => stockRow(i, onOrder.get(i.component_id))),
     waiting: (inc.data ?? EMPTY).filter((p) => p.status === "PENDING_STORE").map((p) => (direct ? { ...incomingRow(p), to: ACCEPT_PAGE } : incomingRow(p))),
     packaging: (fg.data ?? EMPTY).filter((x) => x.status === "PACKAGING").map(finishedRow),
     dispatched: (fg.data ?? EMPTY).filter((x) => x.status === "DISPATCHED").map(finishedRow),
-  }), [inv.data, fg.data, inc.data, direct])
+    }
+  }, [inv.data, fg.data, inc.data, buys.data, direct])
 
   return (
     <>
@@ -44,7 +48,7 @@ export default function StoreView({ readOnly = false }) {
       />
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ListPanel drill={drill} loading={loading} title="Incoming stock to accept" description="IQC-approved purchases." rows={waiting} to={direct ? ACCEPT_PAGE : "/incoming-stock"} toLabel={direct ? "Accept now" : "Open Incoming Stock"} emptyIcon={PackageCheck} empty="Nothing waiting for the store" />
-        <ListPanel drill={drill} loading={loading} title="Components to reorder" description="Available stock is at or below the minimum." rows={low} to="/inventory?filter=low" toLabel="Open Inventory" emptyIcon={PackageCheck} empty="All components are above minimum" />
+        <ListPanel drill={drill} loading={loading} title="Components to reorder" description="Stock on hand is at or below the minimum." rows={low} to="/inventory?filter=low" toLabel="Open Inventory" emptyIcon={PackageCheck} empty="All components are above minimum" />
         <ListPanel drill={drill} loading={loading} className="lg:col-span-2" title="Finished goods in packaging" description="Mark them dispatched from the Finished Goods page." rows={packaging} to="/finished-goods" toLabel="Open Finished Goods" emptyIcon={Warehouse} empty="No batch in packaging" />
       </div>
       <DepartmentOverview className="mt-4" depts={["iqc", "purchase"]} />
