@@ -7,13 +7,13 @@ import UserCell from "@/components/UserCell"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { StatCard } from "@/components/HistoryUI"
 import { StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
+import { Accordion } from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useGetIqcQueueQuery } from "@/features/purchasing/purchasingApi"
-import { PurchaseDetailModal, PurchaseStatus } from "@/features/purchasing/PurchaseParts"
+import { PurchaseDetailModal, PurchaseLines, PurchaseStatus } from "@/features/purchasing/PurchaseParts"
 import { WAS_INSPECTED, downloadRejected, rejectedLines } from "@/features/purchasing/purchasingUtils"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import InspectModal from "./InspectModal"
@@ -128,38 +128,34 @@ export default function Iqc() {
             {query ? "Try a different PO number, supplier or component." : "Purchases show up here once the purchase manager sends them to IQC."}
           </EmptyState>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Purchase</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead>Components</TableHead>
-                  <TableHead>Purchased by</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {waitingShown.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-semibold">{p.po_number}</TableCell>
-                    <TableCell>{p.supplier}</TableCell>
-                    <TableCell className="text-muted-foreground">
+          <ul className="divide-y">
+            {waitingShown.map((p) => (
+              <Accordion
+                key={p.id}
+                as="li"
+                headerClassName="flex-wrap gap-x-4 gap-y-2 px-5 py-3.5"
+                panelClassName="border-t bg-muted/10 p-4"
+                header={
+                  <>
+                    <p className="font-semibold">{p.po_number} · {p.supplier}</p>
+                    <p className="text-xs text-muted-foreground">
                       {p.totals.lines} item{p.totals.lines === 1 ? "" : "s"} · {fmtQty(p.totals.ordered)} pcs ordered
-                    </TableCell>
-                    <TableCell><UserCell name={p.created_by_name} sub={fmtDateTime(p.created_at)} /></TableCell>
-                    <TableCell className="text-right">
-                      {editable ? (
-                        <Button size="sm" onClick={() => setInspecting(p.id)}>Inspect</Button>
-                      ) : (
-                        <Button size="sm" variant="outline" onClick={() => setViewing(p)}>View</Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                    </p>
+                  </>
+                }
+                meta={<UserCell name={p.created_by_name} sub={fmtDateTime(p.created_at)} />}
+                actions={
+                  editable ? (
+                    <Button size="sm" onClick={() => setInspecting(p.id)}>Inspect</Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => setViewing(p)}>View</Button>
+                  )
+                }
+              >
+                <PurchaseLines items={p.items} inspected={false} />
+              </Accordion>
+            ))}
+          </ul>
         )}
       </Card>
 
@@ -179,45 +175,44 @@ export default function Iqc() {
         ) : inspectedShown.length === 0 ? (
           <EmptyState icon={ClipboardCheck} title={query ? "No purchase matches your search" : view ? `Nothing ${cfg.label.toLowerCase()}` : "Nothing inspected yet"}>{query ? "Try a different PO number, supplier or component." : "Inspected purchases and their result appear here."}</EmptyState>
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Purchase</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead className="text-right">Received</TableHead>
-                  <TableHead className="text-right">Approved</TableHead>
-                  <TableHead className="text-right">Rejected lines</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Inspected by</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {inspectedShown.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell className="font-semibold">{p.po_number}</TableCell>
-                    <TableCell>{p.supplier}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmtQty(p.totals.received)}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">{fmtQty(p.totals.approved)}</TableCell>
-                    <TableCell className={`text-right tabular-nums ${rejectedLines(p).length > 0 ? "font-semibold text-destructive" : ""}`}>
-                      {rejectedLines(p).length} of {p.totals.lines}
-                    </TableCell>
-                    <TableCell><PurchaseStatus value={p.status} /></TableCell>
-                    <TableCell><UserCell name={p.iqc_by_name} sub={fmtDateTime(p.iqc_at)} /></TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        {rejectedLines(p).length > 0 && (
-                          <Button size="sm" variant="outline" onClick={() => downloadRejected(p)}><Download /> Rejected (Excel)</Button>
-                        )}
-                        <Button size="sm" variant="ghost" onClick={() => setViewing(p)}>Details</Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <ul className="divide-y">
+            {inspectedShown.map((p) => {
+              const rejected = rejectedLines(p).length
+              return (
+                <Accordion
+                  key={p.id}
+                  as="li"
+                  headerClassName="flex-wrap gap-x-4 gap-y-2 px-5 py-3.5"
+                  panelClassName="border-t bg-muted/10 p-4"
+                  header={
+                    <>
+                      <p className="font-semibold">{p.po_number} · {p.supplier}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Received {fmtQty(p.totals.received)} · Approved <span className="font-semibold tabular-nums text-foreground">{fmtQty(p.totals.approved)}</span> ·{" "}
+                        <span className={rejected > 0 ? "font-semibold text-destructive" : ""}>{rejected} of {p.totals.lines} lines rejected</span>
+                      </p>
+                    </>
+                  }
+                  meta={
+                    <>
+                      <PurchaseStatus value={p.status} />
+                      <UserCell name={p.iqc_by_name} sub={fmtDateTime(p.iqc_at)} />
+                    </>
+                  }
+                  actions={
+                    <>
+                      {rejected > 0 && (
+                        <Button size="sm" variant="outline" onClick={() => downloadRejected(p)}><Download /> Rejected (Excel)</Button>
+                      )}
+                      <Button size="sm" variant="ghost" onClick={() => setViewing(p)}>Details</Button>
+                    </>
+                  }
+                >
+                  <PurchaseLines items={p.items} inspected />
+                </Accordion>
+              )
+            })}
+          </ul>
         )}
       </Card>
       )}

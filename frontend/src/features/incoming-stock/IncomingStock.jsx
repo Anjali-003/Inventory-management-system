@@ -1,12 +1,13 @@
 import { useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { CheckCircle2, ChevronDown, PackageCheck, RefreshCw, Truck } from "lucide-react"
+import { CheckCircle2, PackageCheck, RefreshCw, Truck } from "lucide-react"
 import PageHeader from "@/components/PageHeader"
 import UserCell from "@/components/UserCell"
 import { ConfirmDialog } from "@/components/Modal"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { StatCard } from "@/components/HistoryUI"
 import { StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
+import { Accordion } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,30 +17,53 @@ import { usePermissions } from "@/features/auth/usePermissions"
 import { useAcceptPurchaseMutation, useGetIncomingStockQuery } from "@/features/purchasing/purchasingApi"
 import { PurchaseDetailModal } from "@/features/purchasing/PurchaseParts"
 import { qtyWithUnit } from "@/features/purchasing/purchasingUtils"
-import { cn } from "@/lib/utils"
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
 
 const EMPTY = []
+
+/* The components of one purchase as a table. `resultLabel` names the last column ("You will receive" / "Added to stock"). */
+function StockLines({ lines, resultLabel }) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Component</TableHead>
+            <TableHead className="text-right">Ordered</TableHead>
+            <TableHead className="text-right">{resultLabel}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {lines.map((i) => (
+            <TableRow key={i.id}>
+              <TableCell>
+                <p className="font-medium">{i.name}</p>
+                <p className="text-xs text-muted-foreground">{i.sku}{i.remarks ? ` · ${i.remarks}` : ""}</p>
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{qtyWithUnit(i.quantity_ordered, i.unit)}</TableCell>
+              <TableCell className="text-right font-semibold tabular-nums">{qtyWithUnit(i.quantity_approved, i.unit)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
 
 /*
   One purchase waiting to be accepted, as an accordion: closed it shows only the header (PO, supplier, summary, Accept);
   click the header to show the components, click again to hide them. The Accept button never toggles the card.
 */
 function WaitingCard({ p, editable, onAccept }) {
-  const [open, setOpen] = useState(false)
   const lines = p.items.filter((i) => Number(i.quantity_approved) > 0)
-  const toggle = () => setOpen((v) => !v)
   return (
-    <Card className="overflow-hidden">
-      <CardHeader
-        role="button"
-        tabIndex={0}
-        aria-expanded={open}
-        onClick={toggle}
-        onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle() } }}
-        className={cn("cursor-pointer items-center outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60", !open && "border-b-0 rounded-b-[14px]")}
-      >
-        <div className="min-w-0">
+    <Accordion
+      as={Card}
+      headerAs={CardHeader}
+      className="overflow-hidden"
+      headerClassName={(open) => !open && "border-b-0 rounded-b-[14px]"}
+      header={
+        <>
           <CardTitle>{p.po_number} · {p.supplier}</CardTitle>
           <CardDescription>
             Approved by {p.iqc_by_name || "IQC"} on {fmtDateTime(p.iqc_at)}
@@ -48,38 +72,12 @@ function WaitingCard({ p, editable, onAccept }) {
           <p className="mt-1 pl-[13px] text-xs font-medium text-foreground">
             {lines.length} component{lines.length === 1 ? "" : "s"} · {fmtQty(p.totals.approved)} pieces to receive
           </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          {editable && <Button onClick={(e) => { e.stopPropagation(); onAccept(p) }}><CheckCircle2 /> Accept into stock</Button>}
-          <ChevronDown className={cn("size-5 text-muted-foreground transition-transform duration-200", open && "rotate-180")} aria-hidden />
-        </div>
-      </CardHeader>
-      {open && (
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Component</TableHead>
-                <TableHead className="text-right">Ordered</TableHead>
-                <TableHead className="text-right">You will receive</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lines.map((i) => (
-                <TableRow key={i.id}>
-                  <TableCell>
-                    <p className="font-medium">{i.name}</p>
-                    <p className="text-xs text-muted-foreground">{i.sku}{i.remarks ? ` · ${i.remarks}` : ""}</p>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{qtyWithUnit(i.quantity_ordered, i.unit)}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">{qtyWithUnit(i.quantity_approved, i.unit)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
-    </Card>
+        </>
+      }
+      actions={editable && <Button onClick={() => onAccept(p)}><CheckCircle2 /> Accept into stock</Button>}
+    >
+      <StockLines lines={lines} resultLabel="You will receive" />
+    </Accordion>
   )
 }
 
@@ -88,60 +86,31 @@ function WaitingCard({ p, editable, onAccept }) {
   click to show its components, click again to hide them.
 */
 function AcceptedRow({ p, onDetails }) {
-  const [open, setOpen] = useState(false)
   const lines = p.items.filter((i) => Number(i.quantity_approved) > 0)
-  const toggle = () => setOpen((v) => !v)
   return (
-    <li>
-      <div
-        role="button"
-        tabIndex={0}
-        aria-expanded={open}
-        onClick={toggle}
-        onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle() } }}
-        className="flex cursor-pointer flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-3.5 outline-none transition-colors hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
-      >
-        <div className="min-w-0">
+    <Accordion
+      as="li"
+      headerClassName="flex-wrap gap-x-4 gap-y-2 px-5 py-3.5"
+      endClassName="gap-4"
+      panelClassName="border-t bg-muted/10"
+      header={
+        <>
           <p className="font-semibold">{p.po_number} · {p.supplier}</p>
           <p className="text-xs text-muted-foreground">{lines.length} component{lines.length === 1 ? "" : "s"}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-4">
+        </>
+      }
+      meta={
+        <>
           <UserCell name={p.accepted_by_name} sub={fmtDateTime(p.accepted_at)} />
           <Badge variant="success">{fmtQty(p.totals.approved)}</Badge>
-          <ChevronDown className={cn("size-5 text-muted-foreground transition-transform duration-200", open && "rotate-180")} aria-hidden />
-        </div>
+        </>
+      }
+    >
+      <StockLines lines={lines} resultLabel="Added to stock" />
+      <div className="flex justify-end px-5 py-2.5">
+        <Button size="sm" variant="ghost" onClick={() => onDetails(p)}>Full details</Button>
       </div>
-      {open && (
-        <div className="border-t bg-muted/10">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Component</TableHead>
-                  <TableHead className="text-right">Ordered</TableHead>
-                  <TableHead className="text-right">Added to stock</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lines.map((i) => (
-                  <TableRow key={i.id}>
-                    <TableCell>
-                      <p className="font-medium">{i.name}</p>
-                      <p className="text-xs text-muted-foreground">{i.sku}{i.remarks ? ` · ${i.remarks}` : ""}</p>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{qtyWithUnit(i.quantity_ordered, i.unit)}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">{qtyWithUnit(i.quantity_approved, i.unit)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="flex justify-end px-5 py-2.5">
-            <Button size="sm" variant="ghost" onClick={() => onDetails(p)}>Full details</Button>
-          </div>
-        </div>
-      )}
-    </li>
+    </Accordion>
   )
 }
 

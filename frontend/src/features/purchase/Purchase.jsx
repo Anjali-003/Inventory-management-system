@@ -5,6 +5,7 @@ import { ClipboardList, RefreshCw, ShoppingCart, X } from "lucide-react"
 import UserCell from "@/components/UserCell"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { useToast } from "@/components/toast"
+import { Accordion } from "@/components/ui/accordion"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -166,16 +167,33 @@ export default function Purchase() {
           ) : (
             <motion.ul variants={stagger(0.05, 0.05)} initial="hidden" animate="show" className="grid gap-3 p-3 sm:p-4 lg:grid-cols-2">
               {toOrder.map(({ order, lines }) => (
-                <motion.li key={order.id} variants={rise} className="flex flex-col gap-3 rounded-xl border border-[#dce5e0] bg-card p-4 transition-colors duration-200 hover:border-[#c3d1ca] sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="break-all text-[15px] font-semibold tabular-nums">{order.order_number}</p>
-                    <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
-                      {lines.slice(0, 3).map((l) => `${l.name} (${qtyWithUnit(l.quantity, l.unit)})`).join(", ")}
-                      {lines.length > 3 && ` +${lines.length - 3} more`}
-                    </p>
-                  </div>
-                  <MktBtn variant="primary" className="shrink-0" onClick={() => setPlacing(order.id)}><ShoppingCart /> Place order ({lines.length})</MktBtn>
-                </motion.li>
+                <Accordion
+                  key={order.id}
+                  as={motion.li}
+                  rootProps={{ variants: rise }}
+                  className="rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]"
+                  headerClassName="flex-wrap gap-y-3 rounded-xl p-4"
+                  panelClassName="border-t px-4 py-3"
+                  header={
+                    <>
+                      <p className="break-all text-[15px] font-semibold tabular-nums">{order.order_number}</p>
+                      <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
+                        {lines.slice(0, 3).map((l) => `${l.name} (${qtyWithUnit(l.quantity, l.unit)})`).join(", ")}
+                        {lines.length > 3 && ` +${lines.length - 3} more`}
+                      </p>
+                    </>
+                  }
+                  actions={<MktBtn variant="primary" className="shrink-0" onClick={() => setPlacing(order.id)}><ShoppingCart /> Place order ({lines.length})</MktBtn>}
+                >
+                  <ul className="space-y-1.5 text-[13px]">
+                    {lines.map((l) => (
+                      <li key={l.component_id} className="flex items-baseline justify-between gap-3">
+                        <span className="min-w-0 break-words">{l.name}</span>
+                        <span className="shrink-0 font-medium tabular-nums">{qtyWithUnit(l.quantity, l.unit)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Accordion>
               ))}
             </motion.ul>
           )}

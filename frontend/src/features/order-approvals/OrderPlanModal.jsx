@@ -2,6 +2,7 @@ import { useState } from "react"
 import { motion } from "motion/react"
 import { Loader2, Factory, ShoppingCart } from "lucide-react"
 import { Modal } from "@/components/Modal"
+import { Accordion } from "@/components/ui/accordion"
 import { Notice } from "@/components/feedback"
 import { Field } from "@/components/FormField"
 import { useToast } from "@/components/toast"
@@ -23,18 +24,26 @@ const BANNER = {
   neutral: { grad: "from-slate-400 to-slate-600", glow: "shadow-slate-500/30" },
 }
 
+/* A titled block of the stock check. Open by default; the admin can fold a block away to focus on the other one. */
 function Section({ icon: Icon, title, hint, children }) {
   return (
-    <section className="space-y-2">
-      <div className="flex items-start gap-2">
-        <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        <div>
-          <h3 className="text-sm font-semibold leading-tight">{title}</h3>
-          <p className="text-xs text-muted-foreground">{hint}</p>
+    <Accordion
+      as="section"
+      defaultOpen
+      headerClassName="rounded-lg"
+      panelClassName="pt-2"
+      header={
+        <div className="flex items-start gap-2">
+          <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <div>
+            <h3 className="text-sm font-semibold leading-tight">{title}</h3>
+            <p className="text-xs text-muted-foreground">{hint}</p>
+          </div>
         </div>
-      </div>
+      }
+    >
       {children}
-    </section>
+    </Accordion>
   )
 }
 
