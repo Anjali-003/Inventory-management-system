@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/feedback"
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { useGetOrderApprovalsQuery } from "@/features/order-approvals/orderApprovalsApi"
 import OpsOrderDrawer from "@/features/order-approvals/OpsOrderDrawer"
+import PurchaseDrawer from "@/features/purchase/PurchaseDrawer"
 import { ApprovalList, OPS_ALL, OPS_STAGES, OpsPanel, OpsTileGrid, opsHref } from "@/features/order-approvals/opsKit"
 import { HeroLink, MktHero, StageTile } from "@/features/marketing-orders/mktKit"
 import { OrderPipeline, countByStatus, newestFirst, plural } from "@/features/marketing-orders/orderParts"
@@ -17,6 +18,15 @@ import { purchaseRow, stockRow } from "../rows"
 
 const EMPTY = []
 const QUEUE = "PENDING_APPROVAL"
+
+/* The Purchase page's side drawer for one purchase, read-only here (the Operations Admin only follows purchases).
+   It reads the purchase from the live list by id, and closes itself if the purchase is no longer in it. */
+function OpsPurchaseDrawer({ purchaseId, onClose }) {
+  const { data = EMPTY } = useGetPurchasesQuery()
+  const [tab, setTab] = useState("overview")
+  const purchase = data.find((p) => p.id === purchaseId) ?? null
+  return <PurchaseDrawer purchase={purchase} tab={tab} onTab={setTab} onClose={onClose} editable={false} />
+}
 
 /* Plain-language line under "Hello": the one thing worth doing next. */
 function nudge(counts) {
@@ -48,7 +58,7 @@ export default function OperationsView() {
     return {
       pending: by(QUEUE),
       rejected: by("REJECTED"),
-      inProgress: (buys.data ?? EMPTY).filter((p) => p.status !== "STORED" && p.status !== "REJECTED").map(purchaseRow),
+      inProgress: (buys.data ?? EMPTY).filter((p) => p.status !== "STORED" && p.status !== "REJECTED").map((p) => ({ ...purchaseRow(p), detail: (close) => <OpsPurchaseDrawer purchaseId={p.id} onClose={close} /> })),
       low: (inv.data ?? EMPTY).filter((i) => Number(i.available) <= Number(i.minimum_stock_level)).map(stockRow),
     }
   }, [orders, buys.data, inv.data])
