@@ -49,12 +49,16 @@ async function listOrders() {
             oi.product_id,
             p.name AS product_name,
             oi.quantity,
-            COALESCE(ap.quantity, 0) AS approved_quantity,
+            CASE WHEN o.inventory_issued_at IS NOT NULL
+                 THEN LEAST(oi.quantity, GREATEST(0, COALESCE(ap.quantity, 0) - COALESCE(prior_items.quantity, 0)))
+                 ELSE oi.quantity END AS approved_quantity,
             COALESCE(po.quantity_to_produce, 0) AS quantity_to_produce,
             COALESCE(po.quantity_completed, 0) AS quantity_completed,
             GREATEST(
                 0,
-                (CASE WHEN o.inventory_issued_at IS NOT NULL THEN COALESCE(ap.quantity, 0) ELSE oi.quantity END)
+                (CASE WHEN o.inventory_issued_at IS NOT NULL
+                      THEN LEAST(oi.quantity, GREATEST(0, COALESCE(ap.quantity, 0) - COALESCE(prior_items.quantity, 0)))
+                      ELSE oi.quantity END)
                     - COALESCE(po.quantity_to_produce, 0)
             ) AS remaining_to_start
         FROM orders o
@@ -63,12 +67,21 @@ async function listOrders() {
         JOIN products p
             ON oi.product_id = p.id
         LEFT JOIN production_orders po
-            ON po.order_id = o.id AND po.product_id = oi.product_id
+            ON po.order_item_id = oi.id
         LEFT JOIN (
             SELECT order_id, product_id, SUM(quantity) AS quantity
             FROM order_production_items GROUP BY order_id, product_id
         ) ap
             ON ap.order_id = o.id AND ap.product_id = oi.product_id
+        LEFT JOIN (
+            SELECT current_item.id AS order_item_id, SUM(previous.quantity) AS quantity
+            FROM order_items current_item
+            JOIN order_items previous
+              ON previous.order_id = current_item.order_id
+             AND previous.product_id = current_item.product_id
+             AND previous.id < current_item.id
+            GROUP BY current_item.id
+        ) prior_items ON prior_items.order_item_id = oi.id
         LEFT JOIN users cu
             ON cu.id = o.created_by
         ORDER BY o.id DESC

@@ -23,7 +23,8 @@ const ACCESS = {
         finishedGoods: "edit",
         // IQC-approved purchases waiting to be accepted into stock
         incomingStock: "edit",
-        // "issue these components" requests from approved orders (dashboard)
+        materialRequests: "edit",
+        // Legacy notifications remain readable during transition.
         notifications: "edit",
         // can look at these, cannot change
         iqc: "view",
@@ -82,6 +83,7 @@ const ACCESS = {
     PRODUCTION_MANAGER: {
         dashboard: "view",
         production: "edit",
+        materialRequests: "edit",
         qcFailed: "edit",
         inventory: "edit",
         qualityControl: "view",
@@ -175,7 +177,8 @@ const RESOURCE_MODULE = {
     "order-approvals": "orderApprovals",
     "approved-orders": "approvedOrders",
     employees: "employees",
-    attendance: "attendance"
+    attendance: "attendance",
+    "material-requests": "materialRequests"
     // "auth" and "super-admins" are not listed on purpose: super admin only
 };
 

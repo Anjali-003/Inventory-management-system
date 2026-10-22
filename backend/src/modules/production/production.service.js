@@ -1,5 +1,6 @@
 const db = require("../../config/db")
 const AppError = require("../../shared/AppError")
+const materialRequests = require("../material-requests/material-request.service")
 
 async function getOrderItem(connection, orderItemId) {
   const [rows] = await connection.query(`
@@ -84,7 +85,8 @@ async function getProductionInfo(orderItemId) {
     const quantityCompleted = Number(run?.quantity_completed || 0)
     const quantityInProduction = Math.max(0, quantityToProduce - quantityCompleted)
     const remainingToStart = Math.max(0, orderedQuantity - quantityToProduce)
-    const maxProductionQuantity = remainingToStart
+    const materialState = await materialRequests.getItemMaterialState(connection, orderItemId, orderedQuantity, quantityToProduce)
+    const maxProductionQuantity = Math.min(remainingToStart, Number(materialState.maxStartQuantity || 0))
 
     return {
       success: true, orderId: Number(item.order_id), orderItemId: Number(item.order_item_id),
@@ -92,7 +94,8 @@ async function getProductionInfo(orderItemId) {
       itemCount: Number(item.item_count), itemIndex: Number(item.item_index),
       productId: Number(item.product_id), productSku: item.product_sku, productName: item.product_name,
       orderedQuantity, quantityToProduce, quantityCompleted, quantityInProduction, remainingToStart,
-      materialsIssued: true,
+      materialsIssued: maxProductionQuantity > 0,
+      materialStatus: materialState.status,
       maxProductionQuantity, productionId: run?.id || null, productionStatus: run?.status || "NOT_STARTED",
       startedAt: run?.started_at || null, completedAt: run?.completed_at || null,
     }
@@ -109,18 +112,27 @@ async function checkProductionMaterials(orderItemId, quantity) {
     const item = await getOrderItem(connection, orderItemId)
     const targetQuantity = await getProductionTargetForItem(connection, item)
     const existing = await getOrderProgress(connection, orderItemId)
-    const remainingToStart = Math.max(0, targetQuantity - Number(existing?.quantity_to_produce || 0))
+    const started = Number(existing?.quantity_to_produce || 0)
+    const remainingToStart = Math.max(0, targetQuantity - started)
     if (quantity > remainingToStart) throw new AppError(409, `Requested quantity exceeds remaining quantity to start. Remaining: ${remainingToStart}`)
-    // Materials are deducted during Operations approval; do not reserve or consume them here.
+    const state = await materialRequests.getItemMaterialState(connection, orderItemId, targetQuantity, started)
+    const materials = state.components.map((component) => {
+      const required = Number(component.quantity_per_unit || 0) * quantity
+      const alreadyStartedRequirement = Number(component.quantity_per_unit || 0) * started
+      const available = Math.max(0, Number(component.issued_quantity || 0) - alreadyStartedRequirement)
+      return { componentId: component.component_id, name: component.name, required, available, shortage: Math.max(0, required - available) }
+    })
+    const shortages = materials.filter((component) => component.shortage > 0)
+    const canProduce = state.bomComplete && quantity <= Number(state.maxStartQuantity || 0)
     return {
-      success: true,
-      canProduce: true,
+      success: true, canProduce,
       orderId: Number(item.order_id), orderItemId: Number(item.order_item_id),
       orderNumber: item.order_number, itemCount: Number(item.item_count), itemIndex: Number(item.item_index),
       productName: item.product_name, requestedQuantity: quantity,
-      orderedQuantity: Number(item.ordered_quantity),
-      approvedProductionQuantity: targetQuantity,
-      remainingToStart, materials: [], shortages: [], status: "READY",
+      orderedQuantity: Number(item.ordered_quantity), approvedProductionQuantity: targetQuantity,
+      remainingToStart, materials, shortages,
+      status: canProduce ? "READY" : state.status,
+      message: canProduce ? "Store-issued materials cover this quantity." : "Request the required materials and wait for Store to issue them before starting production.",
     }
   } finally {
     connection.release()
@@ -183,6 +195,16 @@ async function startProduction(orderItemId, quantity, userId) {
       throw new AppError(
         409,
         `Requested quantity exceeds remaining quantity to start. Remaining: ${remaining}`
+      );
+    }
+
+    const materialState = await materialRequests.getItemMaterialState(connection, orderItemId, ordered, started);
+    const maxStartable = Math.min(remaining, Number(materialState.maxStartQuantity || 0));
+    if (!materialState.bomComplete || quantity > maxStartable) {
+      throw AppError.conflict(
+        `Store has issued materials for only ${maxStartable} additional unit(s). Request materials from the Store Manager before starting production.`,
+        "MATERIALS_NOT_ISSUED",
+        { max_production_quantity: maxStartable }
       );
     }
 
@@ -253,8 +275,8 @@ async function getProductionOrders() {
     // One row represents one product line within the parent marketing order.
     // Production/QC history stays attached to that line's production batch.
     const [rows] = await connection.query(`
-      SELECT po.id, oi.id AS order_item_id, o.id AS order_id, o.order_number,
-             o.status AS order_status, oi.quantity AS ordered_quantity,
+      SELECT po.id, oi.id AS order_item_id, oi.product_id, o.id AS order_id, o.order_number,
+             o.status AS order_status, o.approval_status, oi.quantity AS ordered_quantity,
              o.inventory_issued_at,
              COALESCE((
                SELECT SUM(opi.quantity)
@@ -330,9 +352,26 @@ async function getProductionOrders() {
       row.remaining_to_start = remainingToStart
       // Retain the response fields expected by the current frontend, but do not
       // inspect inventory because materials were deducted at approval.
-      row.max_production_quantity = remainingToStart
-      row.material_status = remainingToStart > 0 ? "APPROVED_QUANTITY" : "NOT_REQUIRED"
-      row.material_check_available = false
+      row.target_quantity = targetQuantity
+    }
+
+    const materialStates = await materialRequests.getMaterialStatesForItems(connection, rows.map((row) => ({
+      order_item_id: Number(row.order_item_id),
+      order_id: Number(row.order_id),
+      product_id: Number(row.product_id),
+      approval_status: row.approval_status,
+      inventory_issued_at: row.inventory_issued_at,
+      target_quantity: Number(row.target_quantity || 0),
+      quantity_started: Number(row.quantity_to_produce || 0),
+    })))
+
+    for (const row of rows) {
+      const state = materialStates.get(Number(row.order_item_id))
+      row.max_production_quantity = state ? state.maxStartQuantity : 0
+      row.material_status = state ? state.status : "UNKNOWN"
+      row.material_requestable_quantity = state ? state.materialRequestableQuantity : 0
+      row.material_request_outstanding_quantity = state ? state.materialRequestOutstandingQuantity : 0
+      row.material_check_available = true
     }
 
     return rows

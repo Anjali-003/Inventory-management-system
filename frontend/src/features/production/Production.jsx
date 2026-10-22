@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 import { useDispatch } from "react-redux"
-import { Activity, AlertTriangle, ClipboardCheck, Factory, History, RefreshCw } from "lucide-react"
+import { Activity, AlertTriangle, Factory, History, PackagePlus, RefreshCw } from "lucide-react"
 import { productionService } from "@/features/production/productionService"
 import { useGetProductionQuery } from "@/features/production/productionApi"
 import { baseApi } from "@/api/baseApi"
@@ -21,7 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import ListViewControls from "@/components/ListViewControls"
 import OrderDisplayNumber from "@/components/OrderDisplayNumber"
 import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
-import MaterialCheckModal from "@/features/orders/components/MaterialCheckModal"
+import RequestMaterialsModal from "@/features/material-requests/RequestMaterialsModal"
 import StartProductionModal from "@/features/orders/components/StartProductionModal"
 
 const PAGE_SIZE = 12
@@ -31,7 +31,7 @@ const CAN_START_STATUSES = new Set(["PENDING", "IN_PRODUCTION", "TESTING"])
 
 const remainingToStart = (item) => Math.max(0, num(item.remaining_to_start ?? (num(item.ordered_quantity) - num(item.quantity_to_produce))))
 const inProduction = (item) => Math.max(0, num(item.quantity_in_production ?? (num(item.quantity_to_produce) - num(item.quantity_completed))))
-const canStartMore = (item) => remainingToStart(item) > 0 && CAN_START_STATUSES.has(item.order_status) && item.material_status !== "UNKNOWN"
+const canStartMore = (item) => remainingToStart(item) > 0 && CAN_START_STATUSES.has(item.order_status) && item.material_status !== "UNKNOWN" && num(item.max_production_quantity) > 0
 
 function Progress({ done, total }) {
   const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0
@@ -51,32 +51,35 @@ function Progress({ done, total }) {
 function MaterialReadiness({ item }) {
   const remaining = remainingToStart(item)
   const possible = Math.min(remaining, Math.max(0, num(item.max_production_quantity)))
+  const outstanding = num(item.material_request_outstanding_quantity)
 
   if (remaining <= 0) {
     return <div className="space-y-1"><Badge variant="info">Fully started</Badge><p className="text-xs text-muted-foreground">No quantity left to start</p></div>
   }
   if (item.material_status === "UNKNOWN") {
-    return <div className="space-y-1"><Badge variant="warning">BOM needs review</Badge><p className="text-xs text-muted-foreground">Material coverage unavailable</p></div>
+    return <div className="space-y-1"><Badge variant="warning">BOM needs review</Badge><p className="text-xs text-muted-foreground">Component requirements need fixing</p></div>
   }
-  if (possible < remaining) {
-    return (
-      <div className="space-y-1">
-        <Badge variant="danger">Short for {remaining - possible} unit{remaining - possible === 1 ? "" : "s"}</Badge>
-        <p className="text-xs leading-snug text-muted-foreground">Can start {possible} of {remaining} remaining</p>
-      </div>
-    )
+  if (item.material_status === "NOT_APPROVED" || !item.inventory_issued_at || item.approval_status !== "APPROVED") {
+    return <div className="space-y-1"><Badge variant="warning">Awaiting approval</Badge><p className="text-xs text-muted-foreground">Operations approval is required</p></div>
   }
-  return <div className="space-y-1"><Badge variant="success">Materials covered</Badge><p className="text-xs text-muted-foreground">All {remaining} remaining unit{remaining === 1 ? "" : "s"} can start</p></div>
+  if (item.material_status === "WAITING_FOR_STORE") {
+    return <div className="space-y-1"><Badge variant="warning">Waiting for Store</Badge><p className="text-xs text-muted-foreground">{outstanding > 0 ? "Request is awaiting allotment" : "Request materials to begin"}</p></div>
+  }
+  if (item.material_status === "PARTIAL_ISSUE" || possible < remaining) {
+    return <div className="space-y-1"><Badge variant="info">Partially allotted</Badge><p className="text-xs leading-snug text-muted-foreground">{possible > 0 ? `Can start ${possible} of ${remaining} remaining` : "Some materials have arrived; waiting for enough to start production"}</p></div>
+  }
+  return <div className="space-y-1"><Badge variant="success">Materials allotted</Badge><p className="text-xs text-muted-foreground">Ready to start {remaining} unit{remaining === 1 ? "" : "s"}</p></div>
 }
 
-function ProductionActions({ item, onUpdate, onCheck, onStart, editable = true, compact = false, marketing = false }) {
+function ProductionActions({ item, onUpdate, onRequest, onStart, editable = true, compact = false, marketing = false }) {
   if (!editable) return <span className="text-xs text-muted-foreground">View only</span>
   const activeUnits = inProduction(item)
   const hasUpdate = item.id && item.status === "IN_PRODUCTION" && activeUnits > 0
   const eligibleToStart = canStartMore(item)
+  const canRequest = Boolean(item.inventory_issued_at) && item.approval_status === "APPROVED" && item.material_status !== "UNKNOWN" && remainingToStart(item) > 0 && num(item.material_requestable_quantity) > 0
+  const needsBomReview = remainingToStart(item) > 0 && CAN_START_STATUSES.has(item.order_status) && item.material_status === "UNKNOWN"
 
-  if (!eligibleToStart && !hasUpdate) {
-    const needsBomReview = remainingToStart(item) > 0 && CAN_START_STATUSES.has(item.order_status) && item.material_status === "UNKNOWN"
+  if (!eligibleToStart && !hasUpdate && !canRequest) {
     return <span className="text-xs text-muted-foreground">{item.status === "COMPLETED" ? "Production complete" : needsBomReview ? "Resolve BOM first" : "—"}</span>
   }
 
@@ -85,18 +88,14 @@ function ProductionActions({ item, onUpdate, onCheck, onStart, editable = true, 
 
   return (
     <div className={`flex flex-wrap gap-1.5 ${compact ? "justify-start" : "justify-end"}`}>
-      {eligibleToStart && (
-        <>
-          <ActionButton variant="outline" size="sm" onClick={() => onCheck(item)}><ClipboardCheck className="size-3.5" /> Check materials</ActionButton>
-          <ActionButton variant={primaryVariant} size="sm" onClick={() => onStart(item)}>{num(item.quantity_to_produce) > 0 ? "Start more" : "Start production"}</ActionButton>
-        </>
-      )}
+      {canRequest && <ActionButton variant="outline" size="sm" onClick={() => onRequest(item)}><PackagePlus className="size-3.5" /> Request materials</ActionButton>}
+      {eligibleToStart && <ActionButton variant={primaryVariant} size="sm" onClick={() => onStart(item)}>{num(item.quantity_to_produce) > 0 ? "Start more" : "Start production"}</ActionButton>}
       {hasUpdate && <ActionButton variant="outline" size="sm" onClick={() => onUpdate(item)}>Update progress</ActionButton>}
     </div>
   )
 }
 
-function ProductionCard({ item, onUpdate, onCheck, onStart, editable }) {
+function ProductionCard({ item, onUpdate, onRequest, onStart, editable }) {
   const started = num(item.quantity_to_produce)
   const completed = num(item.quantity_completed)
   const ordered = num(item.ordered_quantity)
@@ -127,7 +126,7 @@ function ProductionCard({ item, onUpdate, onCheck, onStart, editable }) {
           <span>Started: {date(item.started_at)}</span>
           {item.started_by_name && <span className="truncate">{item.started_by_name}</span>}
         </div>
-        <ProductionActions item={item} onUpdate={onUpdate} onCheck={onCheck} onStart={onStart} editable={editable} compact />
+        <ProductionActions item={item} onUpdate={onUpdate} onRequest={onRequest} onStart={onStart} editable={editable} compact />
       </div>
     </div>
   )
@@ -168,7 +167,7 @@ export default function Production() {
   const [view, setView] = useState("cards")
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState(null)
-  const [checkFor, setCheckFor] = useState(null)
+  const [requestFor, setRequestFor] = useState(null)
   const [startFor, setStartFor] = useState(null)
   const [quantity, setQuantity] = useState("1")
   const [saving, setSaving] = useState(false)
@@ -185,7 +184,7 @@ export default function Production() {
 
   const counts = useMemo(() => ({
     all: items.length,
-    shortage: items.filter((item) => item.material_status === "SHORTAGE" && remainingToStart(item) > 0).length,
+    shortage: items.filter((item) => ["WAITING_FOR_STORE", "PARTIAL_ISSUE"].includes(item.material_status) && remainingToStart(item) > 0).length,
     active: items.filter((item) => item.status === "IN_PRODUCTION" && (inProduction(item) > 0 || remainingToStart(item) > 0)).length,
     history: items.filter((item) => item.status === "COMPLETED" || item.qc_decision === "PASS").length,
   }), [items])
@@ -195,7 +194,7 @@ export default function Production() {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     const filtered = items.filter((item) => {
-      if (filter === "shortage" && !(item.material_status === "SHORTAGE" && remainingToStart(item) > 0)) return false
+      if (filter === "shortage" && !(["WAITING_FOR_STORE", "PARTIAL_ISSUE"].includes(item.material_status) && remainingToStart(item) > 0)) return false
       if (filter === "active" && !(item.status === "IN_PRODUCTION" && (inProduction(item) > 0 || remainingToStart(item) > 0))) return false
       if (filter === "history" && !(item.status === "COMPLETED" || item.qc_decision === "PASS" || item.qc_decision === "FAIL")) return false
       if (productFilter !== "all" && item.product_name !== productFilter) return false
@@ -214,7 +213,7 @@ export default function Production() {
       if (sortBy === "waiting") return aWaiting - bWaiting
       if (sortBy === "most-progress") return bProgress - aProgress
       if (sortBy === "least-progress") return aProgress - bProgress
-      if (sortBy === "shortage") return Number(b.material_status === "SHORTAGE") - Number(a.material_status === "SHORTAGE") || bCreated - aCreated
+      if (sortBy === "shortage") return Number(["WAITING_FOR_STORE", "PARTIAL_ISSUE"].includes(b.material_status)) - Number(["WAITING_FOR_STORE", "PARTIAL_ISSUE"].includes(a.material_status)) || bCreated - aCreated
       return bCreated - aCreated
     })
   }, [items, query, filter, productFilter, orderStatusFilter, fromDate, toDate, sortBy])
@@ -285,7 +284,6 @@ export default function Production() {
     }
   }
 
-  const startFromCheck = (order) => { setCheckFor(null); setStartFor(order) }
   const started = async (qty, orderNumber) => {
     setStartFor(null)
     toast.success(`${qty} unit(s) started for ${orderNumber}`)
@@ -350,7 +348,7 @@ export default function Production() {
                 key={item.order_item_id}
                 item={item}
                 readiness={<MaterialReadiness item={item} />}
-                actions={<ProductionActions item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} marketing />}
+                actions={<ProductionActions item={item} onUpdate={openUpdate} onRequest={(row) => setRequestFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} marketing />}
               />
             ))}
           </div>
@@ -372,14 +370,14 @@ export default function Production() {
                   <TableCell className="min-w-0 whitespace-normal align-top"><Progress done={num(item.quantity_completed)} total={num(item.ordered_quantity)} /></TableCell>
                   <TableCell className="min-w-0 whitespace-normal align-top"><MaterialReadiness item={item} /></TableCell>
                   <TableCell className="whitespace-normal align-top text-xs text-muted-foreground">{date(item.started_at || item.order_created_at)}</TableCell>
-                  <TableCell className="min-w-0 whitespace-normal align-top"><ProductionActions item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} compact marketing /></TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><ProductionActions item={item} onUpdate={openUpdate} onRequest={(row) => setRequestFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} compact marketing /></TableCell>
                 </TableRow>
               ))}</TableBody>
             </Table>
           </div>
 
           <div className="grid min-w-0 gap-3 p-3 lg:hidden">
-            {pageRows.map((item) => <ProductionCard key={item.order_item_id} item={item} onUpdate={openUpdate} onCheck={(row) => setCheckFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} />)}
+            {pageRows.map((item) => <ProductionCard key={item.order_item_id} item={item} onUpdate={openUpdate} onRequest={(row) => setRequestFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} />)}
           </div>
 
           <Pagination page={page} pageSize={PAGE_SIZE} total={rows.length} onPage={setPage} noun="production orders" />
@@ -388,7 +386,7 @@ export default function Production() {
     </Card>
     </div>
 
-      {editable && checkFor && <MaterialCheckModal order={checkFor} onClose={() => setCheckFor(null)} onStart={startFromCheck} partialProduction />}
+      {editable && requestFor && <RequestMaterialsModal order={requestFor} onClose={() => setRequestFor(null)} onSubmitted={load} />}
       {editable && startFor && <StartProductionModal order={startFor} onClose={() => setStartFor(null)} onStarted={started} />}
 
       {editable && selected && (

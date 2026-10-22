@@ -1,9 +1,11 @@
 import { useMemo } from "react"
-import { AlertTriangle, PackageCheck, Truck, Warehouse } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { AlertTriangle, ArrowRight, ClipboardList, PackageCheck, Truck, Warehouse } from "lucide-react"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
 import { useGetIncomingStockQuery } from "@/features/purchasing/purchasingApi"
-import IssueComponentsPanel from "@/features/notifications/IssueComponentsPanel"
+import { useGetMaterialRequestsQuery } from "@/features/material-requests/materialRequestsApi"
+import { Button } from "@/components/ui/button"
 import DepartmentOverview from "../DepartmentOverview"
 import { Greeting, ListPanel, StatRow, useDrill } from "../DashboardKit"
 import { finishedRow, incomingRow, stockRow } from "../rows"
@@ -13,10 +15,13 @@ const EMPTY = []
 /* readOnly: shown to another role (e.g. Purchase Manager) from its Department Overview; hides the "issue components" actions. */
 export default function StoreView({ readOnly = false }) {
   const drill = useDrill()
+  const navigate = useNavigate()
   const inv = useGetInventoryQuery("active")
   const fg = useGetFinishedGoodsQuery()
   const inc = useGetIncomingStockQuery()
-  const loading = inv.isLoading || fg.isLoading || inc.isLoading
+  const requests = useGetMaterialRequestsQuery(undefined, { skip: readOnly })
+  const pendingMaterialRequests = (requests.data ?? EMPTY).filter((request) => request.status !== "ISSUED")
+  const loading = inv.isLoading || fg.isLoading || inc.isLoading || (!readOnly && requests.isLoading)
 
   const { low, waiting, packaging, dispatched } = useMemo(() => ({
     low: (inv.data ?? EMPTY).filter((i) => Number(i.available) <= Number(i.minimum_stock_level)).map(stockRow),
@@ -28,7 +33,28 @@ export default function StoreView({ readOnly = false }) {
   return (
     <>
       <Greeting description="What is waiting for the store today." />
-      {!readOnly && <IssueComponentsPanel />}
+      {!readOnly && (
+        <div className={`mb-4 overflow-hidden rounded-xl border ${pendingMaterialRequests.length ? "border-amber-300 bg-gradient-to-r from-amber-50 via-white to-emerald-50" : "border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-teal-50"}`}>
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className={`grid size-10 shrink-0 place-items-center rounded-xl ${pendingMaterialRequests.length ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                <ClipboardList className="size-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold">Production material requests</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {requests.isLoading ? "Checking material requests…" : pendingMaterialRequests.length
+                    ? `${pendingMaterialRequests.length} request${pendingMaterialRequests.length === 1 ? " is" : "s are"} waiting for a full or partial allotment.`
+                    : "No material requests are waiting. New requests from Production will appear here."}
+                </p>
+              </div>
+            </div>
+            <Button onClick={() => navigate("/store-material-requests")} className="shrink-0">
+              Open Material Allotment <ArrowRight className="size-4" />
+            </Button>
+          </div>
+        </div>
+      )}
       <StatRow
         drill={drill}
         stats={[

@@ -28,8 +28,8 @@ async function refreshOrderStatus(connection, orderId) {
             COALESCE((SELECT SUM(fg.quantity) FROM finished_goods fg WHERE fg.production_id = po.id), 0) AS boxed,
             COALESCE((SELECT SUM(fg.quantity) FROM finished_goods fg WHERE fg.production_id = po.id AND fg.status IN ('DISPATCHED', 'COMPLETED')), 0) AS shipped
      FROM orders o
-     JOIN (SELECT DISTINCT order_id, product_id FROM order_items) oi ON oi.order_id = o.id
-     LEFT JOIN production_orders po ON po.order_id = o.id AND po.product_id = oi.product_id
+     JOIN order_items oi ON oi.order_id = o.id
+     LEFT JOIN production_orders po ON po.order_item_id = oi.id
      WHERE o.id = ?`,
     [orderId]
   )

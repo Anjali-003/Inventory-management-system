@@ -48,8 +48,8 @@ function ItemCard({ item: i, actions }) {
           ))}
         </dl>
       )}
-      <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border bg-border text-center">
-        {[["On hand", i.quantity_on_hand], ["Reserved", i.quantity_reserved], ["Available", i.available]].map(([l, v]) => (
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border text-center">
+        {[["On hand", i.quantity_on_hand], ["Available", i.available]].map(([l, v]) => (
           <div key={l} className="bg-card py-2"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">{l}</p><p className="font-semibold tabular-nums">{fmtQty(v)}</p></div>
         ))}
       </div>
@@ -143,7 +143,7 @@ export default function Inventory() {
 
   return (
     <>
-      <PageHeader title="Inventory" description="Stock on hand, reserved and available, backed by an append-only movement ledger.">
+      <PageHeader title="Inventory" description="Track on-hand and usable stock, backed by an append-only movement ledger.">
         {editable && <Button size="lg" onClick={() => open("in")}><Plus /> Stock in</Button>}
       </PageHeader>
 
@@ -225,10 +225,7 @@ export default function Inventory() {
                             {fmtQty(i.quantity_on_hand)}
                             <span className="block text-xs text-muted-foreground">min {fmtQty(i.minimum_stock_level)}</span>
                           </TableCell>
-                          <TableCell className="text-right font-medium tabular-nums">
-                            {fmtQty(i.available)}
-                            {Number(i.quantity_reserved) > 0 && <span className="block text-xs font-normal text-muted-foreground">{fmtQty(i.quantity_reserved)} reserved</span>}
-                          </TableCell>
+                          <TableCell className="text-right font-medium tabular-nums">{fmtQty(i.available)}</TableCell>
                           <TableCell><StockBadge item={i} /></TableCell>
                           <TableCell><Actions item={i} /></TableCell>
                         </TableRow>

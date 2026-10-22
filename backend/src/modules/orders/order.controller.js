@@ -97,7 +97,7 @@ async function productionCheck(req, res) {
     const orderItemId = orderIdOf(req);
     const quantity = parsePositiveInt(req.query.quantity, "Quantity must be a positive integer");
 
-    res.json(await checkProductionMaterials(orderId, quantity, productIdOf(req.query.product_id)));
+    res.json(await checkProductionMaterials(orderItemId, quantity, productIdOf(req.query.product_id)));
 }
 
 /*
@@ -125,7 +125,7 @@ async function startPartialProduction(req, res) {
     }
 
     // req.user is set by authMiddleware + resolveUser (see order.routes.js)
-    const result = await startProduction(orderId, quantity, req.user.id, productIdOf(req.body?.product_id));
+    const result = await startProduction(orderItemId, quantity, req.user.id, productIdOf(req.body?.product_id));
 
     // Material shortage: a normal answer (the dialog shows what is missing), not an exception
     if (!result.success) return res.status(409).json(result);

@@ -37,6 +37,7 @@ const attendanceRoutes = require("../modules/attendance/attendance.routes");
 const superAdminRoutes = require("../modules/super-admins/super-admin.routes");
 const activityRoutes = require("../modules/activity/activity.routes");
 const notificationRoutes = require("../modules/notifications/notification.routes");
+const materialRequestRoutes = require("../modules/material-requests/material-request.routes");
 const eventsRoutes = require("../realtime/events.routes");
 
 const MODULES = [
@@ -51,6 +52,7 @@ const MODULES = [
 
     { path: "/orders", router: orderRoutes, resource: "orders" },
     { path: "/production", router: productionRoutes, resource: "production", guards: [permit("production")] },
+    { path: "/material-requests", router: materialRequestRoutes, resource: "material-requests", guards: [permit("materialRequests")] },
     { path: "/qc-failed", router: qcFailedRoutes, resource: "qc-failed", guards: [permit("qcFailed")] },
     { path: "/quality-control", router: qualityControlRoutes, resource: "quality-control", guards: [permit("qualityControl")] },
 

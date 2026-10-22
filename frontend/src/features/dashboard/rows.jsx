@@ -90,7 +90,7 @@ export const stockRow = (i) => {
         title={i.component_name}
         description={i.sku}
         badge={badge}
-        fields={[["On hand", fmtQty(i.quantity_on_hand)], ["Reserved", fmtQty(i.quantity_reserved)], ["Available", fmtQty(avail)], ["Minimum level", fmtQty(min)]]}
+        fields={[["On hand", fmtQty(i.quantity_on_hand)], ["Available", fmtQty(avail)], ["Minimum level", fmtQty(min)]]}
         onClose={close}
       />
     ),

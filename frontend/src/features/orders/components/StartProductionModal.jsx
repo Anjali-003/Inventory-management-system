@@ -178,11 +178,7 @@ export default function StartProductionModal({ order, onClose, onStarted }) {
 
             <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
               <div className="min-w-0">
-                <p className="text-sm font-medium">
-                  {info.materialsIssued
-                    ? "Approved quantity remaining"
-                    : "Max from current inventory"}
-                </p>
+                <p className="text-sm font-medium">Units currently ready with Store-allotted materials</p>
                 <p className="text-2xl font-bold tabular-nums">
                   {Number.isFinite(max) ? max : 0}
                 </p>

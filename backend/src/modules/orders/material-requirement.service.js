@@ -38,8 +38,7 @@ async function checkMaterialAvailability(orderId) {
 
             pb.quantity_required AS bom_quantity,
 
-            COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand,
-            COALESCE(i.quantity_reserved, 0) AS quantity_reserved
+            COALESCE(i.quantity_on_hand, 0) AS quantity_on_hand
 
         FROM order_items oi
 
@@ -82,10 +81,8 @@ async function checkMaterialAvailability(orderId) {
         const requiredQuantity =
             orderedQuantity * bomQuantity;
 
-        // Available = On Hand - Reserved
-        const availableQuantity =
-            Number(row.quantity_on_hand) -
-            Number(row.quantity_reserved);
+        // Reservations are no longer used. Operations approval deducts stock immediately.
+        const availableQuantity = Number(row.quantity_on_hand);
 
         const componentId = row.component_id;
 

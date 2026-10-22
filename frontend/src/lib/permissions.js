@@ -207,6 +207,7 @@ export const MODULE_PATHS = {
   qualityControl: "/quality-control",
   finishedGoods: "/finished-goods",
   incomingStock: "/incoming-stock",
+  storeMaterialRequests: "/store-material-requests",
   employees: "/employees",
   attendance: "/attendance",
 
@@ -241,6 +242,7 @@ const ACCESS = {
     inventoryHistory: "edit",
     finishedGoods: "edit",
     incomingStock: "edit",
+    storeMaterialRequests: "edit",
 
     // Read-only access to other departments.
     iqc: "view",

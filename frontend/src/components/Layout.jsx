@@ -127,6 +127,7 @@ const GROUPS = [
       { to: "/purchase", label: "Purchase", icon: ShoppingCart, module: "purchase" },
       { to: "/iqc", label: "IQC", icon: ClipboardCheck, module: "iqc" },
       { to: "/incoming-stock", label: "Incoming Stock", icon: Truck, module: "incomingStock" },
+      { to: "/store-material-requests", label: "Material Allotment", icon: ClipboardList, module: "storeMaterialRequests" },
     ],
   },
 

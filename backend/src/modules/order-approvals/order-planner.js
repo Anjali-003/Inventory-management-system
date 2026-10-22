@@ -8,7 +8,7 @@
   Inputs
     items             order lines, in priority order:  [{ product_id, quantity }]
     bomByProduct      { [product_id]: [{ component_id, quantity_per_unit }] }   (components for ONE unit)
-    availableByComp   { [component_id]: available }   available = on hand - reserved for production
+    availableByComp   { [component_id]: available }   available = current on-hand stock; reservation logic is not used
     componentInfo     optional { [component_id]: { sku, name, unit } } copied into the shortage rows
 
   How it works

@@ -104,8 +104,8 @@ export default function MaterialCheckModal({ order, onClose, onStart, partialPro
       open
       onClose={onClose}
       size="lg"
-      title="Material availability"
-      description={partialProduction ? "Required components for the remaining quantity, compared with unreserved inventory." : "Required components compared with current available inventory."}
+      title={partialProduction ? "Material readiness" : "Material requirements"}
+      description={partialProduction ? "Required components compared with material already allotted by the Store Manager." : "Review the component requirements for this order."}
       footer={
         <>
           <Button type="button" variant="outline" size="lg" onClick={onClose}>Close</Button>
@@ -127,7 +127,7 @@ export default function MaterialCheckModal({ order, onClose, onStart, partialPro
 
           {loading && (
             <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" /> Checking material availability...
+              <Loader2 className="size-4 animate-spin" /> Checking Store-allotted material...
             </div>
           )}
           {error && <Notice>{error}</Notice>}
