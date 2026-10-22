@@ -13,7 +13,9 @@ import OrderPlanModal from "./OrderPlanModal"
 import { BomBlockModal } from "./BomWarning"
 import PlanSummary from "./PlanSummary"
 import { approveLabel, canApprove } from "./approvalParts"
-import { useGetOrderApprovalsQuery, useGetOrderPlanQuery } from "./orderApprovalsApi"
+import { useGetOrderApprovalsQuery, useGetOrderPlanQuery, useUpdateDeliveryDateMutation } from "./orderApprovalsApi"
+import { useToast } from "@/components/toast"
+import { Calendar, Edit3, Check } from "lucide-react"
 
 const EMPTY = []
 
@@ -100,6 +102,56 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
                 </div>
               </motion.div>
             )}
+
+                        {/* Estimated Delivery Date with Ops Admin modification */}
+            <div className="rounded-xl border border-[#dce5e0] bg-muted/20 p-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="size-4 text-muted-foreground" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estimated Delivery Date</span>
+                </div>
+                {editable && !isEditingDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewDeliveryDate(order.estimated_delivery_date || "")
+                      setIsEditingDate(true)
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                  >
+                    <Edit3 className="size-3.5" /> Modify Date
+                  </button>
+                )}
+              </div>
+              {!isEditingDate ? (
+                <p className="mt-1.5 text-sm font-semibold tabular-nums text-foreground">
+                  {order.estimated_delivery_date ? order.estimated_delivery_date : <span className="text-muted-foreground font-normal">Not set by marketing</span>}
+                </p>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  <input
+                    type="date"
+                    value={newDeliveryDate}
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setNewDeliveryDate(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Reason for change (optional, sent to marketing)"
+                    value={dateChangeReason}
+                    onChange={(e) => setDateChangeReason(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-input bg-card px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <MktBtn size="sm" onClick={() => setIsEditingDate(false)} disabled={updatingDate}>Cancel</MktBtn>
+                    <MktBtn size="sm" variant="primary" onClick={handleSaveDeliveryDate} disabled={updatingDate || !newDeliveryDate}>
+                      {updatingDate ? <Loader2 className="animate-spin size-3.5" /> : <Check className="size-3.5" />} Save & Notify Marketing
+                    </MktBtn>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {approvable && (
               <section className="space-y-2.5">

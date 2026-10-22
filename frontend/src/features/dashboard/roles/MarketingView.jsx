@@ -12,6 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "@/features/marketing-orders/marketingOrdersApi"
+import { useGetNotificationsQuery, useMarkNotificationDoneMutation } from "@/features/notifications/notificationsApi"
+import { Bell, CheckCircle } from "lucide-react"
 import { HeroLink, MktBtn, MktHero, NewOrderFab, StageTile, StatusPill, TileGrid } from "@/features/marketing-orders/mktKit"
 import { rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { ALL_STAGE, OrderPipeline, STAGES, countByStatus, newestFirst, ordersHref, plural } from "@/features/marketing-orders/orderParts"
@@ -167,6 +169,9 @@ export default function MarketingView() {
   const [busyId, setBusyId] = useState(null)
   const [openedId, setOpenedId] = useState(null) // the order whose popup is open
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const { data: notifications = [] } = useGetNotificationsQuery()
+  const [markDone] = useMarkNotificationDoneMutation()
+  const dateNotifs = useMemo(() => notifications.filter((n) => !n.done && n.type === "DELIVERY_DATE_CHANGED"), [notifications])
 
   const counts = useMemo(() => countByStatus(data), [data])
   const latest = useMemo(() => [...data].sort(newestFirst), [data])
@@ -214,6 +219,33 @@ export default function MarketingView() {
       <MktHero eyebrow="Marketing dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={nudge(counts)}>
         {editable && <HeroLink wrap="hidden md:inline-flex" className="h-10" to={ordersHref(null, { new: 1 })}><Plus /> New order</HeroLink>}
       </MktHero>
+
+            {/* Operations Admin Delivery Date Notifications */}
+      {dateNotifs.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {dateNotifs.map((n) => (
+            <div key={n.id} className="flex items-center justify-between gap-3 rounded-xl border border-amber-300/80 bg-amber-50/90 p-3.5 text-sm dark:bg-amber-950/30 dark:border-amber-700">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Bell className="size-4 shrink-0 text-amber-600" />
+                <div className="min-w-0">
+                  <p className="font-semibold text-amber-900 dark:text-amber-200 truncate">{n.title}</p>
+                  <p className="text-xs text-amber-800/90 dark:text-amber-300">
+                    Changed from <span className="font-medium">{n.old_date || "None"}</span> to <span className="font-bold underline">{n.new_date}</span>
+                    {n.reason ? ` · Reason: "${n.reason}"` : ""}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => markDone(n.id)}
+                className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-200/80 hover:bg-amber-300 px-2.5 py-1 text-xs font-semibold text-amber-950 transition-colors"
+              >
+                <CheckCircle className="size-3.5" /> Acknowledge
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <TileGrid>
         {tiles.map((t) => (

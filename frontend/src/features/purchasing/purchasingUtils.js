@@ -21,11 +21,11 @@ export const rejectedLines = (p) => (p.items || []).filter((i) => i.iqc_decision
 
 /* Excel file of the rejected components of one purchase. */
 export function downloadRejected(p) {
-  const headers = ["PO number", "Supplier", "SKU", "Component", "Unit", "Ordered", "Received", "IQC remarks", "Inspected by", "Inspected at"]
+  const headers = ["PO number", "Supplier", "SKU", "Component", "Unit", "Ordered", "Received", "Rejection reason", "Inspected by", "Inspected at"]
   const rows = rejectedLines(p).map((it) => [
     p.po_number, p.supplier, it.sku, it.name, it.unit || "",
     Number(it.quantity_ordered), Number(it.quantity_received ?? 0),
-    p.iqc_remarks || "", p.iqc_by_name || "", p.iqc_at || "",
+    it.remarks || p.iqc_remarks || "", p.iqc_by_name || "", p.iqc_at || "",
   ])
   downloadXlsx(`${p.po_number}-rejected-components.xlsx`, `${p.po_number} rejected`, headers, rows)
 }

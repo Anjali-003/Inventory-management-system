@@ -39,6 +39,10 @@ export const orderApprovalsApi = baseApi.injectEndpoints({
       query: ({ id, remarks }) => ({ url: `/order-approvals/${id}/approve`, method: "post", data: { remarks } }),
       invalidatesTags: ["OrderApprovals", "Orders", "Production", "Purchases", "Inventory"],
     }),
+    updateDeliveryDate: build.mutation({
+      query: ({ id, ...data }) => ({ url: `/order-approvals/${id}/delivery-date`, method: "patch", data }),
+      invalidatesTags: ["OrderApprovals", "MarketingOrders", "Orders"],
+    }),
     rejectOrder: build.mutation({
       query: ({ id, remarks }) => ({ url: `/order-approvals/${id}/reject`, method: "post", data: { remarks } }),
       invalidatesTags: ["OrderApprovals", "Orders"],
@@ -53,4 +57,5 @@ export const {
   useDispatchOrderMutation,
   useApproveOrderMutation,
   useRejectOrderMutation,
+  useUpdateDeliveryDateMutation,
 } = orderApprovalsApi;

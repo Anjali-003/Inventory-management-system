@@ -69,6 +69,13 @@ export default function OrderDetailModal({ order, editable, busy, onClose, onSen
           </motion.div>
         )}
 
+                {order.estimated_delivery_date && (
+          <div className="flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-50/60 px-4 py-2.5 text-sm dark:bg-emerald-950/20">
+            <span className="font-medium text-emerald-800 dark:text-emerald-300">Estimated Delivery Date</span>
+            <span className="font-semibold tabular-nums text-emerald-950 dark:text-emerald-200">{order.estimated_delivery_date}</span>
+          </div>
+        )}
+
         <section>
           <h3 className="mb-3 text-sm font-semibold">Progress</h3>
           <OrderTimeline order={order} />

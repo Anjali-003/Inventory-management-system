@@ -95,4 +95,32 @@ async function markDone(id, role, userId) {
     return shape(rows[0]);
 }
 
-module.exports = { createIssueRequest, list, markDone };
+async function createDeliveryDateNotification(connOrDb, { orderId, orderNumber, oldDate, newDate, reason, userId }) {
+    const title = `Delivery date updated for order ${orderNumber}`;
+    const payload = { order_number: orderNumber, old_date: oldDate || null, new_date: newDate, reason: reason || null };
+
+    const [result] = await connOrDb.query(
+        `INSERT INTO notifications (role, type, title, order_id, payload, created_by) VALUES ('MARKETING_MANAGER', 'DELIVERY_DATE_CHANGED', ?, ?, ?, ?)`,
+        [title, orderId, JSON.stringify(payload), userId]
+    );
+
+    const message = `${title}: Delivery changed to ${newDate}${reason ? ` (${reason})` : ""}`;
+    if (connOrDb.afterCommit) {
+        connOrDb.afterCommit(() =>
+            hub.notifyRole("MARKETING_MANAGER", {
+                type: "DELIVERY_DATE_CHANGED",
+                notificationId: result.insertId,
+                message
+            })
+        );
+    } else {
+        hub.notifyRole("MARKETING_MANAGER", {
+            type: "DELIVERY_DATE_CHANGED",
+            notificationId: result.insertId,
+            message
+        });
+    }
+    return result.insertId;
+}
+
+module.exports = { createIssueRequest, createDeliveryDateNotification, list, markDone };

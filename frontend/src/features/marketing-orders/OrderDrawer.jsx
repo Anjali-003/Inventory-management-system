@@ -1,7 +1,11 @@
 import { useEffect, useId, useRef } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
-import { Check, Clock3, Loader2, Send, Trash2, X } from "lucide-react"
+import { Calendar, Check, Clock3, Edit3, Loader2, Send, Trash2, X } from "lucide-react"
+import { useState } from "react"
+import { useToast } from "@/components/toast"
+import { usePermissions } from "@/features/auth/usePermissions"
+import { useUpdateDeliveryDateMutation } from "@/features/order-approvals/orderApprovalsApi"
 import UserCell from "@/components/UserCell"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
@@ -49,6 +53,29 @@ function Fact({ label, children }) {
 /* ------------------------------------------------------------------ Overview */
 
 function OverviewTab({ order }) {
+  const toast = useToast()
+  const { canEdit } = usePermissions()
+  const canModifyDate = canEdit("orderApprovals")
+  const [updateDeliveryDate, { isLoading: updatingDate }] = useUpdateDeliveryDateMutation()
+  const [isEditingDate, setIsEditingDate] = useState(false)
+  const [newDeliveryDate, setNewDeliveryDate] = useState("")
+  const [dateChangeReason, setDateChangeReason] = useState("")
+
+  const handleSaveDeliveryDate = async () => {
+    if (!newDeliveryDate) return
+    try {
+      await updateDeliveryDate({
+        id: order.id,
+        estimated_delivery_date: newDeliveryDate,
+        reason: dateChangeReason,
+      }).unwrap()
+      toast.success("Delivery date updated and Marketing Manager notified")
+      setIsEditingDate(false)
+      setDateChangeReason("")
+    } catch (err) {
+      toast.error(err?.data?.message || "Failed to update delivery date")
+    }
+  }
   const stage = stageOf(order.approval_status)
   const decided = DECIDED_STATUSES.includes(order.approval_status)
   const { requested, approved, ratio } = reviewOf(order)
@@ -79,6 +106,56 @@ function OverviewTab({ order }) {
           </div>
         </motion.div>
       )}
+
+            {/* Estimated Delivery Date */}
+      <div className="rounded-xl border bg-card p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Calendar className="size-4 text-muted-foreground" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estimated Delivery Date</span>
+          </div>
+          {canModifyDate && !isEditingDate && (
+            <button
+              type="button"
+              onClick={() => {
+                setNewDeliveryDate(order.estimated_delivery_date || "")
+                setIsEditingDate(true)
+              }}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+            >
+              <Edit3 className="size-3.5" /> Modify Date
+            </button>
+          )}
+        </div>
+        {!isEditingDate ? (
+          <p className="mt-1.5 text-sm font-semibold tabular-nums text-foreground">
+            {order.estimated_delivery_date ? order.estimated_delivery_date : <span className="text-muted-foreground font-normal">Not set by marketing</span>}
+          </p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            <input
+              type="date"
+              value={newDeliveryDate}
+              min={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setNewDeliveryDate(e.target.value)}
+              className="h-9 w-full rounded-lg border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            />
+            <input
+              type="text"
+              placeholder="Reason for change (optional, sent to marketing)"
+              value={dateChangeReason}
+              onChange={(e) => setDateChangeReason(e.target.value)}
+              className="h-9 w-full rounded-lg border border-input bg-card px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            />
+            <div className="flex gap-2 justify-end">
+              <MktBtn size="sm" onClick={() => setIsEditingDate(false)} disabled={updatingDate}>Cancel</MktBtn>
+              <MktBtn size="sm" variant="primary" onClick={handleSaveDeliveryDate} disabled={updatingDate || !newDeliveryDate}>
+                {updatingDate ? <Loader2 className="animate-spin size-3.5" /> : <Check className="size-3.5" />} Save & Notify Marketing
+              </MktBtn>
+            </div>
+          </div>
+        )}
+      </div>
 
       <dl className="grid grid-cols-2 gap-2.5">
         <Fact label="Created by">{order.created_by_name || "-"}</Fact>

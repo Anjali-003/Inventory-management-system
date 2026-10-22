@@ -14,14 +14,15 @@ import { useInspectPurchaseMutation } from "@/features/purchasing/purchasingApi"
   (starts at the ordered quantity, change it if the count differs) and TICKS the component when it is fine.
   Ticked components go to the store manager with their received count. Unticked components are rejected:
   they stay with IQC and can be downloaded as an Excel file afterwards. If nothing is ticked the whole
-  purchase is rejected. Only one overall remark is kept (no per-component remarks).
+  purchase is rejected. Every rejected component needs a REASON (saved as that line's remarks, so the
+  Purchase Manager sees why it was rejected). The overall remark is optional.
 */
 export default function InspectModal({ purchase, onClose }) {
   const toast = useToast()
   const [inspect, { isLoading: saving }] = useInspectPurchaseMutation()
 
   const [rows, setRows] = useState(() =>
-    purchase.items.map((it) => ({ id: it.id, received: String(Number(it.quantity_ordered)), approve: false }))
+    purchase.items.map((it) => ({ id: it.id, received: String(Number(it.quantity_ordered)), approve: false, reason: "" }))
   )
   const [remarks, setRemarks] = useState("")
   const [showErrors, setShowErrors] = useState(false)
@@ -38,10 +39,11 @@ export default function InspectModal({ purchase, onClose }) {
         const rec = checkQty(r.received, "Received quantity", { allowZero: true })
         const counted = !rec.error
         const tickError = r.approve && counted && rec.cents <= 0 ? "Nothing received" : ""
+        const reasonError = !r.approve && !r.reason.trim() ? "Enter the reason for rejecting this component" : ""
         const ordered = Math.round(Number(it.quantity_ordered) * 100)
         return {
-          rec, tickError,
-          ok: counted && !tickError,
+          rec, tickError, reasonError,
+          ok: counted && !tickError && !reasonError,
           approved: r.approve ? rec.cents : 0,
           diff: !rec.error ? rec.cents - ordered : 0, // < 0 short, > 0 excess
         }
@@ -65,7 +67,7 @@ export default function InspectModal({ purchase, onClose }) {
       await inspect({
         id: purchase.id,
         remarks: remarks.trim(),
-        items: rows.map((r, i) => ({ id: r.id, approve: r.approve, received: lines[i].rec.value })),
+        items: rows.map((r, i) => ({ id: r.id, approve: r.approve, received: lines[i].rec.value, remarks: r.approve ? "" : r.reason.trim() })),
       }).unwrap()
       toast.success(
         rejecting
@@ -140,6 +142,19 @@ export default function InspectModal({ purchase, onClose }) {
                       <p className="font-medium">{it.name}</p>
                       <p className="text-xs text-muted-foreground">{it.sku}</p>
                       {showErrors && l.tickError && <p className="mt-1 text-xs text-destructive">{l.tickError}. Untick it to reject.</p>}
+                      {!rows[i].approve && (
+                        <div className="mt-2">
+                          <TextInput
+                            aria-label={`Rejection reason for ${it.name}`}
+                            placeholder="Why is this rejected? e.g. damaged, wrong spec"
+                            maxLength={200}
+                            value={rows[i].reason}
+                            error={showErrors && l.reasonError}
+                            onChange={(e) => set(i, { reason: e.target.value })}
+                          />
+                          {showErrors && l.reasonError && <p className="mt-1 text-xs text-destructive">{l.reasonError}.</p>}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{fmtQty(it.quantity_ordered)} {it.unit}</TableCell>
                     <TableCell className="align-top">

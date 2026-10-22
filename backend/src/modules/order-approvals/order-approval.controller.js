@@ -46,6 +46,10 @@ async function plan(req, res) {
 }
 
 /* POST /order-approvals/:id/dispatch: approve + send the producible list (Production) and the shortage list (Purchase) */
+async function updateDeliveryDate(req, res) {
+    res.json(await service.updateDeliveryDate(idOf(req), req.body, req.user));
+}
+
 async function dispatch(req, res) {
     res.json(await service.dispatch(idOf(req), guardedBody(req), req.user.id, replayFlag(res)));
 }
@@ -58,4 +62,5 @@ module.exports = {
     reject: asyncHandler(reject, { message: "Failed to reject the order" }),
     plan: asyncHandler(plan, { message: "Failed to check the stock for this order" }),
     dispatch: asyncHandler(dispatch, { message: "Failed to send the order" }),
+    updateDeliveryDate: asyncHandler(updateDeliveryDate, { message: "Failed to update delivery date" }),
 };

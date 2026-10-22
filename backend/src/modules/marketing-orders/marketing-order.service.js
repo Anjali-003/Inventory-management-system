@@ -52,6 +52,8 @@ function parseItems(body) {
 
 async function createDraft(body, userId) {
     const items = parseItems(body || {});
+    const rawDate = body && (body.estimated_delivery_date || body.estimatedDeliveryDate);
+    const deliveryDate = (typeof rawDate === "string" && rawDate.trim().length > 0) ? rawDate.trim() : null;
 
     return inventory.inTransaction(async (conn) => {
         const [found] = await conn.query(`SELECT id FROM products WHERE id IN (?) AND is_active = TRUE`, [items.map((i) => i.productId)]);
@@ -61,8 +63,8 @@ async function createDraft(body, userId) {
         });
 
         const [res] = await conn.query(
-            `INSERT INTO orders (order_number, status, approval_status, created_by) VALUES (?, 'PENDING', 'DRAFT', ?)`,
-            [`TEMP-${Date.now()}-${userId}`, userId]
+            `INSERT INTO orders (order_number, status, approval_status, estimated_delivery_date, created_by) VALUES (?, 'PENDING', 'DRAFT', ?, ?)`,
+            [`TEMP-${Date.now()}-${userId}`, deliveryDate, userId]
         );
         const id = res.insertId;
         const d = new Date();

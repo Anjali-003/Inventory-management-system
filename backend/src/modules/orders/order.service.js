@@ -40,6 +40,7 @@ async function listOrders() {
             o.order_number,
             o.status,
             o.approval_status,
+            DATE_FORMAT(o.estimated_delivery_date, '%Y-%m-%d') AS estimated_delivery_date,
             o.created_at,
             o.created_by,
             cu.name AS created_by_name,
