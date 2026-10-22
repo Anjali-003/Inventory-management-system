@@ -86,7 +86,7 @@ export default function RequestMaterialsModal({ order, onClose, onSubmitted }) {
           <div className="min-w-0">
             <p className="font-semibold">{data?.order_number || order?.order_number || `Order #${order?.order_id}`}</p>
             <p className="text-sm text-muted-foreground">{data?.product_name || order?.product_name}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Approved production quantity: {fmtQty(data?.approved_quantity ?? order?.ordered_quantity ?? 0)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Order quantity to supply: {fmtQty(data?.approved_quantity ?? order?.ordered_quantity ?? 0)}</p>
           </div>
           <Badge variant="info">Partial requests allowed</Badge>
         </div>

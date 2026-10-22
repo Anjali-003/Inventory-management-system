@@ -53,14 +53,14 @@ function MaterialReadiness({ item }) {
   const possible = Math.min(remaining, Math.max(0, num(item.max_production_quantity)))
   const outstanding = num(item.material_request_outstanding_quantity)
 
-  if (remaining <= 0) {
-    return <div className="space-y-1"><Badge variant="info">Fully started</Badge><p className="text-xs text-muted-foreground">No quantity left to start</p></div>
+  if (item.material_status === "NOT_APPROVED" || !item.inventory_issued_at || item.approval_status !== "APPROVED") {
+    return <div className="space-y-1"><Badge variant="warning">Awaiting approval</Badge><p className="text-xs text-muted-foreground">Operations approval is required</p></div>
   }
   if (item.material_status === "UNKNOWN") {
     return <div className="space-y-1"><Badge variant="warning">BOM needs review</Badge><p className="text-xs text-muted-foreground">Component requirements need fixing</p></div>
   }
-  if (item.material_status === "NOT_APPROVED" || !item.inventory_issued_at || item.approval_status !== "APPROVED") {
-    return <div className="space-y-1"><Badge variant="warning">Awaiting approval</Badge><p className="text-xs text-muted-foreground">Operations approval is required</p></div>
+  if (remaining <= 0) {
+    return <div className="space-y-1"><Badge variant="info">Fully started</Badge><p className="text-xs text-muted-foreground">No quantity left to start</p></div>
   }
   if (item.material_status === "WAITING_FOR_STORE") {
     return <div className="space-y-1"><Badge variant="warning">Waiting for Store</Badge><p className="text-xs text-muted-foreground">{outstanding > 0 ? "Request is awaiting allotment" : "Request materials to begin"}</p></div>

@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const db = require("../../config/db");
 const AppError = require("../../shared/AppError");
 const inventory = require("../inventory/inventory.service");
@@ -35,11 +36,6 @@ async function getLineContext(conn, orderItemId, { lockOrder = false } = {}) {
     SELECT oi.id AS order_item_id, oi.order_id, oi.product_id, oi.quantity AS line_quantity,
            o.order_number, o.status AS order_status, o.approval_status, o.inventory_issued_at,
            p.sku AS product_sku, p.name AS product_name,
-           COALESCE((SELECT SUM(opi.quantity) FROM order_production_items opi
-                     WHERE opi.order_id = oi.order_id AND opi.product_id = oi.product_id), 0) AS approved_product_quantity,
-           COALESCE((SELECT SUM(previous.quantity) FROM order_items previous
-                     WHERE previous.order_id = oi.order_id AND previous.product_id = oi.product_id
-                       AND previous.id < oi.id), 0) AS prior_same_product_quantity,
            COALESCE((SELECT SUM(po.quantity_to_produce) FROM production_orders po
                      WHERE po.order_item_id = oi.id), 0) AS quantity_started
     FROM order_items oi
@@ -51,11 +47,9 @@ async function getLineContext(conn, orderItemId, { lockOrder = false } = {}) {
 
   const item = rows[0];
   if (!item) throw AppError.notFound("Order product was not found", "NOT_FOUND");
-  const approvedProductQuantity = Number(item.approved_product_quantity || 0);
-  const priorQuantity = Number(item.prior_same_product_quantity || 0);
-  item.target_quantity = item.inventory_issued_at
-    ? Math.min(Number(item.line_quantity), Math.max(0, approvedProductQuantity - priorQuantity))
-    : Number(item.line_quantity);
+  // The order line remains the target even if only some materials were available
+  // at approval. Remaining components can be purchased and issued by Store later.
+  item.target_quantity = Math.max(0, Number(item.line_quantity));
   item.quantity_started = Number(item.quantity_started || 0);
   return item;
 }
@@ -193,7 +187,7 @@ function assertRequestableOrder(item) {
     throw AppError.conflict("Materials can only be requested after Operations Admin approval and inventory deduction.", "ORDER_NOT_ISSUED");
   }
   if (Number(item.target_quantity) <= 0) {
-    throw AppError.conflict("No production quantity was approved for this product line.", "NO_APPROVED_QUANTITY");
+    throw AppError.conflict("There is no remaining quantity to supply for this product line.", "NO_REMAINING_QUANTITY");
   }
 }
 
@@ -340,10 +334,13 @@ async function issueRequest(requestId, body, userId) {
   }
 
   const out = await inventory.inTransaction(async (conn) => {
-    const [requests] = await conn.query(`SELECT id, status FROM production_material_requests WHERE id = ? FOR UPDATE`, [requestId]);
+    const [requests] = await conn.query(
+      `SELECT id, order_id, order_item_id, status FROM production_material_requests WHERE id = ? FOR UPDATE`,
+      [requestId]
+    );
     if (!requests.length) throw AppError.notFound("Material request not found", "NOT_FOUND");
 
-    // The request lock serializes concurrent allotments, so an exact retry sees the committed issue rows.
+    // An allotment key is replayed before any new stock movement is considered.
     const [previousIssues] = await conn.query(`
       SELECT i.request_item_id, i.quantity, r.request_id
       FROM production_material_issues i
@@ -362,20 +359,104 @@ async function issueRequest(requestId, body, userId) {
     }
     if (requests[0].status === "ISSUED") throw AppError.conflict("This request has already been fully issued", "REQUEST_ALREADY_ISSUED");
 
+    const orderId = Number(requests[0].order_id);
+    // Serialize allotments for the whole order. Multiple product lines can consume
+    // the same component, and their handovers share the approval-time deduction budget.
+    const [lockedOrder] = await conn.query(`SELECT id FROM orders WHERE id = ? FOR UPDATE`, [orderId]);
+    if (!lockedOrder.length) throw AppError.notFound("Order not found", "NOT_FOUND");
+
     for (const [requestItemId, cents] of [...quantities].sort(([a], [b]) => a - b)) {
       const [rows] = await conn.query(`
-        SELECT id, requested_quantity, issued_quantity
+        SELECT id, component_id, requested_quantity, issued_quantity
         FROM production_material_request_items
         WHERE id = ? AND request_id = ?
         LIMIT 1 FOR UPDATE
       `, [requestItemId, requestId]);
       if (!rows.length) throw new AppError(422, "A component does not belong to this material request", "INVALID_REQUEST_ITEM");
-      const remainingCents = toCents(rows[0].requested_quantity) - toCents(rows[0].issued_quantity);
+      const requestItem = rows[0];
+      const componentId = Number(requestItem.component_id);
+      const remainingCents = toCents(requestItem.requested_quantity) - toCents(requestItem.issued_quantity);
       if (cents > remainingCents) {
         throw AppError.conflict(`You can allot at most ${fromCents(Math.max(0, remainingCents))} for this component. Refresh and try again.`, "ISSUE_EXCEEDS_REMAINING");
       }
-      await conn.query(`UPDATE production_material_request_items SET issued_quantity = issued_quantity + ? WHERE id = ?`, [fromCents(cents), requestItemId]);
-      await conn.query(`INSERT INTO production_material_issues (request_item_id, quantity, issued_by, remarks, idempotency_key) VALUES (?, ?, ?, ?, ?)`, [requestItemId, fromCents(cents), userId, remarks, idempotencyKey]);
+
+      // The approval workflow already deducted the quantity that could be made
+      // from then-available stock. A physical handover within that allowance is
+      // record-only. Anything beyond that allowance came from later replenishment
+      // and must be deducted now, exactly once, from current on-hand inventory.
+      const [handedRows] = await conn.query(`
+        SELECT COALESCE(SUM(i.quantity), 0) AS handed_quantity
+        FROM production_material_issues i
+        JOIN production_material_request_items ri ON ri.id = i.request_item_id
+        JOIN production_material_requests r ON r.id = ri.request_id
+        WHERE r.order_id = ? AND ri.component_id = ?
+      `, [orderId, componentId]);
+      const handedAfterCents = toCents(handedRows[0]?.handed_quantity || 0) + cents;
+
+      const [approvalRows] = await conn.query(`
+        SELECT COALESCE(SUM(quantity), 0) AS deducted_quantity
+        FROM inventory_transactions
+        WHERE order_id = ? AND component_id = ?
+          AND direction = 'OUT' AND reason_code = 'ISSUED_TO_PRODUCTION'
+          AND reference_type = 'ORDER_APPROVAL'
+      `, [orderId, componentId]);
+      const approvalDeductedCents = toCents(approvalRows[0]?.deducted_quantity || 0);
+      const [allotmentDeductionRows] = await conn.query(`
+        SELECT COALESCE(SUM(quantity), 0) AS deducted_quantity
+        FROM inventory_transactions
+        WHERE order_id = ? AND component_id = ?
+          AND direction = 'OUT' AND reason_code = 'ISSUED_TO_PRODUCTION'
+          AND reference_type = 'MATERIAL_ALLOTMENT'
+      `, [orderId, componentId]);
+      const previouslyDeductedAfterApprovalCents = toCents(allotmentDeductionRows[0]?.deducted_quantity || 0);
+      const requiredAfterApprovalCents = Math.max(0, handedAfterCents - approvalDeductedCents);
+      // Reconcile against the ledger, not just prior handovers, so retries and
+      // already-recorded late-stock deductions can never charge the same quantity twice.
+      const deductCents = Math.max(0, requiredAfterApprovalCents - previouslyDeductedAfterApprovalCents);
+
+      if (deductCents > 0) {
+        const deductQuantity = fromCents(deductCents);
+        const [stockUpdate] = await conn.query(`
+          UPDATE inventory
+          SET quantity_on_hand = quantity_on_hand - ?
+          WHERE component_id = ? AND quantity_on_hand >= ?
+        `, [deductQuantity, componentId, deductQuantity]);
+        if (stockUpdate.affectedRows !== 1) {
+          throw AppError.conflict(
+            `Insufficient stock for component #${componentId}. The additional material must be received into inventory before it can be allotted.`,
+            "INSUFFICIENT_STOCK"
+          );
+        }
+        const [stockRows] = await conn.query(`SELECT quantity_on_hand FROM inventory WHERE component_id = ?`, [componentId]);
+        if (!stockRows.length) throw AppError.conflict(`Inventory record for component #${componentId} was not found.`, "INVENTORY_NOT_FOUND");
+        const ledgerKey = crypto.createHash("sha256")
+          .update(`material-allotment|${idempotencyKey}|${requestItemId}`)
+          .digest("hex");
+        await conn.query(`
+          INSERT INTO inventory_transactions
+            (component_id, transaction_type, direction, quantity, balance_after, reason,
+             reason_code, reference_type, reference_id, created_by, order_id, idempotency_key)
+          VALUES (?, 'CONSUMED', 'OUT', ?, ?, ?, 'ISSUED_TO_PRODUCTION', 'MATERIAL_ALLOTMENT', ?, ?, ?, ?)
+        `, [
+          componentId,
+          deductQuantity,
+          stockRows[0].quantity_on_hand,
+          `Additional material supplied to production for order #${orderId}`,
+          requestId,
+          userId,
+          orderId,
+          ledgerKey,
+        ]);
+      }
+
+      await conn.query(
+        `UPDATE production_material_request_items SET issued_quantity = issued_quantity + ? WHERE id = ?`,
+        [fromCents(cents), requestItemId]
+      );
+      await conn.query(
+        `INSERT INTO production_material_issues (request_item_id, quantity, issued_by, remarks, idempotency_key) VALUES (?, ?, ?, ?, ?)`,
+        [requestItemId, fromCents(cents), userId, remarks, idempotencyKey]
+      );
     }
 
     const [totals] = await conn.query(`

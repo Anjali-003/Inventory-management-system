@@ -21,39 +21,18 @@ async function getOrderItem(connection, orderItemId) {
 }
 
 /*
- * Resolve the production cap for an individual order item.
- * For orders whose materials have been issued at Operations approval, use
- * the sum of approved quantities for that product. If the same product appears
- * on multiple order lines, allocate that approved total in order-item ID order
- * so the same approved units cannot be started against multiple lines.
- * Legacy orders without an inventory-issued marker fall back to ordered quantity.
+ * Production target is the order-line quantity, not the quantity that could be
+ * made from stock on hand during approval. order_production_items is the
+ * approval-time stock-feasibility plan; shortages can be purchased later and
+ * supplied through the Store material-request workflow.
  */
-async function getProductionTargetForItem(connection, item) {
-  const orderedQuantity = Number(item.ordered_quantity || 0)
-  if (!item.inventory_issued_at) return orderedQuantity
-
-  const [approvedRows] = await connection.query(`
-    SELECT COALESCE(SUM(quantity), 0) AS approved_quantity
-    FROM order_production_items
-    WHERE order_id = ? AND product_id = ?
-  `, [item.order_id, item.product_id])
-
-  const [priorRows] = await connection.query(`
-    SELECT COALESCE(SUM(quantity), 0) AS prior_quantity
-    FROM order_items
-    WHERE order_id = ? AND product_id = ? AND id < ?
-  `, [item.order_id, item.product_id, item.order_item_id])
-
-  const approvedQuantity = Number(approvedRows[0]?.approved_quantity || 0)
-  const priorQuantity = Number(priorRows[0]?.prior_quantity || 0)
-  return Math.min(
-    orderedQuantity,
-    Math.max(0, approvedQuantity - priorQuantity)
-  )
+async function getProductionTargetForItem(_connection, item) {
+  return Math.max(0, Number(item.ordered_quantity || 0))
 }
 
-// Inventory is issued/deducted during Operations approval.
-// Production only tracks quantities and status; it does not reserve or consume stock.
+// Available materials are deducted during Operations approval. If Purchasing later replenishes a shortage,
+// the Store allotment workflow deducts only the additional quantity not covered by that approval deduction.
+// Production itself only tracks production quantities and status; it does not reserve or consume stock.
 
 async function getOrderProgress(connection, orderItemId) {
   const [rows] = await connection.query(`
@@ -230,7 +209,7 @@ async function startProduction(orderItemId, quantity, userId) {
       productionId = result.insertId;
     }
 
-    // Inventory is handled during Operations approval. Starting production only updates production counters.
+    // Inventory deductions are handled by approval and Store allotment. Starting production only updates production counters.
 
     await connection.query(`
       UPDATE orders
@@ -278,18 +257,6 @@ async function getProductionOrders() {
       SELECT po.id, oi.id AS order_item_id, oi.product_id, o.id AS order_id, o.order_number,
              o.status AS order_status, o.approval_status, oi.quantity AS ordered_quantity,
              o.inventory_issued_at,
-             COALESCE((
-               SELECT SUM(opi.quantity)
-               FROM order_production_items opi
-               WHERE opi.order_id = o.id AND opi.product_id = oi.product_id
-             ), 0) AS approved_product_quantity,
-             COALESCE((
-               SELECT SUM(previous.quantity)
-               FROM order_items previous
-               WHERE previous.order_id = oi.order_id
-                 AND previous.product_id = oi.product_id
-                 AND previous.id < oi.id
-             ), 0) AS prior_same_product_quantity,
              p.name AS product_name, p.sku AS product_sku,
              (SELECT COUNT(*) FROM order_items siblings WHERE siblings.order_id = o.id) AS item_count,
              (SELECT COUNT(*) FROM order_items previous WHERE previous.order_id = o.id AND previous.id <= oi.id) AS item_index,
@@ -331,15 +298,10 @@ async function getProductionOrders() {
     `)
 
     for (const row of rows) {
-      const lineOrderedQuantity = Number(row.ordered_quantity || 0)
-      const approvedProductQuantity = Number(row.approved_product_quantity || 0)
-      const priorSameProductQuantity = Number(row.prior_same_product_quantity || 0)
-      const targetQuantity = row.inventory_issued_at
-        ? Math.min(
-            lineOrderedQuantity,
-            Math.max(0, approvedProductQuantity - priorSameProductQuantity)
-          )
-        : lineOrderedQuantity
+      const lineOrderedQuantity = Math.max(0, Number(row.ordered_quantity || 0))
+      // Approval-time stock planning does not reduce the customer order target.
+      // Any material shortage can be requested from Store after replenishment.
+      const targetQuantity = lineOrderedQuantity
       const started = Number(row.quantity_to_produce || 0)
       const completed = Number(row.quantity_completed || 0)
       const remainingToStart = Math.max(0, targetQuantity - started)
