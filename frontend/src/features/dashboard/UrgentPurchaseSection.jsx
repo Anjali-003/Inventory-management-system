@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { ChevronDown, ChevronUp, Clock, PackageSearch, ShoppingCart } from "lucide-react"
+import { ChevronDown, ChevronRight, ChevronUp, Clock, PackageSearch } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { EmptyState } from "@/components/feedback"
@@ -7,7 +7,8 @@ import { timeAgo } from "@/features/activity/time"
 import { fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { shortageOf } from "./DepartmentOverview"
-import OrderShortageDrawer from "./OrderShortageDrawer"
+import ApprovedOrderDrawer from "@/features/approved-orders/ApprovedOrderDrawer"
+import { useGetPurchasesQuery } from "@/features/purchasing/purchasingApi"
 
 /*
   Urgent Purchase Requirements.
@@ -115,6 +116,9 @@ function ComponentChips({ lines }) {
 
 export default function UrgentPurchaseSection({ orders = [], canRaise = true }) {
   const [selected, setSelected] = useState(null)
+  const [tab, setTab] = useState("components") // an urgent order opens on what has to be bought
+  const { data: purchases } = useGetPurchasesQuery()
+  const openOrder = (o) => { setTab("components"); setSelected(o) }
   const [showAll, setShowAll] = useState(false)
 
   // Approved orders with something still to buy, nearest delivery first.
@@ -153,12 +157,18 @@ export default function UrgentPurchaseSection({ orders = [], canRaise = true }) 
               const meta = getDeliveryMeta(o)
               const lines = shortageOf(o)
               return (
-                <li key={o.id} className={cn("flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4", isHot(meta) && "border-s-4 border-s-rose-400")}>
+                <li
+                  key={o.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open ${o.order_number}`}
+                  onClick={() => openOrder(o)}
+                  onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openOrder(o) } }}
+                  className={cn("flex cursor-pointer items-center justify-between gap-4 px-4 py-3.5 outline-none transition-colors hover:bg-muted/40 focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60", isHot(meta) && "border-s-4 border-s-rose-400")}
+                >
                   <div className="min-w-0 flex-1 space-y-2">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <button type="button" onClick={() => setSelected(o)} className="text-sm font-bold tabular-nums text-primary hover:underline">
-                        {o.order_number}
-                      </button>
+                      <span className="text-sm font-bold tabular-nums text-primary">{o.order_number}</span>
                       <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset", meta.tone)}>
                         <Clock className="size-3 shrink-0" aria-hidden />
                         {meta.label}
@@ -168,13 +178,7 @@ export default function UrgentPurchaseSection({ orders = [], canRaise = true }) 
                     <ComponentChips lines={lines} />
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setSelected(o)}
-                    className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
-                  >
-                    <ShoppingCart className="size-3.5" aria-hidden /> Raise PO
-                  </button>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 </li>
               )
             })}
@@ -192,7 +196,14 @@ export default function UrgentPurchaseSection({ orders = [], canRaise = true }) 
         </>
       )}
 
-      {selected && <OrderShortageDrawer order={selected} onClose={() => setSelected(null)} canRaisePurchase={canRaise} />}
+      <ApprovedOrderDrawer
+        order={selected ? orders.find((o) => o.id === selected.id) || selected : null}
+        purchases={purchases ?? []}
+        canRaise={canRaise}
+        tab={tab}
+        onTab={setTab}
+        onClose={() => setSelected(null)}
+      />
     </Card>
   )
 }

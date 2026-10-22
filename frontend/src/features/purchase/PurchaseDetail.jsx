@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { motion } from "motion/react"
 import { Check, Download, X } from "lucide-react"
 import { Modal } from "@/components/Modal"
@@ -23,7 +24,7 @@ const MARK = {
 }
 
 /* Vertical timeline: placed, received, sent to IQC, inspected, accepted by the store. */
-function PurchaseTimeline({ purchase: p }) {
+export function PurchaseTimeline({ purchase: p }) {
   const rejected = p.status === "REJECTED"
   const rows = [
     { title: "Order placed", who: p.created_by_name, at: p.created_at, wait: "" },
@@ -89,7 +90,7 @@ function Decision({ value }) {
 }
 
 /* The lines of one purchase. Received and the IQC decision stay hidden until IQC has inspected it. */
-function Lines({ items, inspected }) {
+export function Lines({ items, inspected }) {
   return (
     <>
       <div className="hidden overflow-hidden rounded-xl border sm:block">

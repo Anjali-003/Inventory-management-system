@@ -4,13 +4,14 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { EmptyState } from "@/components/feedback"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { PurchaseDetailModal } from "@/features/purchasing/PurchaseParts"
+import PurchaseDrawer from "@/features/purchase/PurchaseDrawer"
 import { downloadRejected } from "@/features/purchasing/purchasingUtils"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 
 export default function IqcRejectionsSection({ purchases = [] }) {
   const [selectedPurchase, setSelectedPurchase] = useState(null)
+  const [drawerTab, setDrawerTab] = useState("overview")
   const [query, setQuery] = useState("")
 
   // Extract all rejected lines from all purchases
@@ -240,12 +241,12 @@ export default function IqcRejectionsSection({ purchases = [] }) {
         ))}
       </div>
 
-      {selectedPurchase && (
-        <PurchaseDetailModal
-          purchase={selectedPurchase}
-          onClose={() => setSelectedPurchase(null)}
-        />
-      )}
+      <PurchaseDrawer
+        purchase={selectedPurchase}
+        tab={drawerTab}
+        onTab={setDrawerTab}
+        onClose={() => { setSelectedPurchase(null); setDrawerTab("overview") }}
+      />
     </Card>
   )
 }

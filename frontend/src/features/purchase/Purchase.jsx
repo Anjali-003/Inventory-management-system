@@ -22,7 +22,7 @@ import { ordersToOrder, qtyWithUnit } from "@/features/purchasing/purchasingUtil
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import NewPurchaseModal from "./NewPurchaseModal"
-import PurchaseDetailSheet from "./PurchaseDetail"
+import PurchaseDrawer, { isPurchaseTab } from "./PurchaseDrawer"
 
 const EMPTY = []
 
@@ -78,7 +78,6 @@ export default function Purchase() {
 
   const { data = EMPTY, isLoading, isFetching, error, refetch } = useGetPurchasesQuery()
   const [placing, setPlacing] = useState(null) // order id whose "Place order" dialog is open
-  const [viewing, setViewing] = useState(null)
   const approved = useGetApprovedOrdersQuery(undefined, { skip: !editable })
   const toOrder = useMemo(() => ordersToOrder(approved.data), [approved.data])
   const placingGroup = toOrder.find((g) => g.order.id === placing) || null // closes itself once every line is ordered
@@ -120,7 +119,12 @@ export default function Purchase() {
 
   const filtered = !!(status || query.trim())
   const clearFilters = () => patch({ status: null, q: null })
-  const open = (p) => setViewing(p)
+  // the open purchase and its tab live in the URL (?purchase=12&tab=iqc), so the drawer survives a refresh
+  const tab = isPurchaseTab(params.get("tab")) ? params.get("tab") : "overview"
+  const selected = data.find((p) => String(p.id) === params.get("purchase")) || null
+  const linkedOrder = selected?.order_number ? (approved.data ?? EMPTY).find((o) => o.order_number === selected.order_number) || null : null
+  const open = (p) => patch({ purchase: String(p.id), tab: null })
+  const closeDrawer = () => patch({ purchase: null, tab: null })
 
   // Same list feeds the tiles (md and up) and the chips (phones).
   const filters = [
@@ -322,7 +326,17 @@ export default function Purchase() {
       )}
 
       {placingGroup && <NewPurchaseModal order={placingGroup.order} lines={placingGroup.lines} onClose={() => setPlacing(null)} />}
-      <PurchaseDetailSheet purchase={viewing && (data.find((p) => p.id === viewing.id) || viewing)} onClose={() => setViewing(null)} />
+      <PurchaseDrawer
+        purchase={selected}
+        order={linkedOrder}
+        tab={tab}
+        onTab={(t) => patch({ tab: t === "overview" ? null : t }, true)}
+        onClose={closeDrawer}
+        editable={editable}
+        busy={selected ? busyId === selected.id : false}
+        onReceive={onReceive}
+        onSendIqc={onSendIqc}
+      />
     </MotionConfig>
   )
 }

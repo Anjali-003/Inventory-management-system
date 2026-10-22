@@ -1,20 +1,20 @@
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 import { useSearchParams } from "react-router-dom"
 import { MotionConfig, motion } from "motion/react"
-import { ChevronRight, ClipboardCheck, Download, RefreshCw, X } from "lucide-react"
+import { ChevronRight, ClipboardCheck, RefreshCw, X } from "lucide-react"
 import UserCell from "@/components/UserCell"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
-import { Modal } from "@/components/Modal"
-import { Accordion } from "@/components/ui/accordion"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useGetApprovedOrdersQuery } from "@/features/order-approvals/orderApprovalsApi"
-import { HeroButton, MktBtn, MktHero, OrderItems, SearchField, StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
-import { SPRING_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
+import { HeroButton, MktBtn, MktHero, SearchField, StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
+import { rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { plural } from "@/features/marketing-orders/orderParts"
-import { BUY_ALL, BUY_STAGES, BuyStatePill, PurchaseTile, PurchaseTileGrid, buyStageOf, buyState, isBuyState, openLinesOf } from "@/features/purchasing/purchaseKit"
-import { downloadPurchaseList } from "@/features/purchasing/purchasingUtils"
+import { BUY_ALL, BUY_STAGES, BuyStatePill, PurchaseTile, PurchaseTileGrid, buyStageOf, buyState, isBuyState } from "@/features/purchasing/purchaseKit"
+import { useGetPurchasesQuery } from "@/features/purchasing/purchasingApi"
+import { usePermissions } from "@/features/auth/usePermissions"
+import ApprovedOrderDrawer, { isApprovedTab } from "./ApprovedOrderDrawer"
 import { timeAgo } from "@/features/activity/time"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -37,63 +37,6 @@ const SHOW_LINES = 2
 
 const productsSummary = (items = []) => (items.length === 0 ? "No products" : items.length === 1 ? items[0].name : `${items[0].name} + ${items.length - 1} more`)
 const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
-
-const LINE_PILL = { toOrder: "bg-amber-50 text-amber-800 ring-amber-200", ordered: "bg-emerald-50 text-emerald-800 ring-emerald-200" }
-
-function LineStatus({ line }) {
-  const toOrder = line.purchase_order_id == null
-  return (
-    <span className={cn("inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset", toOrder ? LINE_PILL.toOrder : LINE_PILL.ordered)}>
-      {toOrder ? "To order" : `Ordered · ${line.po_number}`}
-    </span>
-  )
-}
-
-/* The components the Operations Admin asked the Purchase Manager to buy for this order: table from `sm`, cards on a phone. */
-function ComponentsToBuy({ items }) {
-  return (
-    <>
-      <div className="hidden overflow-hidden rounded-xl border sm:block">
-        <Table data-cards="off">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Component</TableHead>
-              <TableHead className="text-right">To buy</TableHead>
-              <TableHead>Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((c) => (
-              <TableRow key={c.component_id}>
-                <TableCell className="whitespace-normal">
-                  <p className="font-medium">{c.name}</p>
-                  {c.sku && <p className="text-xs text-muted-foreground">{c.sku}</p>}
-                </TableCell>
-                <TableCell className="text-right font-semibold tabular-nums">{fmtQty(c.quantity)} {c.unit}</TableCell>
-                <TableCell><LineStatus line={c} /></TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <motion.ul variants={stagger(0.05)} initial="hidden" animate="show" className="space-y-2 sm:hidden">
-        {items.map((c) => (
-          <motion.li key={c.component_id} variants={rise} className="rounded-xl border bg-card px-3.5 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="break-words text-sm font-semibold leading-snug">{c.name}</p>
-                {c.sku && <p className="mt-0.5 text-xs text-muted-foreground">{c.sku}</p>}
-              </div>
-              <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-bold tabular-nums text-slate-800">{fmtQty(c.quantity)} {c.unit}</span>
-            </div>
-            <div className="mt-2.5 border-t border-dashed pt-2.5"><LineStatus line={c} /></div>
-          </motion.li>
-        ))}
-      </motion.ul>
-    </>
-  )
-}
 
 /* One approved order as a card (phones and tablets). The whole card opens the popup. */
 function OrderCard({ order, onOpen }) {
@@ -140,7 +83,10 @@ function CardsSkeleton() {
 
 export default function ApprovedOrders() {
   const { data = EMPTY, isLoading, isFetching, error, refetch } = useGetApprovedOrdersQuery()
-  const [viewing, setViewing] = useState(null)
+  const { canEdit, canView } = usePermissions()
+  const canRaise = canEdit("purchase")
+  const buys = useGetPurchasesQuery(undefined, { skip: !canView("purchase") })
+  const purchases = buys.data ?? EMPTY
 
   const [params, setParams] = useSearchParams()
   const state = isBuyState(params.get("state")) ? params.get("state") : null
@@ -190,10 +136,10 @@ export default function ApprovedOrders() {
     })),
   ]
 
-  // read from the live list, so the popup stays right if the data refreshes while it is open
-  const opened = viewing ? data.find((o) => o.id === viewing.id) || viewing : null
-  const openedLines = opened?.purchase_request?.items ?? EMPTY
-  const openedToOrder = opened ? openLinesOf(opened).length : 0
+  // the open order and its tab live in the URL (?order=12&tab=components): the drawer survives a refresh
+  const tab = isApprovedTab(params.get("tab")) ? params.get("tab") : "overview"
+  const opened = data.find((o) => String(o.id) === params.get("order")) || null
+  const setViewing = (o) => patch({ order: String(o.id), tab: null })
 
   return (
     <MotionConfig reducedMotion="user">
@@ -321,82 +267,14 @@ export default function ApprovedOrders() {
         </>
       )}
 
-      <Modal
-        open={!!opened}
-        onClose={() => setViewing(null)}
-        size="lg"
-        title={opened ? opened.order_number : ""}
-        description={opened?.approval_remarks || undefined}
-        footer={<MktBtn onClick={() => setViewing(null)} data-autofocus>Close</MktBtn>}
-      >
-        {opened && (
-          <div className="space-y-6">
-            {(() => {
-              const stage = buyStageOf(buyState(opened))
-              const Icon = stage.icon
-              return (
-                // key = state, so the banner re-plays its entrance (and changes colour) when the lines get ordered
-                <motion.div
-                  key={stage.status}
-                  initial={{ opacity: 0, scale: 0.97 }}
-                  animate={{ opacity: 1, scale: 1, transition: SPRING_SOFT }}
-                  className={cn("relative overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg", stage.s.grad, stage.s.glow)}
-                >
-                  <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
-                  <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/60" />
-                  <div className="relative flex items-center gap-3.5">
-                    <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/20 ring-1 ring-inset ring-white/30">
-                      <Icon className="size-5" aria-hidden />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">
-                        {stage.status === "TO_ORDER" ? `${plural(openedToOrder, "component")} to order` : stage.label}
-                      </p>
-                      <p className="mt-0.5 text-xs text-white/80">{stage.hint}</p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(unitsOf(opened.items))}</p>
-                      <p className="mt-1 text-[11px] text-white/80">units</p>
-                    </div>
-                  </div>
-                </motion.div>
-              )
-            })()}
-
-            <section className="space-y-2.5">
-              <h3 className="text-sm font-semibold">Products</h3>
-              <OrderItems items={opened.items} />
-            </section>
-
-            {openedLines.length > 0 && (
-              <section>
-                <Accordion
-                  headerClassName="rounded-lg"
-                  panelClassName="pt-2.5"
-                  actions={
-                    <MktBtn size="sm" aria-label="Download components to buy (Excel)" onClick={() => downloadPurchaseList(opened, openedLines)}>
-                      <Download /> Excel
-                    </MktBtn>
-                  }
-                  header={(open) => (
-                    <>
-                      <h3 className="text-sm font-semibold">Components to buy for this order</h3>
-                      {!open && (
-                        <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-                          {openedLines.slice(0, 3).map((l) => l.name).join(", ")}
-                          {openedLines.length > 3 && ` +${openedLines.length - 3} more`}
-                        </p>
-                      )}
-                    </>
-                  )}
-                >
-                  <ComponentsToBuy items={openedLines} />
-                </Accordion>
-              </section>
-            )}
-          </div>
-        )}
-      </Modal>
+      <ApprovedOrderDrawer
+        order={opened}
+        purchases={purchases}
+        canRaise={canRaise}
+        tab={tab}
+        onTab={(t) => patch({ tab: t === "overview" ? null : t }, true)}
+        onClose={() => patch({ order: null, tab: null })}
+      />
     </MotionConfig>
   )
 }
