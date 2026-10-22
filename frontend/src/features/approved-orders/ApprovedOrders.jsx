@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { MotionConfig, motion } from "motion/react"
-import { ChevronRight, ClipboardCheck, RefreshCw, X } from "lucide-react"
+import { ChevronRight, ClipboardCheck, Download, RefreshCw, X } from "lucide-react"
 import UserCell from "@/components/UserCell"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { Modal } from "@/components/Modal"
+import { Accordion } from "@/components/ui/accordion"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -13,6 +14,7 @@ import { HeroButton, MktBtn, MktHero, OrderItems, SearchField, StageChips, Statu
 import { SPRING_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { plural } from "@/features/marketing-orders/orderParts"
 import { BUY_ALL, BUY_STAGES, BuyStatePill, PurchaseTile, PurchaseTileGrid, buyStageOf, buyState, isBuyState, openLinesOf } from "@/features/purchasing/purchaseKit"
+import { downloadPurchaseList } from "@/features/purchasing/purchasingUtils"
 import { timeAgo } from "@/features/activity/time"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -367,9 +369,29 @@ export default function ApprovedOrders() {
             </section>
 
             {openedLines.length > 0 && (
-              <section className="space-y-2.5">
-                <h3 className="text-sm font-semibold">Components to buy for this order</h3>
-                <ComponentsToBuy items={openedLines} />
+              <section>
+                <Accordion
+                  headerClassName="rounded-lg"
+                  panelClassName="pt-2.5"
+                  actions={
+                    <MktBtn size="sm" aria-label="Download components to buy (Excel)" onClick={() => downloadPurchaseList(opened, openedLines)}>
+                      <Download /> Excel
+                    </MktBtn>
+                  }
+                  header={(open) => (
+                    <>
+                      <h3 className="text-sm font-semibold">Components to buy for this order</h3>
+                      {!open && (
+                        <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                          {openedLines.slice(0, 3).map((l) => l.name).join(", ")}
+                          {openedLines.length > 3 && ` +${openedLines.length - 3} more`}
+                        </p>
+                      )}
+                    </>
+                  )}
+                >
+                  <ComponentsToBuy items={openedLines} />
+                </Accordion>
               </section>
             )}
           </div>

@@ -1,5 +1,6 @@
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback";
 import UserCell from "@/components/UserCell";
+import { Accordion } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -34,7 +35,8 @@ import {
 } from "@/features/marketing-orders/orderParts";
 import { fmtDateTime, fmtQty } from "@/lib/stock";
 import { cn } from "@/lib/utils";
-import { ClipboardCheck, PackageCheck, RefreshCw, X } from "lucide-react";
+import { ClipboardCheck, Download, PackageCheck, RefreshCw, X } from "lucide-react";
+import { downloadPurchaseList } from "@/features/purchasing/purchasingUtils";
 import { MotionConfig, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -259,24 +261,47 @@ function FeasibilityTab({ order }) {
           )}
         </section>
         <section>
-          <Heading>Components sent to Purchase</Heading>
           {purch?.items?.length ? (
-            <ul className="space-y-1 rounded-xl border p-3 text-sm">
-              {purch.items.map((i) => (
-                <li key={i.component_id} className="flex justify-between gap-3">
-                  <span>
-                    {i.name}
-                    {i.sku ? <span className="text-muted-foreground"> · {i.sku}</span> : null}
-                  </span>
-                  <b className="tabular-nums">
-                    {fmtQty(i.quantity)}
-                    {i.unit ? ` ${i.unit}` : ""}
-                  </b>
-                </li>
-              ))}
-            </ul>
+            <Accordion
+              headerClassName="rounded-lg"
+              panelClassName="pt-2"
+              actions={
+                <MktBtn size="sm" aria-label="Download components sent to Purchase (Excel)" onClick={() => downloadPurchaseList(order, purch.items)}>
+                  <Download /> Excel
+                </MktBtn>
+              }
+              header={(open) => (
+                <>
+                  <h3 className="text-sm font-semibold">Components sent to Purchase</h3>
+                  {!open && (
+                    <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                      {purch.items.slice(0, 3).map((i) => i.name).join(", ")}
+                      {purch.items.length > 3 && ` +${purch.items.length - 3} more`}
+                    </p>
+                  )}
+                </>
+              )}
+            >
+              <ul className="space-y-1 rounded-xl border p-3 text-sm">
+                {purch.items.map((i) => (
+                  <li key={i.component_id} className="flex justify-between gap-3">
+                    <span>
+                      {i.name}
+                      {i.sku ? <span className="text-muted-foreground"> · {i.sku}</span> : null}
+                    </span>
+                    <b className="tabular-nums">
+                      {fmtQty(i.quantity)}
+                      {i.unit ? ` ${i.unit}` : ""}
+                    </b>
+                  </li>
+                ))}
+              </ul>
+            </Accordion>
           ) : (
-            <Note>No components were sent to Purchase.</Note>
+            <>
+              <Heading>Components sent to Purchase</Heading>
+              <Note>No components were sent to Purchase.</Note>
+            </>
           )}
         </section>
       </div>

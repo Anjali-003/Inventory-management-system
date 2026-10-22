@@ -30,6 +30,16 @@ export function downloadRejected(p) {
   downloadXlsx(`${p.po_number}-rejected-components.xlsx`, `${p.po_number} rejected`, headers, rows)
 }
 
+/* Excel file of the components the Operations Admin sent to Purchase for one order (lines = purchase_request.items). */
+export function downloadPurchaseList(order, lines) {
+  const headers = ["Order number", "SKU", "Component", "Quantity", "Unit", "Status"]
+  const rows = (lines || []).map((l) => [
+    order.order_number, l.sku || "", l.name, Number(l.quantity), l.unit || "",
+    l.purchase_order_id == null ? "To order" : `Ordered${l.po_number ? ` · ${l.po_number}` : ""}`,
+  ])
+  downloadXlsx(`${order.order_number}-components-to-buy.xlsx`, `${order.order_number} to buy`.slice(0, 31), headers, rows)
+}
+
 /*
   The Operations Admin's list, as the Purchase Manager sees it. An approved order carries
   purchase_request.items = [{ request_item_id, component_id, sku, name, unit, quantity, purchase_order_id, po_number }].

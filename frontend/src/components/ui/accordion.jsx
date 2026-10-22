@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
     ...what opens...
   </Accordion>
 
-  header        always visible, left side of the bar
+  header        always visible, left side of the bar. May be a function of `open`: (open) => node
   meta          always visible, right side. Plain info: clicking it still toggles the accordion
   actions       always visible, right side. Buttons / links: clicking them NEVER toggles the accordion
   children      the panel; it is only mounted while open
@@ -82,7 +82,7 @@ export function Accordion({
           typeof headerClassName === "function" ? headerClassName(open) : headerClassName,
         )}
       >
-        <div className="min-w-0">{header}</div>
+        <div className="min-w-0">{typeof header === "function" ? header(open) : header}</div>
         {(meta || actions || !hideChevron) && (
           <div className={cn("flex max-w-full flex-wrap items-center gap-3 sm:shrink-0 sm:flex-nowrap", endClassName)}>
             {meta}
