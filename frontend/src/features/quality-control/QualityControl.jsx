@@ -78,7 +78,7 @@ export default function QualityControl() {
       )}
 
       <Card className="overflow-hidden">
-        <StatStrip
+        <StatStrip dropdown="Filter production runs"
           cols="grid-cols-2 md:grid-cols-4"
           layoutId="qc-summary"
           items={[

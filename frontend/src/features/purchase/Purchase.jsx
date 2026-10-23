@@ -5,12 +5,13 @@ import { ClipboardList, RefreshCw, ShoppingCart, X } from "lucide-react"
 import UserCell from "@/components/UserCell"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { useToast } from "@/components/toast"
+import { Accordion } from "@/components/ui/accordion"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useGetApprovedOrdersQuery } from "@/features/order-approvals/orderApprovalsApi"
-import { HeroButton, MktBtn, MktHero, SearchField, StageChips } from "@/features/marketing-orders/mktKit"
+import { HeroButton, MktBtn, MktHero, SearchField, StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
 import { rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { useGetPurchasesQuery, useReceivePurchaseMutation, useSendPurchaseToIqcMutation } from "@/features/purchasing/purchasingApi"
 import {
@@ -21,7 +22,7 @@ import { ordersToOrder, qtyWithUnit } from "@/features/purchasing/purchasingUtil
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import NewPurchaseModal from "./NewPurchaseModal"
-import PurchaseDetailSheet from "./PurchaseDetail"
+import PurchaseDrawer, { isPurchaseTab } from "./PurchaseDrawer"
 
 const EMPTY = []
 
@@ -77,7 +78,6 @@ export default function Purchase() {
 
   const { data = EMPTY, isLoading, isFetching, error, refetch } = useGetPurchasesQuery()
   const [placing, setPlacing] = useState(null) // order id whose "Place order" dialog is open
-  const [viewing, setViewing] = useState(null)
   const approved = useGetApprovedOrdersQuery(undefined, { skip: !editable })
   const toOrder = useMemo(() => ordersToOrder(approved.data), [approved.data])
   const placingGroup = toOrder.find((g) => g.order.id === placing) || null // closes itself once every line is ordered
@@ -119,7 +119,12 @@ export default function Purchase() {
 
   const filtered = !!(status || query.trim())
   const clearFilters = () => patch({ status: null, q: null })
-  const open = (p) => setViewing(p)
+  // the open purchase and its tab live in the URL (?purchase=12&tab=iqc), so the drawer survives a refresh
+  const tab = isPurchaseTab(params.get("tab")) ? params.get("tab") : "overview"
+  const selected = data.find((p) => String(p.id) === params.get("purchase")) || null
+  const linkedOrder = selected?.order_number ? (approved.data ?? EMPTY).find((o) => o.order_number === selected.order_number) || null : null
+  const open = (p) => patch({ purchase: String(p.id), tab: null })
+  const closeDrawer = () => patch({ purchase: null, tab: null })
 
   // Same list feeds the tiles (md and up) and the chips (phones).
   const filters = [
@@ -166,24 +171,41 @@ export default function Purchase() {
           ) : (
             <motion.ul variants={stagger(0.05, 0.05)} initial="hidden" animate="show" className="grid gap-3 p-3 sm:p-4 lg:grid-cols-2">
               {toOrder.map(({ order, lines }) => (
-                <motion.li key={order.id} variants={rise} className="flex flex-col gap-3 rounded-xl border border-[#dce5e0] bg-card p-4 transition-colors duration-200 hover:border-[#c3d1ca] sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="break-all text-[15px] font-semibold tabular-nums">{order.order_number}</p>
-                    <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
-                      {lines.slice(0, 3).map((l) => `${l.name} (${qtyWithUnit(l.quantity, l.unit)})`).join(", ")}
-                      {lines.length > 3 && ` +${lines.length - 3} more`}
-                    </p>
-                  </div>
-                  <MktBtn variant="primary" className="shrink-0" onClick={() => setPlacing(order.id)}><ShoppingCart /> Place order ({lines.length})</MktBtn>
-                </motion.li>
+                <Accordion
+                  key={order.id}
+                  as={motion.li}
+                  rootProps={{ variants: rise }}
+                  className="rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]"
+                  headerClassName="flex-wrap gap-y-3 rounded-xl p-4"
+                  panelClassName="border-t px-4 py-3"
+                  header={
+                    <>
+                      <p className="break-all text-[15px] font-semibold tabular-nums">{order.order_number}</p>
+                      <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
+                        {lines.slice(0, 3).map((l) => `${l.name} (${qtyWithUnit(l.quantity, l.unit)})`).join(", ")}
+                        {lines.length > 3 && ` +${lines.length - 3} more`}
+                      </p>
+                    </>
+                  }
+                  actions={<MktBtn variant="primary" className="shrink-0" onClick={() => setPlacing(order.id)}><ShoppingCart /> Place order ({lines.length})</MktBtn>}
+                >
+                  <ul className="space-y-1.5 text-[13px]">
+                    {lines.map((l) => (
+                      <li key={l.component_id} className="flex items-baseline justify-between gap-3">
+                        <span className="min-w-0 break-words">{l.name}</span>
+                        <span className="shrink-0 font-medium tabular-nums">{qtyWithUnit(l.quantity, l.unit)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Accordion>
               ))}
             </motion.ul>
           )}
         </Card>
       )}
 
-      {/* filter: tiles on md+, chips on a phone */}
-      <div className="hidden md:block">
+      {/* filter: chips on a phone, tiles on tablets, a dropdown (in the bar below) on desktop */}
+      <div className="hidden md:block lg:hidden">
         <PurchaseTileGrid className="md:grid-cols-3 xl:grid-cols-6">
           {filters.filter((f) => f.key !== "ALL").map((f) => (
             <PurchaseTile key={f.key} toggle stage={f.stage} value={f.value} loading={isLoading} active={f.active} onClick={f.onClick} />
@@ -192,13 +214,18 @@ export default function Purchase() {
       </div>
       <StageChips
         label="Filter purchases by status"
-        items={filters.map((f) => ({ key: f.key, label: f.stage.label, value: f.value, grad: f.stage.s.grad, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
+        items={filters.map((f) => ({ key: f.key, label: f.stage.label, value: f.value, grad: f.stage.s.grad, pill: f.stage.s.pill, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
       />
 
       {/* search: stays under the top bar while a phone scrolls. On a phone the bar stays one line tall:
           the count and the removable filter tag are for bigger screens (the chips already show the filter). */}
       <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-5 md:bg-transparent md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
         <SearchField className="min-w-0 flex-1 sm:max-w-xs sm:flex-none" value={query} onChange={(v) => patch({ q: v }, true)} placeholder="Search PO, supplier or component..." />
+        <StatusSelect
+          className="hidden shrink-0 lg:block"
+          label="Filter purchases by status"
+          items={filters.map((f) => ({ key: f.key, label: f.stage.label, short: f.stage.short, value: f.value, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
+        />
         <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground sm:min-h-8 sm:flex-1 sm:flex-wrap sm:justify-end" aria-live="polite">
           <span className="hidden tabular-nums sm:inline">Showing {shown.length} of {counts.total}</span>
           {status && (
@@ -299,7 +326,17 @@ export default function Purchase() {
       )}
 
       {placingGroup && <NewPurchaseModal order={placingGroup.order} lines={placingGroup.lines} onClose={() => setPlacing(null)} />}
-      <PurchaseDetailSheet purchase={viewing && (data.find((p) => p.id === viewing.id) || viewing)} onClose={() => setViewing(null)} />
+      <PurchaseDrawer
+        purchase={selected}
+        order={linkedOrder}
+        tab={tab}
+        onTab={(t) => patch({ tab: t === "overview" ? null : t }, true)}
+        onClose={closeDrawer}
+        editable={editable}
+        busy={selected ? busyId === selected.id : false}
+        onReceive={onReceive}
+        onSendIqc={onSendIqc}
+      />
     </MotionConfig>
   )
 }

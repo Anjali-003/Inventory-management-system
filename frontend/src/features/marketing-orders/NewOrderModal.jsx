@@ -30,6 +30,7 @@ export default function NewOrderModal({ onClose }) {
   const [create, { isLoading: saving }] = useCreateMarketingOrderMutation()
 
   const [rows, setRows] = useState(() => [blank()])
+  const [deliveryDate, setDeliveryDate] = useState("")
   const [showErrors, setShowErrors] = useState(false)
   const [serverError, setServerError] = useState("")
   const endRef = useRef(null)
@@ -57,7 +58,10 @@ export default function NewOrderModal({ onClose }) {
     setServerError("")
     if (rows.some(rowError)) { setShowErrors(true); return }
     try {
-      const order = await create({ items: rows.map((r) => ({ productId: Number(r.product), quantity: Number(r.qty) })) }).unwrap()
+      const order = await create({
+        items: rows.map((r) => ({ productId: Number(r.product), quantity: Number(r.qty) })),
+        estimated_delivery_date: deliveryDate || null,
+      }).unwrap()
       toast.success(`${order.order_number} saved as draft`)
       onClose()
     } catch (err) {
@@ -91,6 +95,23 @@ export default function NewOrderModal({ onClose }) {
             <p className="mt-0.5 opacity-90">{serverError}</p>
           </div>
         )}
+
+                <div className="rounded-2xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 sm:p-4">
+          <label className={LABEL} htmlFor="order-edd">
+            Estimated Delivery Date
+          </label>
+          <input
+            id="order-edd"
+            type="date"
+            value={deliveryDate}
+            min={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setDeliveryDate(e.target.value)}
+            className="h-10 w-full rounded-[10px] border border-input bg-card px-3 text-sm outline-none transition-shadow focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Target delivery commitment for this order (can be revised by Operations Admin).
+          </p>
+        </div>
 
         <div className="relative space-y-3">
           <AnimatePresence initial={false} mode="popLayout">

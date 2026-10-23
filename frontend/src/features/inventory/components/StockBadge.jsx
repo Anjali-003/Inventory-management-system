@@ -2,9 +2,9 @@ import { Badge } from "@/components/ui/badge"
 
 export function stockState(item) {
   if (item.is_active === 0) return "archived"
-  const avail = Number(item.available)
-  if (avail <= 0) return "out"
-  if (avail <= Number(item.minimum_stock_level)) return "low"
+  const onHand = Number(item.quantity_on_hand)
+  if (onHand <= 0) return "out"
+  if (onHand <= Number(item.minimum_stock_level)) return "low"
   return "ok"
 }
 

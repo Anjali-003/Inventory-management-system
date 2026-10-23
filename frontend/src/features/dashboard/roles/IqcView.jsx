@@ -27,10 +27,10 @@ export default function IqcView() {
       <StatRow
         drill={drill}
         stats={[
-          { label: "Waiting for inspection", value: waiting.length, icon: ClipboardCheck, tone: waiting.length ? "amber" : "green", loading: isLoading, detail: "Sent by purchase", drill: { title: "Waiting for inspection", rows: waiting, to: "/iqc", toLabel: "Open IQC", empty: "Nothing to inspect" } },
-          { label: "Approved", value: approved.length, icon: CheckCircle2, tone: "green", loading: isLoading, detail: "Passed inspection", drill: { title: "Approved purchases", rows: approved, to: "/iqc", toLabel: "Open IQC", empty: "No approved purchase yet" } },
-          { label: "Rejected", value: rejected.length, icon: XCircle, tone: rejected.length ? "violet" : "green", loading: isLoading, detail: "Failed inspection", drill: { title: "Rejected purchases", rows: rejected, to: "/iqc", toLabel: "Open IQC", empty: "Nothing rejected" } },
-          { label: "Total inspected", value: inspected.length, icon: ClipboardList, tone: "blue", loading: isLoading, detail: "All time", drill: { title: "All inspected purchases", rows: inspected, to: "/iqc", toLabel: "Open IQC", empty: "Nothing inspected yet" } },
+          { label: "Total inspected", value: inspected.length, icon: ClipboardList, tone: "blue", loading: isLoading, detail: "All time", to: "/iqc?status=INSPECTED" },
+          { label: "Waiting for inspection", value: waiting.length, icon: ClipboardCheck, tone: waiting.length ? "amber" : "green", loading: isLoading, detail: "Sent by purchase", to: "/iqc?status=PENDING_IQC" },
+          { label: "Approved", value: approved.length, icon: CheckCircle2, tone: "green", loading: isLoading, detail: "Passed inspection", to: "/iqc?status=APPROVED" },
+          { label: "Rejected", value: rejected.length, icon: XCircle, tone: rejected.length ? "violet" : "green", loading: isLoading, detail: "Failed inspection", to: "/iqc?status=REJECTED" },
         ]}
       />
       <div className="mt-4 grid gap-4 lg:grid-cols-2">

@@ -5,7 +5,8 @@ import { Reveal } from "@/components/HistoryUI"
 import { EmptyState } from "@/components/feedback"
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { useGetOrderApprovalsQuery } from "@/features/order-approvals/orderApprovalsApi"
-import ApprovalDetailModal from "@/features/order-approvals/ApprovalDetailModal"
+import OpsOrderDrawer from "@/features/order-approvals/OpsOrderDrawer"
+import PurchaseDrawer from "@/features/purchase/PurchaseDrawer"
 import { ApprovalList, OPS_ALL, OPS_STAGES, OpsPanel, OpsTileGrid, opsHref } from "@/features/order-approvals/opsKit"
 import { HeroLink, MktHero, StageTile } from "@/features/marketing-orders/mktKit"
 import { OrderPipeline, countByStatus, newestFirst, plural } from "@/features/marketing-orders/orderParts"
@@ -13,10 +14,19 @@ import { useGetPurchasesQuery } from "@/features/purchasing/purchasingApi"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
 import DepartmentOverview from "../DepartmentOverview"
 import { ListPanel, useDrill } from "../DashboardKit"
-import { purchaseRow, stockRow } from "../rows"
+import { isLowStock, onOrderByComponent, purchaseRow, stockRow } from "../rows"
 
 const EMPTY = []
 const QUEUE = "PENDING_APPROVAL"
+
+/* The Purchase page's side drawer for one purchase, read-only here (the Operations Admin only follows purchases).
+   It reads the purchase from the live list by id, and closes itself if the purchase is no longer in it. */
+function OpsPurchaseDrawer({ purchaseId, onClose }) {
+  const { data = EMPTY } = useGetPurchasesQuery()
+  const [tab, setTab] = useState("overview")
+  const purchase = data.find((p) => p.id === purchaseId) ?? null
+  return <PurchaseDrawer purchase={purchase} tab={tab} onTab={setTab} onClose={onClose} editable={false} />
+}
 
 /* Plain-language line under "Hello": the one thing worth doing next. */
 function nudge(counts) {
@@ -26,7 +36,7 @@ function nudge(counts) {
 
 /*
   Operations Admin dashboard, built like the Marketing Manager one: a hero, one colour tile per stage (each is a
-  link to Order Approvals with that filter on), the pipeline bar, then the lists. Clicking an order opens the full
+  link to Incoming Orders with that filter on), the pipeline bar, then the lists. Clicking an order opens the full
   Operations popup (stock check, progress, products, Reject / Check stock & send). The purchase and stock lists
   below keep the shared dashboard panels, because those records belong to other roles.
 */
@@ -37,23 +47,24 @@ export default function OperationsView() {
   const buys = useGetPurchasesQuery()
   const inv = useGetInventoryQuery("active")
   const loading = appr.isLoading || buys.isLoading || inv.isLoading
-  const [openedId, setOpenedId] = useState(null) // the order whose popup is open
+  const [openedId, setOpenedId] = useState(null) // the order whose side drawer is open
 
   const orders = appr.data ?? EMPTY
   const counts = useMemo(() => countByStatus(orders), [orders])
 
   const d = useMemo(() => {
     const latest = [...orders].sort(newestFirst)
+    const onOrder = onOrderByComponent(buys.data)
     const by = (s) => latest.filter((o) => o.approval_status === s)
     return {
       pending: by(QUEUE),
       rejected: by("REJECTED"),
-      inProgress: (buys.data ?? EMPTY).filter((p) => p.status !== "STORED" && p.status !== "REJECTED").map(purchaseRow),
-      low: (inv.data ?? EMPTY).filter((i) => Number(i.available) <= Number(i.minimum_stock_level)).map(stockRow),
+      inProgress: (buys.data ?? EMPTY).filter((p) => p.status !== "STORED" && p.status !== "REJECTED").map((p) => ({ ...purchaseRow(p), detail: (close) => <OpsPurchaseDrawer purchaseId={p.id} onClose={close} /> })),
+      low: (inv.data ?? EMPTY).filter(isLowStock).map((i) => stockRow(i, onOrder.get(i.component_id))),
     }
   }, [orders, buys.data, inv.data])
 
-  // Every figure opens Order Approvals with that filter already on.
+  // Every figure opens Incoming Orders with that filter already on.
   const tiles = [
     { key: "ALL", stage: OPS_ALL, value: counts.total, to: opsHref("ALL") },
     ...OPS_STAGES.map((s) => ({ key: s.status, stage: s, value: counts[s.status], to: opsHref(s.status) })),
@@ -64,7 +75,7 @@ export default function OperationsView() {
   return (
     <MotionConfig reducedMotion="user">
       <MktHero eyebrow="Operations dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={nudge(counts)}>
-        <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to={opsHref(QUEUE)}><ClipboardCheck /> Open order approvals</HeroLink>
+        <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to={opsHref(QUEUE)}><ClipboardCheck /> Open incoming orders</HeroLink>
       </MktHero>
 
       <OpsTileGrid>
@@ -96,13 +107,13 @@ export default function OperationsView() {
           </OpsPanel>
         </Reveal>
         <Reveal delay={0.5}>
-          <ListPanel table rightLabel="Available / min" drill={drill} loading={loading} title="Components to reorder" description="Available stock is at or below the minimum." rows={d.low} to="/inventory?filter=low" toLabel="Open Inventory" emptyIcon={d.low.length ? AlertTriangle : CheckCircle2} empty="All components are above minimum" />
+          <ListPanel table rightLabel="On hand / min" drill={drill} loading={loading} title="Components to reorder" description="Stock on hand is at or below the minimum." rows={d.low} to="/inventory?filter=low" toLabel="Open Inventory" emptyIcon={d.low.length ? AlertTriangle : CheckCircle2} empty="All components are above minimum" />
         </Reveal>
       </div>
 
       <DepartmentOverview className="mt-6" depts={["iqc", "store", "purchase"]} />
 
-      {openedId != null && <ApprovalDetailModal orderId={openedId} onClose={() => setOpenedId(null)} />}
+      <OpsOrderDrawer orderId={openedId} onClose={() => setOpenedId(null)} />
       {drill.host}
     </MotionConfig>
   )

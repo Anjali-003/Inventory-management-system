@@ -1,24 +1,118 @@
 import { useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { CheckCircle2, PackageCheck, RefreshCw, Truck } from "lucide-react"
 import PageHeader from "@/components/PageHeader"
 import UserCell from "@/components/UserCell"
 import { ConfirmDialog } from "@/components/Modal"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { StatCard } from "@/components/HistoryUI"
+import { StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
+import { Accordion } from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/components/toast"
 import { usePermissions } from "@/features/auth/usePermissions"
-import { useDrill } from "@/features/dashboard/DashboardKit"
-import { incomingRow } from "@/features/dashboard/rows"
 import { useAcceptPurchaseMutation, useGetIncomingStockQuery } from "@/features/purchasing/purchasingApi"
 import { PurchaseDetailModal } from "@/features/purchasing/PurchaseParts"
 import { qtyWithUnit } from "@/features/purchasing/purchasingUtils"
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
 
 const EMPTY = []
+
+/* The components of one purchase as a table. `resultLabel` names the last column ("You will receive" / "Added to stock"). */
+function StockLines({ lines, resultLabel }) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Component</TableHead>
+            <TableHead className="text-right">Ordered</TableHead>
+            <TableHead className="text-right">{resultLabel}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {lines.map((i) => (
+            <TableRow key={i.id}>
+              <TableCell>
+                <p className="font-medium">{i.name}</p>
+                <p className="text-xs text-muted-foreground">{i.sku}{i.remarks ? ` · ${i.remarks}` : ""}</p>
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{qtyWithUnit(i.quantity_ordered, i.unit)}</TableCell>
+              <TableCell className="text-right font-semibold tabular-nums">{qtyWithUnit(i.quantity_approved, i.unit)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+/*
+  One purchase waiting to be accepted, as an accordion: closed it shows only the header (PO, supplier, summary, Accept);
+  click the header to show the components, click again to hide them. The Accept button never toggles the card.
+*/
+function WaitingCard({ p, editable, onAccept }) {
+  const lines = p.items.filter((i) => Number(i.quantity_approved) > 0)
+  return (
+    <Accordion
+      as={Card}
+      headerAs={CardHeader}
+      className="overflow-hidden"
+      headerClassName={(open) => !open && "border-b-0 rounded-b-[14px]"}
+      header={
+        <>
+          <CardTitle>{p.po_number} · {p.supplier}</CardTitle>
+          <CardDescription>
+            Approved by {p.iqc_by_name || "IQC"} on {fmtDateTime(p.iqc_at)}
+            {p.iqc_remarks ? ` · "${p.iqc_remarks}"` : ""}
+          </CardDescription>
+          <p className="mt-1 pl-[13px] text-xs font-medium text-foreground">
+            {lines.length} component{lines.length === 1 ? "" : "s"} · {fmtQty(p.totals.approved)} pieces to receive
+          </p>
+        </>
+      }
+      actions={editable && <Button onClick={() => onAccept(p)}><CheckCircle2 /> Accept into stock</Button>}
+    >
+      <StockLines lines={lines} resultLabel="You will receive" />
+    </Accordion>
+  )
+}
+
+/*
+  One accepted purchase, same accordion as WaitingCard: closed = a single row (PO, supplier, pieces added, who accepted it),
+  click to show its components, click again to hide them.
+*/
+function AcceptedRow({ p, onDetails }) {
+  const lines = p.items.filter((i) => Number(i.quantity_approved) > 0)
+  return (
+    <Accordion
+      as="li"
+      headerClassName="flex-wrap gap-x-4 gap-y-2 px-5 py-3.5"
+      endClassName="gap-4"
+      panelClassName="border-t bg-muted/10"
+      header={
+        <>
+          <p className="font-semibold">{p.po_number} · {p.supplier}</p>
+          <p className="text-xs text-muted-foreground">{lines.length} component{lines.length === 1 ? "" : "s"}</p>
+        </>
+      }
+      meta={
+        <>
+          <UserCell name={p.accepted_by_name} sub={fmtDateTime(p.accepted_at)} />
+          <Badge variant="success">{fmtQty(p.totals.approved)}</Badge>
+        </>
+      }
+    >
+      <StockLines lines={lines} resultLabel="Added to stock" />
+      <div className="flex justify-end px-5 py-2.5">
+        <Button size="sm" variant="ghost" onClick={() => onDetails(p)}>Full details</Button>
+      </div>
+    </Accordion>
+  )
+}
 
 /*
   Store manager: purchases that IQC has approved. Accepting is the step that puts the approved quantity
@@ -34,12 +128,18 @@ export default function IncomingStock() {
   const [confirming, setConfirming] = useState(null)
   const [acceptError, setAcceptError] = useState("")
   const [viewing, setViewing] = useState(null)
+  const [params, setParams] = useSearchParams() // /incoming-stock?status=PENDING_STORE (from the Store dashboard)
+  const view = ["PENDING_STORE", "STORED"].includes(params.get("status")) ? params.get("status") : null
 
   const waiting = data.filter((p) => p.status === "PENDING_STORE")
   const done = data.filter((p) => p.status === "STORED")
   const piecesWaiting = waiting.reduce((s, p) => s + p.totals.approved, 0)
-  const drill = useDrill() // clicking a figure opens a popup with the purchases behind it
-  const open = (title, description, list, empty) => () => drill.openList({ title, description, rows: list.map(incomingRow), empty })
+  const pick = (k) => () => setParams(k === "ALL" || k === view ? {} : { status: k }, { replace: true })
+  const filters = [
+    { key: "ALL", label: "All purchases", value: waiting.length + done.length, icon: Truck, tone: "violet", detail: "IQC approved", grad: "from-violet-400 to-purple-600", pill: "bg-violet-50 text-violet-800 ring-violet-200", dot: "bg-violet-500", active: !view, onClick: pick("ALL") },
+    { key: "PENDING_STORE", label: "To accept into stock", value: waiting.length, icon: Truck, tone: "amber", detail: `${fmtQty(piecesWaiting)} pieces to receive`, grad: "from-amber-400 to-orange-500", pill: "bg-amber-50 text-amber-800 ring-amber-200", dot: "bg-amber-500", active: view === "PENDING_STORE", onClick: pick("PENDING_STORE") },
+    { key: "STORED", label: "Accepted", value: done.length, icon: CheckCircle2, tone: "green", detail: "Already in inventory", grad: "from-emerald-400 to-emerald-700", pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", dot: "bg-emerald-600", active: view === "STORED", onClick: pick("STORED") },
+  ]
 
   const confirmAccept = async () => {
     setAcceptError("")
@@ -60,57 +160,29 @@ export default function IncomingStock() {
 
       {error && <div className="mb-4"><Notice title="Something went wrong">Could not load incoming stock. Check that the server is running.</Notice></div>}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard index={0} icon={Truck} tone={waiting.length ? "amber" : "green"} label="Waiting for you" value={waiting.length} loading={isLoading} detail="IQC approved, not accepted yet" onClick={open("Waiting for you", "IQC approved these. Accept them into stock.", waiting, "Nothing to accept")} />
-        <StatCard index={1} icon={PackageCheck} tone="blue" label="Pieces to receive" value={piecesWaiting} loading={isLoading} detail="Approved quantity in those purchases" onClick={open("Pieces to receive", "Approved quantity in each purchase.", waiting, "Nothing to receive")} />
-        <StatCard index={2} icon={CheckCircle2} tone="green" label="Accepted" value={done.length} loading={isLoading} detail="Already in inventory" onClick={open("Accepted", "Already added to inventory.", done, "Nothing accepted yet")} />
+      {/* the figures are filters: chips on a phone, cards on a tablet, a dropdown on a PC. The chosen one matches the URL. */}
+      <div className="mb-4 hidden lg:block">
+        <StatusSelect className="w-64" portal label="Filter incoming stock" items={filters.map((f) => ({ key: f.key, label: f.label, value: f.value, dot: f.dot, active: f.active, onClick: f.onClick }))} />
+      </div>
+      <StageChips label="Filter incoming stock" items={filters} />
+      <div className="hidden gap-4 sm:grid-cols-3 md:grid lg:hidden">
+        {filters.map((f, i) => (
+          <StatCard key={f.key} index={i} icon={f.icon} tone={f.tone} label={f.label} value={f.value} loading={isLoading} detail={f.detail} active={f.active} onClick={f.onClick} />
+        ))}
       </div>
 
       <div id="incoming-waiting" className="mt-4 scroll-mt-4 space-y-4">
-        {isLoading ? (
+        {view !== "STORED" && (isLoading ? (
           <Card><TableSkeleton rows={3} /></Card>
         ) : waiting.length === 0 ? (
           <Card><EmptyState icon={Truck} title="Nothing to accept">Purchases appear here after the IQC manager approves them.</EmptyState></Card>
         ) : (
           waiting.map((p) => (
-            <Card key={p.id} className="overflow-hidden">
-              <CardHeader>
-                <div>
-                  <CardTitle>{p.po_number} · {p.supplier}</CardTitle>
-                  <CardDescription>
-                    Approved by {p.iqc_by_name || "IQC"} on {fmtDateTime(p.iqc_at)}
-                    {p.iqc_remarks ? ` · "${p.iqc_remarks}"` : ""}
-                  </CardDescription>
-                </div>
-                {editable && <Button onClick={() => { setAcceptError(""); setConfirming(p) }}><CheckCircle2 /> Accept into stock</Button>}
-              </CardHeader>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Component</TableHead>
-                      <TableHead className="text-right">Ordered</TableHead>
-                      <TableHead className="text-right">You will receive</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {p.items.filter((i) => Number(i.quantity_approved) > 0).map((i) => (
-                      <TableRow key={i.id}>
-                        <TableCell>
-                          <p className="font-medium">{i.name}</p>
-                          <p className="text-xs text-muted-foreground">{i.sku}{i.remarks ? ` · ${i.remarks}` : ""}</p>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{qtyWithUnit(i.quantity_ordered, i.unit)}</TableCell>
-                        <TableCell className="text-right font-semibold tabular-nums">{qtyWithUnit(i.quantity_approved, i.unit)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </Card>
+            <WaitingCard key={p.id} p={p} editable={editable} onAccept={(x) => { setAcceptError(""); setConfirming(x) }} />
           ))
-        )}
+        ))}
 
+        {view !== "PENDING_STORE" && (
         <Card id="incoming-accepted" className="scroll-mt-4 overflow-hidden">
           <CardHeader>
             <div>
@@ -123,32 +195,12 @@ export default function IncomingStock() {
           ) : done.length === 0 ? (
             <EmptyState icon={PackageCheck} title="Nothing accepted yet">Accepted purchases are listed here.</EmptyState>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Purchase</TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead className="text-right">Added to stock</TableHead>
-                    <TableHead>Accepted by</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {done.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-semibold">{p.po_number}</TableCell>
-                      <TableCell>{p.supplier}</TableCell>
-                      <TableCell className="text-right tabular-nums"><Badge variant="success">{fmtQty(p.totals.approved)}</Badge></TableCell>
-                      <TableCell><UserCell name={p.accepted_by_name} sub={fmtDateTime(p.accepted_at)} /></TableCell>
-                      <TableCell className="text-right"><Button size="sm" variant="ghost" onClick={() => setViewing(p)}>Details</Button></TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <ul className="divide-y">
+              {done.map((p) => <AcceptedRow key={p.id} p={p} onDetails={setViewing} />)}
+            </ul>
           )}
         </Card>
+        )}
       </div>
 
       <ConfirmDialog
@@ -170,7 +222,6 @@ export default function IncomingStock() {
         )}
       </ConfirmDialog>
 
-      {drill.host}
       <PurchaseDetailModal purchase={viewing && (data.find((p) => p.id === viewing.id) || viewing)} onClose={() => setViewing(null)} />
     </>
   )

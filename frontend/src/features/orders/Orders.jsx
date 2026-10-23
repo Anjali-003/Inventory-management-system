@@ -86,7 +86,7 @@ export default function Orders() {
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
       <Card className="overflow-hidden">
-        <StatStrip layoutId="orders-filter" cols="grid-cols-2 md:grid-cols-3 xl:grid-cols-5" items={stats} />
+        <StatStrip dropdown="Filter orders by status" layoutId="orders-filter" cols="grid-cols-2 md:grid-cols-3 xl:grid-cols-5" items={stats} />
 
         <div className="flex flex-wrap items-center gap-3 border-y px-4 py-3 sm:px-5">
           <SearchBar value={query} onChange={setQueryAndReset} placeholder="Search by order, product, status or creator..." />

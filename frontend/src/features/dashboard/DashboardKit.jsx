@@ -18,6 +18,7 @@ import { useGetMeQuery } from "@/features/auth/authApi"
 
   A ROW is { id, title, sub, badge: { variant, label }, right, detail }:
     detail = (close) => <Modal .../>   the popup that opens when the row is clicked (optional)
+    to     = "/some/page"              go straight to that page when the row is clicked (used instead of detail)
   Clicking a stat card opens a popup listing its rows; clicking a row inside it (or in a panel) opens that row's popup.
   Closing a row popup that was opened from a list brings the list back.
 */
@@ -27,14 +28,18 @@ export function Greeting({ description, children }) {
   return <PageHeader title={me?.name ? `Hello, ${me.name}` : "Hello"} description={description}>{children}</PageHeader>
 }
 
+const openable = (r) => !!(r.detail || r.to)
+
 export function useDrill() {
+  const navigate = useNavigate()
   const [list, setList] = useState(null) // { title, description, rows, to, toLabel, empty }
   const [row, setRow] = useState(null)
-  return { openList: setList, openRow: setRow, host: <DrillHost list={list} row={row} onOpenRow={setRow} onCloseList={() => setList(null)} onCloseRow={() => setRow(null)} /> }
+  const openRow = (r) => (r?.to ? navigate(r.to) : setRow(r)) // a row with `to` skips the popup
+  return { openList: setList, openRow, host: <DrillHost list={list} row={row} onOpenRow={setRow} onCloseList={() => setList(null)} onCloseRow={() => setRow(null)} /> }
 }
 
 function RowButton({ row, onOpen }) {
-  const clickable = !!row.detail
+  const clickable = openable(row)
   const Tag = clickable ? "button" : "div"
   return (
     <Tag
@@ -84,8 +89,9 @@ function DrillHost({ list, row, onOpenRow, onCloseList, onCloseRow }) {
   )
 }
 
-/* Top-of-page figures. Each one opens a popup with the records behind the number. */
+/* Top-of-page figures. Each one opens a popup with the records behind the number, or (with `to`) goes to that page. */
 export function StatRow({ stats, drill, cols = "sm:grid-cols-2 xl:grid-cols-4" }) {
+  const navigate = useNavigate()
   return (
     <div className={`grid gap-4 ${cols}`}>
       {stats.map((s, i) => (
@@ -98,7 +104,7 @@ export function StatRow({ stats, drill, cols = "sm:grid-cols-2 xl:grid-cols-4" }
           value={s.value}
           detail={s.detail}
           loading={s.loading}
-          onClick={() => drill.openList(s.drill)}
+          onClick={s.to ? () => navigate(s.to) : () => drill.openList(s.drill)}
         />
       ))}
     </div>
@@ -120,9 +126,9 @@ function RowTable({ rows, onOpen, rightLabel }) {
       </TableHeader>
       <TableBody>
         {rows.map((r) => (
-          <TableRow key={r.id} onClick={r.detail ? () => onOpen(r) : undefined} className={r.detail ? "cursor-pointer" : undefined}>
+          <TableRow key={r.id} onClick={openable(r) ? () => onOpen(r) : undefined} className={openable(r) ? "cursor-pointer" : undefined}>
             <TableCell className="min-w-40 whitespace-normal">
-              {r.detail ? (
+              {openable(r) ? (
                 <button type="button" onClick={() => onOpen(r)} className="break-words text-left font-semibold text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/60">{r.title}</button>
               ) : (
                 <p className="break-words font-semibold">{r.title}</p>
@@ -131,7 +137,7 @@ function RowTable({ rows, onOpen, rightLabel }) {
             </TableCell>
             {hasRight && <TableCell className="text-right font-semibold tabular-nums">{r.right ?? "-"}</TableCell>}
             <TableCell>{r.badge ? <Badge variant={r.badge.variant}>{r.badge.label}</Badge> : <span className="text-muted-foreground">-</span>}</TableCell>
-            <TableCell className="text-right">{r.detail && <ChevronRight className="ml-auto size-4 text-muted-foreground" aria-hidden />}</TableCell>
+            <TableCell className="text-right">{openable(r) && <ChevronRight className="ml-auto size-4 text-muted-foreground" aria-hidden />}</TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -144,7 +150,7 @@ function RowCards({ rows, onOpen, rightLabel }) {
     <ul className="grid gap-3 p-3 sm:p-4">
       {rows.map((r) => (
         <li key={r.id} className="relative rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]">
-          {r.detail && <button type="button" onClick={() => onOpen(r)} aria-label={`Open ${r.title}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />}
+          {openable(r) && <button type="button" onClick={() => onOpen(r)} aria-label={`Open ${r.title}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />}
           <div className="pointer-events-none relative p-4">
             <div className="flex items-start justify-between gap-3">
               <span className="min-w-0 break-words text-[15px] font-semibold leading-snug">{r.title}</span>
@@ -155,7 +161,7 @@ function RowCards({ rows, onOpen, rightLabel }) {
                 {r.sub && <p className="break-words text-xs text-muted-foreground">{r.sub}</p>}
                 {r.right != null && <p className="mt-0.5 text-[13px] font-medium tabular-nums">{rightLabel ? `${rightLabel}: ` : ""}{r.right}</p>}
               </div>
-              {r.detail && <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+              {openable(r) && <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
             </div>
           </div>
         </li>

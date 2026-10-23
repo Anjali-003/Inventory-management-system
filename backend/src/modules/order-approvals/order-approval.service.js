@@ -54,6 +54,7 @@ const ORDER_SELECT = `
         o.approval_remarks,
         cu.name AS created_by_name,
         DATE_FORMAT(o.sent_to_admin_at, '%Y-%m-%d %H:%i:%s') AS sent_to_admin_at,
+        DATE_FORMAT(o.estimated_delivery_date, '%Y-%m-%d') AS estimated_delivery_date,
         au.name AS approved_by_name,
         DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
         DATE_FORMAT(o.approved_at, '%Y-%m-%d %H:%i:%s') AS approved_at
@@ -514,4 +515,39 @@ async function dispatch(orderId, body, userId, opts) {
     });
 }
 
-module.exports = { APPROVAL_STATUSES, listOrders, getOrder, getOrdersByIds, approve, reject, getPlan, dispatch };
+
+async function updateDeliveryDate(orderId, body, user) {
+    const newDate = (body && (body.estimated_delivery_date || body.estimatedDeliveryDate)) || null;
+    const reason = (body && body.reason) || null;
+    if (!newDate) {
+        throw new AppError(422, "Estimated delivery date is required", "VALIDATION");
+    }
+
+    return inventory.inTransaction(async (conn) => {
+        const [orders] = await conn.query(
+            `SELECT id, order_number, approval_status, DATE_FORMAT(estimated_delivery_date, '%Y-%m-%d') AS old_date
+             FROM orders WHERE id = ? FOR UPDATE`,
+            [orderId]
+        );
+        if (orders.length === 0) throw AppError.notFound("Order not found", "NOT_FOUND");
+        const order = orders[0];
+        const oldDate = order.old_date;
+
+        await conn.query(`UPDATE orders SET estimated_delivery_date = ? WHERE id = ?`, [newDate, orderId]);
+
+        // Send notification to marketing manager
+        await notifications.createDeliveryDateNotification(conn, {
+            orderId,
+            orderNumber: order.order_number,
+            oldDate,
+            newDate,
+            reason,
+            userId: user.id
+        });
+
+        return getOrder(orderId, conn);
+    });
+}
+
+module.exports = {
+    updateDeliveryDate, APPROVAL_STATUSES, listOrders, getOrder, getOrdersByIds, approve, reject, getPlan, dispatch };

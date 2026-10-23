@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { CheckCircle2, PackageCheck, RefreshCw, Truck } from "lucide-react"
 import { finishedGoodsService } from "@/features/finished-goods/finishedGoodsService"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
@@ -84,7 +85,8 @@ export default function FinishedGoods() {
   const [actionError, setError] = useState("")
   const error = actionError || (loadError ? errorMessage(loadError, "Failed to load finished goods.") : "")
   const [query, setQuery] = useState("")
-  const [status, setStatus] = useState("all") // set by clicking a figure in the strip
+  const [searchParams] = useSearchParams() // /finished-goods?status=PACKAGING (from the Store dashboard)
+  const [status, setStatus] = useState(() => (["PACKAGING", "DISPATCHED", "COMPLETED"].includes(searchParams.get("status")) ? searchParams.get("status") : "all")) // set by clicking a figure in the strip
   const [selected, setSelected] = useState(null)
   const [action, setAction] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -133,11 +135,11 @@ export default function FinishedGoods() {
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
       <Card className="overflow-hidden">
-        <StatStrip
+        <StatStrip dropdown="Filter finished goods by status"
           layoutId="finished-goods-status"
           cols="grid-cols-2 md:grid-cols-4"
           items={[
-            { key: "packaging", label: "Packaging", value: counts.packaging, tone: "warning", active: status === "PACKAGING", onClick: () => setStatus(status === "PACKAGING" ? "all" : "PACKAGING") },
+            { key: "packaging", label: "In packaging", value: counts.packaging, tone: "warning", active: status === "PACKAGING", onClick: () => setStatus(status === "PACKAGING" ? "all" : "PACKAGING") },
             { key: "dispatched", label: "Dispatched", value: counts.dispatched, tone: "info", active: status === "DISPATCHED", onClick: () => setStatus(status === "DISPATCHED" ? "all" : "DISPATCHED") },
             { key: "completed", label: "Completed", value: counts.completed, tone: "success", active: status === "COMPLETED", onClick: () => setStatus(status === "COMPLETED" ? "all" : "COMPLETED") },
             { key: "total", label: "Total batches", value: items.length, tone: "neutral", active: status === "all", onClick: () => setStatus("all") },

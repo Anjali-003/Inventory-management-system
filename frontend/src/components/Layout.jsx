@@ -115,7 +115,7 @@ const GROUPS = [
     items: [
       { to: "/marketing-orders", label: "Marketing Orders", icon: ClipboardList, module: "marketingOrders" },
       // order approval: Operations Admin decides, then the Purchase Manager sees the approved orders
-      { to: "/order-approvals", label: "Order Approvals", icon: ClipboardCheck, module: "orderApprovals" },
+      { to: "/order-approvals", label: "Incoming Orders", icon: ClipboardCheck, module: "orderApprovals" },
       { to: "/approved-orders", label: "Approved Orders", icon: ClipboardList, module: "approvedOrders" },
       // the incoming-goods flow, in order: buy -> inspect -> accept into stock
       { to: "/purchase", label: "Purchase", icon: ShoppingCart, module: "purchase" },

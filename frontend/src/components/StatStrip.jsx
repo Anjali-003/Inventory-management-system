@@ -1,4 +1,5 @@
 import { motion } from "motion/react"
+import { StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
 import { cn } from "../lib/utils"
 
 const DOT = {
@@ -9,11 +10,50 @@ const DOT = {
   neutral: "bg-muted-foreground/50",
 }
 
+// the colour of the selected chip on a phone, per tone
+const GRAD = {
+  success: "from-emerald-400 to-emerald-700",
+  warning: "from-amber-400 to-orange-500",
+  danger: "from-rose-400 to-red-600",
+  info: "from-sky-400 to-blue-600",
+  neutral: "from-slate-500 to-slate-700",
+}
+
+// soft tinted look of the unselected chips on a phone (same as the Marketing Orders chips)
+const PILL = {
+  success: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+  warning: "bg-amber-50 text-amber-800 ring-amber-200",
+  danger: "bg-rose-50 text-rose-800 ring-rose-200",
+  info: "bg-sky-50 text-sky-800 ring-sky-200",
+  neutral: "bg-slate-100 text-slate-800 ring-slate-200",
+}
+
 /**
  * One connected strip of figures. Give an item `onClick` to make it a filter toggle
  * (`active` marks the selected one). `cols` is a full Tailwind grid-cols class string.
+ * `dropdown` (a label): the strip is responsive: a thin scrolling row of chips on a phone, this strip on a tablet,
+ * and one dropdown listing every figure with its count on a PC (lg+).
  */
-export default function StatStrip({ items, cols = "grid-cols-2 lg:grid-cols-4", layoutId = "stat-active" }) {
+export default function StatStrip({ items, cols = "grid-cols-2 lg:grid-cols-4", layoutId = "stat-active", dropdown }) {
+  return (
+    <>
+      {dropdown && (
+        <StageChips
+          label={dropdown}
+          items={items.map((it) => ({ key: it.key, label: it.label, value: it.value, grad: GRAD[it.tone ?? "neutral"], pill: PILL[it.tone ?? "neutral"], dot: DOT[it.tone ?? "neutral"], active: it.active, onClick: it.onClick }))}
+        />
+      )}
+      {dropdown && (
+        <div className="hidden items-center gap-3 border-b px-4 py-3 sm:px-5 lg:flex">
+          <StatusSelect portal label={dropdown} items={items.map((it) => ({ key: it.key, label: it.label, value: it.value, dot: DOT[it.tone ?? "neutral"], active: it.active, onClick: it.onClick }))} />
+        </div>
+      )}
+      <StripGrid items={items} cols={cn(cols, dropdown && "hidden md:grid lg:hidden")} layoutId={layoutId} />
+    </>
+  )
+}
+
+function StripGrid({ items, cols, layoutId }) {
   return (
     <div className={cn("grid gap-px bg-border", cols)}>
       {items.map((it) => {

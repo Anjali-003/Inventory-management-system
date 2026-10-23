@@ -48,8 +48,8 @@ function ItemCard({ item: i, actions }) {
           ))}
         </dl>
       )}
-      <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border bg-border text-center">
-        {[["On hand", i.quantity_on_hand], ["Reserved", i.quantity_reserved], ["Available", i.available]].map(([l, v]) => (
+      <div className={`grid gap-px overflow-hidden rounded-lg border bg-border text-center ${Number(i.quantity_reserved) > 0 ? "grid-cols-3" : "grid-cols-1"}`}>
+        {[["On hand", i.quantity_on_hand], ...(Number(i.quantity_reserved) > 0 ? [["Reserved", i.quantity_reserved], ["Available", i.available]] : [])].map(([l, v]) => (
           <div key={l} className="bg-card py-2"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">{l}</p><p className="font-semibold tabular-nums">{fmtQty(v)}</p></div>
         ))}
       </div>
@@ -162,12 +162,12 @@ export default function Inventory() {
           <LedgerPanel componentFilter={ledgerFor} onClearComponent={() => setLedgerFor(null)} refreshToken={token} />
         ) : (
           <>
-            <StatStrip
+            <StatStrip dropdown="Filter components by stock"
               layoutId="inv-filter"
               cols="grid-cols-3"
               items={[
                 { key: "all", label: "Components", value: counts.all, tone: "info", active: filter === "all", onClick: () => setFilter("all") },
-                { key: "low", label: "Low stock", value: counts.low, tone: "warning", active: filter === "low", onClick: () => setFilter(filter === "low" ? "all" : "low") },
+                { key: "low", label: "At or below minimum", value: counts.low, tone: "warning", active: filter === "low", onClick: () => setFilter(filter === "low" ? "all" : "low") },
                 { key: "out", label: "Out of stock", value: counts.out, tone: "danger", active: filter === "out", onClick: () => setFilter(filter === "out" ? "all" : "out") },
               ]}
             />
@@ -200,7 +200,7 @@ export default function Inventory() {
                         <TableHead className="hidden lg:table-cell">Category / Size</TableHead>
                         <TableHead className="hidden lg:table-cell">Location</TableHead>
                         <TableHead className="text-right">On hand</TableHead>
-                        <TableHead className="text-right">Available</TableHead>
+                        {rows.some((r) => Number(r.quantity_reserved) > 0) && <TableHead className="text-right">Available</TableHead>}
                         <TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -223,10 +223,12 @@ export default function Inventory() {
                             {fmtQty(i.quantity_on_hand)}
                             <span className="block text-xs text-muted-foreground">min {fmtQty(i.minimum_stock_level)}</span>
                           </TableCell>
-                          <TableCell className="text-right font-medium tabular-nums">
-                            {fmtQty(i.available)}
-                            {Number(i.quantity_reserved) > 0 && <span className="block text-xs font-normal text-muted-foreground">{fmtQty(i.quantity_reserved)} reserved</span>}
-                          </TableCell>
+                          {rows.some((r) => Number(r.quantity_reserved) > 0) && (
+                            <TableCell className="text-right font-medium tabular-nums">
+                              {fmtQty(i.available)}
+                              {Number(i.quantity_reserved) > 0 && <span className="block text-xs font-normal text-muted-foreground">{fmtQty(i.quantity_reserved)} reserved</span>}
+                            </TableCell>
+                          )}
                           <TableCell><StockBadge item={i} /></TableCell>
                           <TableCell><Actions item={i} /></TableCell>
                         </TableRow>

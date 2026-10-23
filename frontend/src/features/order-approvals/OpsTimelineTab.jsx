@@ -1,4 +1,7 @@
-import { Check, Clock3, X } from "lucide-react";
+import { Check, Clock3, Download, X } from "lucide-react";
+import { Accordion } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
+import { downloadPurchaseList } from "@/features/purchasing/purchasingUtils";
 import { fmtDateTime, fmtQty } from "@/lib/stock";
 import { cn } from "@/lib/utils";
 import { DECIDED_STATUSES, reviewOf, sumQty } from "@/features/marketing-orders/orderParts";
@@ -83,6 +86,8 @@ function buildEvents(order) {
       at: purch.sent_at,
       sub: who(purch.sent_by_name, purch.sent_at),
       detail: `${purch.items.length} component${purch.items.length === 1 ? "" : "s"} short`,
+      collapsible: true, // closed it previews the first 3 names; open it lists every component
+      download: () => downloadPurchaseList(order, purch.items),
       lines: purch.items.map((i) => [i.name, `${fmtQty(i.quantity)}${i.unit ? ` ${i.unit}` : ""}`]),
     });
   }
@@ -123,19 +128,58 @@ export default function OpsTimelineTab({ order }) {
               {e.state === "wait" && <Clock3 className="size-3" aria-hidden />}
             </span>
             <div className="min-w-0 flex-1">
-              <p className={cn("text-[13px] font-semibold leading-snug", e.state === "fail" && "text-destructive")}>{e.title}</p>
-              {e.sub && <p className="text-xs text-muted-foreground">{e.sub}</p>}
-              {e.detail && <p className="text-xs font-medium tabular-nums">{e.detail}</p>}
-              {e.lines?.length > 0 && (
-                <ul className="mt-1 space-y-0.5 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-xs">
-                  {e.lines.map(([name, qty], n) => (
-                    <li key={`${name}-${n}`} className="flex justify-between gap-3">
-                      <span className="min-w-0 truncate">{name}</span>
-                      <b className="shrink-0 tabular-nums">{qty}</b>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              {(() => {
+                const head = (
+                  <>
+                    <p className={cn("text-[13px] font-semibold leading-snug", e.state === "fail" && "text-destructive")}>{e.title}</p>
+                    {e.sub && <p className="text-xs text-muted-foreground">{e.sub}</p>}
+                    {e.detail && <p className="text-xs font-medium tabular-nums">{e.detail}</p>}
+                  </>
+                );
+                const list = e.lines?.length > 0 && (
+                  <ul className="mt-1 space-y-0.5 rounded-lg border bg-muted/40 px-2.5 py-1.5 text-xs">
+                    {e.lines.map(([name, qty], n) => (
+                      <li key={`${name}-${n}`} className="flex justify-between gap-3">
+                        <span className="min-w-0 truncate">{name}</span>
+                        <b className="shrink-0 tabular-nums">{qty}</b>
+                      </li>
+                    ))}
+                  </ul>
+                );
+                if (!(e.collapsible && e.lines?.length > 0)) {
+                  return (
+                    <>
+                      {head}
+                      {list}
+                    </>
+                  );
+                }
+                return (
+                  <Accordion
+                    headerClassName="rounded-lg"
+                    actions={
+                      e.download && (
+                        <Button type="button" size="sm" variant="ghost" aria-label="Download shortage list (Excel)" onClick={e.download}>
+                          <Download /> Excel
+                        </Button>
+                      )
+                    }
+                    header={(open) => (
+                      <>
+                        {head}
+                        {!open && (
+                          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                            {e.lines.slice(0, 3).map(([name]) => name).join(", ")}
+                            {e.lines.length > 3 && ` +${e.lines.length - 3} more`}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  >
+                    {list}
+                  </Accordion>
+                );
+              })()}
               {e.remarks && (
                 <p
                   className={cn(

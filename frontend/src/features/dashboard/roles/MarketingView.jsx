@@ -12,12 +12,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "@/features/marketing-orders/marketingOrdersApi"
+import { useGetNotificationsQuery, useMarkNotificationDoneMutation } from "@/features/notifications/notificationsApi"
+import { Bell, CheckCircle } from "lucide-react"
 import { HeroLink, MktBtn, MktHero, NewOrderFab, StageTile, StatusPill, TileGrid } from "@/features/marketing-orders/mktKit"
 import { rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { ALL_STAGE, OrderPipeline, STAGES, countByStatus, newestFirst, ordersHref, plural } from "@/features/marketing-orders/orderParts"
 import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtQty } from "@/lib/stock"
-import OrderDetailModal from "@/features/marketing-orders/OrderDetailModal"
+import OrderDrawer from "@/features/marketing-orders/OrderDrawer"
 
 const EMPTY = []
 
@@ -35,7 +37,7 @@ const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity
 
 /*
   Phone: a short card, only what matters at a glance (number, status, products in one line, units, age,
-  the rejection reason). Tapping anywhere on it opens the full details in a popup. The Send button
+  the rejection reason). Tapping anywhere on it opens the full details in the side drawer. The Send button
   sits above the tap area, so it only sends. Hairline border, no shadow (ChaiUI).
 */
 function OrderCard({ order, canSend, busy, onSend, onOpen }) {
@@ -71,7 +73,7 @@ function OrderCard({ order, canSend, busy, onSend, onOpen }) {
   )
 }
 
-/* Tablet and desktop: a compact table. Clicking a row opens the full details in a popup. */
+/* Tablet and desktop: a compact table. Clicking a row opens the full details in the side drawer. */
 function OrderTable({ orders, editable, busyId, onSend, onOpen }) {
   return (
     <Table data-cards="off">
@@ -165,8 +167,14 @@ export default function MarketingView() {
   const [send] = useSendMarketingOrderMutation()
   const [remove, { isLoading: deleting }] = useDeleteMarketingOrderMutation()
   const [busyId, setBusyId] = useState(null)
-  const [openedId, setOpenedId] = useState(null) // the order whose popup is open
+  const [openedId, setOpenedId] = useState(null) // the order whose side drawer is open
+  const [tab, setTab] = useState("overview")
+  const openOrder = (o) => { setOpenedId(o.id); setTab("overview") }
+  const closeOrder = () => { setOpenedId(null); setTab("overview") }
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const { data: notifications = [] } = useGetNotificationsQuery()
+  const [markDone] = useMarkNotificationDoneMutation()
+  const dateNotifs = useMemo(() => notifications.filter((n) => !n.done && n.type === "DELIVERY_DATE_CHANGED"), [notifications])
 
   const counts = useMemo(() => countByStatus(data), [data])
   const latest = useMemo(() => [...data].sort(newestFirst), [data])
@@ -175,7 +183,7 @@ export default function MarketingView() {
     [latest]
   )
 
-  // read from the live list, so the popup moves on by itself once the order is sent or decided
+  // read from the live list, so the drawer moves on by itself once the order is sent or decided
   const opened = useMemo(() => data.find((o) => o.id === openedId) ?? null, [data, openedId])
 
   const doDelete = async () => {
@@ -215,6 +223,33 @@ export default function MarketingView() {
         {editable && <HeroLink wrap="hidden md:inline-flex" className="h-10" to={ordersHref(null, { new: 1 })}><Plus /> New order</HeroLink>}
       </MktHero>
 
+            {/* Operations Admin Delivery Date Notifications */}
+      {dateNotifs.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {dateNotifs.map((n) => (
+            <div key={n.id} className="flex items-center justify-between gap-3 rounded-xl border border-amber-300/80 bg-amber-50/90 p-3.5 text-sm dark:bg-amber-950/30 dark:border-amber-700">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Bell className="size-4 shrink-0 text-amber-600" />
+                <div className="min-w-0">
+                  <p className="font-semibold text-amber-900 dark:text-amber-200 truncate">{n.title}</p>
+                  <p className="text-xs text-amber-800/90 dark:text-amber-300">
+                    Changed from <span className="font-medium">{n.old_date || "None"}</span> to <span className="font-bold underline">{n.new_date}</span>
+                    {n.reason ? ` · Reason: "${n.reason}"` : ""}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => markDone(n.id)}
+                className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-200/80 hover:bg-amber-300 px-2.5 py-1 text-xs font-semibold text-amber-950 transition-colors"
+              >
+                <CheckCircle className="size-3.5" /> Acknowledge
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <TileGrid>
         {tiles.map((t) => (
           <StageTile key={t.key} solid stage={t.stage} value={t.value} loading={isLoading} to={t.to} className={t.className} />
@@ -243,21 +278,28 @@ export default function MarketingView() {
               {attention.length === 0 ? (
                 <EmptyState icon={CheckCircle2} title="Nothing needs attention">Every order has been sent and decided.</EmptyState>
               ) : (
-                <OrderList orders={attention.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={(o) => setOpenedId(o.id)} />
+                <OrderList orders={attention.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
               )}
             </Panel>
           </Reveal>
           <Reveal delay={0.4}>
             <Panel title="Latest orders" description="Newest first." loading={isLoading} to={ordersHref(null)} toLabel="View all">
-              <OrderList orders={latest.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={(o) => setOpenedId(o.id)} />
+              <OrderList orders={latest.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
             </Panel>
           </Reveal>
         </div>
       )}
 
-      {opened && !confirmDelete && (
-        <OrderDetailModal order={opened} editable={editable} busy={busyId === opened.id} onClose={() => setOpenedId(null)} onSend={sendOrder} onDelete={setConfirmDelete} />
-      )}
+      <OrderDrawer
+        order={opened && !confirmDelete ? opened : null}
+        tab={tab}
+        onTab={setTab}
+        editable={editable}
+        busy={opened ? busyId === opened.id : false}
+        onClose={closeOrder}
+        onSend={sendOrder}
+        onDelete={setConfirmDelete}
+      />
       <ConfirmDialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)} onConfirm={doDelete} busy={deleting} tone="danger" title="Delete this draft?" confirmLabel="Delete">
         {confirmDelete && <p>{confirmDelete.order_number} has not been sent yet. It will be removed permanently.</p>}
       </ConfirmDialog>

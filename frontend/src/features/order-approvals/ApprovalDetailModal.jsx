@@ -13,7 +13,9 @@ import OrderPlanModal from "./OrderPlanModal"
 import { BomBlockModal } from "./BomWarning"
 import PlanSummary from "./PlanSummary"
 import { approveLabel, canApprove } from "./approvalParts"
-import { useGetOrderApprovalsQuery, useGetOrderPlanQuery } from "./orderApprovalsApi"
+import { useGetOrderApprovalsQuery, useGetOrderPlanQuery, useUpdateDeliveryDateMutation } from "./orderApprovalsApi"
+import { useToast } from "@/components/toast"
+import { Calendar, Edit3, Check } from "lucide-react"
 
 const EMPTY = []
 
@@ -29,6 +31,11 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
   const { data = EMPTY } = useGetOrderApprovalsQuery()
   const [deciding, setDeciding] = useState(false)
   const [planning, setPlanning] = useState(false)
+  const toast = useToast()
+  const [updateDeliveryDate, { isLoading: updatingDate }] = useUpdateDeliveryDateMutation()
+  const [isEditingDate, setIsEditingDate] = useState(false)
+  const [newDeliveryDate, setNewDeliveryDate] = useState("")
+  const [dateChangeReason, setDateChangeReason] = useState("")
 
   const order = data.find((o) => o.id === orderId)
   const pending = order?.approval_status === "PENDING_APPROVAL"
@@ -36,6 +43,22 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
   // the same plan the stock check below uses (one request, cached): its BOM problems are shown first
   const { data: plan, isLoading: planLoading } = useGetOrderPlanQuery(orderId, { skip: !approvable })
   if (!order) return null
+
+  const handleSaveDeliveryDate = async () => {
+    if (!newDeliveryDate) return
+    try {
+      await updateDeliveryDate({
+        id: order.id,
+        estimated_delivery_date: newDeliveryDate,
+        reason: dateChangeReason,
+      }).unwrap()
+      toast.success("Delivery date updated and Marketing Manager notified")
+      setIsEditingDate(false)
+      setDateChangeReason("")
+    } catch (err) {
+      toast.error(err?.data?.message || "Failed to update delivery date")
+    }
+  }
 
   // An order with an incomplete BOM opens the blocking warning popup first, and nothing else.
   const idle = !deciding && !planning
@@ -100,6 +123,56 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
                 </div>
               </motion.div>
             )}
+
+                        {/* Estimated Delivery Date with Ops Admin modification */}
+            <div className="rounded-xl border border-[#dce5e0] bg-muted/20 p-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Calendar className="size-4 text-muted-foreground" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estimated Delivery Date</span>
+                </div>
+                {editable && !isEditingDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewDeliveryDate(order.estimated_delivery_date || "")
+                      setIsEditingDate(true)
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                  >
+                    <Edit3 className="size-3.5" /> Modify Date
+                  </button>
+                )}
+              </div>
+              {!isEditingDate ? (
+                <p className="mt-1.5 text-sm font-semibold tabular-nums text-foreground">
+                  {order.estimated_delivery_date ? order.estimated_delivery_date : <span className="text-muted-foreground font-normal">Not set by marketing</span>}
+                </p>
+              ) : (
+                <div className="mt-2 space-y-2">
+                  <input
+                    type="date"
+                    value={newDeliveryDate}
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={(e) => setNewDeliveryDate(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-input bg-card px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Reason for change (optional, sent to marketing)"
+                    value={dateChangeReason}
+                    onChange={(e) => setDateChangeReason(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-input bg-card px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <MktBtn size="sm" onClick={() => setIsEditingDate(false)} disabled={updatingDate}>Cancel</MktBtn>
+                    <MktBtn size="sm" variant="primary" onClick={handleSaveDeliveryDate} disabled={updatingDate || !newDeliveryDate}>
+                      {updatingDate ? <Loader2 className="animate-spin size-3.5" /> : <Check className="size-3.5" />} Save & Notify Marketing
+                    </MktBtn>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {approvable && (
               <section className="space-y-2.5">

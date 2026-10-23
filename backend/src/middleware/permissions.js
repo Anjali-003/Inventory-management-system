@@ -32,7 +32,8 @@ const ACCESS = {
 
     // Marketing Manager: prepares orders and sends them to the Operations Admin
     MARKETING_MANAGER: {
-        marketingOrders: "edit"
+        marketingOrders: "edit",
+        notifications: "edit"
     },
 
     // Operations Admin: reviews the orders that come in (e.g. from marketing): sees what can be built from the
