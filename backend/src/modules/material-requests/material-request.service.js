@@ -76,22 +76,88 @@ async function getMaterialStatesForItems(conn, lines) {
     WHERE r.order_item_id IN (?)
     GROUP BY r.order_item_id, ri.component_id
   `, [orderItemIds]);
-  const [productUsageRows] = await conn.query(`
-    SELECT order_item_id,
-           COALESCE(SUM(requested_product_quantity), 0) AS requested_product_quantity,
-           COALESCE(SUM(issued_product_quantity), 0) AS issued_product_quantity,
-           COALESCE(SUM(GREATEST(
-             COALESCE(requested_product_quantity, 0) - COALESCE(issued_product_quantity, 0), 0
-           )), 0) AS outstanding_product_quantity
-    FROM production_material_requests
-    WHERE order_item_id IN (?)
-    GROUP BY order_item_id
+  // Include both the current product-unit request model and older component-only
+  // requests created before requested_product_quantity was introduced. Without this
+  // compatibility calculation, legacy component quantities consume the BOM budget
+  // while the product summary incorrectly shows Requested: 0.
+  const [requestRows] = await conn.query(`
+    SELECT r.id AS request_id, r.order_item_id,
+           r.requested_product_quantity, r.issued_product_quantity,
+           ri.component_id, ri.requested_quantity, ri.issued_quantity,
+           COALESCE(ri.quantity_per_product, pb.quantity_required) AS quantity_per_product,
+           (SELECT COUNT(*)
+            FROM product_bom pb2
+            WHERE pb2.product_id = oi.product_id
+              AND pb2.quantity_required IS NOT NULL
+              AND pb2.quantity_required > 0) AS bom_component_count,
+           (SELECT COUNT(*)
+            FROM production_material_request_items ri2
+            WHERE ri2.request_id = r.id) AS request_component_count
+    FROM production_material_requests r
+    JOIN order_items oi ON oi.id = r.order_item_id
+    JOIN production_material_request_items ri ON ri.request_id = r.id
+    LEFT JOIN product_bom pb
+      ON pb.product_id = oi.product_id AND pb.component_id = ri.component_id
+    WHERE r.order_item_id IN (?)
+    ORDER BY r.id, ri.id
   `, [orderItemIds]);
-  const productUsageByLine = new Map(productUsageRows.map((row) => [Number(row.order_item_id), {
-    requested: Number(row.requested_product_quantity || 0),
-    issued: Number(row.issued_product_quantity || 0),
-    outstanding: Number(row.outstanding_product_quantity || 0),
-  }]));
+
+  const requestsById = new Map();
+  for (const row of requestRows) {
+    const requestId = Number(row.request_id);
+    if (!requestsById.has(requestId)) {
+      requestsById.set(requestId, {
+        requestId,
+        orderItemId: Number(row.order_item_id),
+        requestedProductQuantity: row.requested_product_quantity,
+        issuedProductQuantity: row.issued_product_quantity,
+        bomComponentCount: Number(row.bom_component_count || 0),
+        requestComponentCount: Number(row.request_component_count || 0),
+        components: [],
+      });
+    }
+    requestsById.get(requestId).components.push({
+      requestedCents: toCents(row.requested_quantity),
+      issuedCents: toCents(row.issued_quantity),
+      perProductCents: toCents(row.quantity_per_product),
+    });
+  }
+
+  const productUsageByLine = new Map();
+  for (const request of requestsById.values()) {
+    let requestedProducts = 0;
+    let issuedProducts = 0;
+    const isProductQuantityRequest = request.requestedProductQuantity !== null &&
+      request.requestedProductQuantity !== undefined;
+
+    if (isProductQuantityRequest) {
+      requestedProducts = Math.max(0, Number(request.requestedProductQuantity || 0));
+      issuedProducts = Math.max(0, Number(request.issuedProductQuantity || 0));
+    } else {
+      // Only infer units when the legacy request contains the whole BOM. Using a
+      // partial component list would falsely imply that a complete product can be made.
+      const hasCompleteRatios = request.bomComponentCount > 0 &&
+        request.requestComponentCount === request.bomComponentCount &&
+        request.components.length === request.bomComponentCount &&
+        request.components.every((component) => component.perProductCents > 0);
+      if (hasCompleteRatios) {
+        requestedProducts = Math.max(0, Math.min(...request.components.map((component) =>
+          Math.floor(component.requestedCents / component.perProductCents)
+        )));
+        issuedProducts = Math.max(0, Math.min(...request.components.map((component) =>
+          Math.floor(component.issuedCents / component.perProductCents)
+        )));
+      }
+    }
+
+    const current = productUsageByLine.get(request.orderItemId) || {
+      requested: 0, issued: 0, outstanding: 0,
+    };
+    current.requested += requestedProducts;
+    current.issued += issuedProducts;
+    current.outstanding += Math.max(0, requestedProducts - issuedProducts);
+    productUsageByLine.set(request.orderItemId, current);
+  }
 
   const bomByProduct = new Map();
   for (const row of bomRows) {
