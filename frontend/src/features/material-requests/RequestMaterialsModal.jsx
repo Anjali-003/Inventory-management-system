@@ -16,44 +16,34 @@ export default function RequestMaterialsModal({ order, onClose, onSubmitted }) {
   const orderItemId = order?.order_item_id;
   const { data, isLoading, error: loadError } = useGetMaterialRequestOptionsQuery(orderItemId, { skip: !orderItemId });
   const [createRequest, { isLoading: saving }] = useCreateMaterialRequestMutation();
-  const [quantities, setQuantities] = useState({});
+  const [productQuantity, setProductQuantity] = useState("1");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
   const [requestKey] = useState(makeKey);
 
   useEffect(() => {
-    if (data?.items) {
-      setQuantities(Object.fromEntries(data.items.map((item) => [item.component_id, String(item.requestable_quantity)])));
-    }
-  }, [data?.order_item_id, data?.items]);
+    if (data) setProductQuantity(data.requestable_product_quantity > 0 ? "1" : "0");
+  }, [data?.order_item_id, data?.requestable_product_quantity]);
 
+  const maxProductQuantity = Number(data?.requestable_product_quantity || 0);
+  const selectedProductQuantity = Math.max(0, Number(productQuantity) || 0);
   const selected = useMemo(() => (data?.items || []).map((item) => ({
     ...item,
-    quantity: quantities[item.component_id] ?? String(item.requestable_quantity),
-  })), [data?.items, quantities]);
+    quantity: Number((Number(item.quantity_per_product || item.quantity_per_unit || 0) * selectedProductQuantity).toFixed(2)),
+  })), [data?.items, selectedProductQuantity]);
 
   async function submit(event) {
     event.preventDefault();
     setError("");
-    const items = [];
-    for (const item of selected) {
-      const text = String(item.quantity).trim();
-      if (!text || Number(text) === 0) continue;
-      const quantity = Number(text);
-      if (!Number.isFinite(quantity) || quantity < 0 || Math.round(quantity * 100) !== quantity * 100) {
-        setError(`${item.name}: enter a positive quantity with at most 2 decimal places, or 0 to skip it.`);
-        return;
-      }
-      if (quantity > Number(item.requestable_quantity)) {
-        setError(`${item.name}: the remaining requestable quantity is ${fmtQty(item.requestable_quantity)} ${item.unit}.`);
-        return;
-      }
-      items.push({ component_id: item.component_id, quantity });
+    if (!Number.isInteger(selectedProductQuantity) || selectedProductQuantity < 1 || selectedProductQuantity > maxProductQuantity) {
+      setError(`Choose between 1 and ${maxProductQuantity} product units.`);
+      return;
     }
-    if (!items.length) return setError("Enter a quantity for at least one component.");
+    const items = selected.map((item) => ({ component_id: item.component_id, quantity: item.quantity }));
+    if (!items.length || items.some((item) => item.quantity <= 0)) return setError("No component quantities are available for this product.");
 
     try {
-      await createRequest({ order_item_id: orderItemId, items, notes, request_key: requestKey }).unwrap();
+      await createRequest({ order_item_id: orderItemId, product_quantity: selectedProductQuantity, items, notes, request_key: requestKey }).unwrap();
       toast.success("Material request sent to Store Manager.");
       onSubmitted?.();
       onClose();
@@ -74,7 +64,7 @@ export default function RequestMaterialsModal({ order, onClose, onSubmitted }) {
       footer={
         <>
           <Button type="button" variant="outline" size="lg" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" size="lg" disabled={saving || isLoading || !selected.some((item) => Number(item.quantity) > 0)}>
+          <Button type="submit" size="lg" disabled={saving || isLoading || maxProductQuantity < 1 || selectedProductQuantity < 1 || selectedProductQuantity > maxProductQuantity}>
             {saving ? <Loader2 className="size-4 animate-spin" /> : <PackagePlus className="size-4" />}
             {saving ? "Sending request..." : "Send material request"}
           </Button>
@@ -86,10 +76,22 @@ export default function RequestMaterialsModal({ order, onClose, onSubmitted }) {
           <div className="min-w-0">
             <p className="font-semibold">{data?.order_number || order?.order_number || `Order #${order?.order_id}`}</p>
             <p className="text-sm text-muted-foreground">{data?.product_name || order?.product_name}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Order quantity to supply: {fmtQty(data?.approved_quantity ?? order?.ordered_quantity ?? 0)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Ordered quantity: {fmtQty(data?.approved_quantity ?? order?.ordered_quantity ?? 0)} · Available to request: {maxProductQuantity} products</p>
           </div>
           <Badge variant="info">Partial requests allowed</Badge>
         </div>
+
+        {!isLoading && maxProductQuantity > 0 && (
+          <div className="grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-end">
+            <div>
+              <p className="text-sm font-semibold text-emerald-950">How many products need materials?</p>
+              <p className="mt-1 text-xs text-emerald-800">Choose the number of finished products. Component quantities below are calculated from the BOM.</p>
+            </div>
+            <Field label="Product quantity" htmlFor="request-product-quantity">
+              <TextInput id="request-product-quantity" type="number" min="1" max={maxProductQuantity} step="1" value={productQuantity} onChange={(event) => setProductQuantity(event.target.value)} />
+            </Field>
+          </div>
+        )}
 
         {isLoading && <div className="py-8 text-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline size-4 animate-spin" />Loading BOM and remaining material allowance…</div>}
         {(error || loadError) && <Notice title="Could not load request details">{error || loadError?.response?.data?.message || loadError?.data?.message || "Refresh the production page and try again."}</Notice>}
@@ -101,7 +103,7 @@ export default function RequestMaterialsModal({ order, onClose, onSubmitted }) {
         {!!data?.items?.length && (
           <div className="overflow-hidden rounded-xl border">
             <div className="hidden sm:grid sm:grid-cols-[minmax(0,1fr)_100px_130px] gap-3 bg-muted/60 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <span>Component</span><span className="text-right">Still requestable</span><span className="text-right">Request quantity</span>
+              <span>Component</span><span className="text-right">Per product</span><span className="text-right">Required quantity</span>
             </div>
             <div className="divide-y">
               {selected.map((item) => (
@@ -109,21 +111,10 @@ export default function RequestMaterialsModal({ order, onClose, onSubmitted }) {
                   <div className="min-w-0">
                     <p className="break-words text-sm font-medium">{item.name}</p>
                     <p className="text-xs text-muted-foreground">{item.sku} · {item.unit}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">Already requested: {fmtQty(item.requested_quantity)} · issued: {fmtQty(item.issued_quantity)}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">Remaining component allowance: {fmtQty(item.requestable_quantity)} {item.unit}</p>
                   </div>
-                  <p className="text-right text-sm font-semibold tabular-nums"><span className="mr-2 text-xs font-normal text-muted-foreground sm:hidden">Still requestable</span>{fmtQty(item.requestable_quantity)} {item.unit}</p>
-                  <Field label="Quantity" htmlFor={`request-material-${item.component_id}`}>
-                    <TextInput
-                      id={`request-material-${item.component_id}`}
-                      type="number"
-                      min="0"
-                      max={item.requestable_quantity}
-                      step="0.01"
-                      inputMode="decimal"
-                      value={item.quantity}
-                      onChange={(event) => setQuantities((current) => ({ ...current, [item.component_id]: event.target.value }))}
-                    />
-                  </Field>
+                  <p className="text-right text-sm tabular-nums"><span className="mr-2 text-xs text-muted-foreground sm:hidden">Per product</span>{fmtQty(item.quantity_per_product)} {item.unit}</p>
+                  <p className="text-right text-sm font-semibold tabular-nums"><span className="mr-2 text-xs font-normal text-muted-foreground sm:hidden">Required quantity</span>{fmtQty(item.quantity)} {item.unit}</p>
                 </div>
               ))}
             </div>

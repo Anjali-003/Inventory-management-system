@@ -69,6 +69,19 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
               <Badge variant={meta.variant}>{meta.label}</Badge>
             </div>
 
+            {request.requested_product_quantity !== null && request.requested_product_quantity !== undefined && (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Products requested</p>
+                  <p className="mt-1 text-sm font-bold text-emerald-950">{fmtQty(request.requested_product_quantity)}</p>
+                </div>
+                <div className="rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">Products allotted</p>
+                  <p className="mt-1 text-sm font-bold text-blue-950">{fmtQty(request.issued_product_quantity || 0)} / {fmtQty(request.requested_product_quantity)}</p>
+                </div>
+              </div>
+            )}
+
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2.5">
                 <CalendarClock className="size-4 shrink-0 text-emerald-700" />

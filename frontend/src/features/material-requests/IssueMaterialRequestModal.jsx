@@ -15,6 +15,7 @@ export default function IssueMaterialRequestModal({ request, onClose }) {
   const toast = useToast();
   const [issueRequest, { isLoading: saving }] = useIssueMaterialRequestMutation();
   const [quantities, setQuantities] = useState({});
+  const [productQuantity, setProductQuantity] = useState("1");
   const [remarks, setRemarks] = useState("");
   const [error, setError] = useState("");
   const [idempotencyKey, setIdempotencyKey] = useState(makeIssueKey);
@@ -22,6 +23,7 @@ export default function IssueMaterialRequestModal({ request, onClose }) {
   useEffect(() => {
     if (request) {
       setQuantities(Object.fromEntries(request.items.map((item) => [item.id, String(item.remaining_quantity)])));
+      setProductQuantity(Number(request.requested_product_quantity) > Number(request.issued_product_quantity || 0) ? "1" : "0");
       setRemarks("");
       setError("");
       setIdempotencyKey(makeIssueKey());
@@ -29,17 +31,31 @@ export default function IssueMaterialRequestModal({ request, onClose }) {
   }, [request?.id]);
 
   const openItems = useMemo(() => (request?.items || []).filter((item) => Number(item.remaining_quantity) > 0), [request?.items]);
+  const productMode = request?.requested_product_quantity !== null && request?.requested_product_quantity !== undefined;
+  const maxProductQuantity = productMode ? Math.max(0, Number(request.requested_product_quantity) - Number(request.issued_product_quantity || 0)) : 0;
+  const selectedProductQuantity = Math.max(0, Number(productQuantity) || 0);
+  const calculatedItems = useMemo(() => openItems.map((item) => ({
+    ...item,
+    issue_quantity: productMode && item.quantity_per_product !== null && item.quantity_per_product !== undefined
+      ? Number((Number(item.quantity_per_product) * selectedProductQuantity).toFixed(2))
+      : Number(quantities[item.id] || 0),
+  })), [openItems, productMode, productQuantity, quantities, selectedProductQuantity]);
 
   function fillAllRemaining() {
-    setQuantities(Object.fromEntries(openItems.map((item) => [item.id, String(item.remaining_quantity)])));
+    if (productMode) setProductQuantity(String(maxProductQuantity));
+    else setQuantities(Object.fromEntries(openItems.map((item) => [item.id, String(item.remaining_quantity)])));
   }
 
   async function submit(event) {
     event.preventDefault();
     setError("");
+    if (productMode && (!Number.isInteger(selectedProductQuantity) || selectedProductQuantity < 1 || selectedProductQuantity > maxProductQuantity)) {
+      setError(`Choose between 1 and ${maxProductQuantity} product units to allot.`);
+      return;
+    }
     const items = [];
-    for (const item of openItems) {
-      const text = String(quantities[item.id] ?? "0").trim();
+    for (const item of calculatedItems) {
+      const text = String(item.issue_quantity ?? quantities[item.id] ?? "0").trim();
       if (!text || Number(text) === 0) continue;
       const quantity = Number(text);
       if (!Number.isFinite(quantity) || quantity < 0 || Math.round(quantity * 100) !== quantity * 100) {
@@ -55,7 +71,7 @@ export default function IssueMaterialRequestModal({ request, onClose }) {
     if (!items.length) return setError("Enter a quantity for at least one component.");
 
     try {
-      const result = await issueRequest({ id: request.id, items, remarks, idempotency_key: idempotencyKey }).unwrap();
+      const result = await issueRequest({ id: request.id, items, ...(productMode ? { product_quantity: selectedProductQuantity } : {}), remarks, idempotency_key: idempotencyKey }).unwrap();
       toast.success(result.status === "ISSUED" ? "All requested material has been allotted." : "Partial material allotment saved.");
       onClose();
     } catch (err) {
@@ -77,7 +93,7 @@ export default function IssueMaterialRequestModal({ request, onClose }) {
       footer={
         <>
           <Button type="button" variant="outline" size="lg" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" size="lg" disabled={saving || openItems.length === 0 || !openItems.some((item) => Number(quantities[item.id]) > 0)}>
+          <Button type="submit" size="lg" disabled={saving || openItems.length === 0 || (productMode ? selectedProductQuantity < 1 || selectedProductQuantity > maxProductQuantity : !openItems.some((item) => Number(quantities[item.id]) > 0))}>
             {saving ? <Loader2 className="size-4 animate-spin" /> : <PackageCheck className="size-4" />}
             {saving ? "Saving allotment…" : "Confirm allotment"}
           </Button>
@@ -96,12 +112,24 @@ export default function IssueMaterialRequestModal({ request, onClose }) {
 
         {request.notes && <div className="rounded-lg border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-950">Production note: {request.notes}</div>}
 
+        {productMode && maxProductQuantity > 0 && (
+          <div className="grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-end">
+            <div>
+              <p className="text-sm font-semibold text-emerald-950">How many products are you allotting?</p>
+              <p className="mt-1 text-xs text-emerald-800">Component quantities are calculated automatically from the request's saved BOM ratio.</p>
+            </div>
+            <Field label="Product quantity" htmlFor="allot-product-quantity">
+              <TextInput id="allot-product-quantity" type="number" min="1" max={maxProductQuantity} step="1" value={productQuantity} onChange={(event) => setProductQuantity(event.target.value)} />
+            </Field>
+          </div>
+        )}
+
         {openItems.length === 0 ? (
           <Notice title="Request already fully allotted">There are no outstanding quantities in this request.</Notice>
         ) : (
           <div className="overflow-hidden rounded-xl border">
             <div className="hidden sm:grid sm:grid-cols-[minmax(0,1fr)_90px_90px_130px] gap-3 bg-muted/60 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <span>Component</span><span className="text-right">Requested</span><span className="text-right">Issued</span><span className="text-right">Issue now</span>
+              <span>Component</span><span className="text-right">Requested</span><span className="text-right">Allotted</span><span className="text-right">Issue now</span>
             </div>
             <div className="divide-y">
               {openItems.map((item) => (
@@ -109,18 +137,22 @@ export default function IssueMaterialRequestModal({ request, onClose }) {
                   <div className="min-w-0">
                     <p className="break-words text-sm font-medium">{item.name}</p>
                     <p className="text-xs text-muted-foreground">{item.sku} · {item.unit}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">Remaining: {fmtQty(item.remaining_quantity)} {item.unit}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">Remaining: {fmtQty(item.remaining_quantity)} {item.unit}{productMode && item.quantity_per_product != null ? ` · ${fmtQty(item.quantity_per_product)} per product` : ""}</p>
                   </div>
                   <p className="text-right text-sm tabular-nums"><span className="mr-2 text-xs text-muted-foreground sm:hidden">Requested</span>{fmtQty(item.requested_quantity)}</p>
                   <p className="text-right text-sm tabular-nums"><span className="mr-2 text-xs text-muted-foreground sm:hidden">Already allotted</span>{fmtQty(item.issued_quantity)}</p>
-                  <Field label="Quantity" htmlFor={`allot-material-${item.id}`}>
-                    <TextInput id={`allot-material-${item.id}`} type="number" min="0" max={item.remaining_quantity} step="0.01" inputMode="decimal" value={quantities[item.id] ?? "0"} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))} />
-                  </Field>
+                  {productMode ? (
+                    <p className="text-right text-sm font-semibold tabular-nums"><span className="mr-2 text-xs font-normal text-muted-foreground sm:hidden">Issue now</span>{fmtQty(calculatedItems.find((entry) => entry.id === item.id)?.issue_quantity || 0)} {item.unit}</p>
+                  ) : (
+                    <Field label="Quantity" htmlFor={`allot-material-${item.id}`}>
+                      <TextInput id={`allot-material-${item.id}`} type="number" min="0" max={item.remaining_quantity} step="0.01" inputMode="decimal" value={quantities[item.id] ?? "0"} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))} />
+                    </Field>
+                  )}
                 </div>
               ))}
             </div>
             <div className="flex justify-end border-t bg-muted/30 p-3">
-              <Button type="button" variant="outline" size="sm" onClick={fillAllRemaining}>Issue all remaining quantities</Button>
+              <Button type="button" variant="outline" size="sm" onClick={fillAllRemaining}>Allot all remaining products</Button>
             </div>
           </div>
         )}

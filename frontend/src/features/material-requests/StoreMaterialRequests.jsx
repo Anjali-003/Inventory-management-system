@@ -156,6 +156,11 @@ function RequestCard({ request, onView, onAllot }) {
             <p className="mt-1 break-words text-xs text-slate-600">
               {request.order_number || `Order #${request.order_id}`} · {request.product_sku || "No SKU"}
             </p>
+            {request.requested_product_quantity !== null && request.requested_product_quantity !== undefined && (
+              <p className="mt-1 text-xs font-semibold text-emerald-800">
+                Products: {request.issued_product_quantity || 0} / {request.requested_product_quantity} allotted
+              </p>
+            )}
           </button>
           <button
             type="button"

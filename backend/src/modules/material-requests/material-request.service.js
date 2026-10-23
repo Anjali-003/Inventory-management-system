@@ -77,6 +77,13 @@ async function getMaterialStatesForItems(conn, lines) {
     WHERE r.order_item_id IN (?)
     GROUP BY r.order_item_id, ri.component_id
   `, [orderItemIds]);
+  const [productUsageRows] = await conn.query(`
+    SELECT order_item_id, COALESCE(SUM(requested_product_quantity), 0) AS requested_product_quantity
+    FROM production_material_requests
+    WHERE order_item_id IN (?)
+    GROUP BY order_item_id
+  `, [orderItemIds]);
+  const requestedProductsByLine = new Map(productUsageRows.map((row) => [Number(row.order_item_id), Number(row.requested_product_quantity || 0)]));
 
   const bomByProduct = new Map();
   for (const row of bomRows) {
@@ -151,6 +158,14 @@ async function getMaterialStatesForItems(conn, lines) {
       materialRequestableQuantity: authorized
         ? fromCents(components.reduce((sum, component) => sum + toCents(component.requestable_quantity), 0))
         : 0,
+      requestableProductQuantity: authorized && bomComplete && components.length
+        ? Math.max(0, Math.min(
+            Math.floor(targetQuantity - (requestedProductsByLine.get(itemId) || 0)),
+            ...components.map((component) => component.perUnitCents > 0
+              ? Math.floor(toCents(component.requestable_quantity) / component.perUnitCents)
+              : 0)
+          ))
+        : 0,
       materialRequestOutstandingQuantity: fromCents(components.reduce((sum, component) => sum + toCents(component.outstanding_quantity), 0)),
       components: components.map(({ perUnitCents, issuedCents, startable_units, ...component }) => component),
     });
@@ -175,7 +190,11 @@ async function getOptions(orderItemId) {
       product_id: Number(item.product_id), product_name: item.product_name, product_sku: item.product_sku,
       approved_quantity: Number(item.target_quantity), quantity_started: Number(item.quantity_started),
       requestable_quantity: state.materialRequestableQuantity,
-      items: state.components.filter((component) => component.requestable_quantity > 0),
+      requestable_product_quantity: state.requestableProductQuantity,
+      items: state.components.filter((component) => component.requestable_quantity > 0).map((component) => ({
+        ...component,
+        quantity_per_product: component.quantity_per_unit,
+      })),
     };
   } finally {
     conn.release();
@@ -197,7 +216,9 @@ async function createRequest(body, userId) {
   const notes = cleanText(body.notes);
   const key = typeof body.request_key === "string" ? body.request_key.trim() : "";
   if (key && !/^[A-Za-z0-9_-]{8,64}$/.test(key)) throw new AppError(422, "Invalid request key", "VALIDATION");
-  if (!Array.isArray(body.items) || body.items.length === 0) throw new AppError(422, "Select at least one component quantity", "VALIDATION");
+  const productQuantity = Number(body.product_quantity);
+  if (!Number.isInteger(productQuantity) || productQuantity <= 0) throw new AppError(422, "Select a whole number of products to request", "VALIDATION");
+  if (!Array.isArray(body.items) || body.items.length === 0) throw new AppError(422, "No BOM component quantities were supplied", "VALIDATION");
 
   const requested = new Map();
   for (const raw of body.items) {
@@ -226,22 +247,30 @@ async function createRequest(body, userId) {
     const state = states.get(Number(item.order_item_id));
     if (!state.bomComplete) throw AppError.conflict("This product has no complete BOM. Fix its component requirements before requesting materials.", "INCOMPLETE_BOM");
 
+    if (productQuantity > state.requestableProductQuantity) {
+      throw AppError.conflict(`You can request materials for at most ${state.requestableProductQuantity} more product units. Refresh and try again.`, "REQUEST_LIMIT_EXCEEDED");
+    }
     const options = new Map(state.components.map((component) => [component.component_id, component]));
-    for (const [componentId, quantityCents] of requested) {
-      const component = options.get(componentId);
-      if (!component) throw new AppError(422, "One selected component is not in this product's BOM", "INVALID_COMPONENT");
+    if (requested.size !== options.size) throw new AppError(422, "The request must include every component in the product BOM", "INVALID_COMPONENTS");
+    for (const [componentId, component] of options) {
+      const quantityCents = requested.get(componentId);
+      const expectedCents = toCents(component.quantity_per_unit * productQuantity);
+      if (quantityCents === undefined || quantityCents !== expectedCents) {
+        throw new AppError(422, `${component.name}: component quantity must match the selected product quantity (${fromCents(expectedCents)} ${component.unit}).`, "BOM_QUANTITY_MISMATCH");
+      }
       if (quantityCents > toCents(component.requestable_quantity)) {
         throw AppError.conflict(`${component.name}: only ${component.requestable_quantity} ${component.unit} remain available to request. Refresh and try again.`, "REQUEST_LIMIT_EXCEEDED");
       }
     }
 
     const [header] = await conn.query(`
-      INSERT INTO production_material_requests (order_id, order_item_id, requested_by, request_key, status, notes)
-      VALUES (?, ?, ?, ?, 'PENDING', ?)
-    `, [item.order_id, item.order_item_id, userId, key || null, notes]);
+      INSERT INTO production_material_requests
+        (order_id, order_item_id, requested_product_quantity, issued_product_quantity, requested_by, request_key, status, notes)
+      VALUES (?, ?, ?, 0, ?, ?, 'PENDING', ?)
+    `, [item.order_id, item.order_item_id, productQuantity, userId, key || null, notes]);
     await conn.query(
-      `INSERT INTO production_material_request_items (request_id, component_id, requested_quantity) VALUES ?`,
-      [[...requested].map(([componentId, cents]) => [header.insertId, componentId, fromCents(cents)])]
+      `INSERT INTO production_material_request_items (request_id, component_id, quantity_per_product, requested_quantity) VALUES ?`,
+      [[...options.values()].map((component) => [header.insertId, component.component_id, component.quantity_per_unit, fromCents(toCents(component.quantity_per_unit) * productQuantity)])]
     );
     return { id: Number(header.insertId), replayed: false };
   });
@@ -256,7 +285,7 @@ async function listRequests() {
   const conn = await db.getConnection();
   try {
     const [headers] = await conn.query(`
-      SELECT r.id, r.order_id, r.order_item_id, r.requested_by, r.status, r.notes, r.created_at, r.updated_at,
+      SELECT r.id, r.order_id, r.order_item_id, r.requested_product_quantity, r.issued_product_quantity, r.requested_by, r.status, r.notes, r.created_at, r.updated_at,
              o.order_number, oi.product_id, p.name AS product_name, p.sku AS product_sku,
              requester.name AS requested_by_name
       FROM production_material_requests r
@@ -271,7 +300,7 @@ async function listRequests() {
     if (!headers.length) return [];
     const requestIds = headers.map((row) => row.id);
     const [items] = await conn.query(`
-      SELECT ri.id, ri.request_id, ri.component_id, c.sku, c.name, c.unit,
+      SELECT ri.id, ri.request_id, ri.component_id, ri.quantity_per_product, c.sku, c.name, c.unit,
              ri.requested_quantity, ri.issued_quantity,
              GREATEST(ri.requested_quantity - ri.issued_quantity, 0) AS remaining_quantity
       FROM production_material_request_items ri
@@ -319,6 +348,7 @@ async function listRequests() {
 
 async function issueRequest(requestId, body, userId) {
   const lines = body && body.items;
+  const productQuantity = Number(body && body.product_quantity);
   const remarks = cleanText(body && body.remarks, 255);
   const idempotencyKey = typeof body?.idempotency_key === "string" ? body.idempotency_key.trim() : "";
   if (!/^[A-Za-z0-9_-]{8,64}$/.test(idempotencyKey)) {
@@ -335,7 +365,7 @@ async function issueRequest(requestId, body, userId) {
 
   const out = await inventory.inTransaction(async (conn) => {
     const [requests] = await conn.query(
-      `SELECT id, order_id, order_item_id, status FROM production_material_requests WHERE id = ? FOR UPDATE`,
+      `SELECT id, order_id, order_item_id, requested_product_quantity, issued_product_quantity, status FROM production_material_requests WHERE id = ? FOR UPDATE`,
       [requestId]
     );
     if (!requests.length) throw AppError.notFound("Material request not found", "NOT_FOUND");
@@ -365,7 +395,32 @@ async function issueRequest(requestId, body, userId) {
     const [lockedOrder] = await conn.query(`SELECT id FROM orders WHERE id = ? FOR UPDATE`, [orderId]);
     if (!lockedOrder.length) throw AppError.notFound("Order not found", "NOT_FOUND");
 
-    for (const [requestItemId, cents] of [...quantities].sort(([a], [b]) => a - b)) {
+    const productMode = requests[0].requested_product_quantity !== null && requests[0].requested_product_quantity !== undefined;
+    let expectedQuantities = quantities;
+    if (productMode) {
+      if (!Number.isInteger(productQuantity) || productQuantity <= 0) throw new AppError(422, "Select a whole number of product units to allot", "VALIDATION");
+      const remainingProducts = Number(requests[0].requested_product_quantity) - Number(requests[0].issued_product_quantity || 0);
+      if (productQuantity > remainingProducts) throw AppError.conflict(`You can allot at most ${remainingProducts} more product units.`, "ISSUE_EXCEEDS_REMAINING_PRODUCTS");
+      const [requestItemRows] = await conn.query(`
+        SELECT id, component_id, quantity_per_product, requested_quantity, issued_quantity
+        FROM production_material_request_items WHERE request_id = ? ORDER BY id FOR UPDATE
+      `, [requestId]);
+      expectedQuantities = new Map();
+      for (const row of requestItemRows) {
+        if (row.quantity_per_product === null || row.quantity_per_product === undefined) {
+          throw AppError.conflict("This request has no saved per-product component ratio. Use the legacy component allotment workflow or create a new request.", "MISSING_COMPONENT_RATIO");
+        }
+        const expected = toCents(Number(row.quantity_per_product) * productQuantity);
+        const remaining = toCents(row.requested_quantity) - toCents(row.issued_quantity);
+        if (expected > remaining) throw AppError.conflict(`Component #${row.component_id} does not have enough remaining quantity for ${productQuantity} product units.`, "COMPONENTS_NOT_READY");
+        expectedQuantities.set(Number(row.id), expected);
+      }
+      if (quantities.size !== expectedQuantities.size || [...expectedQuantities].some(([id, qty]) => quantities.get(id) !== qty)) {
+        throw new AppError(422, "Component allotment quantities must match the selected number of product units", "BOM_QUANTITY_MISMATCH");
+      }
+    }
+
+    for (const [requestItemId, cents] of [...expectedQuantities].sort(([a], [b]) => a - b)) {
       const [rows] = await conn.query(`
         SELECT id, component_id, requested_quantity, issued_quantity
         FROM production_material_request_items
@@ -457,6 +512,10 @@ async function issueRequest(requestId, body, userId) {
         `INSERT INTO production_material_issues (request_item_id, quantity, issued_by, remarks, idempotency_key) VALUES (?, ?, ?, ?, ?)`,
         [requestItemId, fromCents(cents), userId, remarks, idempotencyKey]
       );
+    }
+
+    if (requests[0].requested_product_quantity !== null && requests[0].requested_product_quantity !== undefined) {
+      await conn.query(`UPDATE production_material_requests SET issued_product_quantity = issued_product_quantity + ? WHERE id = ?`, [productQuantity, requestId]);
     }
 
     const [totals] = await conn.query(`
