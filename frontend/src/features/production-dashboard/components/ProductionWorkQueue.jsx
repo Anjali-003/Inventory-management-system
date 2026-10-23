@@ -1,10 +1,22 @@
-import { ArrowRight, ClipboardCheck, Factory, Play, Wrench } from "lucide-react"
+import { ArrowRight, Factory, PackagePlus, Play, Wrench } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { EmptyState, TableSkeleton } from "@/components/feedback"
-import { getWorkQueue, inProduction, isStartable, qty, readinessFor, remainingToStart } from "@/features/production-dashboard/productionDashboardUtils"
+import {
+  getWorkQueue,
+  inProduction,
+  isStartable,
+  qty,
+  readinessFor,
+} from "@/features/production-dashboard/productionDashboardUtils"
+import {
+  isApprovedForProduction,
+  isProductionCompleted,
+  leftToBeAllottedQuantity,
+  readyToStartQuantity,
+} from "@/features/production/productionWorkflow"
 
 function OrderProgress({ item }) {
   const ordered = qty(item.ordered_quantity)
@@ -23,7 +35,7 @@ function OrderProgress({ item }) {
   )
 }
 
-export default function ProductionWorkQueue({ items, loading, onCheck, onStart }) {
+export default function ProductionWorkQueue({ items, loading, onRequest, onStart }) {
   const navigate = useNavigate()
   const queue = getWorkQueue(items).slice(0, 6)
 
@@ -31,8 +43,8 @@ export default function ProductionWorkQueue({ items, loading, onCheck, onStart }
     <Card className="min-w-0 overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader className="flex-row items-center justify-between gap-3">
         <div>
-          <CardTitle>Today's production tasks</CardTitle>
-          <CardDescription>Start work when materials are ready, continue active work, or resolve missing material details first.</CardDescription>
+          <CardTitle>Production work queue</CardTitle>
+          <CardDescription>Request materials, start allotted units, or record completed production.</CardDescription>
         </div>
         <Button variant="outline" size="sm" className="shrink-0" onClick={() => navigate("/production")}>
           View all <ArrowRight />
@@ -40,16 +52,22 @@ export default function ProductionWorkQueue({ items, loading, onCheck, onStart }
       </CardHeader>
       {loading ? <div className="p-4"><TableSkeleton rows={4} /></div> : queue.length === 0 ? (
         <EmptyState icon={Factory} title="No production tasks need attention">
-          New orders and active production runs will appear here when action is needed.
+          Approved product lines will appear here when a material request or production action is available.
         </EmptyState>
       ) : (
         <div className="divide-y">
           {queue.map((item) => {
             const readiness = readinessFor(item)
-            const canStart = isStartable(item) && item.material_status !== "UNKNOWN"
-            const active = item.status === "IN_PRODUCTION" && inProduction(item) > 0
+            const complete = isProductionCompleted(item)
+            const activeUnits = inProduction(item)
+            const ready = readyToStartQuantity(item)
+            const left = leftToBeAllottedQuantity(item)
+            const approved = isApprovedForProduction(item)
+            const canRequest = approved && !complete && left > 0 && item.material_status !== "UNKNOWN"
+            const canStart = approved && !complete && isStartable(item) && item.material_status !== "UNKNOWN" && ready > 0
+
             return (
-              <div key={item.order_id} className="min-w-0 px-4 py-4 sm:px-5">
+              <div key={item.order_item_id ?? item.id ?? item.order_id} className="min-w-0 px-4 py-4 sm:px-5">
                 <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -59,24 +77,25 @@ export default function ProductionWorkQueue({ items, loading, onCheck, onStart }
                     <p className="mt-1 truncate text-sm text-muted-foreground" title={item.product_name || "-"}>{item.product_name || "-"}</p>
                     <OrderProgress item={item} />
                     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                      <span>{inProduction(item)} units in production</span>
-                      <span>{remainingToStart(item)} units left to start</span>
+                      <span>{qty(item.material_allotted_quantity)} units allotted</span>
+                      <span>{left} left to be allotted</span>
+                      <span>{qty(item.quantity_completed)} completed</span>
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-                    {isStartable(item) && (
-                      <Button variant="outline" size="sm" onClick={() => onCheck(item)}>
-                        <ClipboardCheck /> Check materials
+                    {canRequest && (
+                      <Button variant="outline" size="sm" onClick={() => onRequest(item)}>
+                        <PackagePlus /> Request materials
                       </Button>
                     )}
                     {canStart && (
                       <Button size="sm" onClick={() => onStart(item)}>
-                        <Play /> {qty(item.quantity_to_produce) > 0 ? "Start more" : "Start production"}
+                        <Play /> Start production
                       </Button>
                     )}
-                    {active && (
+                    {activeUnits > 0 && (
                       <Button variant="outline" size="sm" onClick={() => navigate("/production")}>
-                        <Wrench /> Update progress
+                        <Wrench /> Record completed units
                       </Button>
                     )}
                   </div>

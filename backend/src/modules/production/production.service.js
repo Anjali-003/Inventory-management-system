@@ -30,9 +30,8 @@ async function getProductionTargetForItem(_connection, item) {
   return Math.max(0, Number(item.ordered_quantity || 0))
 }
 
-// Available materials are deducted during Operations approval. If Purchasing later replenishes a shortage,
-// the Store allotment workflow deducts only the additional quantity not covered by that approval deduction.
-// Production itself only tracks production quantities and status; it does not reserve or consume stock.
+// Inventory is deducted by Operations approval. Store allotment records physical handover only.
+// Production itself only tracks material readiness, production quantities, and status; it does not reserve or consume stock.
 
 async function getOrderProgress(connection, orderItemId) {
   const [rows] = await connection.query(`
@@ -209,7 +208,7 @@ async function startProduction(orderItemId, quantity, userId) {
       productionId = result.insertId;
     }
 
-    // Inventory deductions are handled by approval and Store allotment. Starting production only updates production counters.
+    // Inventory deductions are handled by Operations approval. Starting production only updates production counters.
 
     await connection.query(`
       UPDATE orders
@@ -332,7 +331,19 @@ async function getProductionOrders() {
       row.max_production_quantity = state ? state.maxStartQuantity : 0
       row.material_status = state ? state.status : "UNKNOWN"
       row.material_requestable_quantity = state ? state.materialRequestableQuantity : 0
+      row.requestable_product_quantity = state ? state.requestableProductQuantity : 0
+      row.requested_product_quantity = state ? state.requestedProductQuantity : 0
+      row.issued_product_quantity = state ? state.issuedProductQuantity : 0
+      row.material_request_outstanding_product_quantity = state ? state.materialRequestOutstandingProductQuantity : 0
       row.material_request_outstanding_quantity = state ? state.materialRequestOutstandingQuantity : 0
+      // Allotted units are the units covered by Store handovers, including units
+      // already started. This uses material-request issue records, never on-hand inventory.
+      row.material_allotted_quantity = Math.min(
+        Number(row.ordered_quantity || 0),
+        Number(row.quantity_to_produce || 0) + Number(row.max_production_quantity || 0),
+      )
+      row.material_left_to_allot = Math.max(0, Number(row.ordered_quantity || 0) - row.material_allotted_quantity)
+      // Kept for compatibility with older consumers; this is not an inventory availability check.
       row.material_check_available = true
     }
 

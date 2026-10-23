@@ -1,3 +1,12 @@
+import {
+  inProductionQuantity,
+  isApprovedForProduction,
+  isProductionCompleted,
+  leftToBeAllottedQuantity,
+  productionWorkflowStatus,
+  readyToStartQuantity,
+} from "@/features/production/productionWorkflow"
+
 const STARTABLE_ORDER_STATUSES = new Set(["PENDING", "IN_PRODUCTION", "TESTING"])
 
 export const qty = (value) => Number(value || 0)
@@ -48,8 +57,8 @@ export function getTodayTaskCount(items) {
 
 export function getCompletedTodayCount(items) {
   return new Set(items
-    .filter((item) => item.status === "COMPLETED" && isSameLocalDay(item.completed_at))
-    .map((item) => item.order_id ?? item.id))
+    .filter((item) => isProductionCompleted(item) && isSameLocalDay(item.completed_at))
+    .map((item) => item.order_item_id ?? item.id ?? item.order_id))
     .size
 }
 
@@ -61,19 +70,34 @@ export function getMaterialIssues(items) {
   return items.filter((item) => hasMaterialIssue(item))
 }
 
+export function getAwaitingAllotmentCount(items) {
+  return items.filter((item) => (
+    !isProductionCompleted(item)
+    && isApprovedForProduction(item)
+    && item.material_status !== "UNKNOWN"
+    && leftToBeAllottedQuantity(item) > 0
+  )).length
+}
+
 export function getWorkQueue(items) {
   return items
     .filter((item) => {
-      const active = item.status === "IN_PRODUCTION" && inProduction(item) > 0
-      return active || isStartable(item)
+      if (isProductionCompleted(item)) return false
+      const workflow = productionWorkflowStatus(item)
+      const active = inProductionQuantity(item) > 0
+      const requestable = isApprovedForProduction(item)
+        && leftToBeAllottedQuantity(item) > 0
+        && item.material_status !== "UNKNOWN"
+      const ready = readyToStartQuantity(item) > 0
+      return active || requestable || ready || workflow.key === "awaiting_allotment" || workflow.key === "partially_allotted"
     })
     .sort((a, b) => {
       const priority = (item) => {
-        if (item.material_status === "SHORTAGE") return 0
-        if (item.material_status === "UNKNOWN") return 1
-        if (item.status === "IN_PRODUCTION" && inProduction(item) > 0) return 2
-        if (item.material_status === "COVERED") return 3
-        return 4
+        const workflow = productionWorkflowStatus(item)
+        if (workflow.key === "awaiting_allotment" || workflow.key === "partially_allotted") return 0
+        if (inProductionQuantity(item) > 0) return 1
+        if (readyToStartQuantity(item) > 0) return 2
+        return 3
       }
       const priorityDifference = priority(a) - priority(b)
       if (priorityDifference) return priorityDifference
@@ -97,9 +121,10 @@ export function formatWhen(value) {
 }
 
 export function readinessFor(item) {
-  if (remainingToStart(item) <= 0) return { label: "Fully started", variant: "info" }
-  if (item.material_status === "UNKNOWN") return { label: "BOM needs review", variant: "warning" }
-  if (item.material_status === "SHORTAGE") return { label: "Material shortage", variant: "danger" }
-  if (item.material_status === "COVERED") return { label: "Ready to start", variant: "success" }
-  return { label: "Waiting", variant: "neutral" }
+  const workflow = productionWorkflowStatus(item)
+  const variants = { warning: "warning", info: "info", success: "success", neutral: "neutral" }
+  return {
+    label: workflow.label,
+    variant: variants[workflow.tone] || "neutral",
+  }
 }

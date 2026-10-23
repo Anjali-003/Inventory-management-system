@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2, PackagePlus } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { Notice } from "@/components/feedback";
-import { Field, TextInput } from "@/components/FormField";
+import { Field } from "@/components/FormField";
 import { Button } from "@/components/ui/button";
+import QuantityStepper from "@/components/QuantityStepper";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/toast";
 import { fmtQty } from "@/lib/stock";
@@ -22,7 +23,7 @@ export default function RequestMaterialsModal({ order, onClose, onSubmitted }) {
   const [requestKey] = useState(makeKey);
 
   useEffect(() => {
-    if (data) setProductQuantity(data.requestable_product_quantity > 0 ? "1" : "0");
+    if (data) setProductQuantity(data.requestable_product_quantity > 0 ? String(data.requestable_product_quantity) : "");
   }, [data?.order_item_id, data?.requestable_product_quantity]);
 
   const maxProductQuantity = Number(data?.requestable_product_quantity || 0);
@@ -60,14 +61,16 @@ export default function RequestMaterialsModal({ order, onClose, onSubmitted }) {
       size="xl"
       onSubmit={submit}
       title="Request materials from Store"
-      description="Inventory was deducted at order approval. This request records the quantities Production needs Store to physically allot; it does not deduct stock again."
+      description="Request component quantities for the remaining product units."
       footer={
         <>
-          <Button type="button" variant="outline" size="lg" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button type="submit" size="lg" disabled={saving || isLoading || maxProductQuantity < 1 || selectedProductQuantity < 1 || selectedProductQuantity > maxProductQuantity}>
-            {saving ? <Loader2 className="size-4 animate-spin" /> : <PackagePlus className="size-4" />}
-            {saving ? "Sending request..." : "Send material request"}
-          </Button>
+          <Button type="button" variant="outline" size="lg" onClick={onClose} disabled={saving}>{maxProductQuantity > 0 ? "Cancel" : "Close"}</Button>
+          {maxProductQuantity > 0 && (
+            <Button type="submit" size="lg" disabled={saving || isLoading || selectedProductQuantity < 1 || selectedProductQuantity > maxProductQuantity}>
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <PackagePlus className="size-4" />}
+              {saving ? "Sending request..." : "Send material request"}
+            </Button>
+          )}
         </>
       }
     >
@@ -76,31 +79,43 @@ export default function RequestMaterialsModal({ order, onClose, onSubmitted }) {
           <div className="min-w-0">
             <p className="font-semibold">{data?.order_number || order?.order_number || `Order #${order?.order_id}`}</p>
             <p className="text-sm text-muted-foreground">{data?.product_name || order?.product_name}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Ordered quantity: {fmtQty(data?.approved_quantity ?? order?.ordered_quantity ?? 0)} · Available to request: {maxProductQuantity} products</p>
+            <p className="mt-1 text-xs text-muted-foreground">Ordered: {fmtQty(data?.approved_quantity ?? order?.ordered_quantity ?? 0)} · Requested: {fmtQty(data?.requested_product_quantity || 0)} · Allotted: {fmtQty(data?.allotted_product_quantity ?? data?.issued_product_quantity ?? 0)} units</p>
+            {Number(data?.outstanding_product_quantity || 0) > 0 && <p className="mt-1 text-xs font-medium text-amber-700">{fmtQty(data.outstanding_product_quantity)} units are waiting for Store handover.</p>}
+            {maxProductQuantity > 0 && <p className="mt-1 text-xs text-muted-foreground">Available for a new request: {maxProductQuantity} units</p>}
           </div>
           <Badge variant="info">Partial requests allowed</Badge>
         </div>
 
         {!isLoading && maxProductQuantity > 0 && (
-          <div className="grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-end">
-            <div>
-              <p className="text-sm font-semibold text-emerald-950">How many products need materials?</p>
-              <p className="mt-1 text-xs text-emerald-800">Choose the number of finished products. Component quantities below are calculated from the BOM.</p>
-            </div>
-            <Field label="Product quantity" htmlFor="request-product-quantity">
-              <TextInput id="request-product-quantity" type="number" min="1" max={maxProductQuantity} step="1" value={productQuantity} onChange={(event) => setProductQuantity(event.target.value)} />
-            </Field>
-          </div>
+          <QuantityStepper
+            id="request-product-quantity"
+            label="How many products need materials?"
+            description="Component quantities below update from the saved BOM."
+            value={productQuantity}
+            min={1}
+            max={maxProductQuantity}
+            unitLabel="products"
+            onChange={setProductQuantity}
+            disabled={saving}
+          />
         )}
 
-        {isLoading && <div className="py-8 text-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline size-4 animate-spin" />Loading BOM and remaining material allowance…</div>}
+        {isLoading && <div className="py-8 text-center text-sm text-muted-foreground"><Loader2 className="mr-2 inline size-4 animate-spin" />Loading product requirements and current Store handovers…</div>}
         {(error || loadError) && <Notice title="Could not load request details">{error || loadError?.response?.data?.message || loadError?.data?.message || "Refresh the production page and try again."}</Notice>}
 
-        {!isLoading && data?.items?.length === 0 && (
-          <Notice title="No remaining material allowance">All approved component quantities have already been requested, or this product has no remaining approved material allowance. Check the current request status or correct the BOM.</Notice>
+        {!isLoading && maxProductQuantity === 0 && Number(data?.outstanding_product_quantity || 0) > 0 && (
+          <Notice title="Materials are already waiting for Store">
+            {fmtQty(data.outstanding_product_quantity)} product units have already been requested and are still waiting for handover. {fmtQty(data.allotted_product_quantity ?? data.issued_product_quantity ?? 0)} units have been allotted so far. No duplicate request is needed; the existing request remains open on the Store Manager's Material Allotment page until the remaining components are handed over.
+          </Notice>
         )}
 
-        {!!data?.items?.length && (
+        {!isLoading && maxProductQuantity === 0 && Number(data?.outstanding_product_quantity || 0) <= 0 && (
+          <Notice title="No new request quantity available">
+            All remaining units are already covered by existing material requests, or the BOM needs review. Check the request totals and refresh Production before trying again.
+          </Notice>
+        )}
+
+        {maxProductQuantity > 0 && !!data?.items?.length && (
           <div className="overflow-hidden rounded-xl border">
             <div className="hidden sm:grid sm:grid-cols-[minmax(0,1fr)_100px_130px] gap-3 bg-muted/60 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               <span>Component</span><span className="text-right">Per product</span><span className="text-right">Required quantity</span>
@@ -111,7 +126,7 @@ export default function RequestMaterialsModal({ order, onClose, onSubmitted }) {
                   <div className="min-w-0">
                     <p className="break-words text-sm font-medium">{item.name}</p>
                     <p className="text-xs text-muted-foreground">{item.sku} · {item.unit}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">Remaining component allowance: {fmtQty(item.requestable_quantity)} {item.unit}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">Remaining quantity for this order: {fmtQty(item.requestable_quantity)} {item.unit}</p>
                   </div>
                   <p className="text-right text-sm tabular-nums"><span className="mr-2 text-xs text-muted-foreground sm:hidden">Per product</span>{fmtQty(item.quantity_per_product)} {item.unit}</p>
                   <p className="text-right text-sm font-semibold tabular-nums"><span className="mr-2 text-xs font-normal text-muted-foreground sm:hidden">Required quantity</span>{fmtQty(item.quantity)} {item.unit}</p>

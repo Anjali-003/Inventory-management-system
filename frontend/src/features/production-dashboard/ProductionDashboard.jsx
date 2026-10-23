@@ -6,24 +6,24 @@ import { Notice } from "@/components/feedback"
 import { useToast } from "@/components/toast"
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
-import MaterialCheckModal from "@/features/orders/components/MaterialCheckModal"
-import StartProductionModal from "@/features/orders/components/StartProductionModal"
+import ProductionStartModal from "@/features/production/components/ProductionStartModal"
+import RequestMaterialsModal from "@/features/material-requests/RequestMaterialsModal"
 import { useGetProductionQuery } from "@/features/production/productionApi"
 import { errorMessage } from "@/lib/stock"
 import ProductionOverviewCards from "@/features/production-dashboard/components/ProductionOverviewCards"
 import ProductionWorkQueue from "@/features/production-dashboard/components/ProductionWorkQueue"
-import MaterialShortagesPanel from "@/features/production-dashboard/components/MaterialShortagesPanel"
 import ProductionProgressPanel from "@/features/production-dashboard/components/ProductionProgressPanel"
 import StockWatchPanel from "@/features/production-dashboard/components/StockWatchPanel"
 import RecentProductionActivity from "@/features/production-dashboard/components/RecentProductionActivity"
-import { toProductionOrder, inProduction, isStartable } from "@/features/production-dashboard/productionDashboardUtils"
+import { toProductionOrder, inProduction } from "@/features/production-dashboard/productionDashboardUtils"
+import { isProductionCompleted, isApprovedForProduction, productionWorkflowStatus, readyToStartQuantity } from "@/features/production/productionWorkflow"
 import { InteractiveBarChart, InteractiveDonutChart } from "@/features/dashboard/components/InteractiveDashboardCharts"
 
 const PRODUCTION_CHART_CATEGORIES = [
   { key: "active", label: "In production", color: "#3478d4", to: "/production" },
   { key: "ready", label: "Ready to start", color: "#0d9488", to: "/production" },
-  { key: "completed", label: "Production complete", color: "#15966b", to: "/quality-control" },
-  { key: "shortage", label: "Material shortage", color: "#e87927", to: "/inventory?filter=low" },
+  { key: "completed", label: "Production completed", color: "#15966b", to: "/production" },
+  { key: "awaiting", label: "Awaiting allotment", color: "#e87927", to: "/production" },
   { key: "rework", label: "Rework needed / underway", color: "#dc4545", to: "/qc-failed" },
   { key: "retest", label: "Ready for QC retest", color: "#8358c9", to: "/qc-failed" },
   { key: "review", label: "Waiting for review", color: "#d1a025", to: "/production" },
@@ -32,10 +32,11 @@ const PRODUCTION_CHART_CATEGORIES = [
 function productionCategory(item) {
   if (item.rework_status === "READY_FOR_QC") return "retest"
   if (item.qc_decision === "FAIL" || ["IN_PROGRESS", "NEEDS_REWORK"].includes(item.rework_status)) return "rework"
-  if (item.status === "COMPLETED") return "completed"
-  if (item.status === "IN_PRODUCTION" && inProduction(item) > 0) return "active"
-  if (isStartable(item) && item.material_status === "SHORTAGE") return "shortage"
-  if (isStartable(item) && item.material_status === "COVERED") return "ready"
+  const workflow = productionWorkflowStatus(item)
+  if (isProductionCompleted(item)) return "completed"
+  if (inProduction(item) > 0) return "active"
+  if (["awaiting_allotment", "partially_allotted"].includes(workflow.key)) return "awaiting"
+  if (readyToStartQuantity(item) > 0 && isApprovedForProduction(item)) return "ready"
   return "review"
 }
 
@@ -85,7 +86,7 @@ function productionMilestones(items, days) {
       })
     }
     addMilestone(item.started_at, "started", "Started", "#3478d4")
-    addMilestone(item.completed_at, "completed", "Completed", "#15966b", `${Number(item.quantity_completed || 0).toLocaleString()} units`)
+    if (isProductionCompleted(item)) addMilestone(item.completed_at, "completed", "Production completed", "#15966b", `${Number(item.quantity_completed || 0).toLocaleString()} units`)
   })
   return points
 }
@@ -96,7 +97,7 @@ export default function ProductionDashboard() {
   const { data: user } = useGetMeQuery()
   const productionQuery = useGetProductionQuery()
   const inventoryQuery = useGetInventoryQuery("active")
-  const [checkFor, setCheckFor] = useState(null)
+  const [requestFor, setRequestFor] = useState(null)
   const [startFor, setStartFor] = useState(null)
 
   const production = Array.isArray(productionQuery.data) ? productionQuery.data : []
@@ -126,11 +127,6 @@ export default function ProductionDashboard() {
     await refresh()
   }
 
-  const startFromCheck = (order) => {
-    setCheckFor(null)
-    setStartFor(order)
-  }
-
   const productionError = productionQuery.error
     ? errorMessage(productionQuery.error, "Could not load production tasks.")
     : ""
@@ -143,7 +139,7 @@ export default function ProductionDashboard() {
       <MktHero
         eyebrow="Production dashboard"
         title={user?.name ? `Hello, ${user.name}` : "Production overview"}
-        description="See what is running, what is blocked by missing materials, and which batches need a correction or QC retest."
+        description="Review material allotment, active production, completed products, and work needing QC or rework."
       >
         <HeroButton onClick={() => navigate("/production")}><Factory /> Open production</HeroButton>
         <HeroButton variant="glass" onClick={refresh} disabled={productionQuery.isFetching || inventoryQuery.isFetching}>
@@ -177,22 +173,13 @@ export default function ProductionDashboard() {
         />
       </div>
 
-      <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-3">
-        <div className="min-w-0 xl:col-span-2">
-          <ProductionWorkQueue
-            items={production}
-            loading={productionLoading}
-            onCheck={(item) => setCheckFor(toProductionOrder(item))}
-            onStart={(item) => setStartFor(toProductionOrder(item))}
-          />
-        </div>
-        <div className="min-w-0">
-          <MaterialShortagesPanel
-            items={production}
-            loading={productionLoading}
-            onCheck={(item) => setCheckFor(toProductionOrder(item))}
-          />
-        </div>
+      <div className="mt-4 min-w-0">
+        <ProductionWorkQueue
+          items={production}
+          loading={productionLoading}
+          onRequest={(item) => setRequestFor(toProductionOrder(item))}
+          onStart={(item) => setStartFor(toProductionOrder(item))}
+        />
       </div>
 
       <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-3">
@@ -208,16 +195,9 @@ export default function ProductionDashboard() {
         <RecentProductionActivity items={production} loading={productionLoading} />
       </div>
 
-      {checkFor && (
-        <MaterialCheckModal
-          order={checkFor}
-          onClose={() => setCheckFor(null)}
-          onStart={startFromCheck}
-          partialProduction
-        />
-      )}
+      {requestFor && <RequestMaterialsModal order={requestFor} onClose={() => setRequestFor(null)} onSubmitted={refresh} />}
       {startFor && (
-        <StartProductionModal
+        <ProductionStartModal
           order={startFor}
           onClose={() => setStartFor(null)}
           onStarted={handleStarted}

@@ -2,20 +2,21 @@ import { CheckCircle2, Factory, History } from "lucide-react"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { EmptyState } from "@/components/feedback"
 import { formatWhen } from "@/features/production-dashboard/productionDashboardUtils"
+import { isProductionCompleted } from "@/features/production/productionWorkflow"
 
 export default function RecentProductionActivity({ items, loading }) {
   const events = items.flatMap((item) => {
     const result = []
     if (item.started_at) result.push({
-      id: `${item.order_id}-started`,
+      id: `${item.order_item_id ?? item.id ?? item.order_id}-started`,
       kind: "started",
       order: item.order_number,
       product: item.product_name,
       actor: item.started_by_name,
       at: item.started_at,
     })
-    if (item.completed_at) result.push({
-      id: `${item.order_id}-completed`,
+    if (item.completed_at && isProductionCompleted(item)) result.push({
+      id: `${item.order_item_id ?? item.id ?? item.order_id}-completed`,
       kind: "completed",
       order: item.order_number,
       product: item.product_name,
@@ -29,7 +30,7 @@ export default function RecentProductionActivity({ items, loading }) {
     <Card className="min-w-0 overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader>
         <CardTitle>Recent production activity</CardTitle>
-        <CardDescription>Latest recorded start and completion milestones.</CardDescription>
+        <CardDescription>Latest production starts and fully completed product lines.</CardDescription>
       </CardHeader>
       {loading ? (
         <div className="space-y-4 p-5">
