@@ -1,7 +1,6 @@
 const db = require("../../config/db");
 const AppError = require("../../shared/AppError");
 const inventory = require("../inventory/inventory.service");
-const notifications = require("../notifications/notification.service");
 const idem = require("../../shared/idempotency");
 const { planOrder } = require("./order-planner");
 
@@ -12,10 +11,11 @@ const { planOrder } = require("./order-planner");
     A decision is final: only PENDING_APPROVAL orders can be decided (row is locked, so a double click or two
     admins deciding at once can never decide the same order twice).
 
-    There is no partial approval: an order is approved as a whole or rejected. The admin always sees what the order needs,
-    what the stock can cover now and what is short (getPlan), and decides for himself. On approval the units the stock can
-    cover now go to the Production Manager (their BOM materials are issued) and the missing components of the whole order go
-    to the Purchase Manager. Rejecting is only possible while the order is PENDING_APPROVAL.
+    There is no partial approval: an order is approved as a whole or rejected. The admin sees the producible quantities
+    and component shortages. On approval, the required inventory for currently producible quantities is deducted immediately
+    and recorded in the stock ledger; those deducted materials are later physically handed over by Store when Production
+    submits material requests. Missing components for the rest of the order go to the Purchase Manager. Store allotment does
+    not deduct inventory again. Rejecting is only possible while the order is PENDING_APPROVAL.
 
     Dispatch (the normal way to approve): while an order waits, the admin sees what can be built from the stock on the shelf
     (getPlan). dispatch() then approves it and records two lists in the same transaction: the producible quantities
@@ -252,8 +252,7 @@ async function decide(orderId, decision, body, userId, opts) {
             const plan = await computePlan(conn, orderId, { lock: true });
             const producible = await saveApprovalRequests(conn, orderId, plan, userId);
             round += 1;
-            const issued = await issueApprovedMaterials(conn, orderId, producible, userId, round);
-            await notifications.createIssueRequest(conn, { orderId, round, lines: issued, userId });
+            await issueApprovedMaterials(conn, orderId, producible, userId, round);
         }
 
         const [saved] = await conn.query(
@@ -277,8 +276,8 @@ const reject = (orderId, body, userId) => decide(orderId, "REJECTED", body, user
 const toCents = (v) => Math.round(Number(v) * 100);
 
 /*
-    Loads what the planner needs for one order: its lines, each product's BOM and every component's available stock
-    (on hand - reserved). lock = true locks those inventory rows until the transaction ends (used by dispatch, so
+    Loads what the planner needs for one order: its lines, each product's BOM and every component's on-hand stock.
+    Reservations are not used. lock = true locks those inventory rows until the transaction ends (used by dispatch, so
     nobody can take the stock between the check and the save).
     A product whose BOM is missing, or has a line without a quantity, cannot be planned reliably: it is handed to the
     planner with an empty BOM, which reports it in missing_bom.
@@ -318,10 +317,11 @@ async function computePlan(conn, orderId, { lock = false } = {}) {
     const availableByComp = {};
     if (componentIds.length) {
         const [stock] = await conn.query(
-            `SELECT component_id, quantity_on_hand, quantity_reserved FROM inventory WHERE component_id IN (?) ORDER BY component_id${lock ? " FOR UPDATE" : ""}`,
+            `SELECT component_id, quantity_on_hand FROM inventory WHERE component_id IN (?) ORDER BY component_id${lock ? " FOR UPDATE" : ""}`,
             [componentIds]
         );
-        for (const r of stock) availableByComp[r.component_id] = Number(r.quantity_on_hand) - Number(r.quantity_reserved);
+        // No reservations: approval plans against current on-hand stock and immediately deducts it.
+        for (const r of stock) availableByComp[r.component_id] = Number(r.quantity_on_hand);
     }
 
     const plan = planOrder({
@@ -362,8 +362,7 @@ async function getPlan(orderId, conn = db) {
 }
 
 async function issueApprovedMaterials(conn, orderId, productionLines, userId, round = 1) {
-    const issued = []; // [{ component_id, quantity }] -> the Store Manager's "issue these components" notification
-    if (!productionLines.length) return issued;
+    if (!productionLines.length) return;
 
     const [bomRows] = await conn.query(
         `SELECT pb.product_id, pb.component_id, pb.quantity_required
@@ -386,7 +385,7 @@ async function issueApprovedMaterials(conn, orderId, productionLines, userId, ro
         const [updated] = await conn.query(
             `UPDATE inventory
              SET quantity_on_hand = quantity_on_hand - ?
-             WHERE component_id = ? AND quantity_on_hand - quantity_reserved >= ?`,
+             WHERE component_id = ? AND quantity_on_hand >= ?`,
             [quantity, componentId, quantity]
         );
         if (updated.affectedRows !== 1) {
@@ -409,9 +408,7 @@ async function issueApprovedMaterials(conn, orderId, productionLines, userId, ro
             ]
         );
         if (!result.insertId) throw new Error(`Failed to record inventory issue for component ${componentId}`);
-        issued.push({ component_id: componentId, quantity });
     }
-    return issued;
 }
 
 async function saveApprovalRequests(conn, orderId, plan, userId, producible = plan.lines.filter((line) => line.can_make > 0)) {
@@ -501,8 +498,7 @@ async function dispatch(orderId, body, userId, opts) {
 
         const round = (Number(rows[0].approval_round) || 0) + 1;
         await saveApprovalRequests(conn, orderId, plan, userId, selectedProduction);
-        const issued = await issueApprovedMaterials(conn, orderId, selectedProduction, userId, round);
-        await notifications.createIssueRequest(conn, { orderId, round, lines: issued, userId });
+        await issueApprovedMaterials(conn, orderId, selectedProduction, userId, round);
         const [saved] = await conn.query(
             `UPDATE orders
              SET approval_status = ?, approval_remarks = ?, approved_by = ?, approved_at = NOW(),

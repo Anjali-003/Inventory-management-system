@@ -15,7 +15,7 @@ export function TypeBadge({ type }) {
   return <Badge variant={m.tone}>{m.label}</Badge>
 }
 
-/** Signed quantity: +12 (IN) / −12 (OUT); reservations are shown muted because on-hand does not move. */
+/** Signed quantity: +12 (IN) / −12 (OUT); legacy reservations remain readable in historical ledgers. */
 export function Qty({ row, className }) {
   const n = fmtQty(row.quantity)
   if (row.direction === "IN")

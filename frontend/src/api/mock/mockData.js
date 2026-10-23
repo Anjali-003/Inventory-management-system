@@ -213,13 +213,6 @@ export function buildSeed(now = new Date()) {
     }
   }
 
-  // production reservations (do not change on-hand)
-  ;[[7, 12], [9, 10]].forEach(([cid, q]) => {
-    ledger.push({ component_id: cid, type: "RESERVED", direction: "RESERVE", cents: q * 100, when: at(3, 10),
-      reason: "Production order #4", reference_type: "PRODUCTION_ORDER", reference_id: 4, created_by: null })
-    components.find((c) => c.id === cid).reserved = q * 100
-  })
-
   // 6) global order: by time, then assign ids and running balance
   ledger.sort((a, b) => a.when - b.when)
   const run = {}

@@ -23,6 +23,7 @@ const componentRoutes = require("../modules/components/component.routes");
 const inventoryRoutes = require("../modules/inventory/inventory.routes");
 const orderRoutes = require("../modules/orders/order.routes");
 const productionRoutes = require("../modules/production/production.routes");
+const qcFailedRoutes = require("../modules/production/qc-failed.routes");
 const qualityControlRoutes = require("../modules/quality-control/quality-control.routes");
 const finishedGoodsRoutes = require("../modules/finished-goods/finished-goods.routes");
 const purchaseRoutes = require("../modules/purchase/purchase.routes");
@@ -36,6 +37,7 @@ const attendanceRoutes = require("../modules/attendance/attendance.routes");
 const superAdminRoutes = require("../modules/super-admins/super-admin.routes");
 const activityRoutes = require("../modules/activity/activity.routes");
 const notificationRoutes = require("../modules/notifications/notification.routes");
+const materialRequestRoutes = require("../modules/material-requests/material-request.routes");
 const eventsRoutes = require("../realtime/events.routes");
 
 const MODULES = [
@@ -48,8 +50,10 @@ const MODULES = [
     // permit() is applied per route inside inventory.routes.js (stock screens vs history screen)
     { path: "/inventory", router: inventoryRoutes, resource: "inventory" },
 
-    { path: "/orders", router: orderRoutes, resource: "orders", guards: [permit("orders")] },
+    { path: "/orders", router: orderRoutes, resource: "orders" },
     { path: "/production", router: productionRoutes, resource: "production", guards: [permit("production")] },
+    { path: "/material-requests", router: materialRequestRoutes, resource: "material-requests", guards: [permit("materialRequests")] },
+    { path: "/qc-failed", router: qcFailedRoutes, resource: "qc-failed", guards: [permit("qcFailed")] },
     { path: "/quality-control", router: qualityControlRoutes, resource: "quality-control", guards: [permit("qualityControl")] },
 
     // QC PASS -> Finished goods -> Packaging -> Dispatched -> Completed

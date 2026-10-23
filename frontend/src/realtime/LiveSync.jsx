@@ -23,6 +23,7 @@ const TAGS = {
   inventory: ["Inventory"],
   orders: ["Orders", "Inventory", "Production", "FinishedGoods", "QualityControl"],
   production: ["Orders", "Inventory", "Production", "QualityControl"],
+  "qc-failed": ["Production", "QualityControl", "FinishedGoods", "Orders"],
   "quality-control": ["Orders", "Inventory", "QualityControl"],
   "finished-goods": ["Orders", "FinishedGoods"],
   employees: ["Attendance", "Employees"],
@@ -35,6 +36,7 @@ const TAGS = {
   "order-approvals": ["OrderApprovals", "Orders", "MarketingOrders", "Production", "Purchases", "Inventory"],
   "marketing-orders": ["MarketingOrders", "OrderApprovals", "Orders"],
   "approved-orders": ["OrderApprovals"],
+  "material-requests": ["MaterialRequests", "Production"],
 };
 
 export default function LiveSync() {
@@ -93,7 +95,7 @@ export default function LiveSync() {
         const evt = JSON.parse(e.data);
         if (evt.message) toastRef.current.success(evt.message);
         // the dashboard list of "components to issue" (and the stock figures) refresh at once
-        dispatch(baseApi.util.invalidateTags(["Notifications", "Inventory"]));
+        dispatch(baseApi.util.invalidateTags(["Notifications", "Inventory", "MaterialRequests", "Production"]));
       } catch { /* ignore malformed event */ }
     });
 

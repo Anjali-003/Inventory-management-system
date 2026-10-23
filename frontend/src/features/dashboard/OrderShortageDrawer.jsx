@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils"
       `purchase_request.items` ([{ component_id, sku, name, unit, quantity (= shortage), purchase_order_id, po_number }]).
     - "Required" is shown only when the line carries it (`required`); the order data does not send it today, so the column is
       left out rather than guessed.
-    - "In stock now" is the live free stock (on hand - reserved) from the inventory list the Purchase Manager can already read.
+    - "In stock now" is current on-hand stock; reservation accounting is no longer used.
       When a line carries its own `available` (stock when the order was approved) that is shown instead, as "Available".
 */
 

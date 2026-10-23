@@ -13,6 +13,7 @@ import {
   Users,
   Activity,
   History,
+  UserCog,
 } from "lucide-react";
 
 import { LOGIN_PORTALS, setActiveRole } from "@/lib/permissions";
@@ -56,7 +57,29 @@ const PORTAL_CARDS = [
     note: "Raise and track purchases",
     icon: ShoppingCart,
   },
+  {
+    portal: LOGIN_PORTALS.PRODUCTION_MANAGER,
+    label: "Production",
+    note: "Update production runs and view inventory",
+    icon: Factory,
+  },
+  {
+    portal: LOGIN_PORTALS.QUALITY_FG_MANAGER,
+    label: "Quality Control & Finished Goods",
+    note: "Review completed batches, record Pass/Fail decisions, manage rework and release finished goods",
+    icon: PackageCheck,
+  },
+  {
+    portal: LOGIN_PORTALS.HR_MANAGER,
+    label: "HR Manager",
+    note: "Manage employee records and daily attendance",
+    icon: UserCog,
+  },
 ];
+
+// Keep the landing page renderable if a local permissions.js is out of sync.
+// The matching LOGIN_PORTALS entry is still required for that role's login route.
+const AVAILABLE_PORTAL_CARDS = PORTAL_CARDS.filter(({ portal }) => portal?.role && portal?.path);
 
 const MODULES = [
   { icon: Boxes, name: "Products and BOM", text: "Import a bill of materials from a sheet and keep every revision in one place." },
@@ -79,10 +102,51 @@ const FLOW = [
 ];
 
 const ACCESS_ROWS = [
-  { role: "Super Admin", edit: "All modules", view: "None" },
-  { role: "Store Manager", edit: "Inventory, inventory history, finished goods, incoming stock", view: "IQC, purchase" },
-  { role: "IQC Manager", edit: "IQC", view: "Purchase, inventory, inventory history, finished goods, incoming stock" },
-  { role: "Purchase Manager", edit: "Purchase", view: "IQC, inventory, inventory history, finished goods, incoming stock" },
+  {
+    role: "Super Admin",
+    edit: "All modules",
+    view: "None",
+  },
+  {
+    role: "Marketing Manager",
+    edit: "Marketing orders",
+    view: "Dashboard",
+  },
+  {
+    role: "Operations Admin",
+    edit: "Order approvals",
+    view: "Dashboard, approved orders, inventory, inventory history, finished goods, incoming stock, IQC, purchase",
+  },
+  {
+    role: "Store Manager",
+    edit: "Inventory, inventory history, finished goods, incoming stock",
+    view: "Dashboard, IQC, purchase",
+  },
+  {
+    role: "IQC Manager",
+    edit: "IQC",
+    view: "Dashboard, purchase, inventory, inventory history, finished goods, incoming stock",
+  },
+  {
+    role: "Purchase Manager",
+    edit: "Purchase",
+    view: "Dashboard, approved orders, IQC, inventory, inventory history, finished goods, incoming stock",
+  },
+  {
+    role: "Production Manager",
+    edit: "Production",
+    view: "Dashboard, inventory",
+  },
+  {
+    role: "Quality Control & Finished Goods",
+    edit: "Quality Control, finished goods",
+    view: "Dashboard, production",
+  },
+  {
+    role: "HR Manager",
+    edit: "Employees, attendance",
+    view: "Dashboard",
+  },
 ];
 
 /* ---------- shared Tailwind class sets ---------- */
@@ -191,11 +255,11 @@ export default function Landing() {
               Log in to your workspace
             </h2>
             <p className="mt-1 text-[0.95rem] text-lp-muted">
-              Choose the role you work in. All four roles can be logged in at once, one per browser tab.
+              Choose the role you work in. Different roles can stay logged in at once, one per browser tab.
             </p>
 
             <div className="mt-5 grid gap-2.5">
-              {PORTAL_CARDS.map(({ portal, label, note, icon: Icon }) => {
+              {AVAILABLE_PORTAL_CARDS.map(({ portal, label, note, icon: Icon }) => {
                 const session = sessions[portal.role];
                 return (
                   <Link
@@ -328,7 +392,7 @@ export default function Landing() {
         <div className={`${wrap} flex flex-wrap items-center justify-between gap-8`}>
           <h2 className={`${heading} text-[clamp(1.5rem,2.6vw,2rem)] text-white`}>Ready to get back to work?</h2>
           <div className="flex flex-wrap gap-3 max-sm:w-full">
-            {PORTAL_CARDS.map(({ portal, label }) => {
+            {AVAILABLE_PORTAL_CARDS.map(({ portal, label }) => {
               const session = sessions[portal.role];
               return (
                 <Link

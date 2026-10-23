@@ -150,8 +150,8 @@ export function StockOutModal({ open, item, onClose, onSaved, onConflict }) {
       <div className="space-y-4">
         {sub.serverError && <Notice title="Could not issue stock">{sub.serverError}</Notice>}
 
-        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border bg-border text-center">
-          {[["On hand", item.quantity_on_hand], ["Reserved", item.quantity_reserved], ["Available", item.available]].map(([l, v]) => (
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border text-center">
+          {[["On hand", item.quantity_on_hand], ["Available", item.available]].map(([l, v]) => (
             <div key={l} className="bg-card px-2 py-2.5">
               <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{l}</p>
               <p className="mt-0.5 text-lg font-semibold tabular-nums">{fmtQty(v)}</p>
@@ -214,7 +214,6 @@ export function EditModal({ open, item, onClose, onSaved, onConflict }) {
   if (!item) return <Modal open={false} />
 
   const onHandC = toCents(item.quantity_on_hand)
-  const reservedC = toCents(item.quantity_reserved)
   const delta = c.cents != null ? c.cents - onHandC : 0
   const minChanged = toCents(item.minimum_stock_level) !== (checkQty(minLevel, "x", { allowZero: true }).cents ?? -1)
 
@@ -222,7 +221,6 @@ export function EditModal({ open, item, onClose, onSaved, onConflict }) {
     e.preventDefault()
     const next = {}
     if (c.error) next.counted = c.error
-    else if (c.cents < reservedC) next.counted = `Cannot be below ${fmtQty(item.quantity_reserved)} reserved for production`
     const m = checkQty(minLevel, "Minimum level", { allowZero: true })
     if (m.error) next.min = m.error
     const reason = composeReason(reasonPreset, note)
@@ -291,7 +289,7 @@ export function ArchiveDialog({ open, item, onClose, onSaved, onConflict }) {
   useEffect(() => { if (open) setReason("") }, [open])
   if (!item) return <ConfirmDialog open={false} />
 
-  const blocked = Number(item.quantity_on_hand) > 0 || Number(item.quantity_reserved) > 0
+  const blocked = Number(item.quantity_on_hand) > 0
 
   return (
     <ConfirmDialog
@@ -311,8 +309,7 @@ export function ArchiveDialog({ open, item, onClose, onSaved, onConflict }) {
     >
       {blocked ? (
         <p>
-          <span className="font-medium text-foreground">{item.component_name}</span> still has {fmtQty(item.quantity_on_hand)} {item.unit} on hand
-          {Number(item.quantity_reserved) > 0 ? ` (${fmtQty(item.quantity_reserved)} reserved for production)` : ""}. Issue it with Stock out or adjust it to zero first.
+          <span className="font-medium text-foreground">{item.component_name}</span> still has {fmtQty(item.quantity_on_hand)} {item.unit} on hand. Issue it with Stock out or adjust it to zero first.
         </p>
       ) : (
         <>

@@ -8,13 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { errorMessage } from "@/lib/stock"
 import { cn } from "@/lib/utils"
+import OrderDisplayNumber from "@/components/OrderDisplayNumber"
 
 function Verdict({ ok }) {
   return (
     <div className={cn("rounded-lg border p-4", ok ? "border-success/25 bg-success/10 text-success" : "border-destructive/25 bg-destructive/10 text-destructive")}>
       <p className="font-semibold">{ok ? "Ready for production" : "Material shortage"}</p>
       <p className="mt-0.5 text-sm opacity-90">
-        {ok ? "All required materials are available for the full order." : "Some required materials are not available in sufficient quantity."}
+        {ok ? "All required materials are available for the checked quantity." : "Some required materials are not available in sufficient quantity."}
       </p>
     </div>
   )
@@ -79,49 +80,54 @@ function Materials({ materials }) {
 }
 
 // Mounted only while an order is selected (see Orders.jsx), so state resets per order.
-export default function MaterialCheckModal({ order, onClose, onStart }) {
+export default function MaterialCheckModal({ order, onClose, onStart, partialProduction = false }) {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
 
+  const orderItemId = order.order_item_id ?? order.id
+
   useEffect(() => {
     let stale = false
-    ordersService.materialCheck(order.id)
+    const request = partialProduction
+      ? ordersService.productionCheck(orderItemId, Number(order.remaining_to_start))
+      : ordersService.materialCheck(order.order_id ?? order.id)
+    request
       .then((r) => !stale && setResult(r.data))
       .catch((e) => !stale && setError(errorMessage(e, "Failed to check materials")))
       .finally(() => !stale && setLoading(false))
     return () => { stale = true }
-  }, [order])
+  }, [orderItemId, order.order_id, order.remaining_to_start, partialProduction])
 
   return (
     <Modal
       open
       onClose={onClose}
       size="lg"
-      title="Material availability"
-      description="Required components compared with current available inventory."
+      title={partialProduction ? "Material readiness" : "Material requirements"}
+      description={partialProduction ? "Required components compared with material already allotted by the Store Manager." : "Review the component requirements for this order."}
       footer={
         <>
           <Button type="button" variant="outline" size="lg" onClick={onClose}>Close</Button>
-          <Button type="button" size="lg" onClick={() => onStart(order)}>Start production</Button>
+          <Button type="button" size="lg" onClick={() => onStart(order)}>{partialProduction && Number(order.quantity_to_produce) > 0 ? "Start more" : "Start production"}</Button>
         </>
       }
     >
       <div className="space-y-5">
           <div className="flex items-center justify-between gap-4 rounded-lg border bg-muted/30 p-4">
             <div className="min-w-0">
-              <p className="font-semibold tabular-nums">{order.order_number}</p>
+              <OrderDisplayNumber orderNumber={order.order_number} itemCount={order.item_count} itemIndex={order.item_index} className="font-semibold tabular-nums" />
               <p className="truncate text-sm text-muted-foreground">{order.product_name}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-muted-foreground">Order qty</p>
-              <p className="text-lg font-semibold tabular-nums">{Number(order.quantity)}</p>
+              <p className="text-xs text-muted-foreground">{partialProduction ? "Remaining to start" : "Order qty"}</p>
+              <p className="text-lg font-semibold tabular-nums">{partialProduction ? Number(order.remaining_to_start) : Number(order.quantity)}</p>
             </div>
           </div>
 
           {loading && (
             <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" /> Checking material availability...
+              <Loader2 className="size-4 animate-spin" /> Checking Store-allotted material...
             </div>
           )}
           {error && <Notice>{error}</Notice>}

@@ -102,6 +102,12 @@ const GROUPS = [
         module: "qualityControl",
       },
       {
+        to: "/qc-failed",
+        label: "QC Failed",
+        icon: ClipboardCheck,
+        module: "qcFailed",
+      },
+      {
         to: "/finished-goods",
         label: "Finished Goods",
         icon: PackageCheck,
@@ -121,6 +127,7 @@ const GROUPS = [
       { to: "/purchase", label: "Purchase", icon: ShoppingCart, module: "purchase" },
       { to: "/iqc", label: "IQC", icon: ClipboardCheck, module: "iqc" },
       { to: "/incoming-stock", label: "Incoming Stock", icon: Truck, module: "incomingStock" },
+      { to: "/store-material-requests", label: "Material Allotment", icon: ClipboardList, module: "storeMaterialRequests" },
     ],
   },
 

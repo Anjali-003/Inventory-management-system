@@ -37,6 +37,9 @@ async function listOrders() {
         `
         SELECT
             o.id,
+            oi.id AS order_item_id,
+            (SELECT COUNT(*) FROM order_items siblings WHERE siblings.order_id = o.id) AS item_count,
+            (SELECT COUNT(*) FROM order_items previous WHERE previous.order_id = o.id AND previous.id <= oi.id) AS item_index,
             o.order_number,
             o.status,
             o.approval_status,
@@ -47,26 +50,17 @@ async function listOrders() {
             oi.product_id,
             p.name AS product_name,
             oi.quantity,
-            COALESCE(ap.quantity, 0) AS approved_quantity,
+            oi.quantity AS approved_quantity,
             COALESCE(po.quantity_to_produce, 0) AS quantity_to_produce,
             COALESCE(po.quantity_completed, 0) AS quantity_completed,
-            GREATEST(
-                0,
-                (CASE WHEN o.inventory_issued_at IS NOT NULL THEN COALESCE(ap.quantity, 0) ELSE oi.quantity END)
-                    - COALESCE(po.quantity_to_produce, 0)
-            ) AS remaining_to_start
+            GREATEST(0, oi.quantity - COALESCE(po.quantity_to_produce, 0)) AS remaining_to_start
         FROM orders o
         JOIN order_items oi
             ON o.id = oi.order_id
         JOIN products p
             ON oi.product_id = p.id
         LEFT JOIN production_orders po
-            ON po.order_id = o.id AND po.product_id = oi.product_id
-        LEFT JOIN (
-            SELECT order_id, product_id, SUM(quantity) AS quantity
-            FROM order_production_items GROUP BY order_id, product_id
-        ) ap
-            ON ap.order_id = o.id AND ap.product_id = oi.product_id
+            ON po.order_item_id = oi.id
         LEFT JOIN users cu
             ON cu.id = o.created_by
         ORDER BY o.id DESC
@@ -83,6 +77,16 @@ async function listOrders() {
 */
 async function getApprovalStatus(orderId) {
     const [rows] = await db.query("SELECT approval_status FROM orders WHERE id = ?", [orderId]);
+    return rows.length ? rows[0].approval_status : null;
+}
+
+
+/* Approval status for the specific product line used by Production start actions. */
+async function getApprovalStatusForOrderItem(orderItemId) {
+    const [rows] = await db.query(
+        `SELECT o.approval_status FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE oi.id = ? LIMIT 1`,
+        [orderItemId]
+    );
     return rows.length ? rows[0].approval_status : null;
 }
 
@@ -283,6 +287,7 @@ module.exports = {
     ORDER_STATUSES,
     listOrders,
     getApprovalStatus,
+    getApprovalStatusForOrderItem,
     getOrderById,
     updateOrderStatus,
     createOrder
