@@ -13,7 +13,7 @@ import { useApproveOrderMutation, useRejectOrderMutation } from "./orderApproval
   Approve or reject ONE order. `mode` is "approve" or "reject".
   Approve: remarks are optional. Reject: a reason is required (the order's creator and the Purchase Manager can see it).
 */
-export default function DecisionModal({ order, mode, onClose }) {
+export default function DecisionModal({ order, mode, onClose, onSwitch }) {
   const toast = useToast()
   const [approve, { isLoading: approving }] = useApproveOrderMutation()
   const [reject, { isLoading: rejecting }] = useRejectOrderMutation()
@@ -56,7 +56,8 @@ export default function DecisionModal({ order, mode, onClose }) {
       description={isReject ? "Tell the team why this order cannot go ahead." : "Approved orders go to the Purchase Manager and production can start."}
       footer={
         <>
-          <MktBtn onClick={onClose} disabled={busy}>Cancel</MktBtn>
+          <MktBtn onClick={onClose} disabled={busy} className={onSwitch ? "sm:me-auto" : undefined}>Cancel</MktBtn>
+          {onSwitch && isReject && <MktBtn onClick={() => onSwitch("plan")} disabled={busy}>Back to stock check</MktBtn>}
           {isReject ? (
             <DangerButton type="submit" busy={busy}>Reject order</DangerButton>
           ) : (

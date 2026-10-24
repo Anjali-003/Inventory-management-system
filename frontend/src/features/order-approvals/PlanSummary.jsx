@@ -28,14 +28,14 @@ export default function PlanSummary({ orderId, items = [] }) {
               {fmtQty(l.can_make)}
             </span>
             <span className="text-muted-foreground">
-              {` of ${fmtQty(l.ordered)} can be made`}
+              {` of ${fmtQty(l.ordered)} can make now`}
             </span>
           </li>
         ))}
       </ul>
       {plan.shortages?.length > 0 && (
         <p className="text-xs text-destructive">
-          {plan.shortages.length} component{plan.shortages.length > 1 ? "s" : ""} short for the rest
+          {plan.shortages.length} component{plan.shortages.length > 1 ? "s" : ""} to buy
         </p>
       )}
     </div>

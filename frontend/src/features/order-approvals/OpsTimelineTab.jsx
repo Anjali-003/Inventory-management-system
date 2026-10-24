@@ -105,7 +105,7 @@ function buildEvents(order) {
   if (!rejected && purch?.items?.length) {
     events.push({
       key: "purchase",
-      title: "Shortage sent to Purchase",
+      title: "Components to buy sent to Purchase",
       state: "done",
       at: purch.sent_at,
       sub: who(purch.sent_by_name, purch.sent_at),

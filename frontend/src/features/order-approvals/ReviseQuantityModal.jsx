@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { MktBtn } from "@/features/marketing-orders/mktKit"
 import { errorMessage, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
+import { reviseBlockReason } from "./DecisionButtons"
 import { useGetOrderPlanQuery, useReviseOrderMutation } from "./orderApprovalsApi"
 
 /*
@@ -21,13 +22,13 @@ import { useGetOrderPlanQuery, useReviseOrderMutation } from "./orderApprovalsAp
   A reason is required: the Marketing Manager sees it next to both copies.
 */
 
-/** Only a waiting order raised by marketing, and only once. */
-export const canRevise = (o) => o?.approval_status === "PENDING_APPROVAL" && !o.revision && o.created_by_role === "MARKETING_MANAGER"
+/** Only a waiting order raised by marketing, and only once (the reason when not: reviseBlockReason). */
+export const canRevise = (o) => !reviseBlockReason(o)
 
 const INPUT =
   "h-9 w-24 rounded-lg border border-cf-line-strong bg-card px-2.5 text-end text-base tabular-nums outline-none transition-shadow focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15 sm:text-[13px]"
 
-export default function ReviseQuantityModal({ order, onClose }) {
+export default function ReviseQuantityModal({ order, onClose, onSwitch }) {
   const toast = useToast()
   const [revise, { isLoading: busy }] = useReviseOrderMutation()
   const { data: plan, isLoading: planLoading, isFetching: planFetching, error: planError } = useGetOrderPlanQuery(order.id)
@@ -58,7 +59,7 @@ export default function ReviseQuantityModal({ order, onClose }) {
     : !allValid
     ? "Each quantity must be a whole number between 0 and what the stock can make now."
     : totalHeld === 0
-      ? "Nothing is reduced. To make the full order, use Check stock & send."
+      ? "Nothing is reduced. To make the full order, go back to the stock check and send it."
       : totalMake === 0
         ? "You would make nothing of this order: reject it instead."
         : ""
@@ -89,7 +90,8 @@ export default function ReviseQuantityModal({ order, onClose }) {
       description="See what the current stock can build, then choose how much you will make now. The rest is saved for the Marketing Manager as a separate draft order."
       footer={
         <>
-          <MktBtn onClick={onClose} disabled={busy}>Cancel</MktBtn>
+          <MktBtn onClick={onClose} disabled={busy} className="sm:me-auto">Cancel</MktBtn>
+          {onSwitch && <MktBtn onClick={() => onSwitch("plan")} disabled={busy}>Back to stock check</MktBtn>}
           <MktBtn type="submit" variant="primary" disabled={busy || !ready}>
             {busy && <Loader2 className="animate-spin" />}
             Send to Marketing for OK
@@ -127,8 +129,8 @@ export default function ReviseQuantityModal({ order, onClose }) {
                 <TableHead>Product</TableHead>
                 <TableHead className="text-end">Ordered</TableHead>
                 <TableHead className="text-end">Can make now</TableHead>
-                <TableHead className="text-end">Will make</TableHead>
-                <TableHead className="text-end">Not now</TableHead>
+                <TableHead className="text-end">Make now</TableHead>
+                <TableHead className="text-end">Held back</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

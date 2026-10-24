@@ -1,7 +1,5 @@
-/* eslint-disable react-refresh/only-export-components */
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback";
 import UserCell from "@/components/UserCell";
-import { Accordion } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,7 +23,6 @@ import {
   StatusPill,
   StatusSelect,
 } from "@/features/marketing-orders/mktKit";
-import OrderDrawer from "@/features/marketing-orders/OrderDrawer";
 import { stagger } from "@/features/marketing-orders/mktMotion";
 import {
   countByStatus,
@@ -36,15 +33,12 @@ import {
 } from "@/features/marketing-orders/orderParts";
 import { fmtDateTime, fmtQty } from "@/lib/stock";
 import { cn } from "@/lib/utils";
-import { ClipboardCheck, Download, PackageCheck, RefreshCw, Scale, X } from "lucide-react";
-import { downloadPurchaseList } from "@/features/purchasing/purchasingUtils";
+import { ArrowRight, ClipboardCheck, RefreshCw, X } from "lucide-react";
 import { MotionConfig, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import DecisionModal from "./DecisionModal";
-import OrderPlanModal from "./OrderPlanModal";
-import ReviseQuantityModal, { canRevise } from "./ReviseQuantityModal";
-import OpsTimelineTab from "./OpsTimelineTab";
+import { OPS_TABS } from "./FeasibilityTab";
+import OpsOrderDrawer from "./OpsOrderDrawer";
 import {
   ApprovalPageCard,
   OPS_ALL,
@@ -54,7 +48,7 @@ import {
   isDecided,
   isOpsStatus,
 } from "./opsKit";
-import { approveLabel, canApprove, planTotals, planVerdict } from "./approvalParts";
+import { canApprove, planTotals, planVerdict } from "./approvalParts";
 import {
   useGetOrderApprovalsQuery,
   useGetOrderPlanQuery,
@@ -67,8 +61,10 @@ const QUEUE = "PENDING_APPROVAL";
 /*
   Operations Admin: every order that came in (e.g. from the marketing team) and whether it is approved.
   "al" is the work queue, so the page opens on it. Each waiting order shows right away how much
-  of it can be built from the stock on the shelf. "Check stock & send" opens the plan: the producible list goes to
-  the Production Manager and the list of missing components goes to the Purchase Manager. Reject needs a reason.
+  of it can be built from the stock on the shelf. Clicking an order, or its "Review order" button, always opens the
+  same drawer (OpsOrderDrawer): the details, the stock check, and the three decisions Reject · Revise quantity ·
+  Check stock & send. The producible list goes to the Production Manager, the missing components to the Purchase
+  Manager. Reject needs a reason.
 
   Same layout as the Marketing Orders page: the orders are a table while the list box is 1024px wide or more,
   otherwise each order is a card (container query, so it follows the room the list really has next to the sidebar).
@@ -77,7 +73,7 @@ const QUEUE = "PENDING_APPROVAL";
   The page state lives in the URL, so a link (or a click on a dashboard figure) opens it already set up:
     ?status=PENDING_APPROVAL | APPROVED | REJECTED | ALL   filter (no status = the waiting queue)
     ?q=text                                               search
-    ?order=12                                             that order's popup
+    ?order=12&tab=feasibility                             that order's drawer (and tab)
 */
 
 /* Table-only cells, worded so each one reads on its own (the card view keeps its own wording). */
@@ -128,13 +124,13 @@ function FeasibilityCell({ orderId }) {
     <div className="space-y-0.5 text-xs leading-snug">
       <Badge variant={verdict.variant}>{verdict.label}</Badge>
       <p>
-        <span className="text-muted-foreground">Feasible: </span>
+        <span className="text-muted-foreground">Can make now: </span>
         <b className="font-semibold tabular-nums">{plural(canMake, "unit")}</b>
       </p>
       {shortages.length > 0 && (
         <p className="flex flex-wrap items-center gap-x-2">
           <span>
-            <span className="text-muted-foreground">Shortage: </span>
+            <span className="text-muted-foreground">To buy: </span>
             <b className="font-semibold tabular-nums text-destructive">
               {plural(shortages.length, "component")}
             </b>
@@ -148,7 +144,7 @@ function FeasibilityCell({ orderId }) {
             }}
             className="font-semibold text-primary outline-none hover:underline focus-visible:underline"
           >
-            {open ? "Hide Details" : "View Details"}
+            {open ? "Hide list" : "Show list"}
           </button>
         </p>
       )}
@@ -163,7 +159,7 @@ function FeasibilityCell({ orderId }) {
               </b>
               <span className="text-muted-foreground">
                 {" "}
-                (need {fmtQty(c.required)}, free {fmtQty(c.available)})
+                (required {fmtQty(c.required)}, in stock {fmtQty(c.available)})
               </span>
             </li>
           ))}
@@ -178,7 +174,7 @@ function ReviewCell({ order, actions }) {
     return (
       <div className="space-y-1.5">
         <span className="block text-xs font-semibold text-muted-foreground">
-          Awaiting review
+          Waiting for your decision
         </span>
         {actions}
       </div>
@@ -204,7 +200,7 @@ function ReviewCell({ order, actions }) {
       />
       {approved && (
         <p className="text-xs text-muted-foreground">
-          Approved:{" "}
+          Ordered:{" "}
           <b className="font-semibold tabular-nums text-foreground">
             {fmtQty(requested)}
           </b>{" "}
@@ -222,192 +218,6 @@ function ReviewCell({ order, actions }) {
           {approved ? "Remarks" : "Reason"}: {order.approval_remarks}
         </p>
       )}
-    </div>
-  );
-}
-
-export const OPS_TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "items", label: "Products" },
-  { id: "feasibility", label: "Feasibility" },
-  { id: "timeline", label: "Timeline" },
-];
-
-/* "Component Feasibility" tab: the live stock check while the order waits; what was handed over once it is decided. */
-export function FeasibilityTab({ order }) {
-  const waiting = canApprove(order);
-  const { data: plan, isLoading, error } = useGetOrderPlanQuery(order.id, { skip: !waiting });
-  const names = Object.fromEntries(order.items.map((i) => [i.product_id, i.name]));
-  const Heading = ({ children }) => <h3 className="mb-2 text-sm font-semibold">{children}</h3>;
-  const Note = ({ children }) => (
-    <p className="rounded-xl border border-dashed px-3.5 py-3 text-sm text-muted-foreground">{children}</p>
-  );
-
-  if (!waiting) {
-    const prod = order.production_request;
-    const purch = order.purchase_request;
-    return (
-      <div className="space-y-5">
-        <section>
-          <Heading>Sent to Production</Heading>
-          {prod?.items?.length ? (
-            <ul className="space-y-1 rounded-xl border p-3 text-sm">
-              {prod.items.map((i) => (
-                <li key={i.product_id} className="flex justify-between gap-3">
-                  <span>{i.name}</span>
-                  <b className="tabular-nums">{fmtQty(i.quantity)}</b>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <Note>Nothing was sent to Production.</Note>
-          )}
-        </section>
-        <section>
-          {purch?.items?.length ? (
-            <Accordion
-              headerClassName="rounded-lg"
-              panelClassName="pt-2"
-              actions={
-                <MktBtn size="sm" aria-label="Download components sent to Purchase (Excel)" onClick={() => downloadPurchaseList(order, purch.items)}>
-                  <Download /> Excel
-                </MktBtn>
-              }
-              header={(open) => (
-                <>
-                  <h3 className="text-sm font-semibold">Components sent to Purchase</h3>
-                  {!open && (
-                    <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-                      {purch.items.slice(0, 3).map((i) => i.name).join(", ")}
-                      {purch.items.length > 3 && ` +${purch.items.length - 3} more`}
-                    </p>
-                  )}
-                </>
-              )}
-            >
-              <ul className="space-y-1 rounded-xl border p-3 text-sm">
-                {purch.items.map((i) => (
-                  <li key={i.component_id} className="flex justify-between gap-3">
-                    <span>
-                      {i.name}
-                      {i.sku ? <span className="text-muted-foreground"> · {i.sku}</span> : null}
-                    </span>
-                    <b className="tabular-nums">
-                      {fmtQty(i.quantity)}
-                      {i.unit ? ` ${i.unit}` : ""}
-                    </b>
-                  </li>
-                ))}
-              </ul>
-            </Accordion>
-          ) : (
-            <>
-              <Heading>Components sent to Purchase</Heading>
-              <Note>No components were sent to Purchase.</Note>
-            </>
-          )}
-        </section>
-      </div>
-    );
-  }
-
-  if (isLoading) return <Note>Checking stock...</Note>;
-  if (error || !plan) return <Note>Stock check unavailable.</Note>;
-  const verdict = planVerdict(plan);
-  const { ordered, canMake, remaining } = planTotals(plan);
-  const shortages = plan.shortages || [];
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <Badge variant={verdict.variant}>{verdict.label}</Badge>
-        <span>
-          Requested <b className="tabular-nums">{fmtQty(ordered)}</b>
-        </span>
-        <span>
-          Feasible <b className="tabular-nums text-primary">{fmtQty(canMake)}</b>
-        </span>
-        <span>
-          Short{" "}
-          <b className={cn("tabular-nums", remaining > 0 && "text-destructive")}>{fmtQty(remaining)}</b>
-        </span>
-      </div>
-
-      <section>
-        <Heading>By product</Heading>
-        <div className="overflow-hidden rounded-xl border">
-          <Table data-cards="off">
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="px-3! h-8!">Product</TableHead>
-                <TableHead className="px-3! h-8! text-end">Requested</TableHead>
-                <TableHead className="px-3! h-8! text-end">Feasible</TableHead>
-                <TableHead className="px-3! h-8! text-end">Short</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(plan.lines || []).map((l) => (
-                <TableRow key={l.product_id}>
-                  <TableCell className="px-3! py-1! whitespace-normal">
-                    {names[l.product_id] || `Product #${l.product_id}`}
-                  </TableCell>
-                  <TableCell className="px-3! py-1! text-end tabular-nums">{fmtQty(l.ordered)}</TableCell>
-                  <TableCell className={cn("px-3! py-1! text-end font-semibold tabular-nums", l.can_make > 0 ? "text-primary" : "text-destructive")}>
-                    {fmtQty(l.can_make)}
-                  </TableCell>
-                  <TableCell className={cn("px-3! py-1! text-end tabular-nums", Number(l.remaining) > 0 && "font-semibold text-destructive")}>
-                    {fmtQty(l.remaining)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        {plan.missing_bom?.length > 0 && (
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            Bill of materials missing for {plural(plan.missing_bom.length, "product")}.
-          </p>
-        )}
-      </section>
-
-      <section>
-        <Heading>Components short</Heading>
-        {shortages.length === 0 ? (
-          <Note>
-            {plan.missing_bom?.length
-              ? "No shortage can be worked out until the BOM is completed."
-              : "Nothing to buy: every component is in stock."}
-          </Note>
-        ) : (
-          <div className="overflow-hidden rounded-xl border">
-            <Table data-cards="off">
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="px-3! h-8!">Component</TableHead>
-                  <TableHead className="px-3! h-8! text-end">Needed</TableHead>
-                  <TableHead className="px-3! h-8! text-end">Free</TableHead>
-                  <TableHead className="px-3! h-8! text-end">Short</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {shortages.map((c) => (
-                  <TableRow key={c.component_id}>
-                    <TableCell className="px-3! py-1! whitespace-normal">
-                      {c.name}
-                      {c.sku ? <span className="block text-xs text-muted-foreground">{c.sku}</span> : null}
-                    </TableCell>
-                    <TableCell className="px-3! py-1! text-end tabular-nums">{fmtQty(c.required)}</TableCell>
-                    <TableCell className="px-3! py-1! text-end tabular-nums">{fmtQty(c.available)}</TableCell>
-                    <TableCell className="px-3! py-1! text-end font-semibold tabular-nums text-destructive">
-                      {fmtQty(c.shortage)}
-                      {c.unit ? ` ${c.unit}` : ""}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </section>
     </div>
   );
 }
@@ -463,17 +273,7 @@ export default function OrderApprovals() {
     error,
     refetch,
   } = useGetOrderApprovalsQuery();
-  const [deciding, setDeciding] = useState(null); // { order, mode } (reject)
-  const [planning, setPlanning] = useState(null); // the order whose stock check is open
-  const [revising, setRevising] = useState(null); // the order whose quantity is being reduced
-
   const counts = useMemo(() => countByStatus(data), [data]);
-  const selected = useMemo(
-    () =>
-      orderId ? (data.find((o) => String(o.id) === orderId) ?? null) : null,
-    [data, orderId],
-  );
-
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...data]
@@ -495,8 +295,9 @@ export default function OrderApprovals() {
   const filtered = !!(status || query.trim());
   const clearFilters = () => patch({ status: "ALL", q: null });
   const openOrder = (o) => patch({ order: o.id });
+  // "Review order": the same drawer, straight on the stock check, where all three decisions are
+  const reviewOrder = (o) => patch({ order: o.id, tab: "feasibility" });
   const closeOrder = () => patch({ order: null, tab: null }, true);
-  const askReject = (order) => setDeciding({ order, mode: "reject" });
 
   // Same list feeds the tiles (md and up) and the chips (phones).
   const filters = [
@@ -521,7 +322,7 @@ export default function OrderApprovals() {
       <MktHero
         eyebrow="Operations"
         title="Incoming Orders"
-        description="See what can be built from current stock, send the lists to Production and Purchase, or reject the order."
+        description="Open an order to see what the current stock can build, then send it on, revise its quantity, or reject it."
       >
         <HeroButton
           variant="glass"
@@ -683,8 +484,7 @@ export default function OrderApprovals() {
                 order={o}
                 canAct={editable}
                 onOpen={openOrder}
-                onReject={askReject}
-                onPlan={setPlanning}
+                onReview={reviewOrder}
               />
             ))}
           </motion.div>
@@ -694,17 +494,16 @@ export default function OrderApprovals() {
             <Table data-cards="off">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="h-8! px-3!">Order details</TableHead>
-                  <TableHead className="h-8! px-3!">Requested products</TableHead>
-                  <TableHead className="h-8! px-3!">Approval status</TableHead>
-                  <TableHead className="h-8! px-3!">Production feasibility</TableHead>
-                  <TableHead className="h-8! px-3!">Review &amp; actions</TableHead>
+                  <TableHead className="h-8! px-3!">Order</TableHead>
+                  <TableHead className="h-8! px-3!">Products</TableHead>
+                  <TableHead className="h-8! px-3!">Status</TableHead>
+                  <TableHead className="h-8! px-3!">Stock check</TableHead>
+                  <TableHead className="h-8! px-3!">Decision</TableHead>
                 </TableRow>
               </TableHeader>
               {/* keyed by the filter so the rows glide in again whenever the filter changes */}
               <TableBody key={status ?? "all"}>
                 {shown.map((o, i) => {
-                  const pending = o.approval_status === QUEUE;
                   const approvable = canApprove(o); // waiting, or partly approved and open for the rest
                   return (
                     <TableRow
@@ -747,7 +546,7 @@ export default function OrderApprovals() {
                         {approvable ? (
                           <FeasibilityCell orderId={o.id} />
                         ) : (
-                          <span className="text-muted-foreground">Not required</span>
+                          <span className="text-muted-foreground">Already decided</span>
                         )}
                       </TableCell>
                       <TableCell className="px-3! py-1! align-top! min-w-60">
@@ -755,30 +554,16 @@ export default function OrderApprovals() {
                           order={o}
                           actions={
                             editable && approvable ? (
-                              <div className="flex items-center gap-2">
-                                {pending && (
-                                  <MktBtn
-                                    variant="danger"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      askReject(o);
-                                    }}
-                                    aria-label={`Reject ${o.order_number}`}
-                                  >
-                                    <X /> Reject
-                                  </MktBtn>
-                                )}
-                                <MktBtn
-                                  variant="primary"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPlanning(o);
-                                  }}
-                                  aria-label={`${approveLabel(o)} ${o.order_number}`}
-                                >
-                                  <PackageCheck /> {approveLabel(o)}
-                                </MktBtn>
-                              </div>
+                              <MktBtn
+                                variant="primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  reviewOrder(o);
+                                }}
+                                aria-label={`Review ${o.order_number}`}
+                              >
+                                Review order <ArrowRight />
+                              </MktBtn>
                             ) : null
                           }
                         />
@@ -793,49 +578,13 @@ export default function OrderApprovals() {
       )}
       </div>
 
-      {/* right-side details drawer (same one the Marketing page uses); hidden while a decision popup is open.
-          Its Reject / Check stock buttons stay disabled while the list is refetching, so right after a decision
-          the drawer cannot be used again on the old (still "waiting") copy of the order. */}
-      <OrderDrawer
-        order={selected && !deciding && !planning && !revising ? selected : null}
+      {/* the one order drawer (also used by the dashboard): details, stock check and the three decisions */}
+      <OpsOrderDrawer
+        orderId={orderId}
         tab={tab}
         onTab={(t) => patch({ tab: t === "overview" ? null : t }, true)}
         onClose={closeOrder}
-        tabs={OPS_TABS}
-        tabContent={selected ? { feasibility: <FeasibilityTab order={selected} />, timeline: <OpsTimelineTab order={selected} /> } : undefined}
-        actions={
-          selected && editable && canApprove(selected) ? (
-            <>
-              {selected.approval_status === QUEUE && (
-                <MktBtn variant="danger" disabled={isFetching} onClick={() => askReject(selected)}>
-                  <X /> Reject
-                </MktBtn>
-              )}
-              {canRevise(selected) && (
-                <MktBtn disabled={isFetching} onClick={() => setRevising(selected)}>
-                  <Scale /> Revise quantity
-                </MktBtn>
-              )}
-              <MktBtn variant="primary" disabled={isFetching} onClick={() => setPlanning(selected)}>
-                <PackageCheck /> {approveLabel(selected)}
-              </MktBtn>
-            </>
-          ) : null
-        }
       />
-      {deciding && (
-        <DecisionModal
-          order={deciding.order}
-          mode={deciding.mode}
-          onClose={() => setDeciding(null)}
-        />
-      )}
-      {planning && (
-        <OrderPlanModal order={planning} onClose={() => setPlanning(null)} />
-      )}
-      {revising && (
-        <ReviseQuantityModal order={revising} onClose={() => setRevising(null)} />
-      )}
     </MotionConfig>
   );
 }

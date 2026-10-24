@@ -14,6 +14,7 @@ import { useIdempotentSubmit } from "@/lib/useIdempotentSubmit"
 import { cn } from "@/lib/utils"
 import { planTotals, planVerdict } from "./approvalParts"
 import { BomBlockModal } from "./BomWarning"
+import { DecisionButtons } from "./DecisionButtons"
 import { useDispatchOrderMutation, useGetOrderPlanQuery } from "./orderApprovalsApi"
 
 /* Banner colours by plan verdict: the same stage colours the Marketing Manager sees (emerald / amber / rose / slate). */
@@ -53,8 +54,9 @@ function Section({ icon: Icon, title, hint, children }) {
     - components still short -> list for the Purchase Manager
   "Approve & send lists" approves the order and sends both lists in one step. The backend checks the plan
   again at that moment; if stock changed in between it answers 409 STALE_PLAN and the new plan is shown.
+  The other two decisions (Reject, Revise quantity) are in the footer too, so the admin never has to go back.
 */
-export default function OrderPlanModal({ order, onClose }) {
+export default function OrderPlanModal({ order, onClose, onSwitch }) {
   const toast = useToast()
   const { data: plan, isLoading, isFetching, error, refetch } = useGetOrderPlanQuery(order.id)
   const [dispatch, { isLoading: sending }] = useDispatchOrderMutation()
@@ -114,10 +116,11 @@ export default function OrderPlanModal({ order, onClose }) {
       busy={sending}
       size="xl"
       title={`${order.order_number} · stock check`}
-      description="See what the order needs, what the stock covers now and what is short. Approving approves the whole order; to refuse it, close this window and reject it from the list."
+      description="See what the order needs, what the stock covers now and what is short. Approving sends the whole order on. To make only part of it now, use Revise quantity."
       footer={
         <>
-          <MktBtn onClick={onClose} disabled={sending}>Close</MktBtn>
+          <MktBtn onClick={onClose} disabled={sending} className="sm:me-auto">Close</MktBtn>
+          {onSwitch && <DecisionButtons order={order} current="plan" disabled={sending} onDecide={onSwitch} />}
           <MktBtn type="submit" variant="primary" disabled={sending || isLoading || isFetching || !plan || nothingToSend}>
             {sending && <Loader2 className="animate-spin" />}
             Approve order & send lists
@@ -161,7 +164,7 @@ export default function OrderPlanModal({ order, onClose }) {
               </div>
             </motion.div>
 
-            <Section icon={Factory} title="Needed vs available" hint="What each product needs, how many units the stock can cover now (sent to the Production Manager) and how many are short.">
+            <Section icon={Factory} title="What the stock can build" hint="Per product: units ordered, units the stock can build now (sent to the Production Manager) and units short.">
               <div className="overflow-x-auto rounded-2xl border">
                 <Table>
                   <TableHeader>
@@ -169,7 +172,7 @@ export default function OrderPlanModal({ order, onClose }) {
                       <TableHead>Product</TableHead>
                       <TableHead className="text-end">Ordered</TableHead>
                       <TableHead className="text-end">Can make now</TableHead>
-                      <TableHead className="text-end">Short on stock</TableHead>
+                      <TableHead className="text-end">Short</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -191,8 +194,8 @@ export default function OrderPlanModal({ order, onClose }) {
 
             <Section
               icon={ShoppingCart}
-              title="Components short: goes to the Purchase Manager"
-              hint="Needed for the whole order, minus the free stock, for the units that cannot be made now."
+              title="Components to buy: sent to the Purchase Manager"
+              hint="Required for the whole order, minus what is in stock."
             >
               {shortages.length === 0 ? (
                 <p className="rounded-xl border bg-muted/30 px-3 py-4 text-center text-sm text-muted-foreground">
@@ -204,8 +207,8 @@ export default function OrderPlanModal({ order, onClose }) {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Component</TableHead>
-                        <TableHead className="text-end">Needed</TableHead>
-                        <TableHead className="text-end">Free stock</TableHead>
+                        <TableHead className="text-end">Required</TableHead>
+                        <TableHead className="text-end">In stock</TableHead>
                         <TableHead className="text-end">To buy</TableHead>
                       </TableRow>
                     </TableHeader>
