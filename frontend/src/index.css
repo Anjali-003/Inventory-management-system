@@ -8,7 +8,7 @@
 
 /* Landing page tokens: gives Tailwind classes like bg-lp-green, text-lp-ink, font-lp-head */
 @theme {
-  --font-lp-head: "Bricolage Grotesque", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-lp-head: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --color-lp-ink: #10211c;
   --color-lp-text: #3d4b47;
   --color-lp-muted: #66736f;
