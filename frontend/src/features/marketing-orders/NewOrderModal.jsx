@@ -130,7 +130,7 @@ export default function NewOrderModal({ onClose }) {
                 >
                   {/* the remove button lives in the card's own header, so it never has to line up with a field label */}
                   <div className="mb-3 flex items-center gap-2">
-                    <span className="grid size-6 place-items-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 text-[11px] font-bold text-white">{i + 1}</span>
+                    <span className="grid size-6 place-items-center rounded-full bg-gradient-to-br from-emerald-700 to-teal-800 text-[11px] font-bold text-white">{i + 1}</span>
                     <span className="min-w-0 flex-1 truncate text-xs font-semibold text-muted-foreground">Product {i + 1}</span>
                     <MktBtn variant="danger" size="icon" aria-label={`Remove product ${i + 1}`} disabled={rows.length === 1} onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>
                       <Trash2 />

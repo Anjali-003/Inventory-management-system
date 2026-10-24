@@ -42,7 +42,7 @@ const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity
 function OrderCard({ order, onOpen }) {
   const items = order.items ?? []
   return (
-    <motion.li variants={rise} className="relative rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]">
+    <motion.li variants={rise} className="relative rounded-xl border border-[#E3E6EB] bg-card transition-colors duration-200 hover:border-[#CDD2DA]">
       <button type="button" onClick={onOpen} aria-label={`Open ${order.order_number}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />
       <div className="pointer-events-none relative p-4">
         <div className="flex items-start justify-between gap-3">

@@ -50,7 +50,7 @@ export default function IssueComponentsPanel() {
     <>
       <Card className="mb-4 overflow-hidden">
         <div className="flex items-center gap-3 border-b px-5 py-4">
-          <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${pending.length ? "bg-cf-violet-soft text-cf-violet" : "bg-cf-green-soft text-primary"}`}>
+          <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${pending.length ? "bg-cf-amber-soft text-warning" : "bg-cf-green-soft text-success"}`}>
             {pending.length ? <PackageOpen className="size-5" /> : <CheckCircle2 className="size-5" />}
           </span>
           <div className="min-w-0 flex-1">
@@ -60,7 +60,7 @@ export default function IssueComponentsPanel() {
             </p>
           </div>
           {pending.length > 0 && (
-            <span className="shrink-0 rounded-full bg-cf-violet-soft px-2.5 py-1 text-xs font-bold text-cf-violet tabular-nums">
+            <span className="shrink-0 rounded-full bg-cf-amber-soft px-2.5 py-1 text-xs font-bold text-warning tabular-nums">
               {pending.length} pending
             </span>
           )}
@@ -81,7 +81,7 @@ export default function IssueComponentsPanel() {
               {history.map((n) => (
                 <li key={n.id}>
                   <button type="button" onClick={() => show(n)} className="flex w-full items-center gap-2.5 px-5 py-2 text-left text-xs outline-none transition-colors hover:bg-muted focus-visible:bg-muted">
-                    <CheckCircle2 className="size-3.5 shrink-0 text-primary" />
+                    <CheckCircle2 className="size-3.5 shrink-0 text-success" />
                     <span className="min-w-0 flex-1 truncate">
                       <span className="font-semibold text-foreground">{n.order_number}</span>
                       <span className="text-muted-foreground"> · {n.items.length} component{n.items.length === 1 ? "" : "s"}{n.done_by_name ? ` · by ${n.done_by_name}` : ""}</span>

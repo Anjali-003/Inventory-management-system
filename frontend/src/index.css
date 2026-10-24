@@ -9,18 +9,18 @@
 /* Landing page tokens: gives Tailwind classes like bg-lp-green, text-lp-ink, font-lp-head */
 @theme {
   --font-lp-head: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
-  --color-lp-ink: #10211c;
-  --color-lp-text: #3d4b47;
-  --color-lp-muted: #66736f;
-  --color-lp-line: #dfe7e4;
-  --color-lp-rule: #c9d8d2;
-  --color-lp-bg: #f7f9f8;
-  --color-lp-tint: #eaf1ee;
-  --color-lp-soft: #f3f9f7;
-  --color-lp-portal-on: #9fcdbf;
-  --color-lp-green: #0f6d55;
-  --color-lp-green-dark: #0a5945;
-  --color-lp-deep: #0c2a22;
+  --color-lp-ink: #171A21;
+  --color-lp-text: #3E4352;
+  --color-lp-muted: #5A6070;
+  --color-lp-line: #E3E6EB;
+  --color-lp-rule: #D3D8DF;
+  --color-lp-bg: #F0F2F5;
+  --color-lp-tint: #F1EAFF;
+  --color-lp-soft: #F8F4FF;
+  --color-lp-portal-on: #C4A6FF;
+  --color-lp-green: #7A35FF;
+  --color-lp-green-dark: #6424E3;
+  --color-lp-deep: #2A1260;
 }
 
 
@@ -75,38 +75,38 @@
   --shadow-cf: 0 1px 2px rgba(22, 34, 30, 0.04), 0 8px 24px rgba(22, 34, 30, 0.035);
 }
 
-/* CircuitFlow palette (green, soft grey, DM Sans) is the theme for the whole app.
+/* Theme: Signal Violet #7A35FF (brand) on Mist Gray #F0F2F5. --success stays green: it means "done", not brand.
    The Inventory History page set the look; every page now shares these tokens. */
 :root {
-  --background: #f5f7f6;
-  --foreground: #18201f;
+  --background: #F0F2F5;
+  --foreground: #171A21;
   --card: #ffffff;
-  --card-foreground: #18201f;
+  --card-foreground: #171A21;
   --popover: #ffffff;
-  --popover-foreground: #18201f;
-  --primary: #0f6d55;
+  --popover-foreground: #171A21;
+  --primary: #7A35FF;
   --primary-foreground: #ffffff;
-  --secondary: #f5f7f6;
-  --secondary-foreground: #18201f;
-  --muted: #f5f7f6;
-  --muted-foreground: #697572;
-  --accent: #e8f3ef;
-  --accent-foreground: #0f6d55;
+  --secondary: #F0F2F5;
+  --secondary-foreground: #171A21;
+  --muted: #F0F2F5;
+  --muted-foreground: #5A6070;
+  --accent: #F1EAFF;
+  --accent-foreground: #5B21D6;
   --destructive: #c33b3b;
   --success: #0f6d55;
   --warning: #a85b16;
-  --border: #e6ebe8;
-  --input: #d6ddda;
-  --ring: #0f6d55;
+  --border: #E3E6EB;
+  --input: #D3D8DF;
+  --ring: #7A35FF;
   --radius: 0.375rem;
   --sidebar: #ffffff;
-  --sidebar-foreground: #4b5855;
-  --sidebar-primary: #0f6d55;
+  --sidebar-foreground: #474D5C;
+  --sidebar-primary: #7A35FF;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e8f3ef;
-  --sidebar-accent-foreground: #0f6d55;
-  --sidebar-border: #e6ebe8;
-  --sidebar-ring: #0f6d55;
+  --sidebar-accent: #F1EAFF;
+  --sidebar-accent-foreground: #5B21D6;
+  --sidebar-border: #E3E6EB;
+  --sidebar-ring: #7A35FF;
 }
 
 @layer base {
@@ -132,39 +132,39 @@
   --cf-violet: #7659c8;
   --cf-violet-soft: #f0ecfb;
   --cf-green-soft: #e8f3ef;
-  --cf-green-hover: #0a5945;
+  --cf-green-hover: #6424E3;
   --cf-red-soft: #fceded;
   --cf-amber-soft: #fff2df;
-  --cf-faint: #98a29f;
-  --cf-line-strong: #d6ddda;
-  --cf-head: #fbfcfb;
+  --cf-faint: #646A78;
+  --cf-line-strong: #D3D8DF;
+  --cf-head: #F8F9FB;
 }
 .cf-scope {
-  --background: #f5f7f6;
-  --foreground: #18201f;
+  --background: #F0F2F5;
+  --foreground: #171A21;
   --card: #ffffff;
-  --card-foreground: #18201f;
+  --card-foreground: #171A21;
   --popover: #ffffff;
-  --popover-foreground: #18201f;
-  --primary: #0f6d55;
+  --popover-foreground: #171A21;
+  --primary: #7A35FF;
   --primary-foreground: #ffffff;
-  --secondary: #f5f7f6;
-  --secondary-foreground: #18201f;
-  --muted: #f5f7f6;
-  --muted-foreground: #697572;
-  --accent: #e8f3ef;
-  --accent-foreground: #0f6d55;
+  --secondary: #F0F2F5;
+  --secondary-foreground: #171A21;
+  --muted: #F0F2F5;
+  --muted-foreground: #5A6070;
+  --accent: #F1EAFF;
+  --accent-foreground: #5B21D6;
   --destructive: #c33b3b;
   --success: #0f6d55;
   --warning: #a85b16;
-  --border: #e6ebe8;
-  --input: #d6ddda;
-  --ring: #0f6d55;
+  --border: #E3E6EB;
+  --input: #D3D8DF;
+  --ring: #7A35FF;
   font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
   font-feature-settings: normal;
   color: var(--foreground);
 }
-.cf-scope select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23697572' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 0.7rem center; }
+.cf-scope select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235A6070' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 0.7rem center; }
 /* the faint horizontal guide lines behind the month bars (same trick as CircuitFlow's chart) */
 .cf-guides { background: repeating-linear-gradient(to bottom, var(--border) 0 1px, transparent 1px 36px); }
 
@@ -183,7 +183,7 @@
     background: var(--card);
     padding: 32px;
     border-radius: 16px;
-    border: 1px solid #dce5e0;
+    border: 1px solid #E3E6EB;
     box-shadow: 0 1px 2px rgba(22, 34, 30, 0.035), 0 18px 44px rgba(22, 34, 30, 0.08);
 }
 
@@ -227,7 +227,7 @@
 .login-card input:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(15, 109, 85, 0.15);
+    box-shadow: 0 0 0 3px rgba(122, 53, 255, 0.15);
 }
 
 .login-card>form> button {
@@ -239,13 +239,13 @@
     color: var(--primary-foreground);
     font-size: 14px;
     font-weight: 600;
-    box-shadow: 0 1px 2px rgba(15, 109, 85, 0.25);
+    box-shadow: 0 1px 2px rgba(122, 53, 255, 0.25);
     transition: background-color 0.15s;
     cursor: pointer;
 }
 
 .login-card>form> button:hover:not(:disabled) {
-    background: #0a5945;
+    background: #6424E3;
 }
 
 .login-card>form> button:disabled {
@@ -340,11 +340,11 @@
 
   table[data-rt] > tbody > tr {
     display: block; min-width: 0; padding: 0.25rem 1rem;
-    border: 1px solid #dce5e0; border-radius: 0.75rem;
+    border: 1px solid #E3E6EB; border-radius: 0.75rem;
     background: var(--card); box-shadow: none;
     transition: border-color 0.2s;
   }
-  table[data-rt] > tbody > tr:hover { background: var(--card); border-color: #c3d1ca; }
+  table[data-rt] > tbody > tr:hover { background: var(--card); border-color: #CDD2DA; }
 
   table[data-rt] > tbody > tr > td {
     display: flow-root; width: auto; min-width: 0; max-width: none; height: auto;

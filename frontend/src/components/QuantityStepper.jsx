@@ -28,7 +28,7 @@ export default function QuantityStepper({
   }
 
   return (
-    <section className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/80 p-3 sm:p-4">
+    <section className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50/80 via-white to-violet-50/80 p-3 sm:p-4">
       <div className="space-y-1">
         <label htmlFor={id} className="block text-sm font-bold leading-snug text-slate-950 sm:text-base">
           {label}
@@ -41,7 +41,7 @@ export default function QuantityStepper({
           type="button"
           variant="outline"
           size="icon-lg"
-          className="size-10 rounded-lg border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-100 sm:size-11"
+          className="size-10 rounded-lg border-violet-200 bg-white text-violet-800 hover:bg-violet-50 sm:size-11"
           aria-label={`Decrease ${label.toLowerCase()}`}
           disabled={!canDecrease}
           onClick={() => step(-1)}
@@ -59,7 +59,7 @@ export default function QuantityStepper({
           value={value}
           disabled={disabled || !validBounds}
           onChange={(event) => onChange?.(event.target.value)}
-          className="h-11 w-full min-w-0 rounded-lg border border-emerald-200 bg-white px-2 text-center text-2xl font-bold tabular-nums text-slate-950 outline-none transition focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/15 disabled:bg-slate-100 disabled:text-slate-400 sm:h-12 sm:text-3xl"
+          className="h-11 w-full min-w-0 rounded-lg border border-violet-200 bg-white px-2 text-center text-2xl font-bold tabular-nums text-slate-950 outline-none transition focus:border-violet-600 focus:ring-4 focus:ring-violet-600/15 disabled:bg-slate-100 disabled:text-slate-400 sm:h-12 sm:text-3xl"
           aria-describedby={`${id}-limit`}
         />
 
@@ -67,7 +67,7 @@ export default function QuantityStepper({
           type="button"
           variant="outline"
           size="icon-lg"
-          className="size-10 rounded-lg border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-100 sm:size-11"
+          className="size-10 rounded-lg border-violet-200 bg-white text-violet-800 hover:bg-violet-50 sm:size-11"
           aria-label={`Increase ${label.toLowerCase()}`}
           disabled={!canIncrease}
           onClick={() => step(1)}
@@ -77,7 +77,7 @@ export default function QuantityStepper({
       </div>
 
       <p id={`${id}-limit`} className="mt-2 text-[11px] text-slate-600" aria-live="polite">
-        <span className="font-bold text-emerald-900">{hasValue && Number.isInteger(parsed) ? parsed : 0} {unitLabel}</span>
+        <span className="font-bold text-violet-800">{hasValue && Number.isInteger(parsed) ? parsed : 0} {unitLabel}</span>
         {validBounds ? ` selected · maximum ${maximum}` : " · no quantity currently available"}
       </p>
     </section>

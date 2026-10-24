@@ -120,11 +120,11 @@ function OverviewTab({ order }) {
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">{stage.status === "TO_ORDER" ? `${plural(toOrder, "component")} to order` : stage.label}</p>
-            <p className="mt-0.5 text-xs text-white/80">{stage.hint}</p>
+            <p className="mt-0.5 text-xs text-white/95">{stage.hint}</p>
           </div>
           <div className="shrink-0 text-end">
             <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(units)}</p>
-            <p className="mt-1 text-[11px] text-white/80">units</p>
+            <p className="mt-1 text-[11px] text-white/95">units</p>
           </div>
         </div>
       </motion.div>
@@ -156,7 +156,7 @@ function PurchasesTab({ purchases, onOpenPurchase }) {
     <ul className="space-y-2">
       {purchases.map((p) => (
         <li key={p.id}>
-          <button type="button" onClick={() => onOpenPurchase(p)} className="flex w-full items-center justify-between gap-3 rounded-xl border bg-card px-3.5 py-3 text-left outline-none transition-colors hover:border-[#c3d1ca] focus-visible:ring-2 focus-visible:ring-ring/60">
+          <button type="button" onClick={() => onOpenPurchase(p)} className="flex w-full items-center justify-between gap-3 rounded-xl border bg-card px-3.5 py-3 text-left outline-none transition-colors hover:border-[#CDD2DA] focus-visible:ring-2 focus-visible:ring-ring/60">
             <div className="min-w-0">
               <p className="break-all text-sm font-semibold tabular-nums">{p.po_number}</p>
               <p className="truncate text-xs text-muted-foreground">{p.supplier} · {plural(p.totals?.lines ?? p.items?.length ?? 0, "item")} · {fmtQty(p.totals?.ordered ?? 0)} ordered</p>
@@ -205,7 +205,7 @@ export default function ApprovedOrderDrawer({ order, purchases = [], canRaise, t
         <MktBtn className="sm:me-auto" onClick={() => downloadPurchaseList(order, lines)}><Download /> Excel</MktBtn>
       ) : null}
       actions={order && canRaise && toOrder > 0 ? (
-        <MktBtn variant="primary" onClick={() => navigate("/purchase", { state: { orderId: order.id } })}><ShoppingCart /> Place order ({toOrder})</MktBtn>
+        <MktBtn variant="primary" onClick={() => navigate("/purchase-requests")}><ShoppingCart /> Place order ({toOrder})</MktBtn>
       ) : null}
       tabContent={order ? {
         overview: <OverviewTab order={order} />,

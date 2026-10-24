@@ -51,10 +51,10 @@ export function MktHeader({ title, description, children }) {
 const BTN_BASE =
   "inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-xl font-bold outline-none transition-colors focus-visible:ring-4 focus-visible:ring-blue-600/40 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-5 [&_svg]:shrink-0"
 const BTN_VARIANT = {
-  primary: "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800",
+  primary: "bg-primary text-white shadow-sm hover:bg-[#6424E300",
   outline: "border-2 border-slate-400 bg-white text-slate-900 hover:bg-slate-100",
   danger: "border-2 border-red-600 bg-white text-red-700 hover:bg-red-50",
-  ghost: "text-emerald-800 hover:bg-emerald-50",
+  ghost: "text-[#5B21D6] hover:bg-accent",
 }
 const BTN_SIZE = { md: "h-12 px-5 text-base", sm: "h-10 px-4 text-base", icon: "size-11" }
 
@@ -150,7 +150,7 @@ export function MktEmpty({ icon: Icon, title, children }) {
   return (
     <div className="flex flex-col items-center px-6 py-16 text-center">
       {Icon && (
-        <span className="mb-5 grid size-16 place-items-center rounded-2xl bg-emerald-100 text-emerald-800">
+        <span className="mb-5 grid size-16 place-items-center rounded-2xl bg-accent text-[#5B21D6]">
           <Icon className="size-8" aria-hidden />
         </span>
       )}
@@ -184,7 +184,7 @@ export const MTh = ({ className, ...p }) => (
   <th className={cn("h-14 whitespace-nowrap px-5 text-left align-middle text-sm font-extrabold uppercase tracking-wide text-slate-800", className)} {...p} />
 )
 export const MTr = ({ className, ...p }) => (
-  <tr className={cn("animate-in fade-in border-t-2 border-slate-200 duration-300 first:border-t-0 hover:bg-emerald-50", className)} {...p} />
+  <tr className={cn("animate-in fade-in border-t-2 border-slate-200 duration-300 first:border-t-0 hover:bg-accent/60", className)} {...p} />
 )
 export const MTd = ({ className, ...p }) => <td className={cn("px-5 py-5 align-middle text-base text-slate-900", className)} {...p} />
 

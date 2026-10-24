@@ -12,11 +12,11 @@ const DOT = {
 
 // the colour of the selected chip on a phone, per tone
 const GRAD = {
-  success: "from-emerald-400 to-emerald-700",
-  warning: "from-amber-400 to-orange-500",
-  danger: "from-rose-400 to-red-600",
-  info: "from-sky-400 to-blue-600",
-  neutral: "from-slate-500 to-slate-700",
+  success: "from-emerald-700 to-emerald-800",
+  warning: "from-amber-700 to-orange-800",
+  danger: "from-rose-600 to-red-800",
+  info: "from-sky-700 to-blue-800",
+  neutral: "from-slate-600 to-slate-800",
 }
 
 // soft tinted look of the unselected chips on a phone (same as the Marketing Orders chips)
@@ -59,7 +59,7 @@ function StripGrid({ items, cols, layoutId }) {
       {items.map((it) => {
         const inner = (
           <>
-            {it.active && <motion.span layoutId={layoutId} className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-emerald-400 to-primary" />}
+            {it.active && <motion.span layoutId={layoutId} className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[#5B21D6] to-primary" />}
             <span className="flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
               <span className={cn("size-2 rounded-full", DOT[it.tone ?? "neutral"])} />
               {it.label}

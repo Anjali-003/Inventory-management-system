@@ -30,6 +30,7 @@ import { authService } from "@/features/auth/authService"
 import { baseApi } from "../api/baseApi";
 import { usePermissions } from "@/features/auth/usePermissions";
 import NotificationBell from "@/features/notifications/NotificationBell";
+import ProfileMenu from "@/features/auth/ProfileMenu";
 import { clearActiveRole, loginPathFor } from "@/lib/permissions";
 
 const GROUPS = [
@@ -126,6 +127,7 @@ const GROUPS = [
       { to: "/approved-orders", label: "Approved Orders", icon: ClipboardList, module: "approvedOrders" },
       // the incoming-goods flow, in order: buy -> inspect -> accept into stock
       { to: "/purchase", label: "Purchase", icon: ShoppingCart, module: "purchase" },
+      { to: "/purchase-requests", label: "Purchase Requests", icon: ClipboardList, module: "purchase" },
       { to: "/iqc", label: "IQC", icon: ClipboardCheck, module: "iqc" },
       { to: "/incoming-stock", label: "Incoming Stock", icon: Truck, module: "incomingStock" },
       { to: "/store-material-requests", label: "Material Allotment", icon: ClipboardList, module: "storeMaterialRequests" },
@@ -253,13 +255,6 @@ function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
 export default function Layout() {
   const { pathname } = useLocation();
   const { user, roleLabel } = usePermissions();
-  const initials =
-    (user?.name || "")
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0].toUpperCase())
-      .join("") || "--";
 
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -361,12 +356,7 @@ export default function Layout() {
             </div>
           )}
 
-          <span
-            title={user ? `${user.name} · ${roleLabel}` : undefined}
-            className="grid size-8 place-items-center rounded-full bg-cf-green-soft text-xs font-semibold text-primary ring-1 ring-primary/20"
-          >
-            {initials}
-          </span>
+          <ProfileMenu user={user} roleLabel={roleLabel} onLogout={handleLogout} />
         </div>
       </header>
 

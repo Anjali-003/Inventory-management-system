@@ -36,7 +36,7 @@ const STATUS_META = {
     shortLabel: "Pending",
     variant: "warning",
     icon: Clock3,
-    accent: "from-amber-500 to-orange-500",
+    accent: "from-amber-700 to-orange-800",
     soft: "bg-amber-50 text-amber-800 ring-amber-200",
     dot: "bg-amber-500",
   },
@@ -45,7 +45,7 @@ const STATUS_META = {
     shortLabel: "Partial",
     variant: "info",
     icon: PackageOpen,
-    accent: "from-blue-500 to-indigo-600",
+    accent: "from-blue-600 to-indigo-800",
     soft: "bg-blue-50 text-blue-800 ring-blue-200",
     dot: "bg-blue-500",
   },
@@ -54,7 +54,7 @@ const STATUS_META = {
     shortLabel: "Complete",
     variant: "success",
     icon: BadgeCheck,
-    accent: "from-emerald-500 to-teal-700",
+    accent: "from-emerald-700 to-teal-800",
     soft: "bg-emerald-50 text-emerald-800 ring-emerald-200",
     dot: "bg-emerald-500",
   },
@@ -106,7 +106,7 @@ function RequestProgress({ request, compact = false }) {
         aria-valuenow={progress}
       >
         <div
-          className={`h-full rounded-full bg-gradient-to-r transition-[width] duration-300 ${outstandingLines ? "from-emerald-500 to-teal-600" : "from-emerald-500 to-teal-700"}`}
+          className={`h-full rounded-full bg-gradient-to-r transition-[width] duration-300 ${outstandingLines ? "from-emerald-700 to-teal-800" : "from-emerald-700 to-teal-800"}`}
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -133,7 +133,7 @@ function RequestCard({ request, onView, onAllot }) {
   const extraCount = Math.max(0, items.length - names.length)
 
   return (
-    <Card className="group relative min-w-0 overflow-hidden border-[#dce5e0] bg-white shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
+    <Card className="group relative min-w-0 overflow-hidden border-[#E3E6EB] bg-white shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
       <div className={`h-1 bg-gradient-to-r ${meta.accent}`} />
       <CardContent className="min-w-0 space-y-4 p-4 sm:p-5">
         <div className="flex min-w-0 items-start gap-3">
@@ -217,7 +217,7 @@ function RequestCard({ request, onView, onAllot }) {
             <Eye className="size-4" /> View list
           </Button>
           {canIssue ? (
-            <Button type="button" size="sm" onClick={() => onAllot(request)} className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white shadow-sm hover:brightness-110">
+            <Button type="button" size="sm" onClick={() => onAllot(request)} className="bg-gradient-to-br from-emerald-600 to-teal-800 text-white shadow-sm hover:brightness-110">
               <PackageCheck className="size-4" /> Allot materials
             </Button>
           ) : (
@@ -237,7 +237,7 @@ function RequestActions({ request, onView, onAllot }) {
         <Eye className="size-3.5" /> View
       </Button>
       {request.status !== "ISSUED" && outstandingLines > 0 && (
-        <Button type="button" size="sm" onClick={() => onAllot(request)} className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white hover:brightness-110">
+        <Button type="button" size="sm" onClick={() => onAllot(request)} className="bg-gradient-to-br from-emerald-600 to-teal-800 text-white hover:brightness-110">
           <PackageCheck className="size-3.5" /> Allot
         </Button>
       )}
@@ -389,19 +389,19 @@ export default function StoreMaterialRequests() {
   const stats = [
     {
       key: "all", label: "All requests", hint: "Every request from Production", icon: Warehouse, value: requestCounts.all,
-      active: activeFilter === "all", tone: "neutral", s: { grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/20" }, onClick: () => updateFilter("all"),
+      active: activeFilter === "all", tone: "neutral", s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/20" }, onClick: () => updateFilter("all"),
     },
     {
       key: "open", label: "Needs allotment", hint: "New requests waiting for Store", icon: Clock3, value: requestCounts.open,
-      active: activeFilter === "open", tone: "warning", s: { grad: "from-amber-500 to-orange-600", glow: "shadow-amber-500/25" }, onClick: () => updateFilter("open"),
+      active: activeFilter === "open", tone: "warning", s: { grad: "from-amber-700 to-orange-800", glow: "shadow-amber-500/25" }, onClick: () => updateFilter("open"),
     },
     {
       key: "partial", label: "Partially allotted", hint: "Can receive more material", icon: PackageOpen, value: requestCounts.partial,
-      active: activeFilter === "partial", tone: "info", s: { grad: "from-blue-500 to-indigo-700", glow: "shadow-blue-500/25" }, onClick: () => updateFilter("partial"),
+      active: activeFilter === "partial", tone: "info", s: { grad: "from-blue-600 to-indigo-800", glow: "shadow-blue-500/25" }, onClick: () => updateFilter("partial"),
     },
     {
       key: "complete", label: "Completed requests", hint: "All requested components handed over", icon: CheckCircle2, value: requestCounts.complete,
-      active: activeFilter === "complete", tone: "success", s: { grad: "from-emerald-500 to-teal-700", glow: "shadow-emerald-500/25" }, onClick: () => updateFilter("complete"),
+      active: activeFilter === "complete", tone: "success", s: { grad: "from-emerald-700 to-teal-800", glow: "shadow-emerald-500/25" }, onClick: () => updateFilter("complete"),
     },
   ]
 
@@ -434,7 +434,7 @@ export default function StoreMaterialRequests() {
           </TileGrid>
         </div>
 
-        <Card className="min-w-0 overflow-hidden border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+        <Card className="min-w-0 overflow-hidden border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
           <div className="md:hidden">
             <div className="grid grid-cols-2 gap-px bg-slate-200 sm:grid-cols-4">
               {stats.map((item) => (

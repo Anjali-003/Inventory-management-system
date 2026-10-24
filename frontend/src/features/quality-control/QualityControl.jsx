@@ -186,10 +186,10 @@ export default function QualityControl() {
       <section className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
         {summaryCards.map(({ key, label, value, hint, icon: Icon, tone }) => {
           const toneStyles = {
-            amber: { edge: "bg-gradient-to-r from-amber-400 to-orange-500", icon: "bg-gradient-to-br from-amber-400 to-orange-600", text: "text-amber-800" },
-            green: { edge: "bg-gradient-to-r from-emerald-500 to-teal-700", icon: "bg-gradient-to-br from-emerald-500 to-teal-700", text: "text-emerald-800" },
-            rose: { edge: "bg-gradient-to-r from-rose-500 to-red-700", icon: "bg-gradient-to-br from-rose-500 to-red-700", text: "text-rose-800" },
-            teal: { edge: "bg-gradient-to-r from-teal-500 to-cyan-700", icon: "bg-gradient-to-br from-teal-500 to-cyan-700", text: "text-teal-800" },
+            amber: { edge: "bg-gradient-to-r from-amber-700 to-orange-800", icon: "bg-gradient-to-br from-amber-700 to-orange-800", text: "text-amber-800" },
+            green: { edge: "bg-gradient-to-r from-emerald-700 to-teal-800", icon: "bg-gradient-to-br from-emerald-700 to-teal-800", text: "text-emerald-800" },
+            rose: { edge: "bg-gradient-to-r from-rose-600 to-red-800", icon: "bg-gradient-to-br from-rose-600 to-red-800", text: "text-rose-800" },
+            teal: { edge: "bg-gradient-to-r from-teal-700 to-cyan-800", icon: "bg-gradient-to-br from-teal-700 to-cyan-800", text: "text-teal-800" },
           }[tone]
           const openSummary = () => {
             if (key === "pending") switchActiveView("pending")
@@ -203,7 +203,7 @@ export default function QualityControl() {
               type="button"
               onClick={openSummary}
               aria-label={`${label}: ${loading ? "loading" : value}. Open related work.`}
-              className="group relative min-w-0 overflow-hidden rounded-2xl border border-[#dce5e0] bg-white p-4 text-left shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-[#c3d1ca] hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/40 sm:p-5"
+              className="group relative min-w-0 overflow-hidden rounded-2xl border border-[#E3E6EB] bg-white p-4 text-left shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-[#CDD2DA] hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/40 sm:p-5"
             >
               <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${toneStyles.edge}`} />
               <div className="flex min-w-0 items-start justify-between gap-3">
@@ -222,7 +222,7 @@ export default function QualityControl() {
         })}
       </section>
 
-      <section aria-label="Quality Control views" className="grid min-w-0 grid-cols-1 gap-2 rounded-2xl border border-[#dce5e0] bg-white p-1.5 sm:grid-cols-2 sm:p-2">
+      <section aria-label="Quality Control views" className="grid min-w-0 grid-cols-1 gap-2 rounded-2xl border border-[#E3E6EB] bg-white p-1.5 sm:grid-cols-2 sm:p-2">
         <button
           type="button"
           role="tab"
@@ -251,7 +251,7 @@ export default function QualityControl() {
         </button>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-[#dce5e0] bg-white p-3 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] sm:p-4">
+      <section className="overflow-hidden rounded-2xl border border-[#E3E6EB] bg-white p-3 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] sm:p-4">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1 sm:max-w-sm">
             <SearchField value={query} onChange={setQuery} placeholder="Search order, product or SKU..." />

@@ -30,7 +30,7 @@ export default function OrderShortageModal({ order, onClose, canRaisePurchase })
         <>
           <Button type="button" variant="outline" size="lg" onClick={onClose} data-autofocus>Close</Button>
           {canRaisePurchase && toOrder.length > 0 && (
-            <Button size="lg" onClick={() => navigate("/purchase", { state: { orderId: order.id } })}>
+            <Button size="lg" onClick={() => navigate("/purchase-requests")}>
               <ShoppingCart /> Place order ({toOrder.length})
             </Button>
           )}

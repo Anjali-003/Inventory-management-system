@@ -19,18 +19,18 @@ import { useDispatchOrderMutation, useGetOrderPlanQuery } from "./orderApprovals
 
 /* Banner colours by plan verdict: the same stage colours the Marketing Manager sees (emerald / amber / rose / slate). */
 const BANNER = {
-  success: { grad: "from-emerald-400 to-emerald-700", glow: "shadow-emerald-600/30" },
-  warning: { grad: "from-amber-400 to-orange-500", glow: "shadow-orange-500/30" },
-  danger: { grad: "from-rose-400 to-red-600", glow: "shadow-red-500/30" },
-  neutral: { grad: "from-slate-400 to-slate-600", glow: "shadow-slate-500/30" },
+  success: { grad: "from-emerald-700 to-emerald-800", glow: "shadow-emerald-600/30" },
+  warning: { grad: "from-amber-700 to-orange-800", glow: "shadow-orange-500/30" },
+  danger: { grad: "from-rose-600 to-red-800", glow: "shadow-red-500/30" },
+  neutral: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/30" },
 }
 
-/* A titled block of the stock check. Open by default; the admin can fold a block away to focus on the other one. */
+/* A titled block of the stock check. Folded by default: the admin has just seen these lists on the Stock check tab,
+   the title already says the count, and the list opens with one click when needed. */
 function Section({ icon: Icon, title, hint, children }) {
   return (
     <Accordion
       as="section"
-      defaultOpen
       headerClassName="rounded-lg"
       panelClassName="pt-2"
       header={
@@ -115,12 +115,12 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
       onSubmit={submit}
       busy={sending}
       size="xl"
-      title={`${order.order_number} · stock check`}
-      description="See what the order needs, what the stock covers now and what is short. Approving sends the whole order on. To make only part of it now, use Revise quantity."
+      title={`Send ${order.order_number} on`}
+      description="Approving sends what the stock can build to Production and the components to buy to Purchase, in one step. Open a list below to check it."
       footer={
         <>
           <MktBtn onClick={onClose} disabled={sending} className="sm:me-auto">Close</MktBtn>
-          {onSwitch && <DecisionButtons order={order} current="plan" disabled={sending} onDecide={onSwitch} />}
+          {onSwitch && <DecisionButtons order={order} plan={plan} current="plan" disabled={sending} onDecide={onSwitch} />}
           <MktBtn type="submit" variant="primary" disabled={sending || isLoading || isFetching || !plan || nothingToSend}>
             {sending && <Loader2 className="animate-spin" />}
             Approve order & send lists
@@ -153,18 +153,18 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">{verdict.label}</p>
-                  <p className="mt-0.5 text-xs text-white/80">
+                  <p className="mt-0.5 text-xs text-white/95">
                     {`${fmtQty(Math.max(0, ordered - canMake))} units short on stock`}
                   </p>
                 </div>
                 <div className="shrink-0 text-end">
                   <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(ordered)}</p>
-                  <p className="mt-1 text-[11px] text-white/80">ordered · {fmtQty(canMake)} can be made now</p>
+                  <p className="mt-1 text-[11px] text-white/95">ordered · {fmtQty(canMake)} can be made now</p>
                 </div>
               </div>
             </motion.div>
 
-            <Section icon={Factory} title="What the stock can build" hint="Per product: units ordered, units the stock can build now (sent to the Production Manager) and units short.">
+            <Section icon={Factory} title={`To Production: ${fmtQty(canMake)} of ${fmtQty(ordered)} units`} hint="Per product: units ordered, units the stock can build now (sent to the Production Manager) and units short.">
               <div className="overflow-x-auto rounded-2xl border">
                 <Table>
                   <TableHeader>
@@ -183,7 +183,7 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
                           {names[l.product_id]?.sku && <p className="text-xs text-muted-foreground">{names[l.product_id].sku}</p>}
                         </TableCell>
                         <TableCell className="text-end tabular-nums">{fmtQty(l.ordered)}</TableCell>
-                        <TableCell className={cn("text-end font-semibold tabular-nums", l.can_make > 0 ? "text-primary" : "text-destructive")}>{fmtQty(l.can_make)}</TableCell>
+                        <TableCell className={cn("text-end font-semibold tabular-nums", l.can_make > 0 ? "text-success" : "text-destructive")}>{fmtQty(l.can_make)}</TableCell>
                         <TableCell className={cn("text-end tabular-nums", Number(l.remaining) > 0 && "font-semibold text-destructive")}>{fmtQty(l.remaining)}</TableCell>
                       </TableRow>
                     ))}
@@ -194,7 +194,7 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
 
             <Section
               icon={ShoppingCart}
-              title="Components to buy: sent to the Purchase Manager"
+              title={shortages.length ? `To Purchase: ${shortages.length} component${shortages.length === 1 ? "" : "s"} to buy` : "To Purchase: nothing to buy"}
               hint="Required for the whole order, minus what is in stock."
             >
               {shortages.length === 0 ? (

@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { MktBtn } from "@/features/marketing-orders/mktKit"
 import { SPRING, SPRING_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { PurchaseStatusPill, purchaseStageOf } from "@/features/purchasing/purchaseKit"
-import { WAS_INSPECTED, downloadRejected, qtyWithUnit, rejectedLines } from "@/features/purchasing/purchasingUtils"
+import { WAS_INSPECTED, downloadRejected, purchaseFor, qtyWithUnit, rejectedLines } from "@/features/purchasing/purchasingUtils"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 
@@ -17,10 +17,10 @@ import { cn } from "@/lib/utils"
 */
 
 const MARK = {
-  done: "bg-gradient-to-br from-emerald-400 to-emerald-700 text-white shadow-sm",
+  done: "bg-gradient-to-br from-emerald-700 to-emerald-800 text-white shadow-sm",
   current: "border-2 border-primary bg-card text-primary",
   todo: "border-2 border-border bg-card text-transparent",
-  fail: "bg-gradient-to-br from-rose-400 to-red-600 text-white shadow-sm",
+  fail: "bg-gradient-to-br from-rose-600 to-red-800 text-white shadow-sm",
 }
 
 /* Vertical timeline: placed, received, sent to IQC, inspected, accepted by the store. */
@@ -155,12 +155,12 @@ export default function PurchaseDetailSheet({ purchase, onClose }) {
       onClose={onClose}
       size="lg"
       title={`${purchase.po_number} · ${purchase.supplier}`}
-      description={[purchase.order_number && `For order ${purchase.order_number}`, purchase.notes].filter(Boolean).join(" · ") || undefined}
+      description={[purchaseFor(purchase) && `For ${purchaseFor(purchase)}`, purchase.notes].filter(Boolean).join(" · ") || undefined}
       footer={
         <>
           {rejected.length > 0 && (
             <MktBtn className="sm:mr-auto" onClick={() => downloadRejected(purchase)}>
-              <Download /> Rejected components (Excel)
+              <Download /> Rejected pieces (Excel)
             </MktBtn>
           )}
           <MktBtn onClick={onClose} data-autofocus>Close</MktBtn>
@@ -184,11 +184,11 @@ export default function PurchaseDetailSheet({ purchase, onClose }) {
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">{stage.label}</p>
-                <p className="mt-0.5 text-xs text-white/80">{stage.hint}</p>
+                <p className="mt-0.5 text-xs text-white/95">{stage.hint}</p>
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(purchase.totals?.ordered ?? 0)}</p>
-                <p className="mt-1 text-[11px] text-white/80">ordered</p>
+                <p className="mt-1 text-[11px] text-white/95">ordered</p>
               </div>
             </div>
           </motion.div>

@@ -1,26 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { AnimatePresence, MotionConfig, motion, useInView, useScroll, useTransform } from "motion/react";
+import { Link, useLocation } from "react-router-dom";
+import { AnimatePresence, motion, useInView, useScroll, useTransform } from "motion/react";
+import { EASE, Reveal, SectionHead, btnPrimary, ease, focusRing, wrap } from "@/features/site/siteKit";
+import SiteShell from "@/features/site/SiteShell";
 import {
   ShieldCheck,
   Warehouse,
   ClipboardCheck,
   ShoppingCart,
   ArrowRight,
-  ArrowUp,
-  Boxes,
   Factory,
   PackageCheck,
   Truck,
-  Users,
   Activity,
-  History,
   UserCog,
   Plus,
-  Receipt,
-  ArrowLeft,
-  ArrowDown,
-  RotateCcw,
   Stamp,
   CircleCheck,
   TriangleAlert,
@@ -51,29 +45,6 @@ const PORTAL_CARDS = [
 // The matching LOGIN_PORTALS entry is still required for that role's login route.
 const AVAILABLE_PORTAL_CARDS = PORTAL_CARDS.filter(({ portal }) => portal?.role && portal?.path);
 
-const MODULES = [
-  { icon: Boxes, name: "Products and BOM", text: "Import a bill of materials from a sheet and keep every revision in one place." },
-  { icon: Warehouse, name: "Inventory", text: "Stock in, stock out and a full ledger for every component." },
-  { icon: Factory, name: "Orders and production", text: "Check materials before you start an order, then track it on the floor." },
-  { icon: ClipboardCheck, name: "IQC and quality control", text: "Inspect incoming parts and test finished boards before they ship." },
-  { icon: ShoppingCart, name: "Purchase", text: "Shortfalls turn into purchase lists with the right quantities." },
-  { icon: Users, name: "Employees and attendance", text: "Daily sheets and monthly reports for the whole team." },
-  { icon: History, name: "Inventory history", text: "See who moved what, when and why." },
-  { icon: Activity, name: "Activity feed", text: "Every action across the plant, updated live." },
-];
-
-const ACCESS_ROWS = [
-  { role: "Super Admin", edit: "All modules", view: "None" },
-  { role: "Marketing Manager", edit: "Marketing orders", view: "Dashboard" },
-  { role: "Operations Admin", edit: "Order approvals", view: "Dashboard, approved orders, inventory, inventory history, finished goods, incoming stock, IQC, purchase" },
-  { role: "Store Manager", edit: "Inventory, inventory history, finished goods, incoming stock", view: "Dashboard, IQC, purchase" },
-  { role: "IQC Manager", edit: "IQC", view: "Dashboard, purchase, inventory, inventory history, finished goods, incoming stock" },
-  { role: "Purchase Manager", edit: "Purchase", view: "Dashboard, approved orders, IQC, inventory, inventory history, finished goods, incoming stock" },
-  { role: "Production Manager", edit: "Production", view: "Dashboard, inventory" },
-  { role: "Quality Control & Finished Goods", edit: "Quality Control, finished goods", view: "Dashboard, production" },
-  { role: "HR Manager", edit: "Employees, attendance", view: "Dashboard" },
-];
-
 const FAQ = [
   {
     q: "How do I get an account?",
@@ -101,49 +72,6 @@ const FAQ = [
   },
 ];
 
-const NAV = [
-  ["login", "Workflow"],
-  ["modules", "Modules"],
-  ["access", "Roles"],
-  ["faq", "FAQ"],
-];
-
-/* ---------- motion + shared class sets ---------- */
-const EASE = [0.32, 0.72, 0, 1];
-const wrap = "mx-auto w-full max-w-6xl px-4 sm:px-6";
-const heading = "font-lp-head tracking-tight text-lp-ink text-balance";
-const focusRing = "outline-none focus-visible:ring-2 focus-visible:ring-lp-green focus-visible:ring-offset-2 focus-visible:ring-offset-lp-bg";
-const ease = "transition-all duration-700 ease-[cubic-bezier(0.32,0.72,0,1)]";
-const btnPrimary = `inline-flex items-center justify-center gap-2 rounded-lg bg-lp-green px-3 py-2 text-base font-semibold text-white ${ease} hover:bg-lp-green-dark hover:-translate-y-0.5 active:translate-y-px active:scale-[0.98] ${focusRing}`;
-
-const MOTION_TAGS = { div: motion.div, li: motion.li };
-
-/* Fades up out of a soft blur as it scrolls into view. */
-function Reveal({ children, delay = 0, className, as = "div" }) {
-  const M = MOTION_TAGS[as];
-  return (
-    <M
-      className={className}
-      initial={{ opacity: 0, y: 64, filter: "blur(12px)" }}
-      whileInView={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-      viewport={{ once: true, amount: 0.2 }}
-      transition={{ duration: 0.9, ease: EASE, delay }}
-    >
-      {children}
-    </M>
-  );
-}
-
-function SectionHead({ eyebrow, title, text }) {
-  return (
-    <Reveal className="mb-12 max-w-2xl">
-      <p className="text-sm font-semibold text-lp-green">{eyebrow}</p>
-      <h2 className={`${heading} mt-2 text-3xl font-bold sm:text-4xl`}>{title}</h2>
-      {text && <p className="mt-3 text-lg text-pretty text-lp-muted">{text}</p>}
-    </Reveal>
-  );
-}
-
 /* where a portal card leads: straight to the dashboard when that role is already logged in on this browser */
 function portalLink(portal, session) {
   return { to: session ? "/dashboard" : portal.path, onClick: session ? () => setActiveRole(portal.role) : undefined };
@@ -164,150 +92,24 @@ export default function Landing() {
     };
   }, []);
 
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    const t = setTimeout(() => document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" }), 50);
+    return () => clearTimeout(t);
+  }, [hash]);
+
   const signedInCount = Object.keys(sessions).length;
   const loginLabel = signedInCount > 0 ? "Open your workspace" : "Log in to your workspace";
 
   return (
-    <MotionConfig reducedMotion="user">
-      <div className="min-h-screen bg-lp-bg font-lp-head text-base text-lp-text antialiased">
-        <a href="#main" className="sr-only z-50 rounded-lg bg-lp-green px-3 py-2 text-sm font-semibold text-white focus:not-sr-only focus:fixed focus:top-4 focus:left-4">
-          Skip to content
-        </a>
-
-        <IslandNav signedIn={signedInCount > 0} />
-
-        <main id="main">
-          <Hero loginLabel={loginLabel} />
-          <Workflow sessions={sessions} />
-          <TaglineReveal />
-          <Modules />
-          <Access />
-          <Faq />
-          <FinalCta loginLabel={loginLabel} />
-        </main>
-
-        <footer className="border-t border-lp-line py-8 text-sm text-lp-muted">
-          <div className={`${wrap} flex flex-wrap items-center justify-between gap-4`}>
-            <span className="inline-flex items-center gap-2">
-              <img src="/ss_logo.png" alt="" width="20" height="20" className="rounded" />
-              &copy; {new Date().getFullYear()} Sensation Systems · EPIMS, Electronics Production and Inventory Management System
-            </span>
-            <a href="#main" className={`inline-flex items-center gap-1 rounded font-medium hover:text-lp-green ${focusRing}`}>
-              Back to top <ArrowUp className="size-4" />
-            </a>
-          </div>
-        </footer>
-      </div>
-    </MotionConfig>
-  );
-}
-
-/* ------------------------------------------------------------------ nav */
-
-/* Floating glass pill. On phones the hamburger morphs into an X and opens a full screen glass menu. */
-function IslandNav({ signedIn }) {
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(null);
-
-  // highlight the section that is in the middle of the screen
-  useEffect(() => {
-    const els = NAV.map(([id]) => document.getElementById(id)).filter(Boolean);
-    const io = new IntersectionObserver(
-      (entries) => entries.forEach((e) => e.isIntersecting && setActive(e.target.id)),
-      { rootMargin: "-45% 0px -50% 0px" }
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => e.key === "Escape" && setOpen(false);
-    window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-  }, [open]);
-
-  return (
-    <>
-      <header className="fixed inset-x-0 top-0 z-40 px-4">
-        <nav
-          aria-label="Main"
-          className="mx-auto mt-6 flex w-max max-w-full items-center gap-2 rounded-full border border-lp-line bg-white/75 py-2 pr-2 pl-4 shadow-[0_8px_32px_-12px_rgba(16,33,28,0.18)] backdrop-blur-xl"
-        >
-          <Link to="/" aria-label="Sensation Systems home" className={`mr-2 inline-flex items-center gap-2 rounded-full text-sm font-bold text-lp-ink ${focusRing}`}>
-            <img src="/ss_logo.png" alt="" width="24" height="24" className="rounded-md" />
-            <span>Sensation Systems</span>
-          </Link>
-
-          <div className="hidden items-center gap-1 md:flex">
-            {NAV.map(([id, text]) => (
-              <a
-                key={id}
-                href={`#${id}`}
-                aria-current={active === id ? "true" : undefined}
-                className={`relative rounded-full px-3 py-2 text-sm font-medium ${ease} ${focusRing} ${
-                  active === id ? "text-lp-ink" : "text-lp-muted hover:text-lp-ink"
-                }`}
-              >
-                {active === id && (
-                  <motion.span layoutId="nav-pill" className="absolute inset-0 rounded-full bg-lp-tint" transition={{ duration: 0.6, ease: EASE }} />
-                )}
-                <span className="relative">{text}</span>
-              </a>
-            ))}
-          </div>
-
-          <a href="#login" className={`hidden rounded-full bg-lp-green px-4 py-2 text-sm font-semibold text-white md:inline-flex ${ease} hover:bg-lp-green-dark active:scale-[0.98] ${focusRing}`}>
-            {signedIn ? "Open workspace" : "Log in"}
-          </a>
-
-          <button
-            type="button"
-            aria-label={open ? "Close menu" : "Open menu"}
-            aria-expanded={open}
-            onClick={() => setOpen((o) => !o)}
-            className={`relative z-50 grid size-10 place-items-center rounded-full md:hidden ${ease} hover:bg-lp-tint ${focusRing}`}
-          >
-            <span className={`absolute h-0.5 w-5 rounded-full bg-lp-ink ${ease} ${open ? "rotate-45" : "-translate-y-1"}`} />
-            <span className={`absolute h-0.5 w-5 rounded-full bg-lp-ink ${ease} ${open ? "-rotate-45" : "translate-y-1"}`} />
-          </button>
-        </nav>
-      </header>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            key="menu"
-            className="fixed inset-0 z-30 flex flex-col justify-center bg-white/80 px-8 backdrop-blur-3xl md:hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, transition: { duration: 0.3 } }}
-            transition={{ duration: 0.5, ease: EASE }}
-          >
-            <ul className="grid gap-6">
-              {[...NAV, ["login", signedIn ? "Open workspace" : "Log in"]].map(([id, text], i) => (
-                <li key={`${id}-${i}`} className="overflow-hidden">
-                  <motion.a
-                    href={`#${id}`}
-                    onClick={() => setOpen(false)}
-                    className={`block rounded text-4xl font-semibold text-lp-ink ${focusRing}`}
-                    initial={{ y: 48, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ duration: 0.7, ease: EASE, delay: 0.1 + i * 0.05 }}
-                  >
-                    {text}
-                  </motion.a>
-                </li>
-              ))}
-            </ul>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+    <SiteShell signedIn={signedInCount > 0}>
+      <Hero loginLabel={loginLabel} />
+      <Portals sessions={sessions} />
+      <TaglineReveal />
+      <Faq />
+      <FinalCta loginLabel={loginLabel} />
+    </SiteShell>
   );
 }
 
@@ -316,14 +118,14 @@ function IslandNav({ signedIn }) {
 function Hero({ loginLabel }) {
   const stats = [
     ["9", "role workspaces"],
-    ["8", "steps from order to billing"],
+    ["1", "login per role, side by side"],
     ["Live", "updates in every tab"],
   ];
   return (
     <section className="pt-40 pb-20 lg:pt-48 lg:pb-24">
       <div className={`${wrap} grid items-center gap-16 lg:grid-cols-2`}>
         <div>
-          <Reveal>
+          <Reveal immediate>
             <span className="inline-flex items-center gap-2 rounded-full border border-lp-line bg-white px-3 py-1 text-sm font-medium text-lp-text">
               <span className="relative flex size-2">
                 <span className="absolute inline-flex size-full animate-ping rounded-full bg-lp-green opacity-60 motion-reduce:animate-none" />
@@ -332,23 +134,23 @@ function Hero({ loginLabel }) {
               Electronics production and inventory, in one place
             </span>
           </Reveal>
-          <Reveal delay={0.08}>
+          <Reveal immediate delay={0.08}>
             <h1 className="mt-6 max-w-[680px] bg-linear-to-r from-black to-[#666666] bg-clip-text pb-1 font-lp-head text-4xl font-bold tracking-tight text-balance text-transparent sm:text-5xl">
               Know every missing component before the line stops.
             </h1>
           </Reveal>
-          <Reveal delay={0.16}>
+          <Reveal immediate delay={0.16}>
             <p className="mt-6 max-w-[680px] text-lg text-pretty text-lp-text">
               EPIMS keeps production, inventory, quality and purchasing in one system, so a shortfall shows up on the
               material check, not on the shop floor.
             </p>
           </Reveal>
-          <Reveal delay={0.24} className="mt-8 flex flex-wrap items-center gap-4">
+          <Reveal immediate delay={0.24} className="mt-8 flex flex-wrap items-center gap-4">
             <a href="#login" className={btnPrimary}>
               {loginLabel} <ArrowRight className="size-4" />
             </a>
           </Reveal>
-          <Reveal delay={0.32}>
+          <Reveal immediate delay={0.32}>
             <dl className="mt-12 grid max-w-md grid-cols-3 gap-6">
               {stats.map(([value, label]) => (
                 <div key={label}>
@@ -361,7 +163,7 @@ function Hero({ loginLabel }) {
           </Reveal>
         </div>
 
-        <Reveal delay={0.2}>
+        <Reveal immediate delay={0.2}>
           <MaterialCheckPreview />
         </Reveal>
       </div>
@@ -410,14 +212,14 @@ function MaterialCheckPreview() {
                         <TriangleAlert className="size-3.5" /> {r.need - r.have} short
                       </span>
                     ) : (
-                      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-lp-green">
+                      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-success">
                         <CircleCheck className="size-3.5" /> Ready
                       </span>
                     )}
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-lp-tint">
                     <motion.div
-                      className={`h-full rounded-full ${short ? "bg-warning" : "bg-lp-green"}`}
+                      className={`h-full rounded-full ${short ? "bg-warning" : "bg-success"}`}
                       initial={{ width: 0 }}
                       animate={inView ? { width: `${pct}%` } : undefined}
                       transition={{ duration: 1.2, ease: EASE, delay: 0.3 + i * 0.12 }}
@@ -462,141 +264,56 @@ function MaterialCheckPreview() {
   );
 }
 
-/* ------------------------------------------------------------------ workflow + logins */
+/* ------------------------------------------------------------------ logins */
 
-/*
-  The real order of work, one card per hand over. Each card is also the login of the role doing that step.
-  Desktop: two rows of four that snake round (1 to 4 left to right, 5 to 8 right to left), so step 8, billing back at
-  marketing, sits under step 1 where the next order starts. Phones: one timeline from top to bottom.
-*/
-const WORKFLOW = [
-  { role: "MARKETING_MANAGER", action: "Brings the order", text: "Creates the customer order and sends it to the Operations Admin." },
-  { role: "OPERATIONS_ADMIN", action: "Approves the order", text: "Checks stock, approves, and sends what is missing to purchase." },
-  { role: "PURCHASE_MANAGER", action: "Buys what is missing", text: "Raises purchases for the shortfall and sends arrivals to IQC." },
-  { role: "IQC_MANAGER", action: "Inspects what arrives", text: "Approves the good parts and rejects the rest." },
-  { role: "STORE_MANAGER", action: "Stores approved stock", text: "Keeps exactly what IQC approved and issues it to production." },
-  { role: "PRODUCTION_MANAGER", action: "Builds the product", text: "Takes materials from the store and runs production." },
-  { role: "QUALITY_FG_MANAGER", action: "Tests and packs", text: "Tests every batch, handles rework, packs finished goods." },
-  { role: "MARKETING_MANAGER", action: "Bills the customer", text: "Finished goods come back to marketing for billing and dispatch.", icon: Receipt },
+// the order people work in (marketing -> ... -> quality & finished goods), then the roles beside the flow
+const ORDER = [
+  "MARKETING_MANAGER", "OPERATIONS_ADMIN", "PURCHASE_MANAGER", "IQC_MANAGER", "STORE_MANAGER",
+  "PRODUCTION_MANAGER", "QUALITY_FG_MANAGER", "HR_MANAGER", "SUPER_ADMIN",
 ];
-const SUPPORT_ROLES = ["SUPER_ADMIN", "HR_MANAGER"];
+const PORTALS_IN_ORDER = [...AVAILABLE_PORTAL_CARDS].sort(
+  (a, b) => (ORDER.indexOf(a.portal.role) + 1 || 99) - (ORDER.indexOf(b.portal.role) + 1 || 99)
+);
 
-// desktop grid cell and the arrow towards the next step, per position in WORKFLOW
-const CELL = [
-  "lg:col-start-1 lg:row-start-1", "lg:col-start-2 lg:row-start-1", "lg:col-start-3 lg:row-start-1", "lg:col-start-4 lg:row-start-1",
-  "lg:col-start-4 lg:row-start-2", "lg:col-start-3 lg:row-start-2", "lg:col-start-2 lg:row-start-2", "lg:col-start-1 lg:row-start-2",
-];
-const NEXT = ["right", "right", "right", "down", "left", "left", "left", "up"];
-const ARROW = {
-  right: { icon: ArrowRight, at: "-right-10 top-1/2 -translate-y-1/2" },
-  left: { icon: ArrowLeft, at: "-left-10 top-1/2 -translate-y-1/2" },
-  down: { icon: ArrowDown, at: "-bottom-10 left-1/2 -translate-x-1/2" },
-  up: { icon: RotateCcw, at: "-top-10 left-1/2 -translate-x-1/2", label: "Next order starts again at step 1" },
-};
-
-const cardByRole = Object.fromEntries(AVAILABLE_PORTAL_CARDS.map((c) => [c.portal.role, c]));
-
-function Workflow({ sessions }) {
-  const steps = WORKFLOW.filter((s) => cardByRole[s.role]);
-  const support = SUPPORT_ROLES.map((r) => cardByRole[r]).filter(Boolean);
-  const snake = steps.length === WORKFLOW.length; // the snake layout only works with all eight steps
-
+/* One login card per role. A role already logged in on this browser opens its dashboard straight away. */
+function Portals({ sessions }) {
   return (
     <section id="login" className="scroll-mt-24 border-y border-lp-line bg-white py-20 lg:py-24">
       <div className={wrap}>
         <SectionHead
-          eyebrow="Workflow and login"
-          title="Find your step in the flow, then open your workspace"
-          text="Every order moves through these hands in this order. Each card is the login for the role doing that step, and you can stay logged in to several roles at once, one per browser tab."
+          eyebrow="Log in"
+          title="Choose your workspace"
+          text="Every role has its own login. You can stay logged in to several roles at once, one per browser tab."
         />
-
-        <ol className="grid gap-6 lg:grid-cols-4 lg:gap-12">
-          {steps.map((step, i) => {
-            const { portal, label, icon } = cardByRole[step.role];
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {PORTALS_IN_ORDER.map(({ portal, label, note, icon: Icon }, i) => {
             const session = sessions[portal.role];
-            const Icon = step.icon || icon;
-            const arrow = snake ? ARROW[NEXT[i]] : null;
-            const ArrowIcon = arrow?.icon;
-            const last = i === steps.length - 1;
             return (
-              <Reveal as="li" key={i} delay={i * 0.07} className={`relative ${snake ? CELL[i] : ""}`}>
+              <Reveal as="li" key={portal.role} delay={(i % 3) * 0.06}>
                 <Link
                   {...portalLink(portal, session)}
-                  className={`group flex h-full flex-col rounded-2xl border p-4 ${ease} hover:-translate-y-1 hover:border-lp-green hover:shadow-[0_24px_48px_-24px_rgba(15,109,85,0.35)] active:scale-[0.98] ${focusRing} ${
-                    last ? "bg-lp-soft" : "bg-white"
-                  } ${session ? "border-lp-portal-on" : "border-lp-line"}`}
+                  className={`group flex h-full items-center gap-4 rounded-2xl border bg-white p-4 ${ease} hover:-translate-y-1 hover:border-lp-green hover:shadow-[0_24px_48px_-24px_rgba(122,53,255,0.35)] active:scale-[0.98] ${focusRing} ${
+                    session ? "border-lp-portal-on" : "border-lp-line"
+                  }`}
                 >
-                  <span className="flex items-center justify-between gap-3">
-                    <span className={`grid size-10 place-items-center rounded-xl ${ease} ${session ? "bg-lp-green text-white" : "bg-lp-tint text-lp-green group-hover:bg-lp-green group-hover:text-white"}`}>
-                      <Icon className="size-5" />
+                  <span className={`grid size-11 shrink-0 place-items-center rounded-xl ${ease} ${session ? "bg-lp-green text-white" : "bg-lp-tint text-lp-green group-hover:bg-lp-green group-hover:text-white"}`}>
+                    <Icon className="size-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <strong className="text-base font-semibold text-lp-ink">{label}</strong>
+                      {session && <span className="rounded-full bg-lp-tint px-2 py-0.5 text-xs font-semibold text-lp-green">Logged in</span>}
                     </span>
-                    <span className="text-xs font-semibold text-lp-muted tabular-nums">Step {String(i + 1).padStart(2, "0")}</span>
+                    <span className="mt-0.5 block text-sm text-pretty text-lp-muted">
+                      {session ? `Continue as ${session.name}` : note}
+                    </span>
                   </span>
-                  <span className="mt-4 text-xs font-semibold text-lp-green">{label}</span>
-                  <strong className="mt-1 text-base font-semibold text-lp-ink">{step.action}</strong>
-                  <span className="mt-1 flex-1 text-sm text-pretty text-lp-muted">{step.text}</span>
-                  <span className="mt-4 flex items-center justify-between gap-2 border-t border-lp-line pt-3 text-sm font-semibold">
-                    {session ? (
-                      <span className="min-w-0 truncate text-lp-green">Logged in as {session.name}</span>
-                    ) : (
-                      <span className="text-lp-ink">Log in</span>
-                    )}
-                    <ArrowRight className={`size-4 shrink-0 text-lp-muted ${ease} group-hover:translate-x-1 group-hover:text-lp-green`} />
-                  </span>
+                  <ArrowRight className={`size-4 shrink-0 text-lp-muted ${ease} group-hover:translate-x-1 group-hover:text-lp-green`} />
                 </Link>
-
-                {/* phones: the timeline line down to the next card */}
-                {!last && <span aria-hidden className="absolute -bottom-6 left-9 h-6 w-0.5 bg-lp-rule lg:hidden" />}
-
-                {/* desktop: the arrow towards the next step, appearing after the card */}
-                {arrow && (
-                  <motion.span
-                    aria-hidden={!arrow.label}
-                    title={arrow.label}
-                    className={`absolute z-10 hidden size-8 place-items-center rounded-full border border-lp-line bg-white text-lp-green shadow-[0_8px_20px_-10px_rgba(16,33,28,0.3)] lg:grid ${arrow.at}`}
-                    initial={{ opacity: 0, scale: 0.6 }}
-                    whileInView={{ opacity: 1, scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ duration: 0.6, ease: EASE, delay: 0.4 + i * 0.07 }}
-                  >
-                    <ArrowIcon className="size-4" />
-                    {arrow.label && <span className="sr-only">{arrow.label}</span>}
-                  </motion.span>
-                )}
               </Reveal>
             );
           })}
-        </ol>
-
-        {support.length > 0 && (
-          <Reveal className="mt-16">
-            <p className="text-sm font-semibold text-lp-muted">Alongside the whole flow</p>
-            <ul className="mt-4 grid gap-4 sm:grid-cols-2">
-              {support.map(({ portal, label, note, icon: Icon }) => {
-                const session = sessions[portal.role];
-                return (
-                  <li key={portal.role}>
-                    <Link
-                      {...portalLink(portal, session)}
-                      className={`group flex items-center gap-4 rounded-2xl border bg-white p-4 ${ease} hover:-translate-y-1 hover:border-lp-green active:scale-[0.98] ${focusRing} ${
-                        session ? "border-lp-portal-on" : "border-lp-line"
-                      }`}
-                    >
-                      <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${ease} ${session ? "bg-lp-green text-white" : "bg-lp-tint text-lp-green group-hover:bg-lp-green group-hover:text-white"}`}>
-                        <Icon className="size-5" />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <strong className="block text-base font-semibold text-lp-ink">{label}</strong>
-                        <span className="block text-sm text-lp-muted">{session ? `Logged in as ${session.name}` : note}</span>
-                      </span>
-                      <ArrowRight className={`size-4 shrink-0 text-lp-muted ${ease} group-hover:translate-x-1 group-hover:text-lp-green`} />
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </Reveal>
-        )}
+        </ul>
       </div>
     </section>
   );
@@ -633,73 +350,6 @@ function Word({ children, progress, range }) {
     <motion.span style={{ opacity }} className="inline">
       {children}{" "}
     </motion.span>
-  );
-}
-
-/* ------------------------------------------------------------------ modules */
-
-function Modules() {
-  return (
-    <section id="modules" className="scroll-mt-24 py-20 lg:py-24">
-      <div className={wrap}>
-        <SectionHead eyebrow="Modules" title="Everything a component driven factory runs on" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {MODULES.map(({ icon: Icon, name, text }, i) => (
-            <Reveal key={name} delay={(i % 4) * 0.06}>
-              <div className={`group h-full rounded-2xl border border-lp-line bg-white p-6 ${ease} hover:-translate-y-1 hover:shadow-[0_24px_48px_-28px_rgba(16,33,28,0.3)]`}>
-                <span className={`grid size-10 place-items-center rounded-lg bg-lp-tint text-lp-green ${ease} group-hover:scale-110`}>
-                  <Icon className="size-5" />
-                </span>
-                <h3 className="mt-4 text-base font-semibold text-lp-ink">{name}</h3>
-                <p className="mt-1 text-sm text-pretty text-lp-muted">{text}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ------------------------------------------------------------------ roles */
-
-function Access() {
-  return (
-    <section id="access" className="scroll-mt-24 border-y border-lp-line bg-white py-20 lg:py-24">
-      <div className={wrap}>
-        <SectionHead
-          eyebrow="Roles"
-          title="Each role sees only what it needs"
-          text="Access is enforced on the server as well as in the screens."
-        />
-        <Reveal>
-          <div className="overflow-x-auto rounded-2xl border border-lp-line">
-            <table data-cards="off" className="w-full min-w-[640px] border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-lp-line bg-lp-bg">
-                  {["Role", "Can edit", "Can only view"].map((h) => (
-                    <th key={h} className="px-6 py-4 text-left text-xs font-semibold text-lp-muted">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ACCESS_ROWS.map((r) => (
-                  <tr key={r.role} className={`border-b border-lp-line last:border-b-0 ${ease} hover:bg-lp-soft`}>
-                    <th scope="row" className="px-6 py-4 text-left align-top font-semibold whitespace-nowrap text-lp-ink">
-                      {r.role}
-                    </th>
-                    <td className="px-6 py-4 text-left align-top text-lp-text">{r.edit}</td>
-                    <td className="px-6 py-4 text-left align-top text-lp-muted">{r.view}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Reveal>
-      </div>
-    </section>
   );
 }
 

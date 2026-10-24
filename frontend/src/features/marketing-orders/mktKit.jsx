@@ -31,7 +31,7 @@ export function MktHero({ eyebrow, title, description, children, className }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0, transition: SPRING_SOFT }}
       className={cn(
-        "relative mb-5 overflow-hidden rounded-[20px] bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 p-5 text-white shadow-[0_18px_40px_-18px_rgba(13,148,136,0.75)] sm:mb-6 sm:p-7",
+        "relative mb-5 overflow-hidden rounded-[20px] bg-gradient-to-br from-[#7A35FF] via-[#6424E3] to-[#3E1494] p-5 text-white shadow-[0_18px_40px_-18px_rgba(122,53,255,0.75)] sm:mb-6 sm:p-7",
         className
       )}
     >
@@ -40,9 +40,9 @@ export function MktHero({ eyebrow, title, description, children, className }) {
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/50" />
       <div className="relative flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
-          {eyebrow && <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/70">{eyebrow}</p>}
+          {eyebrow && <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-white/95">{eyebrow}</p>}
           <h1 className="break-words text-[26px] font-bold leading-[1.05] tracking-[-0.03em] sm:text-[34px]">{title}</h1>
-          {description && <p className="mt-2 max-w-xl text-[13px] leading-snug text-white/80 sm:text-[15px]">{description}</p>}
+          {description && <p className="mt-2 max-w-xl text-[13px] leading-snug text-white/95 sm:text-[15px]">{description}</p>}
         </div>
         {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
       </div>
@@ -51,10 +51,10 @@ export function MktHero({ eyebrow, title, description, children, className }) {
 }
 
 const HERO_BTN =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-[13px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-teal-700 disabled:pointer-events-none disabled:opacity-60 [&_svg]:size-4 [&_svg]:shrink-0"
+  "inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-[13px] font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-[#6424E3] disabled:pointer-events-none disabled:opacity-60 [&_svg]:size-4 [&_svg]:shrink-0"
 const HERO_VARIANT = {
-  solid: "bg-white text-emerald-800 shadow-[0_8px_20px_-6px_rgba(0,0,0,0.35)] hover:bg-white/95",
-  glass: "bg-white/15 text-white ring-1 ring-inset ring-white/30 backdrop-blur-md hover:bg-white/25",
+  solid: "bg-white text-[#5B21D6] shadow-[0_8px_20px_-6px_rgba(0,0,0,0.35)] hover:bg-white/95",
+  glass: "bg-black/20 text-white ring-1 ring-inset ring-white/40 backdrop-blur-md hover:bg-black/30",
 }
 
 export function HeroButton({ variant = "solid", className, ...p }) {
@@ -73,12 +73,12 @@ export function HeroLink({ variant = "solid", wrap = "inline-flex", className, c
 /* ------------------------------------------------------------------ buttons */
 
 const BTN_BASE =
-  "inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-[10px] text-[13px] font-semibold outline-none transition-colors focus-visible:ring-3 focus-visible:ring-primary/30 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0"
+  "inline-flex shrink-0 select-none items-center justify-center gap-2 whitespace-nowrap rounded-[10px] text-[13px] font-semibold outline-none transition-colors focus-visible:ring-3 focus-visible:ring-primary/30 disabled:pointer-events-none disabled:opacity-100 disabled:bg-none disabled:bg-slate-200 disabled:text-slate-600 disabled:shadow-none disabled:border-transparent [&_svg]:size-4 [&_svg]:shrink-0"
 const BTN_VARIANT = {
-  primary: "bg-gradient-to-br from-emerald-500 to-teal-700 text-white shadow-[0_8px_18px_-8px_rgba(13,148,136,0.8)] hover:brightness-110",
+  primary: "bg-gradient-to-br from-[#7A35FF] to-[#5B21D6] text-white shadow-[0_8px_18px_-8px_rgba(122,53,255,0.7)] hover:brightness-110",
   outline: "border border-cf-line-strong bg-card text-foreground hover:bg-muted",
   danger: "bg-cf-red-soft text-destructive hover:bg-destructive/15",
-  ghost: "text-primary hover:bg-cf-green-soft",
+  ghost: "text-primary hover:bg-accent",
 }
 const BTN_SIZE = { md: "h-11 px-4 sm:h-9 sm:px-3.5", sm: "h-9 px-3", icon: "size-11 sm:size-9" }
 
@@ -89,7 +89,7 @@ export function MktBtn({ variant = "outline", size = "md", className, type = "bu
 /** Floating "New order" button for phones: stays under the thumb. Give it `to` (a link) or `onClick`. */
 export function NewOrderFab({ to, onClick }) {
   const cls =
-    "inline-flex h-12 items-center gap-2 rounded-full bg-gradient-to-br from-emerald-500 to-teal-700 px-5 text-sm font-semibold text-white shadow-[0_14px_30px_-8px_rgba(13,148,136,0.8)] ring-1 ring-inset ring-white/30 outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    "inline-flex h-12 items-center gap-2 rounded-full bg-gradient-to-br from-[#7A35FF] to-[#5B21D6] px-5 text-sm font-semibold text-white shadow-[0_14px_30px_-8px_rgba(122,53,255,0.8)] ring-1 ring-inset ring-white/30 outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
   const button = (
       <motion.div
         initial={{ opacity: 0, scale: 0.8, y: 16 }}
@@ -158,7 +158,7 @@ export function StageTile({ stage, value, loading, active, solid, to, onClick, c
         {(to || onClick) && (
           <ArrowUpRight
             aria-hidden
-            className={cn("size-4 transition-[transform,color] duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5", on ? "text-white/80" : "text-slate-400 group-hover:text-primary")}
+            className={cn("size-4 transition-[transform,color] duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5", on ? "text-white/95" : "text-slate-400 group-hover:text-primary")}
           />
         )}
       </span>
@@ -168,14 +168,14 @@ export function StageTile({ stage, value, loading, active, solid, to, onClick, c
           {loading ? <span className="inline-block h-7 w-14 animate-pulse rounded-md bg-slate-200/80 align-middle" aria-label="Loading" /> : <CountUp value={value} />}
         </span>
         <span className={cn("mt-2 block text-[13px] font-semibold leading-tight transition-colors duration-300", on ? "text-white" : "text-foreground")}>{stage.label}</span>
-        <span className={cn("mt-0.5 block text-[11px] leading-snug transition-colors duration-300", on ? "text-white/75" : "text-muted-foreground")}>{stage.hint}</span>
+        <span className={cn("mt-0.5 block text-[11px] leading-snug transition-colors duration-300", on ? "text-white/95" : "text-muted-foreground")}>{stage.hint}</span>
       </span>
     </>
   )
 
   const cls = cn(
     "group relative block w-full overflow-hidden rounded-2xl border p-4 text-start outline-none transition-[box-shadow,border-color] duration-300 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2",
-    on ? cn("border-transparent shadow-lg", stage.s.glow) : "border-[#dce5e0] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] hover:shadow-md"
+    on ? cn("border-transparent shadow-lg", stage.s.glow) : "border-[#E3E6EB] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] hover:shadow-md"
   )
 
   return (

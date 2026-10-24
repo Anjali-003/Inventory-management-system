@@ -23,12 +23,12 @@ const nudge = (orders) => (orders ? `${plural(orders, "approved customer order")
 
 /* One colour family per KPI card, kept whole so Tailwind can see the class names. Green = nothing to do. */
 const FAMILY = {
-  amber: { grad: "from-amber-400 to-orange-500", glow: "shadow-orange-500/30" },
-  rose: { grad: "from-rose-400 to-red-600", glow: "shadow-red-500/30" },
-  blue: { grad: "from-sky-400 to-blue-600", glow: "shadow-blue-500/30" },
-  violet: { grad: "from-violet-400 to-purple-600", glow: "shadow-purple-500/30" },
-  green: { grad: "from-emerald-400 to-emerald-700", glow: "shadow-emerald-600/30" },
-  slate: { grad: "from-slate-400 to-slate-600", glow: "shadow-slate-500/30" },
+  amber: { grad: "from-amber-700 to-orange-800", glow: "shadow-orange-500/30" },
+  rose: { grad: "from-rose-600 to-red-800", glow: "shadow-red-500/30" },
+  blue: { grad: "from-sky-700 to-blue-800", glow: "shadow-blue-500/30" },
+  violet: { grad: "from-violet-600 to-purple-800", glow: "shadow-purple-500/30" },
+  green: { grad: "from-emerald-700 to-emerald-800", glow: "shadow-emerald-600/30" },
+  slate: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/30" },
 }
 const tile = (label, icon, hint, family) => ({ label, icon, hint, s: FAMILY[family] })
 
@@ -71,7 +71,7 @@ export default function PurchaseView() {
   const tiles = [
     { key: "low", stage: tile("Low Stock", PackageSearch, "At or below minimum", d.lowStock ? "amber" : "green"), value: d.lowStock, to: "/inventory?filter=low", loading: inv.isLoading },
     { key: "out", stage: tile("Out of Stock", XCircle, "Nothing available", d.outStock ? "rose" : "green"), value: d.outStock, to: "/inventory?filter=out", loading: inv.isLoading },
-    canOrders && { key: "req", stage: tile("Purchase Requirements", ClipboardList, "Component lines to order", d.requirementLines ? "amber" : "green"), value: d.requirementLines, to: "/approved-orders?state=TO_ORDER" },
+    canOrders && { key: "req", stage: tile("Purchase Requirements", ClipboardList, "Component lines to order", d.requirementLines ? "amber" : "green"), value: d.requirementLines, to: "/purchase-requests" },
     { key: "iqcstatus", stage: tile("With IQC", FlaskConical, "Awaiting inspection", d.counts.PENDING_IQC ? "violet" : "green"), value: d.counts.PENDING_IQC, to: purchaseHref("PENDING_IQC") },
     { key: "rejected", stage: tile("IQC Rejected", XCircle, "Defective lots / returns", d.rejCount ? "rose" : "green"), value: d.rejCount, to: purchaseHref("REJECTED") },
   ]
@@ -81,7 +81,12 @@ export default function PurchaseView() {
   return (
     <MotionConfig reducedMotion="user">
       <MktHero eyebrow="Purchase dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={canOrders ? nudge(pending) : "Purchases and supplier deliveries."}>
-        <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to="/purchase"><ShoppingCart /> Open purchase</HeroLink>
+        {/* the purchase manager's way into one combined order for every pending request */}
+        {canOrders ? (
+          <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to="/purchase-requests"><ShoppingCart /> Purchase requests{pending ? ` (${pending})` : ""}</HeroLink>
+        ) : (
+          <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to="/purchase"><ShoppingCart /> Open purchase</HeroLink>
+        )}
       </MktHero>
 
       <PurchaseTileGrid className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">

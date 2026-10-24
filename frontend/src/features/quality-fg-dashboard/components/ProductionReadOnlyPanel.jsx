@@ -16,7 +16,7 @@ export default function ProductionReadOnlyPanel({ items = [], loading }) {
   const activeCount = getActiveProduction(items).length
 
   return (
-    <Card className="overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+    <Card className="overflow-hidden rounded-2xl border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader>
         <div>
           <CardTitle>Production status</CardTitle>

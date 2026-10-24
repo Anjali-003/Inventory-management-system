@@ -18,7 +18,7 @@ async function list() {
 async function accept(purchaseId, userId) {
     return inventory.inTransaction(async (conn) => {
         const [rows] = await conn.query(
-            `SELECT id, po_number, supplier, status, order_id FROM purchase_orders WHERE id = ? FOR UPDATE`,
+            `SELECT id, po_number, supplier, status FROM purchase_orders WHERE id = ? FOR UPDATE`,
             [purchaseId]
         );
         if (rows.length === 0) throw AppError.notFound("Purchase not found", "NOT_FOUND");
@@ -53,31 +53,36 @@ async function accept(purchaseId, userId) {
             [userId, purchaseId]
         );
 
-        // Purchase closes its loop; the Operations Admin knows the shortfall of that order is now on the shelf
-        const [orders] = po.order_id ? await conn.query(`SELECT order_number FROM orders WHERE id = ?`, [po.order_id]) : [[]];
-        const orderNumber = orders[0] && orders[0].order_number;
-        const payload = { purchase_id: purchaseId, po_number: po.po_number, order_number: orderNumber || null };
+        // Purchase closes its loop; the Operations Admin hears it for EVERY order this purchase covered (a combined
+        // purchase serves several orders, a purchase for stock none)
+        const [orders] = await conn.query(
+            `SELECT DISTINCT o.id, o.order_number FROM order_purchase_items r JOIN orders o ON o.id = r.order_id
+             WHERE r.purchase_order_id = ? ORDER BY o.id`,
+            [purchaseId]
+        );
+        const numbers = orders.map((o) => o.order_number);
+        const forWhat = numbers.length === 0 ? " for stock" : ` for order${numbers.length > 1 ? "s" : ""} ${numbers.join(", ")}`;
         await notifications.notify(conn, {
             role: "PURCHASE_MANAGER",
             type: "PURCHASE_STORED",
             title: `Purchase ${po.po_number} is in stock`,
-            body: `The Store Manager accepted the IQC approved parts${orderNumber ? ` for order ${orderNumber}` : ""}.`,
+            body: `The Store Manager accepted the IQC approved parts${forWhat}.`.slice(0, 500),
             severity: "success",
             link: "/purchase",
-            orderId: po.order_id || null,
-            payload,
+            orderId: orders.length === 1 ? orders[0].id : null,
+            payload: { purchase_id: purchaseId, po_number: po.po_number, order_numbers: numbers },
             userId,
         });
-        if (po.order_id) {
+        for (const o of orders) {
             await notifications.notify(conn, {
                 role: "OPERATIONS_ADMIN",
                 type: "PURCHASE_STORED",
-                title: `Parts for order ${orderNumber || `#${po.order_id}`} are in stock`,
+                title: `Parts for order ${o.order_number} are in stock`,
                 body: `Purchase ${po.po_number} passed IQC and was accepted into the store.`,
                 severity: "info",
-                link: `/order-approvals?order=${po.order_id}`,
-                orderId: po.order_id,
-                payload,
+                link: `/order-approvals?order=${o.id}`,
+                orderId: o.id,
+                payload: { purchase_id: purchaseId, po_number: po.po_number, order_number: o.order_number },
                 userId,
             });
         }

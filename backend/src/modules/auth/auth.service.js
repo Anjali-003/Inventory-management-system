@@ -107,7 +107,8 @@ async function getCurrentUser(token) {
             id,
             name,
             email,
-            role
+            role,
+            created_at
 
         FROM users
 
@@ -131,4 +132,28 @@ async function findUserById(id) {
     return rows[0] || null;
 }
 
-module.exports = { login, getCurrentUser, findUserById };
+/*
+    The logged-in user changes their own password. The current password must be right (so a tab left open cannot
+    be used to take the account over), the new one follows the same rule as create-user (8+ characters).
+*/
+async function changePassword(userId, currentPassword, newPassword) {
+    const current = String(currentPassword || "");
+    const next = String(newPassword || "");
+    if (!current) throw new AppError(422, "Enter your current password", "VALIDATION", { field: "current_password" });
+    if (next.length < 8) throw new AppError(422, "The new password must be at least 8 characters", "VALIDATION", { field: "new_password" });
+    if (next.length > 128) throw new AppError(422, "The new password must be 128 characters or fewer", "VALIDATION", { field: "new_password" });
+
+    const [rows] = await db.query("SELECT password_hash FROM users WHERE id = ? AND is_active = TRUE LIMIT 1", [userId]);
+    if (rows.length === 0) throw AppError.unauthorized("Not authenticated");
+    if (!(await bcrypt.compare(current, rows[0].password_hash))) {
+        throw new AppError(422, "Your current password is not correct", "WRONG_PASSWORD", { field: "current_password" });
+    }
+    if (await bcrypt.compare(next, rows[0].password_hash)) {
+        throw new AppError(422, "The new password must be different from the current one", "VALIDATION", { field: "new_password" });
+    }
+
+    await db.query("UPDATE users SET password_hash = ? WHERE id = ?", [await bcrypt.hash(next, 10), userId]);
+    return { message: "Password changed" };
+}
+
+module.exports = { login, getCurrentUser, findUserById, changePassword };

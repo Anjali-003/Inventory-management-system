@@ -5,7 +5,8 @@ import OpsTimelineTab from "./OpsTimelineTab"
 import { FeasibilityTab, OPS_TABS } from "./FeasibilityTab"
 import { DecisionButtons } from "./DecisionButtons"
 import useOrderDecisions from "./useOrderDecisions"
-import { useGetOrderApprovalsQuery } from "./orderApprovalsApi"
+import { canApprove } from "./approvalParts"
+import { useGetOrderApprovalsQuery, useGetOrderPlanQuery } from "./orderApprovalsApi"
 
 const EMPTY = []
 
@@ -16,25 +17,30 @@ const EMPTY = []
 
   `orderId={null}` keeps it closed; the order is read from the live list by id.
   `tab` / `onTab` are optional: pass them to keep the tab in the URL (the Incoming Orders page does), otherwise the
-  drawer remembers the tab itself, starting on `initialTab`.
+  drawer remembers the tab itself. With no tab chosen yet it opens where the work is: the Stock check (and its
+  "Your decision" box) for an order that waits, the Overview for one already decided.
 */
-export default function OpsOrderDrawer({ orderId, onClose, tab: tabProp, onTab, initialTab = "overview" }) {
+export default function OpsOrderDrawer({ orderId, onClose, tab: tabProp, onTab }) {
   const { canEdit } = usePermissions()
   const editable = canEdit("orderApprovals")
   const { data = EMPTY, isFetching } = useGetOrderApprovalsQuery()
-  const [ownTab, setOwnTab] = useState(initialTab)
+  const [ownTab, setOwnTab] = useState(null)
   const decisions = useOrderDecisions()
-
-  const tab = tabProp ?? ownTab
-  const setTab = onTab ?? setOwnTab
 
   const selected = useMemo(
     () => (orderId != null ? (data.find((o) => String(o.id) === String(orderId)) ?? null) : null),
     [data, orderId]
   )
+  const waiting = !!selected && canApprove(selected)
+  // the same cached stock check the Stock check tab shows: the footer buttons follow the same rules as its cards
+  const { data: plan } = useGetOrderPlanQuery(selected?.id, { skip: !waiting })
+  const startTab = waiting ? "feasibility" : "overview"
+  const tab = tabProp ?? ownTab ?? startTab
+  const setTab = onTab ?? setOwnTab
+  const decide = (kind) => decisions.open(kind, selected)
 
   const close = () => {
-    setOwnTab("overview")
+    setOwnTab(null)
     onClose()
   }
 
@@ -47,13 +53,17 @@ export default function OpsOrderDrawer({ orderId, onClose, tab: tabProp, onTab, 
         tab={tab}
         onTab={setTab}
         onClose={close}
+        wide
         tabs={OPS_TABS}
-        tabContent={selected ? { feasibility: <FeasibilityTab order={selected} />, timeline: <OpsTimelineTab order={selected} /> } : undefined}
-        actions={
-          selected && editable ? (
-            <DecisionButtons order={selected} disabled={isFetching} onDecide={(kind) => decisions.open(kind, selected)} />
-          ) : null
+        tabContent={
+          selected
+            ? {
+                feasibility: <FeasibilityTab order={selected} onDecide={editable && !isFetching ? decide : undefined} />,
+                timeline: <OpsTimelineTab order={selected} />,
+              }
+            : undefined
         }
+        actions={selected && editable ? <DecisionButtons order={selected} plan={plan} disabled={isFetching} onDecide={decide} /> : null}
       />
       {decisions.popup}
     </>

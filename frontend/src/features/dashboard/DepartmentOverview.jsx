@@ -19,7 +19,7 @@ export const shortageOf = (o) => (o.purchase_request?.items || EMPTY).filter((c)
 /* One read-only figure inside a department card (the card itself is the link, so this is not one). */
 function Stat({ label, value, loading, tone }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-[#dce5e0] bg-background px-3.5 py-2.5">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-[#E3E6EB] bg-background px-3.5 py-2.5">
       <span className="min-w-0 truncate text-sm text-muted-foreground">{label}</span>
       <span className={cn("shrink-0 text-lg font-bold tabular-nums", tone)}>
         {loading ? <span className="inline-block h-5 w-8 animate-pulse rounded-md bg-slate-200/80 align-middle" aria-label="Loading" /> : value}
@@ -31,7 +31,7 @@ function Stat({ label, value, loading, tone }) {
 /* Read-only summary of a department. The whole card opens that department's MAIN dashboard (/dashboard?dept=...). */
 function Panel({ icon: Icon, title, description, dept, children }) {
   return (
-    <Link to={`/dashboard?dept=${dept}`} aria-label={`Open ${title} Dashboard`} className="group flex flex-col gap-3 rounded-2xl border border-[#dce5e0] bg-card p-4 outline-none transition-[border-color,box-shadow] duration-200 hover:border-[#c3d1ca] hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring/60">
+    <Link to={`/dashboard?dept=${dept}`} aria-label={`Open ${title} Dashboard`} className="group flex flex-col gap-3 rounded-2xl border border-[#E3E6EB] bg-card p-4 outline-none transition-[border-color,box-shadow] duration-200 hover:border-[#CDD2DA] hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring/60">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground"><Icon className="size-[18px]" aria-hidden /></span>

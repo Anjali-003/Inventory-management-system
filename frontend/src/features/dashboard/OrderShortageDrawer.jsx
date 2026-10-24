@@ -112,7 +112,7 @@ function Panel({ order, onClose, canRaisePurchase }) {
   const shortages = order.purchase_request?.items || []
   const toOrder = shortages.filter((c) => c.purchase_order_id == null)
   const needs = toOrder.length > 0
-  const grad = needs ? "from-amber-400 to-orange-500 shadow-orange-500/30" : "from-emerald-400 to-emerald-700 shadow-emerald-600/30"
+  const grad = needs ? "from-amber-700 to-orange-800 shadow-orange-500/30" : "from-emerald-700 to-emerald-800 shadow-emerald-600/30"
   const Icon = needs ? ShoppingCart : PackageCheck
 
   // Focus, scroll lock, Escape and Tab trapping while the drawer is mounted (same behaviour as the order drawer).
@@ -159,7 +159,7 @@ function Panel({ order, onClose, canRaisePurchase }) {
         aria-modal="true"
         aria-labelledby={`${uid}-title`}
         tabIndex={-1}
-        className="absolute inset-y-0 end-0 flex w-full flex-col bg-card shadow-[-24px_0_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-[#dce5e0] sm:max-w-xl"
+        className="absolute inset-y-0 end-0 flex w-full flex-col bg-card shadow-[-24px_0_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-[#E3E6EB] sm:max-w-xl"
         initial={{ x: offscreen }}
         animate={{ x: 0 }}
         exit={{ x: offscreen }}
@@ -196,13 +196,13 @@ function Panel({ order, onClose, canRaisePurchase }) {
                 <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">
                   {needs ? `${toOrder.length} component${toOrder.length > 1 ? "s" : ""} to buy` : shortages.length ? "Everything is ordered" : "Nothing to buy"}
                 </p>
-                <p className="mt-0.5 text-xs text-white/80">
+                <p className="mt-0.5 text-xs text-white/95">
                   {needs ? "Place the supplier purchase order from the Purchase page." : shortages.length ? "Every short component is on a supplier purchase order." : "All stock was available when the order was approved."}
                 </p>
               </div>
               <div className="shrink-0 text-end">
                 <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{shortages.length}</p>
-                <p className="mt-1 text-[11px] text-white/80">short</p>
+                <p className="mt-1 text-[11px] text-white/95">short</p>
               </div>
             </div>
           </motion.div>
@@ -230,7 +230,7 @@ function Panel({ order, onClose, canRaisePurchase }) {
         <div className="flex flex-col-reverse gap-2 border-t bg-cf-head px-5 py-3.5 sm:flex-row sm:items-center sm:justify-end">
           <MktBtn onClick={onClose}>Close</MktBtn>
           {canRaisePurchase && needs && (
-            <MktBtn variant="primary" onClick={() => navigate("/purchase", { state: { orderId: order.id } })}>
+            <MktBtn variant="primary" onClick={() => navigate("/purchase-requests")}>
               <ShoppingCart /> Place order ({toOrder.length})
             </MktBtn>
           )}

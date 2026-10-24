@@ -46,7 +46,7 @@ function OrderCard({ order, canSend, busy, onSend, onOpen }) {
   const items = order.items ?? []
   const rejected = order.approval_status === "REJECTED"
   return (
-    <motion.li variants={rise} className="relative rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]">
+    <motion.li variants={rise} className="relative rounded-xl border border-[#E3E6EB] bg-card transition-colors duration-200 hover:border-[#CDD2DA]">
       <button type="button" onClick={onOpen} aria-label={`Open ${order.order_number}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />
       <div className="pointer-events-none relative p-4">
         <div className="flex items-start justify-between gap-3">
@@ -190,7 +190,7 @@ function DeliveryDateNotices({ items, onOpen, onAcknowledge }) {
                     View order <ChevronRight className="size-3.5" />
                   </button>
                 )}
-                <button type="button" onClick={() => onAcknowledge(n)} className="inline-flex h-9 items-center gap-1 rounded-lg bg-cf-green-soft px-3 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-hover focus-visible:ring-2 focus-visible:ring-primary/30 sm:h-8">
+                <button type="button" onClick={() => onAcknowledge(n)} className="inline-flex h-9 items-center gap-1 rounded-lg bg-accent px-3 text-xs font-semibold text-accent-foreground outline-none transition-colors hover:bg-violet-100 focus-visible:ring-2 focus-visible:ring-primary/30 sm:h-8">
                   <CheckCircle2 className="size-3.5" /> Got it
                 </button>
               </div>
@@ -290,7 +290,7 @@ export default function MarketingView() {
               Prepare an order, save it as a draft, then send it to the Operations Admin when it is ready.
               {editable && (
                 <span className="mt-4 flex justify-center">
-                  <Link to={ordersHref(null, { new: 1 })} className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-gradient-to-br from-emerald-500 to-teal-700 px-4 text-[13px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(13,148,136,0.8)] outline-none transition-[filter,transform] hover:brightness-110 focus-visible:ring-3 focus-visible:ring-primary/30 active:scale-[0.97] sm:h-9">
+                  <Link to={ordersHref(null, { new: 1 })} className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-gradient-to-br from-emerald-700 to-teal-800 px-4 text-[13px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(122,53,255,0.8)] outline-none transition-[filter,transform] hover:brightness-110 focus-visible:ring-3 focus-visible:ring-primary/30 active:scale-[0.97] sm:h-9">
                     <Plus className="size-4" /> Create your first order
                   </Link>
                 </span>

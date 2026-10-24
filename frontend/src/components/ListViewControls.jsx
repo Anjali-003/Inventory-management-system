@@ -1,8 +1,8 @@
 import { useState } from "react"
 import { ArrowDownWideNarrow, Check, LayoutGrid, SlidersHorizontal, Table2, X } from "lucide-react"
 
-const iconButton = "relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-[#dce5e0] bg-white text-slate-700 shadow-sm transition-colors hover:bg-emerald-50 hover:text-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-1"
-const fieldClass = "mt-1.5 h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/15"
+const iconButton = "relative inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-[#E3E6EB] bg-white text-slate-700 shadow-sm transition-colors hover:bg-violet-50 hover:text-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600 focus-visible:ring-offset-1"
+const fieldClass = "mt-1.5 h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-800 outline-none focus:border-violet-600 focus:ring-2 focus:ring-violet-600/15"
 
 /** Shared search-adjacent filter, sort, and one-button view switch for operational lists. */
 export default function ListViewControls({
@@ -26,7 +26,7 @@ export default function ListViewControls({
       <div className="flex items-center justify-end gap-1.5">
         <button type="button" className={iconButton} title="Filter records" aria-label="Filter records" aria-expanded={filterOpen} onClick={() => { setFilterOpen((open) => !open); setSortOpen(false) }}>
           <SlidersHorizontal className="size-4" aria-hidden />
-          {hasActiveFilters && <span className="absolute right-1 top-1 size-1.5 rounded-full bg-emerald-600" aria-hidden />}
+          {hasActiveFilters && <span className="absolute right-1 top-1 size-1.5 rounded-full bg-violet-600" aria-hidden />}
         </button>
         <button type="button" className={iconButton} title="Sort records" aria-label="Sort records" aria-expanded={sortOpen} onClick={() => { setSortOpen((open) => !open); setFilterOpen(false) }}>
           <ArrowDownWideNarrow className="size-4" aria-hidden />
@@ -37,7 +37,7 @@ export default function ListViewControls({
       </div>
 
       {sortOpen && (
-        <section className="mt-2 rounded-xl border border-[#dce5e0] bg-white p-3 shadow-sm" aria-label="Sort records">
+        <section className="mt-2 rounded-xl border border-[#E3E6EB] bg-white p-3 shadow-sm" aria-label="Sort records">
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-600">Sort by</p>
             <button type="button" onClick={() => setSortOpen(false)} className="rounded-md p-1 text-slate-500 hover:bg-slate-100" aria-label="Close sort options"><X className="size-4" /></button>
@@ -45,7 +45,7 @@ export default function ListViewControls({
           <div className="grid min-w-0 grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
             {sortOptions.map((option) => {
               const selected = sortBy === option.value
-              return <button key={option.value} type="button" onClick={() => { onSortChange?.(option.value); setSortOpen(false) }} className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${selected ? "border-emerald-700 bg-emerald-50 font-semibold text-emerald-900" : "border-transparent text-slate-700 hover:bg-slate-50"}`}>
+              return <button key={option.value} type="button" onClick={() => { onSortChange?.(option.value); setSortOpen(false) }} className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${selected ? "border-violet-600 bg-violet-50 font-semibold text-violet-800" : "border-transparent text-slate-700 hover:bg-slate-50"}`}>
                 <span className="break-words">{option.label}</span>{selected && <Check className="size-4 shrink-0" aria-hidden />}
               </button>
             })}
@@ -54,7 +54,7 @@ export default function ListViewControls({
       )}
 
       {filterOpen && (
-        <section className="mt-2 rounded-xl border border-[#dce5e0] bg-white p-3 shadow-sm" aria-label="Filter records">
+        <section className="mt-2 rounded-xl border border-[#E3E6EB] bg-white p-3 shadow-sm" aria-label="Filter records">
           <div className="mb-3 flex items-center justify-between gap-2">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-600">Filter records</p>
             <button type="button" onClick={() => setFilterOpen(false)} className="rounded-md p-1 text-slate-500 hover:bg-slate-100" aria-label="Close filters"><X className="size-4" /></button>
@@ -75,7 +75,7 @@ export default function ListViewControls({
             </label>)}
           </div> : <p className="text-sm text-slate-500">No extra filters are available for this list.</p>}
           <div className="mt-3 flex justify-end border-t border-slate-100 pt-3">
-            <button type="button" onClick={() => { onClearFilters?.(); setFilterOpen(false) }} className="rounded-lg px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-50">Clear filters</button>
+            <button type="button" onClick={() => { onClearFilters?.(); setFilterOpen(false) }} className="rounded-lg px-3 py-2 text-xs font-bold text-violet-800 hover:bg-violet-50">Clear filters</button>
           </div>
         </section>
       )}

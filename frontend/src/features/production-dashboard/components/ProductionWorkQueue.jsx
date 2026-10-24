@@ -40,7 +40,7 @@ export default function ProductionWorkQueue({ items, loading, onRequest, onStart
   const queue = getWorkQueue(items).slice(0, 6)
 
   return (
-    <Card className="min-w-0 overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+    <Card className="min-w-0 overflow-hidden rounded-2xl border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader className="flex-row items-center justify-between gap-3">
         <div>
           <CardTitle>Production work queue</CardTitle>

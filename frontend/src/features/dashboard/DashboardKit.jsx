@@ -149,7 +149,7 @@ function RowCards({ rows, onOpen, rightLabel }) {
   return (
     <ul className="grid gap-3 p-3 sm:p-4">
       {rows.map((r) => (
-        <li key={r.id} className="relative rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]">
+        <li key={r.id} className="relative rounded-xl border border-[#E3E6EB] bg-card transition-colors duration-200 hover:border-[#CDD2DA]">
           {openable(r) && <button type="button" onClick={() => onOpen(r)} aria-label={`Open ${r.title}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />}
           <div className="pointer-events-none relative p-4">
             <div className="flex items-start justify-between gap-3">

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { AnimatePresence, motion } from "motion/react"
 import { Bell, CheckCheck, Inbox } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { setUnreadCount } from "@/lib/pageTitle"
 import { timeAgo } from "@/features/activity/time"
 import { severityOf } from "./notificationStyle"
 import NotificationIcon from "./NotificationIcon"
@@ -39,10 +40,10 @@ export default function NotificationBell() {
   const tasks = visible.filter((n) => n.requires_action && !n.done)
   const rest = visible.filter((n) => !(n.requires_action && !n.done))
 
-  // "(3) Sensation Systems": the count shows in the browser tab too
+  // "(3) Incoming orders · Sensation Systems": the count shows in the browser tab too (lib/pageTitle.js)
   useEffect(() => {
-    const base = document.title.replace(/^\(\d+\+?\)\s*/, "")
-    document.title = unread ? `(${unread > 99 ? "99+" : unread}) ${base}` : base
+    setUnreadCount(unread)
+    return () => setUnreadCount(0)
   }, [unread])
 
   useEffect(() => {

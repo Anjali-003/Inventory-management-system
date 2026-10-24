@@ -9,13 +9,14 @@ import { fmtQty } from "@/lib/stock";
 import { cn } from "@/lib/utils";
 import { Download } from "lucide-react";
 import { canApprove, planTotals, planVerdict } from "./approvalParts";
+import DecisionGuide from "./DecisionGuide";
 import { useGetOrderPlanQuery } from "./orderApprovalsApi";
 
-/* Tabs of the Operations Admin's order drawer (OpsOrderDrawer.jsx). */
+/* Tabs of the Operations Admin's order drawer (OpsOrderDrawer.jsx). Stock check first: it is where the decision is made. */
 export const OPS_TABS = [
+  { id: "feasibility", label: "Stock check" },
   { id: "overview", label: "Overview" },
   { id: "items", label: "Products" },
-  { id: "feasibility", label: "Stock check" },
   { id: "timeline", label: "Timeline" },
 ];
 
@@ -24,8 +25,11 @@ const Note = ({ children }) => (
   <p className="rounded-xl border border-dashed px-3.5 py-3 text-sm text-muted-foreground">{children}</p>
 );
 
-/* "Stock check" tab: the live stock check while the order waits; what was handed over once it is decided. */
-export function FeasibilityTab({ order }) {
+/*
+  "Stock check" tab: the live stock check while the order waits (with the "Your decision" box on top when the admin
+  can decide: onDecide), what was handed over once it is decided.
+*/
+export function FeasibilityTab({ order, onDecide }) {
   const waiting = canApprove(order);
   const { data: plan, isLoading, error } = useGetOrderPlanQuery(order.id, { skip: !waiting });
   const names = Object.fromEntries(order.items.map((i) => [i.product_id, i.name]));
@@ -105,13 +109,15 @@ export function FeasibilityTab({ order }) {
   const shortages = plan.shortages || [];
   return (
     <div className="space-y-5">
+      <DecisionGuide order={order} plan={plan} onDecide={onDecide} />
+
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <Badge variant={verdict.variant}>{verdict.label}</Badge>
         <span>
           Ordered <b className="tabular-nums">{fmtQty(ordered)}</b>
         </span>
         <span>
-          Can make now <b className="tabular-nums text-primary">{fmtQty(canMake)}</b>
+          Can make now <b className="tabular-nums text-success">{fmtQty(canMake)}</b>
         </span>
         <span>
           Short{" "}
@@ -138,7 +144,7 @@ export function FeasibilityTab({ order }) {
                     {names[l.product_id] || `Product #${l.product_id}`}
                   </TableCell>
                   <TableCell className="px-3! py-1! text-end tabular-nums">{fmtQty(l.ordered)}</TableCell>
-                  <TableCell className={cn("px-3! py-1! text-end font-semibold tabular-nums", l.can_make > 0 ? "text-primary" : "text-destructive")}>
+                  <TableCell className={cn("px-3! py-1! text-end font-semibold tabular-nums", l.can_make > 0 ? "text-success" : "text-destructive")}>
                     {fmtQty(l.can_make)}
                   </TableCell>
                   <TableCell className={cn("px-3! py-1! text-end tabular-nums", Number(l.remaining) > 0 && "font-semibold text-destructive")}>

@@ -111,7 +111,7 @@ export function ApprovalCard({ order, showPlan, onOpen }) {
   const rejected = order.approval_status === "REJECTED"
 
   return (
-    <motion.li variants={rise} className="relative rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]">
+    <motion.li variants={rise} className="relative rounded-xl border border-[#E3E6EB] bg-card transition-colors duration-200 hover:border-[#CDD2DA]">
       <button type="button" onClick={onOpen} aria-label={`Open ${order.order_number}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />
       <div className="pointer-events-none relative p-4">
         <div className="flex items-start justify-between gap-3">
@@ -133,7 +133,7 @@ export function ApprovalCard({ order, showPlan, onOpen }) {
         </div>
 
         {showPlan && approvable && (
-          <div className="mt-3 rounded-xl border border-[#dce5e0] px-3 py-2.5">
+          <div className="mt-3 rounded-xl border border-[#E3E6EB] px-3 py-2.5">
             <PlanSummary orderId={order.id} items={items} />
           </div>
         )}
@@ -165,9 +165,9 @@ export function ApprovalPageCard({ order: o, canAct, onOpen, onReview }) {
     <motion.article
       layout="position"
       variants={rise}
-      className="relative overflow-hidden rounded-2xl border border-[#dce5e0] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
+      className="relative overflow-hidden rounded-2xl border border-[#E3E6EB] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
     >
-      <span aria-hidden className={cn("absolute inset-y-0 start-0 w-1 bg-gradient-to-b", stage?.s.grad ?? "from-slate-300 to-slate-400")} />
+      <span aria-hidden className={cn("absolute inset-y-0 start-0 w-1 bg-gradient-to-b", stage?.s.grad ?? "from-slate-600 to-slate-800")} />
 
       <motion.div
         role="button"

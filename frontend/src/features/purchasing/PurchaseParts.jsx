@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import UserCell from "@/components/UserCell"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
+import { cn } from "@/lib/utils"
 import { Download } from "lucide-react"
-import { STATUS_META, WAS_INSPECTED, downloadRejected, qtyWithUnit, rejectedLines } from "./purchasingUtils"
+import { STATUS_META, WAS_INSPECTED, badLines, badQty, downloadRejected, goodQty, purchaseFor, qtyWithUnit } from "./purchasingUtils"
 
 export function PurchaseStatus({ value }) {
   const m = STATUS_META[value] || { variant: "neutral", label: value || "Unknown" }
@@ -22,25 +23,38 @@ export function PurchaseLines({ items, inspected }) {
             <TableHead>Component</TableHead>
             <TableHead className="text-right">Ordered</TableHead>
             <TableHead className="text-right">Received</TableHead>
-            {inspected && <TableHead>IQC decision</TableHead>}
+            {inspected && <TableHead className="text-right">Accepted</TableHead>}
+            {inspected && <TableHead className="text-right">Rejected</TableHead>}
+            {inspected && <TableHead>IQC result</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((it) => (
-            <TableRow key={it.id}>
-              <TableCell>
-                <p className="font-medium">{it.name}</p>
-                <p className="text-xs text-muted-foreground">{it.sku}{it.remarks ? ` · ${it.remarks}` : ""}</p>
-              </TableCell>
-              <TableCell className="text-right tabular-nums">{qtyWithUnit(it.quantity_ordered, it.unit)}</TableCell>
-              <TableCell className="text-right tabular-nums">{inspected ? qtyWithUnit(it.quantity_received, it.unit) : "-"}</TableCell>
-              {inspected && (
+          {items.map((it) => {
+            const bad = badQty(it)
+            return (
+              <TableRow key={it.id}>
                 <TableCell>
-                  <Badge variant={it.iqc_decision === "REJECTED" ? "danger" : "success"}>{it.iqc_decision === "REJECTED" ? "Rejected" : "Approved"}</Badge>
+                  <p className="font-medium">{it.name}</p>
+                  <p className="text-xs text-muted-foreground">{it.sku}{it.remarks ? ` · ${it.remarks}` : ""}</p>
                 </TableCell>
-              )}
-            </TableRow>
-          ))}
+                <TableCell className="text-right tabular-nums">{qtyWithUnit(it.quantity_ordered, it.unit)}</TableCell>
+                <TableCell className="text-right tabular-nums">{inspected ? qtyWithUnit(it.quantity_received, it.unit) : "-"}</TableCell>
+                {inspected && <TableCell className="text-right font-semibold tabular-nums text-success">{fmtQty(goodQty(it))}</TableCell>}
+                {inspected && <TableCell className={cn("text-right tabular-nums", bad > 0 ? "font-semibold text-destructive" : "text-muted-foreground")}>{fmtQty(bad)}</TableCell>}
+                {inspected && (
+                  <TableCell>
+                    {it.iqc_decision === "REJECTED" ? (
+                      <Badge variant="danger">Rejected</Badge>
+                    ) : bad > 0 ? (
+                      <Badge variant="warning">Part rejected</Badge>
+                    ) : (
+                      <Badge variant="success">All accepted</Badge>
+                    )}
+                  </TableCell>
+                )}
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>
@@ -57,12 +71,12 @@ export function PurchaseDetailModal({ purchase, onClose }) {
       onClose={onClose}
       size="lg"
       title={`${purchase.po_number} · ${purchase.supplier}`}
-      description={[purchase.order_number && `For order ${purchase.order_number}`, purchase.notes].filter(Boolean).join(" · ") || undefined}
+      description={[purchaseFor(purchase) && `For ${purchaseFor(purchase)}`, purchase.notes].filter(Boolean).join(" · ") || undefined}
       footer={
         <>
-          {rejectedLines(purchase).length > 0 && (
+          {badLines(purchase).length > 0 && (
             <Button type="button" variant="outline" size="lg" onClick={() => downloadRejected(purchase)}>
-              <Download /> Rejected components (Excel)
+              <Download /> Rejected pieces (Excel)
             </Button>
           )}
           <Button type="button" variant="outline" size="lg" onClick={onClose} data-autofocus>Close</Button>

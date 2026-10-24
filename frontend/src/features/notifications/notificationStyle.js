@@ -4,7 +4,8 @@ import {
 } from "lucide-react"
 
 /*
-  One look per severity, shared by the header bell, the toasts and the dashboard panels.
+  One look per severity, shared by the header bell, the toasts and the dashboard panels. Same colour language as
+  the order statuses: green done, amber waiting for a decision, red problem, blue information.
     info     something happened, nothing to do
     success  something you were waiting for went through
     warning  something changed that you should know about (e.g. a delivery date)
@@ -12,9 +13,9 @@ import {
 */
 export const SEVERITY = {
   info: { icon: Info, label: "Info", tone: "text-cf-blue", soft: "bg-cf-blue-soft", bar: "bg-cf-blue" },
-  success: { icon: CircleCheck, label: "Update", tone: "text-primary", soft: "bg-cf-green-soft", bar: "bg-primary" },
+  success: { icon: CircleCheck, label: "Update", tone: "text-success", soft: "bg-cf-green-soft", bar: "bg-success" },
   warning: { icon: TriangleAlert, label: "Changed", tone: "text-warning", soft: "bg-cf-amber-soft", bar: "bg-warning" },
-  action: { icon: BellRing, label: "Action needed", tone: "text-cf-violet", soft: "bg-cf-violet-soft", bar: "bg-cf-violet" },
+  action: { icon: BellRing, label: "Action needed", tone: "text-warning", soft: "bg-cf-amber-soft", bar: "bg-warning" },
 }
 
 // a more specific icon for the notification types we know; anything new falls back to its severity's icon

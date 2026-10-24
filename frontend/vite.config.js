@@ -22,4 +22,22 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+
+  build: {
+    // never ship the source code to the browser in production
+    sourcemap: false,
+    rolldownOptions: {
+      output: {
+        // libraries in their own files: they change rarely, so the browser keeps them cached across app updates
+        codeSplitting: {
+          groups: [
+            { name: "react", test: /node_modules[\/](react|react-dom|scheduler|react-router|react-router-dom)[\/]/ },
+            { name: "redux", test: /node_modules[\/](@reduxjs|redux|react-redux|immer|reselect)[\/]/ },
+            { name: "motion", test: /node_modules[\/](motion|framer-motion|motion-dom|motion-utils)[\/]/ },
+            { name: "icons", test: /node_modules[\/]lucide-react[\/]/ },
+          ],
+        },
+      },
+    },
+  },
 });

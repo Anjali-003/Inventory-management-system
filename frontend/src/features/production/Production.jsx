@@ -272,10 +272,10 @@ export default function Production() {
 
   // Keep this page focused on the current material-allotment production workflow.
   const stats = [
-    { key: "all", label: "All production", hint: "Every product line in production", icon: Factory, dot: "bg-slate-400", s: { grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/20" }, value: counts.all, tone: "neutral", active: filter === "all", onClick: () => setFilterAndReset("all") },
-    { key: "awaiting", label: "Awaiting allotment", hint: "Products still needing material handover", icon: PackagePlus, dot: "bg-amber-500", s: { grad: "from-amber-400 to-orange-600", glow: "shadow-amber-500/20" }, value: counts.awaiting, tone: "warning", active: filter === "awaiting", onClick: () => setFilterAndReset("awaiting") },
-    { key: "ready", label: "Ready to start", hint: "Products covered by allotted materials", icon: PlayCircle, dot: "bg-blue-500", s: { grad: "from-blue-500 to-indigo-700", glow: "shadow-blue-600/20" }, value: counts.ready, tone: "info", active: filter === "ready", onClick: () => setFilterAndReset("ready") },
-    { key: "completed", label: "Production completed", hint: "All ordered units have been completed", icon: CheckCircle2, dot: "bg-emerald-500", s: { grad: "from-emerald-500 to-teal-700", glow: "shadow-emerald-500/20" }, value: counts.completed, tone: "success", active: filter === "completed", onClick: () => setFilterAndReset("completed") },
+    { key: "all", label: "All production", hint: "Every product line in production", icon: Factory, dot: "bg-slate-400", s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/20" }, value: counts.all, tone: "neutral", active: filter === "all", onClick: () => setFilterAndReset("all") },
+    { key: "awaiting", label: "Awaiting allotment", hint: "Products still needing material handover", icon: PackagePlus, dot: "bg-amber-500", s: { grad: "from-amber-700 to-orange-800", glow: "shadow-amber-500/20" }, value: counts.awaiting, tone: "warning", active: filter === "awaiting", onClick: () => setFilterAndReset("awaiting") },
+    { key: "ready", label: "Ready to start", hint: "Products covered by allotted materials", icon: PlayCircle, dot: "bg-blue-500", s: { grad: "from-blue-600 to-indigo-800", glow: "shadow-blue-600/20" }, value: counts.ready, tone: "info", active: filter === "ready", onClick: () => setFilterAndReset("ready") },
+    { key: "completed", label: "Production completed", hint: "All ordered units have been completed", icon: CheckCircle2, dot: "bg-emerald-500", s: { grad: "from-emerald-700 to-teal-800", glow: "shadow-emerald-500/20" }, value: counts.completed, tone: "success", active: filter === "completed", onClick: () => setFilterAndReset("completed") },
   ]
 
   const openUpdate = (item) => {

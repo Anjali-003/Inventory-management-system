@@ -57,7 +57,7 @@ function OrderCards({ orders, onOpen }) {
   return (
     <motion.ul variants={stagger(0.05, 0.05)} initial="hidden" animate="show" className="grid gap-3 p-3 sm:p-4">
       {orders.map((o) => (
-        <motion.li key={o.id} variants={rise} className="relative rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]">
+        <motion.li key={o.id} variants={rise} className="relative rounded-xl border border-[#E3E6EB] bg-card transition-colors duration-200 hover:border-[#CDD2DA]">
           <button type="button" onClick={() => onOpen(o)} aria-label={`Open ${o.order_number}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />
           <div className="pointer-events-none relative p-4">
             <div className="flex items-start justify-between gap-3">

@@ -30,16 +30,17 @@ export const purchasingApi = baseApi.injectEndpoints({
       providesTags: ["Purchases"],
     }),
 
-    // purchase manager: place the order for lines of the Operations Admin's list.
-    // data = { order_id, supplier, notes, request_item_ids: [purchase_request.items[].request_item_id] }
-    // (the server takes the component and quantity from that list; nothing else can be bought)
+    // purchase manager: place a purchase order (PurchasePlanner).
+    // data = { supplier, notes, items: [{ component_id, quantity, request_item_ids }] }: requirements of any approved
+    // orders combined per component and/or components for stock, in round figures (never below what the covered
+    // requirement lines need: the server checks). The older { order_id, request_item_ids } form still works.
     createPurchase: build.mutation({
       query: (data) => ({ url: "/purchase", method: "post", data }),
       invalidatesTags: ["Purchases", "OrderApprovals"],
     }),
-    // purchase manager: goods arrived
+    // purchase manager: goods arrived, with the pieces counted per component ({ id, items: [{ id, received }] })
     receivePurchase: build.mutation({
-      query: (id) => ({ url: `/purchase/${id}/receive`, method: "post" }),
+      query: ({ id, items }) => ({ url: `/purchase/${id}/receive`, method: "post", data: { items } }),
       invalidatesTags: ["Purchases"],
     }),
     // purchase manager: hand the received goods to IQC

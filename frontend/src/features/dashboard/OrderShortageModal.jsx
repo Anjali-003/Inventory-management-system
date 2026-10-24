@@ -80,7 +80,7 @@ export default function OrderShortageModal({ order, onClose, canRaisePurchase })
 
   // amber while something is still to buy, green once everything is ordered or nothing was short
   const needs = toOrder.length > 0
-  const grad = needs ? "from-amber-400 to-orange-500 shadow-orange-500/30" : "from-emerald-400 to-emerald-700 shadow-emerald-600/30"
+  const grad = needs ? "from-amber-700 to-orange-800 shadow-orange-500/30" : "from-emerald-700 to-emerald-800 shadow-emerald-600/30"
   const Icon = needs ? ShoppingCart : PackageCheck
 
   return (
@@ -94,7 +94,7 @@ export default function OrderShortageModal({ order, onClose, canRaisePurchase })
         <>
           <MktBtn onClick={onClose} data-autofocus>Close</MktBtn>
           {canRaisePurchase && needs && (
-            <MktBtn variant="primary" onClick={() => navigate("/purchase", { state: { orderId: order.id } })}>
+            <MktBtn variant="primary" onClick={() => navigate("/purchase-requests")}>
               <ShoppingCart /> Place order ({toOrder.length})
             </MktBtn>
           )}
@@ -119,13 +119,13 @@ export default function OrderShortageModal({ order, onClose, canRaisePurchase })
                 <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">
                   {needs ? `${toOrder.length} component${toOrder.length > 1 ? "s" : ""} to order` : shortages.length ? "Everything is ordered" : "Nothing to buy"}
                 </p>
-                <p className="mt-0.5 text-xs text-white/80">
+                <p className="mt-0.5 text-xs text-white/95">
                   {needs ? "Place the order from the Purchase page." : shortages.length ? "Every short component is on a purchase." : "All stock was available when the order was approved."}
                 </p>
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{shortages.length}</p>
-                <p className="mt-1 text-[11px] text-white/80">short</p>
+                <p className="mt-1 text-[11px] text-white/95">short</p>
               </div>
             </div>
           </motion.div>

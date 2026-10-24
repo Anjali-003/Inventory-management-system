@@ -88,7 +88,7 @@ export default function OrdersTable({ orders, filterKey, editable, busyId, onOpe
                 <TableCell className="relative min-w-40 py-3.5">
                   <span
                     aria-hidden
-                    className={cn("absolute inset-y-2.5 start-0 w-1 origin-center scale-y-0 rounded-e-full bg-gradient-to-b transition-transform duration-200 group-hover:scale-y-100 group-focus-within:scale-y-100 motion-reduce:transition-none", stage?.s.grad ?? "from-slate-300 to-slate-400")}
+                    className={cn("absolute inset-y-2.5 start-0 w-1 origin-center scale-y-0 rounded-e-full bg-gradient-to-b transition-transform duration-200 group-hover:scale-y-100 group-focus-within:scale-y-100 motion-reduce:transition-none", stage?.s.grad ?? "from-slate-600 to-slate-800")}
                   />
                   <button type="button" className="block text-start font-semibold tabular-nums outline-none transition-colors group-hover:text-primary focus-visible:text-primary focus-visible:underline">
                     {o.order_number}

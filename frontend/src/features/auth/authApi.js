@@ -1,6 +1,7 @@
 import { baseApi } from "@/api/baseApi";
 
-/* The logged-in super admin ({ id, name, email, role }). Used for the dashboard greeting and "You" in the activity feed. */
+/* The logged-in user of this tab ({ id, name, email, role, created_at }): dashboard greeting, "You" in the activity
+   feed, the profile menu. changePassword changes that user's own password. */
 export const authApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     getMe: build.query({
@@ -8,7 +9,10 @@ export const authApi = baseApi.injectEndpoints({
       transformResponse: (res) => res.user,
       providesTags: ["Me"],
     }),
+    changePassword: build.mutation({
+      query: (body) => ({ url: "/auth/change-password", method: "post", data: body }),
+    }),
   }),
 });
 
-export const { useGetMeQuery } = authApi;
+export const { useGetMeQuery, useChangePasswordMutation } = authApi;

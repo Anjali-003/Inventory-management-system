@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { PackageCheck, Scale, X } from "lucide-react"
 import { MktBtn } from "@/features/marketing-orders/mktKit"
-import { approveLabel, canApprove } from "./approvalParts"
+import { approveLabel, canApprove, planTotals } from "./approvalParts"
 
 /*
   The Operations Admin's three decisions on a waiting order, the SAME everywhere (the order drawer on the Incoming
@@ -13,11 +13,17 @@ import { approveLabel, canApprove } from "./approvalParts"
   disabled, with the reason, so nobody has to guess where an option went. The popups live in useOrderDecisions.jsx.
 */
 
-/** null when the order can be revised, otherwise the reason it cannot. */
-export function reviseBlockReason(o) {
+/**
+ * null when the order can be revised, otherwise the reason it cannot. THE rule, used by the footer buttons and the
+ * "Your decision" cards alike. With the stock check (`plan`) it also says when revising cannot work right now; the
+ * backend refuses the same cases (a revise that makes nothing, or with an incomplete BOM).
+ */
+export function reviseBlockReason(o, plan) {
   if (!o || o.approval_status !== "PENDING_APPROVAL") return "Only an order waiting for approval can be revised."
   if (o.created_by_role !== "MARKETING_MANAGER") return "Only orders raised by the Marketing Manager can be revised."
   if (o.revision) return "The quantity of this order was already revised once."
+  if (plan?.missing_bom?.length) return "Complete the bill of materials first."
+  if (plan && planTotals(plan).canMake === 0) return "Nothing can be built from the current stock, so there is nothing to make now."
   return null
 }
 
@@ -37,13 +43,13 @@ function Blockable({ reason, children }) {
 }
 
 /**
- * The three decision buttons. `current` is the popup they sit in (that one is left out),
- * `disabled` greys them all out (e.g. while the list refreshes right after a decision).
+ * The three decision buttons. `plan` is the order's stock check when it is loaded, `current` the popup they sit in
+ * (that one is left out), `disabled` greys them all out (e.g. while the list refreshes right after a decision).
  */
-export function DecisionButtons({ order, onDecide, current = null, disabled = false, size = "md" }) {
+export function DecisionButtons({ order, plan, onDecide, current = null, disabled = false, size = "md" }) {
   if (!order || !canApprove(order)) return null
   const rejectWhy = rejectBlockReason(order)
-  const reviseWhy = reviseBlockReason(order)
+  const reviseWhy = reviseBlockReason(order, plan)
   return (
     <>
       {current !== "reject" && (

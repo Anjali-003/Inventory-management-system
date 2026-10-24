@@ -11,8 +11,8 @@ const require = createRequire(import.meta.url);
 let s;
 const fresh = () => ({
   orders: [
-    { id: 7, approval_status: "APPROVED" },
-    { id: 8, approval_status: "PENDING_APPROVAL" },
+    { id: 7, order_number: "ORD-007", approval_status: "APPROVED" },
+    { id: 8, order_number: "ORD-008", approval_status: "PENDING_APPROVAL" },
   ],
   // the Operations Admin's list
   requests: [
@@ -27,7 +27,13 @@ const fresh = () => ({
 const norm = (sql) => sql.replace(/\s+/g, " ");
 const has = (sql, t) => norm(sql).includes(t);
 
+const COMPONENTS = { 11: "Resistor", 12: "Capacitor", 13: "Diode", 20: "Relay" };
+const withOrder = (r) => ({ ...r, ...(({ order_number, approval_status }) => ({ order_number, approval_status }))(s.orders.find((o) => o.id === r.order_id)) });
+
 function run(sql, p = []) {
+  if (has(sql, "SELECT id, name FROM components WHERE id IN (?)")) return [p[0].filter((id) => COMPONENTS[id]).map((id) => ({ id, name: COMPONENTS[id] }))];
+  if (has(sql, "FROM order_purchase_items r JOIN orders o ON o.id = r.order_id WHERE r.id IN (?) FOR UPDATE")) return [s.requests.filter((r) => p[0].includes(r.id)).map(withOrder)];
+  if (has(sql, "FROM order_purchase_items r JOIN orders o ON o.id = r.order_id WHERE r.purchase_order_id IN (?)")) return [s.requests.filter((r) => p[0].includes(r.purchase_order_id)).map(withOrder)];
   if (has(sql, "SELECT id, approval_status FROM orders WHERE id = ? FOR UPDATE")) return [s.orders.filter((o) => o.id === p[0])];
   if (has(sql, "FROM order_purchase_items WHERE id IN (?) FOR UPDATE")) return [s.requests.filter((r) => p[0].includes(r.id))];
   if (has(sql, "INSERT INTO purchase_orders")) {
@@ -105,5 +111,63 @@ describe("createPurchase", () => {
   it("validates supplier and duplicate ids", async () => {
     await expect(service.createPurchase(body({ supplier: " " }), 99)).rejects.toMatchObject({ status: 422 });
     await expect(service.createPurchase(body({ request_item_ids: [1, 1] }), 99)).rejects.toMatchObject({ status: 422 });
+  });
+});
+
+describe("the purchase manager's own order: combined orders and stock", () => {
+  // a second approved order that also needs component 11 (the Resistor)
+  beforeEach(() => {
+    s.orders.push({ id: 9, order_number: "ORD-009", approval_status: "APPROVED" });
+    s.requests.push({ id: 4, order_id: 9, component_id: 11, quantity: "12.50", purchase_order_id: null });
+  });
+  const combined = (items, extra = {}) => ({ supplier: "Sharma Electronics", items, ...extra });
+
+  it("combines several orders' needs of one component into one line, rounded up, surplus to stock", async () => {
+    const po = await service.createPurchase(combined([{ component_id: 11, quantity: 50, request_item_ids: [1, 4] }]), 99);
+    expect(s.pos[0].order_id).toBe(null); // two orders: tied to neither
+    expect(s.poItems).toEqual([{ po: 1, component_id: 11, quantity_ordered: "50.00" }]);
+    expect(s.requests.filter((r) => [1, 4].includes(r.id)).map((r) => r.purchase_order_id)).toEqual([1, 1]);
+    expect(po).toMatchObject({ kind: "COMBINED", orders: ["ORD-007", "ORD-009"] });
+    expect(po.items[0]).toMatchObject({ component_id: 11, for_orders: 20.5 }); // 8 + 12.5 for orders, the rest for stock
+  });
+
+  it("refuses a quantity below what the covered orders need", async () => {
+    await expect(service.createPurchase(combined([{ component_id: 11, quantity: 20, request_item_ids: [1, 4] }]), 99))
+      .rejects.toMatchObject({ code: "BELOW_REQUIREMENT", extra: { minimum: 20.5 } });
+    expect(s.pos).toEqual([]);
+  });
+
+  it("buys for stock with no order at all (low or out of stock)", async () => {
+    const po = await service.createPurchase(combined([{ component_id: 20, quantity: 500 }]), 99);
+    expect(s.pos[0].order_id).toBe(null);
+    expect(po).toMatchObject({ kind: "STOCK", orders: [] });
+    expect(s.requests.every((r) => r.purchase_order_id === null)).toBe(true);
+  });
+
+  it("keeps the order on the purchase when everything covered belongs to one order", async () => {
+    const po = await service.createPurchase(combined([{ component_id: 11, quantity: 10, request_item_ids: [1] }, { component_id: 20, quantity: 100 }]), 99);
+    expect(s.pos[0].order_id).toBe(7);
+    expect(po).toMatchObject({ kind: "ORDER", orders: ["ORD-007"] });
+  });
+
+  it("refuses lines that are already ordered, not approved, or of another component", async () => {
+    await service.createPurchase(combined([{ component_id: 11, quantity: 10, request_item_ids: [1] }]), 99);
+    await expect(service.createPurchase(combined([{ component_id: 11, quantity: 30, request_item_ids: [1, 4] }]), 99)).rejects.toMatchObject({ code: "ALREADY_ORDERED" });
+    await expect(service.createPurchase(combined([{ component_id: 13, quantity: 5, request_item_ids: [3] }]), 99)).rejects.toMatchObject({ code: "NOT_APPROVED" });
+    await expect(service.createPurchase(combined([{ component_id: 12, quantity: 50, request_item_ids: [4] }]), 99)).rejects.toMatchObject({ code: "NOT_ON_LIST" });
+  });
+
+  it("validates the list itself", async () => {
+    const bad = [
+      combined([]),
+      combined([{ component_id: 11, quantity: 0 }]),
+      combined([{ component_id: 11, quantity: 1.555 }]),
+      combined([{ component_id: 11, quantity: 5 }, { component_id: 11, quantity: 5 }]),
+      combined([{ component_id: 11, quantity: 20, request_item_ids: [1, 1] }]),
+      combined([{ component_id: 11, quantity: 5 }], { supplier: "" }),
+    ];
+    for (const b of bad) await expect(service.createPurchase(b, 99)).rejects.toMatchObject({ status: 422 });
+    await expect(service.createPurchase(combined([{ component_id: 999, quantity: 5 }]), 99)).rejects.toMatchObject({ code: "UNKNOWN_COMPONENT" });
+    expect(s.pos).toEqual([]);
   });
 });

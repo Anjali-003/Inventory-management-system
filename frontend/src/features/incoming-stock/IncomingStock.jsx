@@ -136,9 +136,9 @@ export default function IncomingStock() {
   const piecesWaiting = waiting.reduce((s, p) => s + p.totals.approved, 0)
   const pick = (k) => () => setParams(k === "ALL" || k === view ? {} : { status: k }, { replace: true })
   const filters = [
-    { key: "ALL", label: "All purchases", value: waiting.length + done.length, icon: Truck, tone: "violet", detail: "IQC approved", grad: "from-violet-400 to-purple-600", pill: "bg-violet-50 text-violet-800 ring-violet-200", dot: "bg-violet-500", active: !view, onClick: pick("ALL") },
-    { key: "PENDING_STORE", label: "To accept into stock", value: waiting.length, icon: Truck, tone: "amber", detail: `${fmtQty(piecesWaiting)} pieces to receive`, grad: "from-amber-400 to-orange-500", pill: "bg-amber-50 text-amber-800 ring-amber-200", dot: "bg-amber-500", active: view === "PENDING_STORE", onClick: pick("PENDING_STORE") },
-    { key: "STORED", label: "Accepted", value: done.length, icon: CheckCircle2, tone: "green", detail: "Already in inventory", grad: "from-emerald-400 to-emerald-700", pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", dot: "bg-emerald-600", active: view === "STORED", onClick: pick("STORED") },
+    { key: "ALL", label: "All purchases", value: waiting.length + done.length, icon: Truck, tone: "violet", detail: "IQC approved", grad: "from-violet-600 to-purple-800", pill: "bg-violet-50 text-violet-800 ring-violet-200", dot: "bg-violet-500", active: !view, onClick: pick("ALL") },
+    { key: "PENDING_STORE", label: "To accept into stock", value: waiting.length, icon: Truck, tone: "amber", detail: `${fmtQty(piecesWaiting)} pieces to receive`, grad: "from-amber-700 to-orange-800", pill: "bg-amber-50 text-amber-800 ring-amber-200", dot: "bg-amber-500", active: view === "PENDING_STORE", onClick: pick("PENDING_STORE") },
+    { key: "STORED", label: "Accepted", value: done.length, icon: CheckCircle2, tone: "green", detail: "Already in inventory", grad: "from-emerald-700 to-emerald-800", pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", dot: "bg-emerald-600", active: view === "STORED", onClick: pick("STORED") },
   ]
 
   const confirmAccept = async () => {

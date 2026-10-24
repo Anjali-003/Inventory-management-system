@@ -75,7 +75,13 @@ const ACCESS = {
     // on dispatch (POST /purchase checks every line against order_purchase_items). He then marks it received and
     // sends it to IQC.
     PURCHASE_MANAGER: {
-        purchase: "edit"
+        purchase: "edit",
+        approvedOrders: "view", // orders approved by the Operations Admin
+        iqc: "view",
+        inventory: "view", // stock levels for the purchase order planner (low / out of stock)
+        inventoryHistory: "view",
+        finishedGoods: "view",
+        incomingStock: "view"
     },
 
     // Production can update production runs and inventory, and view QC / finished goods.
@@ -96,14 +102,7 @@ const ACCESS = {
         qualityControl: "edit",
         finishedGoods: "edit",
         qcFailed: "edit",
-        production: "view",
-        purchase: "edit",
-        approvedOrders: "view", // orders approved by the Operations Admin
-        iqc: "view",
-        inventory: "view",
-        inventoryHistory: "view",
-        
-        incomingStock: "view"
+        production: "view"
     }
 };
 

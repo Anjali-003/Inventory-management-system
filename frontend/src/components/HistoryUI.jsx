@@ -70,7 +70,7 @@ export function Panel({ className, children, ...p }) {
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-[14px] border border-[#dce5e0]/90 bg-card shadow-[0_1px_2px_rgba(22,34,30,0.035),0_10px_28px_rgba(22,34,30,0.045)]",
+        "overflow-hidden rounded-[14px] border border-[#E3E6EB]/90 bg-card shadow-[0_1px_2px_rgba(22,34,30,0.035),0_10px_28px_rgba(22,34,30,0.045)]",
         className,
       )}
       {...p}
@@ -92,7 +92,7 @@ export function PanelHeader({ title, subtitle, className, children }) {
       <div className="min-w-0">
         <h2 className="flex items-center gap-2.5 text-[14px] font-bold tracking-[-0.2px]">
           <span
-            className="h-4 w-[3px] rounded-full bg-gradient-to-b from-emerald-400 to-primary"
+            className="h-4 w-[3px] rounded-full bg-gradient-to-b from-[#5B21D6] to-primary"
             aria-hidden
           />
           {title}
@@ -114,7 +114,7 @@ const BTN_BASE =
   "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] text-xs font-semibold select-none outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-45 [&_svg]:size-[15px] [&_svg]:shrink-0";
 const BTN = {
   primary:
-    "h-9 bg-primary px-3.5 text-primary-foreground shadow-[0_1px_2px_rgba(15,109,85,0.2)] hover:-translate-y-px hover:bg-cf-green-hover",
+    "h-9 bg-primary px-3.5 text-primary-foreground shadow-[0_1px_2px_rgba(122,53,255,0.25)] hover:-translate-y-px hover:bg-cf-green-hover",
   secondary:
     "h-9 border border-cf-line-strong bg-card px-3.5 text-foreground hover:bg-muted",
   ghost:
@@ -140,33 +140,33 @@ export function CfButton({
 
 const STAT_TONE = {
   blue: [
-    "bg-gradient-to-br from-sky-500 to-blue-700 text-white shadow-[0_5px_12px_rgba(59,130,246,0.22)]",
+    "bg-gradient-to-br from-sky-700 to-blue-800 text-white shadow-[0_5px_12px_rgba(59,130,246,0.22)]",
     "text-sky-700",
-    "bg-gradient-to-r from-sky-400 to-blue-600",
+    "bg-gradient-to-r from-sky-700 to-blue-800",
     "text-sky-800",
   ],
   violet: [
-    "bg-gradient-to-br from-violet-500 to-purple-700 text-white shadow-[0_5px_12px_rgba(124,58,237,0.2)]",
+    "bg-gradient-to-br from-violet-600 to-purple-800 text-white shadow-[0_5px_12px_rgba(124,58,237,0.2)]",
     "text-violet-700",
-    "bg-gradient-to-r from-violet-400 to-purple-600",
+    "bg-gradient-to-r from-violet-600 to-purple-800",
     "text-violet-800",
   ],
   green: [
-    "bg-gradient-to-br from-emerald-500 to-emerald-800 text-white shadow-[0_5px_12px_rgba(16,185,129,0.2)]",
+    "bg-gradient-to-br from-emerald-700 to-emerald-800 text-white shadow-[0_5px_12px_rgba(16,185,129,0.2)]",
     "text-emerald-700",
-    "bg-gradient-to-r from-emerald-400 to-emerald-700",
+    "bg-gradient-to-r from-emerald-700 to-emerald-800",
     "text-emerald-800",
   ],
   red: [
-    "bg-gradient-to-br from-rose-500 to-red-700 text-white shadow-[0_5px_12px_rgba(244,63,94,0.2)]",
+    "bg-gradient-to-br from-rose-600 to-red-800 text-white shadow-[0_5px_12px_rgba(244,63,94,0.2)]",
     "font-semibold text-red-700",
-    "bg-gradient-to-r from-rose-400 to-red-600",
+    "bg-gradient-to-r from-rose-600 to-red-800",
     "text-red-700",
   ],
   amber: [
-    "bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-[0_5px_12px_rgba(245,158,11,0.2)]",
+    "bg-gradient-to-br from-amber-700 to-orange-800 text-white shadow-[0_5px_12px_rgba(245,158,11,0.2)]",
     "font-semibold text-amber-700",
-    "bg-gradient-to-r from-amber-400 to-orange-600",
+    "bg-gradient-to-r from-amber-700 to-orange-800",
     "text-amber-800",
   ],
 };
@@ -487,7 +487,7 @@ export function MonthBars({
                     r.disabled
                       ? "bg-slate-200"
                       : active
-                        ? "bg-gradient-to-t from-emerald-700 via-primary to-emerald-400 shadow-[0_5px_14px_rgba(15,109,85,0.3)] ring-1 ring-emerald-700/15"
+                        ? "bg-gradient-to-t from-emerald-700 via-primary to-emerald-400 shadow-[0_5px_14px_rgba(122, 53, 255,0.3)] ring-1 ring-emerald-700/15"
                         : empty
                           ? "bg-emerald-700/20 group-hover:bg-emerald-700/35"
                           : "bg-gradient-to-t from-emerald-700/55 to-emerald-500/65 group-hover:from-emerald-700/75 group-hover:to-emerald-500/85",

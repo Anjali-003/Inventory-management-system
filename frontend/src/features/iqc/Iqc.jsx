@@ -14,9 +14,10 @@ import { useGetMeQuery } from "@/features/auth/authApi"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useGetIqcQueueQuery } from "@/features/purchasing/purchasingApi"
 import { PurchaseDetailModal, PurchaseLines, PurchaseStatus } from "@/features/purchasing/PurchaseParts"
-import { WAS_INSPECTED, downloadRejected, rejectedLines } from "@/features/purchasing/purchasingUtils"
+import { WAS_INSPECTED, badLines, badQty, downloadRejected, goodQty, rejectedLines } from "@/features/purchasing/purchasingUtils"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import InspectModal from "./InspectModal"
+import IqcPieces from "./IqcPieces"
 
 const EMPTY = []
 
@@ -72,11 +73,11 @@ export default function Iqc() {
   const approvedCount = data.filter((p) => ["PENDING_STORE", "STORED"].includes(p.status)).length
   const pick = (k) => () => setParams(k === "ALL" || k === view ? {} : { status: k }, { replace: true })
   const filters = [
-    { key: "ALL", label: "All purchases", value: data.length, icon: ClipboardList, tone: "violet", detail: "Everything sent to IQC", grad: "from-violet-400 to-purple-600", pill: "bg-violet-50 text-violet-800 ring-violet-200", dot: "bg-violet-500", active: !view, onClick: pick("ALL") },
-    { key: "PENDING_IQC", label: "Waiting for inspection", value: waiting.length, icon: ClipboardList, tone: "amber", detail: "Purchased, not checked yet", grad: "from-amber-400 to-orange-500", pill: "bg-amber-50 text-amber-800 ring-amber-200", dot: "bg-amber-500", active: view === "PENDING_IQC", onClick: pick("PENDING_IQC") },
-    { key: "APPROVED", label: "Approved", value: approvedCount, icon: CheckCircle2, tone: "green", detail: "Passed inspection", grad: "from-emerald-400 to-emerald-700", pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", dot: "bg-emerald-600", active: view === "APPROVED", onClick: pick("APPROVED") },
-    { key: "REJECTED", label: "Rejected", value: byStatus("REJECTED").length, icon: AlertTriangle, tone: "red", detail: "Nothing approved", grad: "from-rose-400 to-red-600", pill: "bg-rose-50 text-rose-800 ring-rose-200", dot: "bg-rose-500", active: view === "REJECTED", onClick: pick("REJECTED") },
-    { key: "INSPECTED", label: "Total inspected", value: inspected.length, icon: PackageCheck, tone: "blue", detail: "All time", grad: "from-sky-400 to-blue-600", pill: "bg-sky-50 text-sky-800 ring-sky-200", dot: "bg-sky-500", active: view === "INSPECTED", onClick: pick("INSPECTED") },
+    { key: "ALL", label: "All purchases", value: data.length, icon: ClipboardList, tone: "violet", detail: "Everything sent to IQC", grad: "from-violet-600 to-purple-800", pill: "bg-violet-50 text-violet-800 ring-violet-200", dot: "bg-violet-500", active: !view, onClick: pick("ALL") },
+    { key: "PENDING_IQC", label: "Waiting for inspection", value: waiting.length, icon: ClipboardList, tone: "amber", detail: "Purchased, not checked yet", grad: "from-amber-700 to-orange-800", pill: "bg-amber-50 text-amber-800 ring-amber-200", dot: "bg-amber-500", active: view === "PENDING_IQC", onClick: pick("PENDING_IQC") },
+    { key: "APPROVED", label: "Approved", value: approvedCount, icon: CheckCircle2, tone: "green", detail: "Passed inspection", grad: "from-emerald-700 to-emerald-800", pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", dot: "bg-emerald-600", active: view === "APPROVED", onClick: pick("APPROVED") },
+    { key: "REJECTED", label: "Rejected", value: byStatus("REJECTED").length, icon: AlertTriangle, tone: "red", detail: "Nothing approved", grad: "from-rose-600 to-red-800", pill: "bg-rose-50 text-rose-800 ring-rose-200", dot: "bg-rose-500", active: view === "REJECTED", onClick: pick("REJECTED") },
+    { key: "INSPECTED", label: "Total inspected", value: inspected.length, icon: PackageCheck, tone: "blue", detail: "All time", grad: "from-sky-700 to-blue-800", pill: "bg-sky-50 text-sky-800 ring-sky-200", dot: "bg-sky-500", active: view === "INSPECTED", onClick: pick("INSPECTED") },
   ]
 
   return (
@@ -178,6 +179,8 @@ export default function Iqc() {
           <ul className="divide-y">
             {inspectedShown.map((p) => {
               const rejected = rejectedLines(p).length
+              const good = p.items.reduce((s, i) => s + goodQty(i), 0)
+              const bad = p.items.reduce((s, i) => s + badQty(i), 0)
               return (
                 <Accordion
                   key={p.id}
@@ -188,8 +191,9 @@ export default function Iqc() {
                     <>
                       <p className="font-semibold">{p.po_number} · {p.supplier}</p>
                       <p className="text-xs text-muted-foreground">
-                        Received {fmtQty(p.totals.received)} · Approved <span className="font-semibold tabular-nums text-foreground">{fmtQty(p.totals.approved)}</span> ·{" "}
-                        <span className={rejected > 0 ? "font-semibold text-destructive" : ""}>{rejected} of {p.totals.lines} lines rejected</span>
+                        Received {fmtQty(p.totals.received)} · Accepted <span className="font-semibold tabular-nums text-success">{fmtQty(good)}</span> ·{" "}
+                        Rejected <span className={bad > 0 ? "font-semibold tabular-nums text-destructive" : "tabular-nums"}>{fmtQty(bad)}</span>
+                        {rejected > 0 && <span className="font-semibold text-destructive"> · {rejected} of {p.totals.lines} components rejected</span>}
                       </p>
                     </>
                   }
@@ -201,8 +205,8 @@ export default function Iqc() {
                   }
                   actions={
                     <>
-                      {rejected > 0 && (
-                        <Button size="sm" variant="outline" onClick={() => downloadRejected(p)}><Download /> Rejected (Excel)</Button>
+                      {badLines(p).length > 0 && (
+                        <Button size="sm" variant="outline" onClick={() => downloadRejected(p)}><Download /> Rejected pieces (Excel)</Button>
                       )}
                       <Button size="sm" variant="ghost" onClick={() => setViewing(p)}>Details</Button>
                     </>
@@ -216,6 +220,8 @@ export default function Iqc() {
         )}
       </Card>
       )}
+
+      {showInspected && <IqcPieces purchases={data} loading={isLoading} query={query} />}
 
       {toInspect && <InspectModal key={toInspect.id} purchase={toInspect} onClose={() => setInspecting(null)} />}
       <PurchaseDetailModal purchase={viewing && (data.find((p) => p.id === viewing.id) || viewing)} onClose={() => setViewing(null)} />

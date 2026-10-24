@@ -186,8 +186,8 @@ export default function QualityFinishedGoodsDashboard() {
         <div className="min-w-0 xl:col-span-2">
           <ProductionReadOnlyPanel items={productionItems} loading={productionQuery.isLoading} />
         </div>
-        <div className="min-w-0 rounded-2xl border border-[#dce5e0] bg-gradient-to-br from-white via-white to-slate-50/80 p-5 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
-          <h2 className="flex items-center gap-2.5 text-sm font-bold before:h-4 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-emerald-400 before:to-primary">What should I do next?</h2>
+        <div className="min-w-0 rounded-2xl border border-[#E3E6EB] bg-gradient-to-br from-white via-white to-slate-50/80 p-5 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+          <h2 className="flex items-center gap-2.5 text-sm font-bold before:h-4 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-emerald-700 before:to-primary">What should I do next?</h2>
           <p className="mt-1 pl-[13px] text-xs leading-relaxed text-muted-foreground">Choose the task that matches the batch status. Each button opens the right workspace.</p>
           <div className="mt-4 grid gap-2">
             <MktBtn variant="primary" className="h-auto min-h-11 w-full justify-start whitespace-normal py-3 text-left sm:h-auto" onClick={() => navigate("/quality-control")}><ClipboardCheck /> Decide whether completed batches Pass or Fail</MktBtn>
@@ -195,7 +195,7 @@ export default function QualityFinishedGoodsDashboard() {
             <MktBtn variant="outline" className="h-auto min-h-11 w-full justify-start whitespace-normal py-3 text-left sm:h-auto" onClick={() => navigate("/finished-goods")}><PackageCheck /> Move packed goods to dispatch or completion</MktBtn>
             <MktBtn variant="outline" className="h-auto min-h-11 w-full justify-start whitespace-normal py-3 text-left sm:h-auto" onClick={() => navigate("/production")}><Factory /> Check production progress (view only)</MktBtn>
           </div>
-          <p className="mt-4 rounded-xl border border-[#dce5e0] bg-slate-50/80 px-3 py-2.5 text-xs leading-relaxed text-slate-600">A batch enters Finished Goods only after it passes QC. A failed batch stays in QC Failed until the repair is submitted for another QC decision.</p>
+          <p className="mt-4 rounded-xl border border-[#E3E6EB] bg-slate-50/80 px-3 py-2.5 text-xs leading-relaxed text-slate-600">A batch enters Finished Goods only after it passes QC. A failed batch stays in QC Failed until the repair is submitted for another QC decision.</p>
         </div>
       </div>
     </>

@@ -1,36 +1,34 @@
-import { useEffect, useMemo, useState } from "react"
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
+import { useMemo, useState } from "react"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { MotionConfig, motion } from "motion/react"
-import { ClipboardList, RefreshCw, ShoppingCart, X } from "lucide-react"
+import { RefreshCw, ShoppingCart, X } from "lucide-react"
 import UserCell from "@/components/UserCell"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { useToast } from "@/components/toast"
-import { Accordion } from "@/components/ui/accordion"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useGetApprovedOrdersQuery } from "@/features/order-approvals/orderApprovalsApi"
 import { HeroButton, MktBtn, MktHero, SearchField, StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
-import { rise, stagger } from "@/features/marketing-orders/mktMotion"
-import { useGetPurchasesQuery, useReceivePurchaseMutation, useSendPurchaseToIqcMutation } from "@/features/purchasing/purchasingApi"
+import { useGetPurchasesQuery, useSendPurchaseToIqcMutation } from "@/features/purchasing/purchasingApi"
 import {
   PURCHASE_ALL, PURCHASE_STAGES, PurchaseCard, PurchaseCardList, PurchaseStatusPill, PurchaseSteps, PurchaseTile, PurchaseTileGrid, StepButton,
   countPurchases, isPurchaseStatus, purchaseStageOf,
 } from "@/features/purchasing/purchaseKit"
-import { ordersToOrder, qtyWithUnit } from "@/features/purchasing/purchasingUtils"
+import { ordersToOrder, purchaseFor } from "@/features/purchasing/purchasingUtils"
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
-import NewPurchaseModal from "./NewPurchaseModal"
 import PurchaseDrawer, { isPurchaseTab } from "./PurchaseDrawer"
+import ReceiveModal from "./ReceiveModal"
 
 const EMPTY = []
 
 /*
-  Purchase department. The purchase manager can only buy what the Operations Admin sent: the "Components to order"
-  panel lists the short components of every approved order, and "Place order" turns some or all of them into a
-  purchase (no free purchases). Then he marks it Received when the goods arrive and presses Send to IQC: only then
-  does it reach the IQC manager (inspection) and, once approved there, the store manager.
+  Purchase department. "New purchase order" opens the Purchase requests page (PurchaseRequests): the requirements of every approved
+  order added up per component, plus low / out of stock components, ordered in round figures (never below what the
+  ticked orders need, the surplus goes to stock): one purchase order for everything to buy now. Then he marks a purchase Received when the goods arrive and presses Send to IQC: only
+  then does it reach the IQC manager (inspection) and, once approved there, the store manager.
   The Store Manager, IQC Manager and Operations Admin see this page read-only.
 
   Same layout as the Marketing Orders page: a gradient hero, a row of colour tiles (chips on a phone) that filter the
@@ -77,23 +75,18 @@ export default function Purchase() {
     }, { replace })
 
   const { data = EMPTY, isLoading, isFetching, error, refetch } = useGetPurchasesQuery()
-  const [placing, setPlacing] = useState(null) // order id whose "Place order" dialog is open
   const approved = useGetApprovedOrdersQuery(undefined, { skip: !editable })
   const toOrder = useMemo(() => ordersToOrder(approved.data), [approved.data])
-  const placingGroup = toOrder.find((g) => g.order.id === placing) || null // closes itself once every line is ordered
-  const [receive] = useReceivePurchaseMutation()
+  const toBuy = useMemo(
+    () => ({ orders: toOrder.length, components: new Set(toOrder.flatMap((g) => g.lines.map((l) => l.component_id))).size }),
+    [toOrder]
+  )
+  const [receiving, setReceiving] = useState(null) // purchase id whose counts are being entered
   const [sendToIqc] = useSendPurchaseToIqcMutation()
   const [busyId, setBusyId] = useState(null) // the purchase whose button was just pressed
 
-  // "Raise purchase" on an order card sends us here with that order selected
-  const location = useLocation()
   const navigate = useNavigate()
-  const wantedOrder = location.state?.orderId
-  useEffect(() => {
-    if (!wantedOrder || !toOrder.some((g) => g.order.id === wantedOrder)) return
-    setPlacing(wantedOrder)
-    navigate(location.pathname + location.search, { replace: true, state: null })
-  }, [wantedOrder, toOrder, navigate, location.pathname, location.search])
+  const openRequests = () => navigate("/purchase-requests")
 
   // one step forward for one purchase; the list refreshes itself (tag "Purchases")
   const step = async (p, run, done) => {
@@ -107,7 +100,7 @@ export default function Purchase() {
       setBusyId(null)
     }
   }
-  const onReceive = (p) => step(p, receive, "marked as received")
+  const onReceive = (p) => setReceiving(p.id) // the counts are entered in ReceiveModal
   const onSendIqc = (p) => step(p, sendToIqc, "sent to IQC")
 
   const counts = useMemo(() => countPurchases(data), [data])
@@ -140,7 +133,12 @@ export default function Purchase() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <MktHero eyebrow="Purchase" title="Purchase" description="Order the components the Operations Admin sent, mark them received when the goods arrive, then send them to IQC.">
+      <MktHero eyebrow="Purchase" title="Purchase" description="Combine what the orders need into one purchase order (or buy for stock), mark it received when the goods arrive, then send it to IQC.">
+        {editable && (
+          <HeroButton onClick={openRequests}>
+            <ShoppingCart /> New purchase order
+          </HeroButton>
+        )}
         <HeroButton variant="glass" onClick={() => { refetch(); approved.refetch?.() }} disabled={isFetching} aria-label="Refresh purchases">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
         </HeroButton>
@@ -150,57 +148,21 @@ export default function Purchase() {
 
       {editable && (
         <Card className="mb-5 overflow-hidden">
-          <CardHeader className="items-center">
+          <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <CardTitle>Components to order</CardTitle>
-              <CardDescription>Sent by the Operations Admin. You can only place orders for these.</CardDescription>
+              <CardTitle>To buy now</CardTitle>
+              <CardDescription className="mt-1">
+                {approved.isLoading
+                  ? "Checking the orders..."
+                  : toBuy.components === 0
+                    ? "No order is waiting for components."
+                    : `${toBuy.components} component${toBuy.components === 1 ? "" : "s"} needed across ${toBuy.orders} order${toBuy.orders === 1 ? "" : "s"}. Low and out of stock components can be added to the same purchase order.`}
+              </CardDescription>
             </div>
-            {toOrder.length > 0 && (
-              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-rose-500 to-red-600 px-3 py-1 text-xs font-semibold text-white shadow-sm">
-                <span className="size-1.5 rounded-full bg-white motion-safe:animate-pulse" aria-hidden />
-                {toOrder.length} order{toOrder.length > 1 ? "s" : ""} waiting
-              </span>
-            )}
-          </CardHeader>
-          {approved.isLoading ? (
-            <TableSkeleton />
-          ) : toOrder.length === 0 ? (
-            <EmptyState icon={ClipboardList} title="Nothing to order">
-              When the Operations Admin sends an order with short components, they will appear here.
-            </EmptyState>
-          ) : (
-            <motion.ul variants={stagger(0.05, 0.05)} initial="hidden" animate="show" className="grid gap-3 p-3 sm:p-4 lg:grid-cols-2">
-              {toOrder.map(({ order, lines }) => (
-                <Accordion
-                  key={order.id}
-                  as={motion.li}
-                  rootProps={{ variants: rise }}
-                  className="rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]"
-                  headerClassName="flex-wrap gap-y-3 rounded-xl p-4"
-                  panelClassName="border-t px-4 py-3"
-                  header={
-                    <>
-                      <p className="break-all text-[15px] font-semibold tabular-nums">{order.order_number}</p>
-                      <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
-                        {lines.slice(0, 3).map((l) => `${l.name} (${qtyWithUnit(l.quantity, l.unit)})`).join(", ")}
-                        {lines.length > 3 && ` +${lines.length - 3} more`}
-                      </p>
-                    </>
-                  }
-                  actions={<MktBtn variant="primary" className="shrink-0" onClick={() => setPlacing(order.id)}><ShoppingCart /> Place order ({lines.length})</MktBtn>}
-                >
-                  <ul className="space-y-1.5 text-[13px]">
-                    {lines.map((l) => (
-                      <li key={l.component_id} className="flex items-baseline justify-between gap-3">
-                        <span className="min-w-0 break-words">{l.name}</span>
-                        <span className="shrink-0 font-medium tabular-nums">{qtyWithUnit(l.quantity, l.unit)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </Accordion>
-              ))}
-            </motion.ul>
-          )}
+            <MktBtn variant="primary" className="shrink-0" onClick={openRequests}>
+              <ShoppingCart /> Create purchase order
+            </MktBtn>
+          </div>
         </Card>
       )}
 
@@ -300,7 +262,7 @@ export default function Purchase() {
                   >
                     <TableCell className="min-w-40">
                       <button type="button" className="block text-left font-semibold tabular-nums outline-none transition-colors hover:text-primary focus-visible:text-primary focus-visible:underline">{p.po_number}</button>
-                      {p.order_number && <span className="block text-xs text-muted-foreground">for {p.order_number}</span>}
+                      {purchaseFor(p) && <span className="block text-xs text-muted-foreground">for {purchaseFor(p)}</span>}
                     </TableCell>
                     <TableCell>{p.supplier}</TableCell>
                     <TableCell className="text-muted-foreground">{p.totals.lines} item{p.totals.lines === 1 ? "" : "s"} · {fmtQty(p.totals.ordered)} ordered</TableCell>
@@ -325,7 +287,6 @@ export default function Purchase() {
         </>
       )}
 
-      {placingGroup && <NewPurchaseModal order={placingGroup.order} lines={placingGroup.lines} onClose={() => setPlacing(null)} />}
       <PurchaseDrawer
         purchase={selected}
         order={linkedOrder}
@@ -337,6 +298,9 @@ export default function Purchase() {
         onReceive={onReceive}
         onSendIqc={onSendIqc}
       />
+      {receiving && data.some((p) => p.id === receiving && p.status === "ORDER_PLACED") && (
+        <ReceiveModal key={receiving} purchase={data.find((p) => p.id === receiving)} onClose={() => setReceiving(null)} />
+      )}
     </MotionConfig>
   )
 }

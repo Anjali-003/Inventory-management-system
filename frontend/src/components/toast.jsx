@@ -72,7 +72,7 @@ export function ToastProvider({ children }) {
               role={t.kind === "error" ? "alert" : "status"}
               onPointerEnter={() => pauseTimer(t.id)}
               onPointerLeave={() => startTimer(t)}
-              className="pointer-events-auto relative flex w-full max-w-sm items-start gap-3 overflow-hidden rounded-xl border border-[#dce5e0] bg-card p-3.5 text-[13px] shadow-[0_12px_32px_-8px_rgba(22,34,30,0.22)]"
+              className="pointer-events-auto relative flex w-full max-w-sm items-start gap-3 overflow-hidden rounded-xl border border-[#E3E6EB] bg-card p-3.5 text-[13px] shadow-[0_12px_32px_-8px_rgba(22,34,30,0.22)]"
             >
               <ToastBody t={t} onDismiss={() => dismiss(t.id)} />
             </motion.div>

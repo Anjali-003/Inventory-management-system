@@ -57,7 +57,7 @@ function Confirm({ item, action, busy, onClose, onConfirm }) {
 
 function ItemCard({ item, onAction, editable }) {
   return (
-    <div className="min-w-0 overflow-hidden rounded-2xl border border-[#dce5e0] bg-white p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.04)] transition-shadow hover:shadow-md">
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-[#E3E6EB] bg-white p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.04)] transition-shadow hover:shadow-md">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="break-all font-medium tabular-nums">{item.orderNumber || "-"}</p>
@@ -70,7 +70,7 @@ function ItemCard({ item, onAction, editable }) {
         <div className="bg-card py-2.5"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Quantity</p><p className="font-semibold tabular-nums">{item.quantity ?? 0}</p></div>
         <div className="bg-card py-2.5"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Batch</p><p className="font-semibold tabular-nums">#{item.id}</p></div>
       </div>
-      <div className="mt-3 rounded-xl border border-[#dce5e0] bg-slate-50/80 px-3 py-2.5">
+      <div className="mt-3 rounded-xl border border-[#E3E6EB] bg-slate-50/80 px-3 py-2.5">
         <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">What happens next</p>
         <p className="mt-1 text-xs leading-relaxed text-slate-700">{nextStepText(item.status)}</p>
       </div>
@@ -178,10 +178,10 @@ export default function FinishedGoods() {
       <div className="min-w-0 space-y-4">
         {(() => {
           const filters = [
-            { key: "all", label: "Total batches", hint: "Every finished-goods batch", icon: PackageCheck, dot: "bg-slate-400", s: { grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/20" }, value: items.length, tone: "neutral", active: status === "all", onClick: () => setStatus("all") },
-            { key: "PACKAGING", label: "Packaging", hint: "Ready to be dispatched", icon: Package, dot: "bg-amber-500", s: { grad: "from-amber-500 to-orange-600", glow: "shadow-amber-500/20" }, value: counts.packaging, tone: "warning", active: status === "PACKAGING", onClick: () => setStatus(status === "PACKAGING" ? "all" : "PACKAGING") },
-            { key: "DISPATCHED", label: "Dispatched", hint: "Awaiting final completion", icon: Truck, dot: "bg-blue-500", s: { grad: "from-blue-500 to-indigo-700", glow: "shadow-blue-500/20" }, value: counts.dispatched, tone: "info", active: status === "DISPATCHED", onClick: () => setStatus(status === "DISPATCHED" ? "all" : "DISPATCHED") },
-            { key: "COMPLETED", label: "Completed", hint: "All steps finished", icon: CircleCheck, dot: "bg-emerald-500", s: { grad: "from-emerald-500 to-teal-700", glow: "shadow-emerald-500/20" }, value: counts.completed, tone: "success", active: status === "COMPLETED", onClick: () => setStatus(status === "COMPLETED" ? "all" : "COMPLETED") },
+            { key: "all", label: "Total batches", hint: "Every finished-goods batch", icon: PackageCheck, dot: "bg-slate-400", s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/20" }, value: items.length, tone: "neutral", active: status === "all", onClick: () => setStatus("all") },
+            { key: "PACKAGING", label: "Packaging", hint: "Ready to be dispatched", icon: Package, dot: "bg-amber-500", s: { grad: "from-amber-700 to-orange-800", glow: "shadow-amber-500/20" }, value: counts.packaging, tone: "warning", active: status === "PACKAGING", onClick: () => setStatus(status === "PACKAGING" ? "all" : "PACKAGING") },
+            { key: "DISPATCHED", label: "Dispatched", hint: "Awaiting final completion", icon: Truck, dot: "bg-blue-500", s: { grad: "from-blue-600 to-indigo-800", glow: "shadow-blue-500/20" }, value: counts.dispatched, tone: "info", active: status === "DISPATCHED", onClick: () => setStatus(status === "DISPATCHED" ? "all" : "DISPATCHED") },
+            { key: "COMPLETED", label: "Completed", hint: "All steps finished", icon: CircleCheck, dot: "bg-emerald-500", s: { grad: "from-emerald-700 to-teal-800", glow: "shadow-emerald-500/20" }, value: counts.completed, tone: "success", active: status === "COMPLETED", onClick: () => setStatus(status === "COMPLETED" ? "all" : "COMPLETED") },
           ]
           return <>
             <div className="hidden min-w-0 md:block">
@@ -195,7 +195,7 @@ export default function FinishedGoods() {
           </>
         })()}
 
-        <Card className="min-w-0 overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+        <Card className="min-w-0 overflow-hidden rounded-2xl border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
           <div className="flex min-w-0 flex-wrap items-center gap-3 border-b border-[#e7eee9] bg-slate-50/70 px-3 py-3 sm:px-5">
             <SearchField className="min-w-0 flex-1 sm:max-w-md" value={query} onChange={setQuery} placeholder="Search order, product, SKU or person..." />
             <span className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{rows.length} batch{rows.length === 1 ? "" : "es"}</span>

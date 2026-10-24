@@ -28,7 +28,7 @@ function Progress({ completed, ordered }) {
         aria-valuemax={100}
         aria-valuenow={percentage}
       >
-        <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-700 transition-[width]" style={{ width: `${percentage}%` }} />
+        <div className="h-full rounded-full bg-gradient-to-r from-emerald-700 to-teal-800 transition-[width]" style={{ width: `${percentage}%` }} />
       </div>
     </div>
   )
@@ -59,18 +59,18 @@ export default function ProductionOrderCard({ item, readiness, actions }) {
   const status = productionWorkflowStatus(item)
   const complete = isProductionCompleted(item)
   const accentClass = complete
-    ? "from-emerald-500 to-teal-700"
+    ? "from-emerald-700 to-teal-800"
     : status.key === "awaiting_allotment" || status.key === "partially_allotted"
-      ? "from-amber-400 to-orange-500"
+      ? "from-amber-700 to-orange-800"
       : status.key === "bom_review" || status.key === "awaiting_approval"
-        ? "from-orange-400 to-amber-600"
-        : "from-emerald-500 to-teal-700"
+        ? "from-orange-700 to-amber-800"
+        : "from-emerald-700 to-teal-800"
 
   return (
     <motion.article
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.998 }}
-      className="relative min-w-0 overflow-hidden rounded-2xl border border-[#dce5e0] bg-white shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] transition-shadow hover:shadow-md"
+      className="relative min-w-0 overflow-hidden rounded-2xl border border-[#E3E6EB] bg-white shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] transition-shadow hover:shadow-md"
     >
       <span aria-hidden className={`absolute inset-y-0 left-0 w-1 bg-gradient-to-b ${accentClass}`} />
 

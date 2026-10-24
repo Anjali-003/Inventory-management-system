@@ -6,7 +6,7 @@ import { MktBtn, OrderItems } from "@/features/marketing-orders/mktKit"
 import { SPRING_SOFT } from "@/features/marketing-orders/mktMotion"
 import { plural } from "@/features/marketing-orders/orderParts"
 import { PurchaseStatusPill, PurchaseSteps, StepButton, buyState, buyStageOf, purchaseStageOf } from "@/features/purchasing/purchaseKit"
-import { WAS_INSPECTED, downloadRejected, qtyWithUnit, rejectedLines } from "@/features/purchasing/purchasingUtils"
+import { WAS_INSPECTED, downloadRejected, purchaseFor, qtyWithUnit, rejectedLines } from "@/features/purchasing/purchasingUtils"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { Lines, PurchaseTimeline } from "./PurchaseDetail"
@@ -58,11 +58,11 @@ function OverviewTab({ purchase: p }) {
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">{stage.label}</p>
-              <p className="mt-0.5 text-xs text-white/80">{stage.hint}</p>
+              <p className="mt-0.5 text-xs text-white/95">{stage.hint}</p>
             </div>
             <div className="shrink-0 text-end">
               <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(p.totals?.ordered ?? 0)}</p>
-              <p className="mt-1 text-[11px] text-white/80">ordered</p>
+              <p className="mt-1 text-[11px] text-white/95">ordered</p>
             </div>
           </div>
         </motion.div>
@@ -72,7 +72,7 @@ function OverviewTab({ purchase: p }) {
 
       <dl className="grid grid-cols-2 gap-2.5">
         <Fact label="Supplier">{p.supplier || "-"}</Fact>
-        <Fact label="For order">{p.order_number || <span className="text-muted-foreground">-</span>}</Fact>
+        <Fact label="For">{purchaseFor(p) || <span className="text-muted-foreground">-</span>}</Fact>
         <Fact label="Placed by">{p.created_by_name || "-"}</Fact>
         <Fact label="Placed on">{fmtDateTime(p.created_at)}</Fact>
         <Fact label="Components">{plural(p.totals?.lines ?? p.items?.length ?? 0, "line")}</Fact>
@@ -230,7 +230,7 @@ export default function PurchaseDrawer({ purchase, order, tab, onTab, onClose, e
       subtitle={p && (
         <>
           <PurchaseStatusPill value={p.status} short />
-          <span>{p.supplier}{p.order_number ? ` · for ${p.order_number}` : ""}</span>
+          <span>{p.supplier}{purchaseFor(p) ? ` · for ${purchaseFor(p)}` : ""}</span>
         </>
       )}
       tabs={withBadge}

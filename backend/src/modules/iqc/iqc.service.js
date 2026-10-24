@@ -4,12 +4,13 @@ const purchases = require("../purchase/purchase.service");
 const notifications = require("../notifications/notification.service");
 
 /*
-    IQC (incoming quality control). For every purchased component the IQC manager records
-        received   how many pieces actually arrived (can be less / more than ordered)
-        defective  how many of those are bad
-    The inspector then TICKS every component line that is fine (approve: true). For a ticked line
-    approved = received - defective and it goes to the store manager. An unticked line is REJECTED
-    (approved = 0) and stays with IQC. If no line is ticked the whole purchase is REJECTED.
+    IQC (incoming quality control). The purchase manager has already counted what arrived (quantity_received, set
+    when he marked the purchase received). For every component the IQC manager only says
+        rejected   how many of the received pieces failed (0 = all fine)
+        remarks    why (required when anything is rejected)
+    accepted = received - rejected goes to the store manager; the rejected pieces stay with IQC. A component with
+    nothing accepted is REJECTED; if nothing at all is accepted the whole purchase is REJECTED.
+    (Older screens sent { received, defective, approve }: "defective" is read as "rejected", the rest is ignored.)
 */
 
 function parseInspection(body) {
@@ -27,35 +28,19 @@ function parseInspection(body) {
         }
         seen.add(id);
 
-        const field = (name, label, value, opts) => {
+        const value = raw.rejected !== undefined ? raw.rejected : raw.defective;
+        let rejected = 0;
+        if (value !== undefined && value !== null && value !== "") {
             try {
-                return inventory.parseQty(value, label, opts);
+                rejected = inventory.parseQty(value, "Rejected quantity", { allowZero: true });
             } catch (error) {
-                error.extra = { line, field: name };
+                error.extra = { line, field: "rejected" };
                 throw error;
             }
-        };
-        if (typeof raw.approve !== "boolean") {
-            throw new AppError(422, "Tick or untick every component", "VALIDATION", { line, field: "approve" });
-        }
-        const received = field("received", "Received quantity", raw.received, { allowZero: true });
-        const defective =
-            raw.defective === undefined || raw.defective === null || raw.defective === ""
-                ? 0
-                : field("defective", "Defective quantity", raw.defective, { allowZero: true });
-
-        if (defective > received) {
-            throw new AppError(422, "Defective quantity cannot be more than the received quantity", "VALIDATION", { line, field: "defective" });
         }
         const note = typeof raw.remarks === "string" ? raw.remarks.trim() : "";
         if (note.length > 255) throw new AppError(422, "Line remarks must be 255 characters or fewer", "VALIDATION", { line, field: "remarks" });
-
-        const good = received - defective;
-        if (raw.approve && good <= 0) {
-            throw new AppError(422, "Nothing to approve on this line. Untick it to reject it.", "VALIDATION", { line, field: "approve" });
-        }
-        // a rejected line sends nothing to the store, whatever the counts say
-        return { id, received, defective, approved: raw.approve ? good : 0, decision: raw.approve ? "APPROVED" : "REJECTED", remarks: note || null };
+        return { id, line, rejected, remarks: note || null };
     });
 
     return { items, remarks: remarks || null };
@@ -71,10 +56,27 @@ async function inspect(purchaseId, body, userId) {
             throw AppError.conflict("This purchase has already been inspected. Refresh the page.", "ALREADY_INSPECTED");
         }
 
-        const [lines] = await conn.query(`SELECT id FROM purchase_order_items WHERE purchase_order_id = ?`, [purchaseId]);
+        const [lines] = await conn.query(
+            `SELECT id, COALESCE(quantity_received, quantity_ordered) AS received FROM purchase_order_items WHERE purchase_order_id = ?`,
+            [purchaseId]
+        );
         const byId = new Map(items.map((i) => [i.id, i]));
         if (lines.length !== items.length || lines.some((l) => !byId.has(l.id))) {
             throw new AppError(422, "Inspect every component of the purchase", "VALIDATION");
+        }
+        // the received count comes from the purchase manager; IQC can only reject part (or all) of it
+        for (const l of lines) {
+            const it = byId.get(l.id);
+            it.received = inventory.toCents(l.received);
+            if (it.rejected > it.received) {
+                throw new AppError(422, "Rejected pieces cannot be more than the received pieces", "VALIDATION", { line: it.line, field: "rejected" });
+            }
+            if (it.rejected > 0 && !it.remarks) {
+                throw new AppError(422, "Enter the reason for the rejected pieces", "VALIDATION", { line: it.line, field: "remarks" });
+            }
+            it.defective = it.rejected;
+            it.approved = it.received - it.rejected;
+            it.decision = it.approved > 0 ? "APPROVED" : "REJECTED";
         }
 
         let approvedTotal = 0;
@@ -127,7 +129,7 @@ async function inspect(purchaseId, body, userId) {
                 : rejected
                     ? `${rejected} component line${rejected === 1 ? "" : "s"} rejected. The approved parts went to the store.`
                     : defective
-                        ? "Approved, with some defective pieces removed. The approved parts went to the store."
+                        ? "Some pieces were rejected and stay with IQC. The accepted pieces went to the store."
                         : "Every component was approved and sent to the store.",
             severity: approvedTotal === 0 || rejected || defective ? "warning" : "success",
             link: "/purchase",

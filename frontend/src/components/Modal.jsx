@@ -6,7 +6,7 @@ import { cn } from "../lib/utils"
 import { Button } from "./ui/button"
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
-const SIZES = { sm: "sm:max-w-md", md: "sm:max-w-xl", lg: "sm:max-w-2xl", xl: "sm:max-w-4xl" }
+const SIZES = { sm: "sm:max-w-md", md: "sm:max-w-xl", lg: "sm:max-w-2xl", xl: "sm:max-w-4xl", "2xl": "sm:max-w-6xl" }
 
 function Panel({ onClose, title, description, size, busy, onSubmit, footer, children, className }) {
   const ref = useRef(null)
@@ -71,7 +71,7 @@ function Panel({ onClose, title, description, size, busy, onSubmit, footer, chil
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-t-2xl bg-card shadow-[0_24px_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-[#dce5e0] sm:max-h-[calc(100dvh-3rem)] sm:rounded-[16px]",
+          "relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-t-2xl bg-card shadow-[0_24px_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-[#E3E6EB] sm:max-h-[calc(100dvh-3rem)] sm:rounded-[16px]",
           SIZES[size],
           className
         )}

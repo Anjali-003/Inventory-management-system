@@ -59,11 +59,11 @@ export default function OrderDetailModal({ order, editable, busy, onClose, onSen
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">{stage.short === "Pending" ? "Waiting for approval" : stage.short}</p>
-                <p className="mt-0.5 text-xs text-white/80">{stage.hint}</p>
+                <p className="mt-0.5 text-xs text-white/95">{stage.hint}</p>
               </div>
               <div className="shrink-0 text-end">
                 <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(units)}</p>
-                <p className="mt-1 text-[11px] text-white/80">units</p>
+                <p className="mt-1 text-[11px] text-white/95">units</p>
               </div>
             </div>
           </motion.div>

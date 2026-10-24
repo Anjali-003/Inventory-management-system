@@ -61,7 +61,7 @@ function BatchCard({ item, kind, onDecide, editable, navigate }) {
   const history = kind === "history"
   const retest = !history && (item.reworkStatus === "READY_FOR_QC" || Number(item.attemptNumber || 1) > 1)
   return (
-    <article className={`min-w-0 rounded-2xl border p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] ${retest ? "border-amber-300 bg-gradient-to-br from-amber-50 via-white to-white ring-1 ring-amber-200" : "border-[#dce5e0] bg-white"}`}>
+    <article className={`min-w-0 rounded-2xl border p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] ${retest ? "border-amber-300 bg-gradient-to-br from-amber-50 via-white to-white ring-1 ring-amber-200" : "border-[#E3E6EB] bg-white"}`}>
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1"><BatchIdentity item={item} /></div>
         {history ? <ResultBadge decision={item.batchDecision} /> : retest && <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-900"><RefreshCw className="size-3.5" aria-hidden /> Retest · Attempt {item.attemptNumber || 2}</span>}

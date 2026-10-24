@@ -146,7 +146,7 @@ export default function ReviseQuantityModal({ order, onClose, onSwitch }) {
                       <span className="text-muted-foreground">...</span>
                     ) : (
                       <>
-                        <span className={cn("font-semibold tabular-nums", r.canMake === 0 ? "text-destructive" : r.canMake < r.ordered ? "text-warning" : "text-primary")}>{fmtQty(r.canMake)}</span>
+                        <span className={cn("font-semibold tabular-nums", r.canMake === 0 ? "text-destructive" : r.canMake < r.ordered ? "text-warning" : "text-success")}>{fmtQty(r.canMake)}</span>
                         {missingBom.has(r.product_id) && <span className="block text-[11px] text-destructive">BOM missing</span>}
                       </>
                     )}

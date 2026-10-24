@@ -12,7 +12,7 @@ async function getOne(req, res) {
 }
 
 async function receive(req, res) {
-    res.json(await service.markReceived(parseId(req.params.id, "purchase ID"), req.user.id));
+    res.json(await service.markReceived(parseId(req.params.id, "purchase ID"), req.body, req.user.id));
 }
 
 async function sendToIqc(req, res) {

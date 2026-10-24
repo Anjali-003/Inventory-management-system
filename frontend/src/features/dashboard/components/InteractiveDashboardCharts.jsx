@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 const number = (value) => Math.max(0, Number(value) || 0)
-const chartCardClass = "min-w-0 overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
+const chartCardClass = "min-w-0 overflow-hidden rounded-2xl border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
 
 function ChartHeader({ title, description, icon: Icon }) {
   return (
@@ -137,14 +137,14 @@ export function InteractiveBarChart({ title, description, dataByPeriod, series, 
         <div className="min-w-0 flex-1">
           <ChartHeader title={title} description={description} icon={TrendingUp} />
         </div>
-        <div className="mt-5 flex shrink-0 rounded-xl border border-[#dce5e0] bg-slate-50 p-1" aria-label="Chart date range">
+        <div className="mt-5 flex shrink-0 rounded-xl border border-[#E3E6EB] bg-slate-50 p-1" aria-label="Chart date range">
           {[7, 30].map((days) => (
             <button
               key={days}
               type="button"
               onClick={() => setPeriod(days)}
               aria-pressed={period === days}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${period === days ? "bg-gradient-to-br from-emerald-500 to-teal-700 text-white shadow-sm" : "text-slate-600 hover:bg-white hover:text-primary"}`}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${period === days ? "bg-gradient-to-br from-emerald-700 to-teal-800 text-white shadow-sm" : "text-slate-600 hover:bg-white hover:text-primary"}`}
             >
               {days} days
             </button>
@@ -215,7 +215,7 @@ export function InteractiveBarChart({ title, description, dataByPeriod, series, 
           </div>
 
           {selectedPoint && (
-            <div className="mt-4 overflow-hidden rounded-xl border border-[#dce5e0] bg-gradient-to-br from-white via-white to-emerald-50/50">
+            <div className="mt-4 overflow-hidden rounded-xl border border-[#E3E6EB] bg-gradient-to-br from-white via-white to-emerald-50/50">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#e7eeea] px-3 py-3 sm:px-4">
                 <div>
                   <p className="text-sm font-bold">{selectedPoint.fullLabel || selectedPoint.label}</p>

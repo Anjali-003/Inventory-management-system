@@ -8,6 +8,7 @@ import { PRESS_SOFT, SPRING_SOFT, rise, stagger } from "@/features/marketing-ord
 import { timeAgo } from "@/features/activity/time"
 import { fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
+import { purchaseFor } from "./purchasingUtils"
 
 /*
   Building blocks for the Purchase Manager screens (dashboard, Purchase, Approved Orders and their popups).
@@ -26,41 +27,41 @@ import { cn } from "@/lib/utils"
 export const PURCHASE_STAGES = [
   {
     status: "ORDER_PLACED", label: "Order placed", short: "Placed", icon: ShoppingCart, hint: "Waiting for the goods",
-    bar: "bg-gradient-to-r from-amber-400 to-orange-500", dot: "bg-amber-500",
-    s: { grad: "from-amber-400 to-orange-500", glow: "shadow-orange-500/30", pill: "bg-amber-50 text-amber-800 ring-amber-200", ink: "text-amber-700" },
+    bar: "bg-gradient-to-r from-amber-700 to-orange-800", dot: "bg-amber-500",
+    s: { grad: "from-amber-700 to-orange-800", glow: "shadow-orange-500/30", pill: "bg-amber-50 text-amber-800 ring-amber-200", ink: "text-amber-700" },
   },
   {
     status: "RECEIVED", label: "Received", short: "Received", icon: PackageCheck, hint: "Not sent to IQC yet",
-    bar: "bg-gradient-to-r from-sky-400 to-blue-600", dot: "bg-sky-500",
-    s: { grad: "from-sky-400 to-blue-600", glow: "shadow-blue-500/30", pill: "bg-sky-50 text-sky-800 ring-sky-200", ink: "text-sky-700" },
+    bar: "bg-gradient-to-r from-sky-700 to-blue-800", dot: "bg-sky-500",
+    s: { grad: "from-sky-700 to-blue-800", glow: "shadow-blue-500/30", pill: "bg-sky-50 text-sky-800 ring-sky-200", ink: "text-sky-700" },
   },
   {
     status: "PENDING_IQC", label: "With IQC", short: "IQC", icon: FlaskConical, hint: "Waiting for inspection",
-    bar: "bg-gradient-to-r from-violet-400 to-purple-600", dot: "bg-violet-500",
-    s: { grad: "from-violet-400 to-purple-600", glow: "shadow-purple-500/30", pill: "bg-violet-50 text-violet-800 ring-violet-200", ink: "text-violet-700" },
+    bar: "bg-gradient-to-r from-violet-600 to-purple-800", dot: "bg-violet-500",
+    s: { grad: "from-violet-600 to-purple-800", glow: "shadow-purple-500/30", pill: "bg-violet-50 text-violet-800 ring-violet-200", ink: "text-violet-700" },
   },
   {
     status: "PENDING_STORE", label: "With store", short: "Store", icon: Warehouse, hint: "Approved, waiting to be accepted",
-    bar: "bg-gradient-to-r from-cyan-400 to-teal-600", dot: "bg-cyan-500",
-    s: { grad: "from-cyan-400 to-teal-600", glow: "shadow-teal-500/30", pill: "bg-cyan-50 text-cyan-800 ring-cyan-200", ink: "text-cyan-700" },
+    bar: "bg-gradient-to-r from-cyan-700 to-teal-800", dot: "bg-cyan-500",
+    s: { grad: "from-cyan-700 to-teal-800", glow: "shadow-teal-500/30", pill: "bg-cyan-50 text-cyan-800 ring-cyan-200", ink: "text-cyan-700" },
   },
   {
     status: "STORED", label: "In stock", short: "In stock", icon: CheckCircle2, hint: "Accepted by the store",
-    bar: "bg-gradient-to-r from-emerald-400 to-emerald-700", dot: "bg-emerald-600",
-    s: { grad: "from-emerald-400 to-emerald-700", glow: "shadow-emerald-600/30", pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", ink: "text-emerald-700" },
+    bar: "bg-gradient-to-r from-emerald-700 to-emerald-800", dot: "bg-emerald-600",
+    s: { grad: "from-emerald-700 to-emerald-800", glow: "shadow-emerald-600/30", pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", ink: "text-emerald-700" },
   },
   {
     status: "REJECTED", label: "Rejected", short: "Rejected", icon: XCircle, hint: "Rejected by IQC",
-    bar: "bg-gradient-to-r from-rose-400 to-red-600", dot: "bg-rose-500",
-    s: { grad: "from-rose-400 to-red-600", glow: "shadow-red-500/30", pill: "bg-rose-50 text-rose-800 ring-rose-200", ink: "text-rose-700" },
+    bar: "bg-gradient-to-r from-rose-600 to-red-800", dot: "bg-rose-500",
+    s: { grad: "from-rose-600 to-red-800", glow: "shadow-red-500/30", pill: "bg-rose-50 text-rose-800 ring-rose-200", ink: "text-rose-700" },
   },
 ]
 
 /* The "everything" filter: not a real status, so it is kept out of PURCHASE_STAGES. */
 export const PURCHASE_ALL = {
   status: "ALL", label: "All purchases", short: "All", icon: ClipboardList, hint: "Everything you ordered",
-  bar: "bg-gradient-to-r from-slate-500 to-slate-700", dot: "bg-slate-500",
-  s: { grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/30", pill: "bg-slate-100 text-slate-800 ring-slate-200", ink: "text-slate-700" },
+  bar: "bg-gradient-to-r from-slate-600 to-slate-800", dot: "bg-slate-500",
+  s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/30", pill: "bg-slate-100 text-slate-800 ring-slate-200", ink: "text-slate-700" },
 }
 
 export const purchaseStageOf = (status) => PURCHASE_STAGES.find((s) => s.status === status)
@@ -96,25 +97,25 @@ export function buyState(order) {
 export const BUY_STAGES = [
   {
     status: "TO_ORDER", label: "To order", short: "To order", icon: ShoppingCart, hint: "Components still to buy",
-    bar: "bg-gradient-to-r from-amber-400 to-orange-500", dot: "bg-amber-500",
-    s: { grad: "from-amber-400 to-orange-500", glow: "shadow-orange-500/30", pill: "bg-amber-50 text-amber-800 ring-amber-200", ink: "text-amber-700" },
+    bar: "bg-gradient-to-r from-amber-700 to-orange-800", dot: "bg-amber-500",
+    s: { grad: "from-amber-700 to-orange-800", glow: "shadow-orange-500/30", pill: "bg-amber-50 text-amber-800 ring-amber-200", ink: "text-amber-700" },
   },
   {
     status: "ORDERED", label: "All ordered", short: "Ordered", icon: CheckCircle2, hint: "Purchases placed",
-    bar: "bg-gradient-to-r from-emerald-400 to-emerald-700", dot: "bg-emerald-600",
-    s: { grad: "from-emerald-400 to-emerald-700", glow: "shadow-emerald-600/30", pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", ink: "text-emerald-700" },
+    bar: "bg-gradient-to-r from-emerald-700 to-emerald-800", dot: "bg-emerald-600",
+    s: { grad: "from-emerald-700 to-emerald-800", glow: "shadow-emerald-600/30", pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", ink: "text-emerald-700" },
   },
   {
     status: "NONE", label: "Nothing to buy", short: "In stock", icon: PackageCheck, hint: "Everything was in stock",
-    bar: "bg-gradient-to-r from-sky-400 to-blue-600", dot: "bg-sky-500",
-    s: { grad: "from-sky-400 to-blue-600", glow: "shadow-blue-500/30", pill: "bg-sky-50 text-sky-800 ring-sky-200", ink: "text-sky-700" },
+    bar: "bg-gradient-to-r from-sky-700 to-blue-800", dot: "bg-sky-500",
+    s: { grad: "from-sky-700 to-blue-800", glow: "shadow-blue-500/30", pill: "bg-sky-50 text-sky-800 ring-sky-200", ink: "text-sky-700" },
   },
 ]
 
 export const BUY_ALL = {
   status: "ALL", label: "All approved", short: "All", icon: ClipboardList, hint: "Approved by the Operations Admin",
-  bar: "bg-gradient-to-r from-slate-500 to-slate-700", dot: "bg-slate-500",
-  s: { grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/30", pill: "bg-slate-100 text-slate-800 ring-slate-200", ink: "text-slate-700" },
+  bar: "bg-gradient-to-r from-slate-600 to-slate-800", dot: "bg-slate-500",
+  s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/30", pill: "bg-slate-100 text-slate-800 ring-slate-200", ink: "text-slate-700" },
 }
 
 export const buyStageOf = (status) => BUY_STAGES.find((s) => s.status === status)
@@ -181,7 +182,7 @@ export function PurchaseTile({ stage, value, loading, active, solid, to, onClick
           <Icon className="size-[18px]" strokeWidth={2.1} aria-hidden />
         </span>
         {(to || onClick) && (
-          <ArrowUpRight aria-hidden className={cn("size-4 transition-[transform,color] duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5", on ? "text-white/80" : "text-slate-400 group-hover:text-primary")} />
+          <ArrowUpRight aria-hidden className={cn("size-4 transition-[transform,color] duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5", on ? "text-white/95" : "text-slate-400 group-hover:text-primary")} />
         )}
       </span>
 
@@ -190,14 +191,14 @@ export function PurchaseTile({ stage, value, loading, active, solid, to, onClick
           {loading ? <span className="inline-block h-7 w-14 animate-pulse rounded-md bg-slate-200/80 align-middle" aria-label="Loading" /> : <CountUp value={value} />}
         </span>
         <span className={cn("mt-2 block text-[13px] font-semibold leading-tight transition-colors duration-300", on ? "text-white" : "text-foreground")}>{stage.label}</span>
-        <span className={cn("mt-0.5 block text-[11px] leading-snug transition-colors duration-300", on ? "text-white/75" : "text-muted-foreground")}>{stage.hint}</span>
+        <span className={cn("mt-0.5 block text-[11px] leading-snug transition-colors duration-300", on ? "text-white/95" : "text-muted-foreground")}>{stage.hint}</span>
       </span>
     </>
   )
 
   const cls = cn(
     "group relative block w-full overflow-hidden rounded-2xl border p-4 text-left outline-none transition-[box-shadow,border-color] duration-300 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2",
-    on ? cn("border-transparent shadow-lg", stage.s.glow) : "border-[#dce5e0] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] hover:shadow-md"
+    on ? cn("border-transparent shadow-lg", stage.s.glow) : "border-[#E3E6EB] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] hover:shadow-md"
   )
 
   return (
@@ -231,8 +232,8 @@ export function purchaseSteps(status) {
 }
 
 const FILL = {
-  done: "bg-gradient-to-r from-emerald-400 to-emerald-600",
-  fail: "bg-gradient-to-r from-rose-400 to-red-600",
+  done: "bg-gradient-to-r from-emerald-700 to-emerald-800",
+  fail: "bg-gradient-to-r from-rose-600 to-red-800",
 }
 
 /* The four steps as a labelled bar that fills in: ordered, received, inspected by IQC, accepted by the store. */
@@ -304,13 +305,13 @@ export function PurchaseCard({ purchase: p, editable, busy, onOpen, onReceive, o
   const lines = p.totals?.lines ?? p.items?.length ?? 0
   const canStep = editable && (p.status === "ORDER_PLACED" || p.status === "RECEIVED")
   return (
-    <motion.li variants={rise} className="relative rounded-xl border border-[#dce5e0] bg-card transition-colors duration-200 hover:border-[#c3d1ca]">
+    <motion.li variants={rise} className="relative rounded-xl border border-[#E3E6EB] bg-card transition-colors duration-200 hover:border-[#CDD2DA]">
       <button type="button" onClick={onOpen} aria-label={`Open ${p.po_number}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />
       <div className="pointer-events-none relative p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="break-all text-[15px] font-semibold leading-snug tabular-nums">{p.po_number}</p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{p.supplier}{p.order_number ? ` · for ${p.order_number}` : ""}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{p.supplier}{purchaseFor(p) ? ` · for ${purchaseFor(p)}` : ""}</p>
           </div>
           <PurchaseStatusPill value={p.status} short className="shrink-0" />
         </div>

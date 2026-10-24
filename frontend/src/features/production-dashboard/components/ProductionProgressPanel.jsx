@@ -19,7 +19,7 @@ export default function ProductionProgressPanel({ items, loading }) {
   const percent = ordered > 0 ? Math.min(100, Math.round((completed / ordered) * 100)) : 0
 
   return (
-    <Card className="min-w-0 overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+    <Card className="min-w-0 overflow-hidden rounded-2xl border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader>
         <CardTitle>Production progress</CardTitle>
         <CardDescription>Material allotment and completed units across active product lines.</CardDescription>

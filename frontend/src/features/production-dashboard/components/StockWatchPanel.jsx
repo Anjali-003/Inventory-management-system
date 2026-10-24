@@ -11,7 +11,7 @@ export default function StockWatchPanel({ items, loading }) {
   const lowStock = getLowStockItems(items).slice(0, 5)
 
   return (
-    <Card className="min-w-0 overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+    <Card className="min-w-0 overflow-hidden rounded-2xl border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader className="flex-row items-center justify-between gap-3">
         <div>
           <CardTitle>Stock to watch</CardTitle>

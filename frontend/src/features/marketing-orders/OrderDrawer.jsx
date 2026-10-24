@@ -163,11 +163,11 @@ function OverviewTab({ order }) {
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[17px] font-bold leading-tight tracking-[-0.02em]">{stage.short === "Pending" ? "Waiting for approval" : stage.short}</p>
-              {stage.hint && <p className="mt-0.5 text-xs text-white/80">{stage.hint}</p>}
+              {stage.hint && <p className="mt-0.5 text-xs text-white/95">{stage.hint}</p>}
             </div>
             <div className="shrink-0 text-end">
               <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(requested)}</p>
-              <p className="mt-1 text-[11px] text-white/80">units ordered</p>
+              <p className="mt-1 text-[11px] text-white/95">units ordered</p>
             </div>
           </div>
         </motion.div>
@@ -310,7 +310,7 @@ function ItemsTab({ order }) {
           </TableHeader>
           <TableBody>
             {rows.map((r) => (
-              <TableRow key={r.product_id} className="hover:bg-emerald-50/40">
+              <TableRow key={r.product_id} className="hover:bg-accent/40">
                 <TableCell className="whitespace-normal">
                   <p className="font-medium leading-snug">{r.name}</p>
                   {r.sku && <p className="text-xs text-muted-foreground">{r.sku}</p>}
@@ -339,10 +339,10 @@ function ItemsTab({ order }) {
 /* ------------------------------------------------------------------ Timeline */
 
 const MARK = {
-  done: "bg-gradient-to-br from-emerald-400 to-emerald-700 text-white shadow-sm",
+  done: "bg-gradient-to-br from-emerald-700 to-emerald-800 text-white shadow-sm",
   current: "border-2 border-primary bg-card text-primary",
   todo: "border-2 border-border bg-card text-transparent",
-  fail: "bg-gradient-to-br from-rose-400 to-red-600 text-white shadow-sm",
+  fail: "bg-gradient-to-br from-rose-600 to-red-800 text-white shadow-sm",
 }
 
 /* Only the three steps Marketing cares about (created, sent to admin, decision). What happens after approval is not shown. */
@@ -411,7 +411,7 @@ function TimelineTab({ order }) {
 
 /* ------------------------------------------------------------------ the drawer */
 
-function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, actions, tabs = DRAWER_TABS, tabContent }) {
+function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, actions, tabs = DRAWER_TABS, tabContent, wide = false }) {
   const ref = useRef(null)
   const bodyRef = useRef(null)
   const uid = useId()
@@ -500,13 +500,13 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
         aria-modal="true"
         aria-labelledby={`${uid}-title`}
         tabIndex={-1}
-        className="absolute inset-y-0 end-0 flex w-full flex-col bg-card shadow-[-24px_0_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-[#dce5e0] sm:max-w-xl"
+        className={cn("absolute inset-y-0 end-0 flex w-full flex-col bg-card shadow-[-24px_0_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-[#E3E6EB]", wide ? "sm:max-w-3xl" : "sm:max-w-xl")}
         initial={{ x: offscreen }}
         animate={{ x: 0 }}
         exit={{ x: offscreen }}
         transition={SPRING}
       >
-        <div className="flex items-start justify-between gap-4 border-b bg-gradient-to-r from-emerald-50/70 via-white to-white px-5 pt-4">
+        <div className="flex items-start justify-between gap-4 border-b bg-gradient-to-r from-accent/70 via-white to-white px-5 pt-4">
           <div className="min-w-0 pb-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">Order details</p>
             <h2 id={`${uid}-title`} className="mt-0.5 truncate text-[17px] font-bold leading-snug tracking-[-0.2px] tabular-nums">{order.order_number}</h2>

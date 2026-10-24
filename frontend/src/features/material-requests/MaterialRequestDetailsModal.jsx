@@ -12,9 +12,9 @@ import { Button } from "@/components/ui/button";
 import { fmtDateTime, fmtQty } from "@/lib/stock";
 
 const STATUS_META = {
-  PENDING: { label: "Waiting for Store", variant: "warning", accent: "from-amber-500 to-orange-400", soft: "bg-amber-50 text-amber-800 ring-amber-100" },
-  PARTIALLY_ISSUED: { label: "Partially allotted", variant: "info", accent: "from-blue-500 to-cyan-400", soft: "bg-blue-50 text-blue-800 ring-blue-100" },
-  ISSUED: { label: "Fully allotted", variant: "success", accent: "from-emerald-600 to-teal-400", soft: "bg-emerald-50 text-emerald-800 ring-emerald-100" },
+  PENDING: { label: "Waiting for Store", variant: "warning", accent: "from-amber-700 to-orange-800", soft: "bg-amber-50 text-amber-800 ring-amber-100" },
+  PARTIALLY_ISSUED: { label: "Partially allotted", variant: "info", accent: "from-blue-600 to-cyan-800", soft: "bg-blue-50 text-blue-800 ring-blue-100" },
+  ISSUED: { label: "Fully allotted", variant: "success", accent: "from-emerald-600 to-teal-800", soft: "bg-emerald-50 text-emerald-800 ring-emerald-100" },
 };
 
 export default function MaterialRequestDetailsModal({ request, onClose, onAllot }) {
@@ -43,7 +43,7 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
               type="button"
               size="lg"
               onClick={() => onAllot(request)}
-              className="bg-gradient-to-r from-emerald-700 to-teal-600 text-white hover:from-emerald-800 hover:to-teal-700"
+              className="bg-gradient-to-r from-emerald-700 to-teal-800 text-white hover:from-emerald-800 hover:to-teal-800"
             >
               <PackageCheck className="size-4" />
               Allot materials

@@ -24,7 +24,7 @@ export default function PlanSummary({ orderId, items = [] }) {
         {(plan.lines || []).map((l) => (
           <li key={l.product_id} className="text-xs">
             <span className="text-muted-foreground">{names[l.product_id] || `#${l.product_id}`}: </span>
-            <span className={cn("font-semibold tabular-nums", l.can_make === 0 ? "text-destructive" : l.remaining > 0 ? "text-warning" : "text-primary")}>
+            <span className={cn("font-semibold tabular-nums", l.can_make === 0 ? "text-destructive" : l.remaining > 0 ? "text-warning" : "text-success")}>
               {fmtQty(l.can_make)}
             </span>
             <span className="text-muted-foreground">

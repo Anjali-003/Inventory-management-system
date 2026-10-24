@@ -71,7 +71,14 @@ function logout(req, res) {
     res.json({ message: "Logout successful" });
 }
 
+/* CHANGE OWN PASSWORD (behind authMiddleware: req.user is the role this tab is logged in as) */
+async function changePassword(req, res) {
+    const body = req.body || {};
+    res.json(await service.changePassword(req.user.userId, body.current_password, body.new_password));
+}
+
 module.exports = {
+    changePassword: asyncHandler(changePassword, { message: "Could not change the password" }),
     login: asyncHandler(login, { message: "Login failed" }),
     me: asyncHandler(me, { message: "Could not check the login" }),
     sessions: asyncHandler(sessions, { message: "Could not check the logins" }),

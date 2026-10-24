@@ -50,9 +50,9 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
     <motion.article
       layout="position"
       variants={rise}
-      className="relative overflow-hidden rounded-2xl border border-[#dce5e0] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
+      className="relative overflow-hidden rounded-2xl border border-[#E3E6EB] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
     >
-      <span aria-hidden className={cn("absolute inset-y-0 start-0 w-1 bg-gradient-to-b", stage?.s.grad ?? "from-slate-300 to-slate-400")} />
+      <span aria-hidden className={cn("absolute inset-y-0 start-0 w-1 bg-gradient-to-b", stage?.s.grad ?? "from-slate-600 to-slate-800")} />
 
       <motion.div
         role="button"

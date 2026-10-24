@@ -110,60 +110,25 @@ function ProductsCell({ items }) {
   );
 }
 
+/* Table cell: the verdict and two numbers. The full lists are one click away in the order drawer. */
 function FeasibilityCell({ orderId }) {
   const { data: plan, isLoading, error } = useGetOrderPlanQuery(orderId);
-  const [open, setOpen] = useState(false);
   if (isLoading)
     return <span className="text-xs text-muted-foreground">Checking stock...</span>;
   if (error || !plan)
     return <span className="text-xs text-muted-foreground">Stock check unavailable</span>;
   const verdict = planVerdict(plan);
-  const { canMake } = planTotals(plan);
-  const shortages = plan.shortages || [];
+  const { ordered, canMake } = planTotals(plan);
+  const toBuy = plan.shortages?.length || 0;
   return (
-    <div className="space-y-0.5 text-xs leading-snug">
+    <div className="space-y-1 text-xs leading-snug">
       <Badge variant={verdict.variant}>{verdict.label}</Badge>
       <p>
-        <span className="text-muted-foreground">Can make now: </span>
-        <b className="font-semibold tabular-nums">{plural(canMake, "unit")}</b>
+        <b className="font-semibold tabular-nums">{fmtQty(canMake)}</b>
+        <span className="text-muted-foreground"> of {fmtQty(ordered)} units can be made now</span>
       </p>
-      {shortages.length > 0 && (
-        <p className="flex flex-wrap items-center gap-x-2">
-          <span>
-            <span className="text-muted-foreground">To buy: </span>
-            <b className="font-semibold tabular-nums text-destructive">
-              {plural(shortages.length, "component")}
-            </b>
-          </span>
-          <button
-            type="button"
-            aria-expanded={open}
-            onClick={(e) => {
-              e.stopPropagation();
-              setOpen((v) => !v);
-            }}
-            className="font-semibold text-primary outline-none hover:underline focus-visible:underline"
-          >
-            {open ? "Hide list" : "Show list"}
-          </button>
-        </p>
-      )}
-      {open && shortages.length > 0 && (
-        <ul className="space-y-0.5 border-s-2 border-destructive/30 ps-2">
-          {shortages.map((c) => (
-            <li key={c.component_id}>
-              {c.name || `Component #${c.component_id}`}:{" "}
-              <b className="font-semibold tabular-nums text-destructive">
-                {fmtQty(c.shortage)}
-                {c.unit ? ` ${c.unit}` : ""}
-              </b>
-              <span className="text-muted-foreground">
-                {" "}
-                (required {fmtQty(c.required)}, in stock {fmtQty(c.available)})
-              </span>
-            </li>
-          ))}
-        </ul>
+      {toBuy > 0 && (
+        <p className="font-semibold text-destructive">{plural(toBuy, "component")} to buy</p>
       )}
     </div>
   );
@@ -250,7 +215,8 @@ export default function OrderApprovals() {
     rawStatus === "ALL" ? null : isOpsStatus(rawStatus) ? rawStatus : QUEUE; // null = every order
   const query = params.get("q") ?? "";
   const orderId = params.get("order");
-  const tab = OPS_TABS.some((t) => t.id === params.get("tab")) ? params.get("tab") : "overview";
+  // no tab in the URL: the drawer opens where the work is (Stock check for a waiting order)
+  const tab = OPS_TABS.some((t) => t.id === params.get("tab")) ? params.get("tab") : undefined;
 
   // `replace` keeps typing in the search box from filling the browser history.
   const patch = (changes, replace = false) =>
@@ -582,7 +548,7 @@ export default function OrderApprovals() {
       <OpsOrderDrawer
         orderId={orderId}
         tab={tab}
-        onTab={(t) => patch({ tab: t === "overview" ? null : t }, true)}
+        onTab={(t) => patch({ tab: t }, true)}
         onClose={closeOrder}
       />
     </MotionConfig>
