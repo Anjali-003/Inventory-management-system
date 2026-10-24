@@ -8,7 +8,12 @@ export const productionApi = baseApi.injectEndpoints({
       transformResponse: (res) => (Array.isArray(res) ? res : []),
       providesTags: ["Production"],
     }),
+    getQCFailed: build.query({
+      query: () => ({ url: "/qc-failed" }),
+      transformResponse: (res) => (Array.isArray(res) ? res : []),
+      providesTags: ["Production"],
+    }),
   }),
 });
 
-export const { useGetProductionQuery } = productionApi;
+export const { useGetProductionQuery, useGetQCFailedQuery } = productionApi;

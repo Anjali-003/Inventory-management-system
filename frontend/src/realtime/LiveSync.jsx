@@ -25,6 +25,7 @@ const TAGS = {
   inventory: ["Inventory"],
   orders: ["Orders", "Inventory", "Production", "FinishedGoods", "QualityControl"],
   production: ["Orders", "Inventory", "Production", "QualityControl"],
+  "qc-failed": ["Production", "QualityControl", "FinishedGoods", "Orders"],
   "quality-control": ["Orders", "Inventory", "QualityControl"],
   "finished-goods": ["Orders", "FinishedGoods"],
   employees: ["Attendance", "Employees"],
@@ -37,6 +38,7 @@ const TAGS = {
   "order-approvals": ["OrderApprovals", "Orders", "MarketingOrders", "Production", "Purchases", "Inventory"],
   "marketing-orders": ["MarketingOrders", "OrderApprovals", "Orders"],
   "approved-orders": ["OrderApprovals"],
+  "material-requests": ["MaterialRequests", "Production"],
 };
 
 // notification type -> extra tags to refetch with the bell (the screens that notification is about)
@@ -46,6 +48,7 @@ const NOTIFY_TAGS = {
   QUANTITY_REVISED: ["MarketingOrders"],
   DELIVERY_DATE_CHANGED: ["MarketingOrders"],
   REVISION_ACCEPTED: ["OrderApprovals"],
+  MATERIAL_REQUESTS_CHANGED: ["MaterialRequests", "Production", "Inventory"],
 };
 
 export default function LiveSync() {
@@ -124,6 +127,9 @@ export default function LiveSync() {
                 }
               : undefined,
           });
+        } else if (evt.message) {
+          // live-only events without a saved notification (e.g. material requests)
+          toastRef.current.notify({ type: evt.type, title: evt.message, severity: "info" });
         }
         dispatch(baseApi.util.invalidateTags(["Notifications", ...(NOTIFY_TAGS[evt.type] || [])]));
       } catch { /* ignore malformed event */ }

@@ -23,6 +23,8 @@ const ACCESS = {
         finishedGoods: "edit",
         // IQC-approved purchases waiting to be accepted into stock
         incomingStock: "edit",
+        // production material requests (allot / issue components to production)
+        materialRequests: "edit",
         // can look at these, cannot change
         iqc: "view",
         purchase: "view"
@@ -31,6 +33,13 @@ const ACCESS = {
     // Marketing Manager: prepares orders and sends them to the Operations Admin
     MARKETING_MANAGER: {
         marketingOrders: "edit"
+    },
+
+    // HR owns employee records and attendance.
+    HR_MANAGER: {
+        dashboard: "view",
+        employees: "edit",
+        attendance: "edit"
     },
 
     // Operations Admin: reviews the orders that come in (e.g. from marketing): sees what can be built from the
@@ -66,12 +75,34 @@ const ACCESS = {
     // on dispatch (POST /purchase checks every line against order_purchase_items). He then marks it received and
     // sends it to IQC.
     PURCHASE_MANAGER: {
+        purchase: "edit"
+    },
+
+    // Production can update production runs and inventory, and view QC / finished goods.
+    PRODUCTION_MANAGER: {
+        dashboard: "view",
+        production: "edit",
+        materialRequests: "edit",
+        qcFailed: "edit",
+        inventory: "edit",
+        qualityControl: "view",
+        finishedGoods: "view"
+    },
+
+    // Quality Control can record test/QC results and manage finished-goods transitions;
+    // Production is visible as a read-only reference.
+    QUALITY_FG_MANAGER: {
+        dashboard: "view",
+        qualityControl: "edit",
+        finishedGoods: "edit",
+        qcFailed: "edit",
+        production: "view",
         purchase: "edit",
         approvedOrders: "view", // orders approved by the Operations Admin
         iqc: "view",
         inventory: "view",
         inventoryHistory: "view",
-        finishedGoods: "view",
+        
         incomingStock: "view"
     }
 };
@@ -89,8 +120,11 @@ const LOGIN_ROUTES = {
     STORE_MANAGER: "/store-manager/login",
     IQC_MANAGER: "/iqc-manager/login",
     PURCHASE_MANAGER: "/purchase-manager/login",
+    PRODUCTION_MANAGER: "/production-manager/login",
+    QUALITY_FG_MANAGER: "/quality-fg-manager/login",
     OPERATIONS_ADMIN: "/operations-admin/login",
-    MARKETING_MANAGER: "/marketing-manager/login"
+    MARKETING_MANAGER: "/marketing-manager/login",
+    HR_MANAGER: "/hr-manager/login"
 };
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
@@ -132,6 +166,7 @@ const RESOURCE_MODULE = {
     inventory: "inventory",
     orders: "orders",
     production: "production",
+    "qc-failed": "qcFailed",
     "quality-control": "qualityControl",
     "finished-goods": "finishedGoods",
     purchase: "purchase",
@@ -141,13 +176,14 @@ const RESOURCE_MODULE = {
     "order-approvals": "orderApprovals",
     "approved-orders": "approvedOrders",
     employees: "employees",
-    attendance: "attendance"
+    attendance: "attendance",
+    "material-requests": "materialRequests"
     // "auth" and "super-admins" are not listed on purpose: super admin only
 };
 
 const REFRESH_ONLY = {
-    inventory: ["orders", "production", "quality-control", "finished-goods", "incoming-stock"],
-    finishedGoods: ["orders", "production", "quality-control", "inventory"],
+    inventory: ["orders", "production", "quality-control", "qc-failed", "finished-goods", "incoming-stock"],
+    finishedGoods: ["orders", "production", "quality-control", "qc-failed", "inventory"],
     // incoming goods: each department's screen refreshes when another department moves a purchase along
     purchase: ["iqc", "incoming-stock"],
     iqc: ["purchase", "incoming-stock"],

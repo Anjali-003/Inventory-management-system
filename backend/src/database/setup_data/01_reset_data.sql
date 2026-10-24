@@ -12,6 +12,7 @@
 --   products, components, inventory, inventory_transactions,
 --   product_bom, purchase_orders, purchase_order_items,
 --   order_purchase_items, order_production_items, orders, order_items,
+--   production_material_requests (+ their items and issues),
 --   production_orders, testing_records,
 --   quality_control_records, finished_goods,
 --   notifications, notification_reads, activity_log, idempotency_keys,
@@ -58,6 +59,16 @@ ALTER TABLE order_purchase_items AUTO_INCREMENT = 1;
 -- 4. Purchase orders after their known child tables
 DELETE FROM purchase_orders;
 ALTER TABLE purchase_orders AUTO_INCREMENT = 1;
+
+-- 4b. Production material requests (children first; they reference orders and components)
+DELETE FROM production_material_issues;
+ALTER TABLE production_material_issues AUTO_INCREMENT = 1;
+
+DELETE FROM production_material_request_items;
+ALTER TABLE production_material_request_items AUTO_INCREMENT = 1;
+
+DELETE FROM production_material_requests;
+ALTER TABLE production_material_requests AUTO_INCREMENT = 1;
 
 -- 5. Sales orders
 -- These depend on the actual FK cascade configuration.
@@ -107,6 +118,7 @@ SELECT
     (SELECT COUNT(*) FROM testing_records) AS testing_records,
     (SELECT COUNT(*) FROM quality_control_records) AS qc_records,
     (SELECT COUNT(*) FROM finished_goods) AS finished_goods,
+    (SELECT COUNT(*) FROM production_material_requests) AS material_requests,
     (SELECT COUNT(*) FROM notifications) AS notifications,
     (SELECT COUNT(*) FROM activity_log) AS activity_rows,
     (SELECT COUNT(*) FROM attendance) AS attendance_rows,

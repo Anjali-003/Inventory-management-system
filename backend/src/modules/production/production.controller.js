@@ -19,8 +19,21 @@ async function complete(req, res) {
     res.json(await service.completeProduction(id, req.user.id));
 }
 
+async function startRework(req, res) {
+    const id = parseId(req.params.id, "Production ID");
+    res.json(await service.startQualityControlRework(id, req.user.id));
+}
+
+async function submitRework(req, res) {
+    const id = parseId(req.params.id, "Production ID");
+    const remarks = typeof req.body?.remarks === "string" ? req.body.remarks : "";
+    res.json(await service.submitQualityControlRework(id, remarks, req.user.id));
+}
+
 module.exports = {
     list: asyncHandler(list, { message: "Failed to fetch production orders" }),
     updateProgress: asyncHandler(updateProgress, { message: "Failed to update production" }),
     complete: asyncHandler(complete, { message: "Failed to complete production" }),
+    startRework: asyncHandler(startRework, { message: "Failed to start quality control rework" }),
+    submitRework: asyncHandler(submitRework, { message: "Failed to submit rework to Quality Control" }),
 };

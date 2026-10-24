@@ -48,8 +48,8 @@ function ItemCard({ item: i, actions }) {
           ))}
         </dl>
       )}
-      <div className={`grid gap-px overflow-hidden rounded-lg border bg-border text-center ${Number(i.quantity_reserved) > 0 ? "grid-cols-3" : "grid-cols-1"}`}>
-        {[["On hand", i.quantity_on_hand], ...(Number(i.quantity_reserved) > 0 ? [["Reserved", i.quantity_reserved], ["Available", i.available]] : [])].map(([l, v]) => (
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border text-center">
+        {[["On hand", i.quantity_on_hand], ["Available", i.available]].map(([l, v]) => (
           <div key={l} className="bg-card py-2"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">{l}</p><p className="font-semibold tabular-nums">{fmtQty(v)}</p></div>
         ))}
       </div>
@@ -63,8 +63,9 @@ const EMPTY = []
 
 export default function Inventory() {
   const toast = useToast()
-  const { canEdit } = usePermissions()
+  const { canEdit, canView } = usePermissions()
   const editable = canEdit("inventory") // false = read-only role: no stock in / out / archive
+  const canViewHistory = canView("inventoryHistory")
   const [tab, setTab] = useState("stock")
   const [query, setQuery] = useState("")
   const [view, setView] = useState("active")
@@ -138,15 +139,16 @@ export default function Inventory() {
   }
 
   const showLedger = (item) => { setLedgerFor(item); setTab("ledger"); close() }
+  const showLedgerTab = canViewHistory && tab === "ledger"
 
   return (
     <>
-      <PageHeader title="Inventory" description="Stock on hand, reserved and available, backed by an append-only movement ledger.">
+      <PageHeader title="Inventory" description="Track on-hand and usable stock, backed by an append-only movement ledger.">
         {editable && <Button size="lg" onClick={() => open("in")}><Plus /> Stock in</Button>}
       </PageHeader>
 
       <div role="tablist" className="mb-4 inline-flex rounded-lg border bg-card p-1 text-sm">
-        {[["stock", "Stock", Warehouse], ["ledger", "Stock ledger", History]].map(([k, l, Icon]) => (
+        {[["stock", "Stock", Warehouse], ...(canViewHistory ? [["ledger", "Stock ledger", History]] : [])].map(([k, l, Icon]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
             className={cn("inline-flex h-8 items-center gap-2 rounded-md px-3.5 font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
               tab === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
@@ -158,7 +160,7 @@ export default function Inventory() {
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
       <Card className="overflow-hidden">
-        {tab === "ledger" ? (
+        {showLedgerTab ? (
           <LedgerPanel componentFilter={ledgerFor} onClearComponent={() => setLedgerFor(null)} refreshToken={token} />
         ) : (
           <>
@@ -223,12 +225,7 @@ export default function Inventory() {
                             {fmtQty(i.quantity_on_hand)}
                             <span className="block text-xs text-muted-foreground">min {fmtQty(i.minimum_stock_level)}</span>
                           </TableCell>
-                          {rows.some((r) => Number(r.quantity_reserved) > 0) && (
-                            <TableCell className="text-right font-medium tabular-nums">
-                              {fmtQty(i.available)}
-                              {Number(i.quantity_reserved) > 0 && <span className="block text-xs font-normal text-muted-foreground">{fmtQty(i.quantity_reserved)} reserved</span>}
-                            </TableCell>
-                          )}
+                          <TableCell className="text-right font-medium tabular-nums">{fmtQty(i.available)}</TableCell>
                           <TableCell><StockBadge item={i} /></TableCell>
                           <TableCell><Actions item={i} /></TableCell>
                         </TableRow>
@@ -248,7 +245,7 @@ export default function Inventory() {
 
       <ItemDetailModal
         open={dlg.kind === "view"} itemId={dlg.item?.id} refreshToken={token} onClose={close}
-        onIn={editable ? (it) => open("in", it) : undefined} onOut={editable ? (it) => open("out", it) : undefined} onLedger={showLedger}
+        onIn={editable ? (it) => open("in", it) : undefined} onOut={editable ? (it) => open("out", it) : undefined} onLedger={canViewHistory ? showLedger : undefined}
       />
       {editable && (
         <>

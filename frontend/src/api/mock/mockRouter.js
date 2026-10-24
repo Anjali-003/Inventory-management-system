@@ -91,7 +91,7 @@ function itemView(c) {
     quantity_on_hand: fromC(onHand),
     quantity_reserved: fromC(c.reserved || 0),
     location: c.location ?? null,
-    available: fromC(onHand - (c.reserved || 0)),
+    available: fromC(onHand),
     minimum_stock_level: fromC(c.minimum_stock_level),
     is_active: c.is_active,
     archived_at: c.archived_at,
@@ -300,11 +300,10 @@ function stockOut(id, body) {
   if (orderId && !state().orders.some((o) => o.id === orderId)) throw bad("Order not found")
   if (!c.is_active) throw new Http(409, "This item is archived. Stock it in again to reactivate it.", "ARCHIVED")
   const onHand = state().onHand[c.id] || 0
-  const available = onHand - (c.reserved || 0)
+  const available = onHand
   if (cents > available) {
     const shown = (x) => Number(fromC(Math.max(x, 0))).toLocaleString("en-US", { maximumFractionDigits: 2 })
-    throw new Http(409, `Insufficient stock: only ${shown(available)} available to issue` +
-      (onHand !== available ? ` (${shown(onHand - available)} is reserved for production)` : ""),
+    throw new Http(409, `Insufficient stock: only ${shown(available)} available to issue`,
       "INSUFFICIENT_STOCK", { available: fromC(Math.max(available, 0)) })
   }
   const row = post(c, "STOCK_OUT", "OUT", cents, { reason, reason_code: code, order_id: orderId, reference_no: body.reference_no || null, key })
@@ -327,7 +326,6 @@ function updateItem(id, body) {
     const again = replayOf(key); if (again) return { status: 200, data: again }
     const onHand = state().onHand[c.id] || 0
     if (onHand !== expected) throw new Http(409, `Stock changed while you were editing (now ${Number(fromC(onHand))}). Review the new balance and try again.`, "STALE", { current_on_hand: fromC(onHand) })
-    if (next < (c.reserved || 0)) throw new Http(409, `Cannot set stock below the ${Number(fromC(c.reserved))} reserved for production`, "BELOW_RESERVED")
     const delta = next - onHand
     if (delta !== 0) movement = post(c, delta > 0 ? "ADJUSTMENT_IN" : "ADJUSTMENT_OUT", delta > 0 ? "IN" : "OUT", Math.abs(delta), { reason, key })
     if (hasMin) c.minimum_stock_level = qty(body.minimum_stock_level, "Minimum stock level", { allowZero: true })
@@ -341,7 +339,6 @@ function archive(id, body) {
   const c = comp(id)
   if (!c) throw new Http(404, "Inventory item not found", "NOT_FOUND")
   if (!c.is_active) throw new Http(409, "This item is already archived", "ALREADY_ARCHIVED")
-  if (c.reserved > 0) throw new Http(409, "Cannot archive: stock is reserved for production", "HAS_RESERVED")
   if ((state().onHand[c.id] || 0) > 0) throw new Http(409, "Cannot archive while stock is still on hand. Stock it out or adjust it to zero first.", "HAS_STOCK")
   c.is_active = 0; c.archived_at = fmtDT(new Date())
   post(c, "ARCHIVED", "NONE", 0, { reason: reasonText(body?.reason, { required: false }) || "Archived by user" })

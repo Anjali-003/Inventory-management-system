@@ -10,7 +10,7 @@ const AppError = require("../../shared/AppError");
          inside the same DB transaction.
       2. The inventory row is locked (SELECT ... FOR UPDATE) before it is read or changed, so two
          concurrent requests (or a request and a production run) are serialised per component.
-      3. Stock can never go below zero or below what is reserved for production.
+      3. Stock is never reserved; approval-time issuance and stock movements control on-hand quantity.
       4. Every request carries an idempotency key; a retry/double submit posts exactly once.
       5. Ledger rows are never updated or deleted (also blocked by DB triggers, migration 006).
 
@@ -216,7 +216,7 @@ const ITEM_SELECT = `
         i.quantity_on_hand,
         i.quantity_reserved,
         i.location,
-        (i.quantity_on_hand - i.quantity_reserved) AS available,
+        i.quantity_on_hand AS available,
         c.minimum_stock_level,
         i.is_active,
         i.archived_at,
@@ -864,13 +864,12 @@ async function stockOut(inventoryIdRaw, body, userId) {
         }
 
         const onHand = toCents(inv.quantity_on_hand);
-        const available = onHand - toCents(inv.quantity_reserved);
+        const available = onHand;
 
         if (cents > available) {
             throw new AppError(
                 409,
-                `Insufficient stock: only ${show(Math.max(available, 0))} available to issue` +
-                    (onHand !== available ? ` (${show(onHand - available)} is reserved for production)` : ""),
+                `Insufficient stock: only ${show(Math.max(available, 0))} available to issue`,
                 "INSUFFICIENT_STOCK",
                 { available: fromCents(Math.max(available, 0)) }
             );
@@ -881,7 +880,7 @@ async function stockOut(inventoryIdRaw, body, userId) {
         const [upd] = await conn.query(
             `UPDATE inventory
                 SET quantity_on_hand = ?
-              WHERE id = ? AND quantity_on_hand - quantity_reserved >= ?`,
+              WHERE id = ? AND quantity_on_hand >= ?`,
             [fromCents(after), inventoryId, fromCents(cents)]
         );
         if (upd.affectedRows !== 1) {
@@ -955,15 +954,6 @@ async function updateItem(inventoryIdRaw, body, userId) {
                     { current_on_hand: fromCents(onHand) }
                 );
             }
-            const reserved = toCents(inv.quantity_reserved);
-            if (newCents < reserved) {
-                throw new AppError(
-                    409,
-                    `Cannot set stock below the ${show(reserved)} reserved for production`,
-                    "BELOW_RESERVED"
-                );
-            }
-
             const delta = newCents - onHand;
             if (delta !== 0) {
                 await conn.query(`UPDATE inventory SET quantity_on_hand = ? WHERE id = ?`, [
@@ -1010,13 +1000,6 @@ async function archiveItem(inventoryIdRaw, body, userId) {
 
         if (!inv.is_active) {
             throw new AppError(409, "This item is already archived", "ALREADY_ARCHIVED");
-        }
-        if (toCents(inv.quantity_reserved) > 0) {
-            throw new AppError(
-                409,
-                `Cannot archive: ${show(toCents(inv.quantity_reserved))} is reserved for production`,
-                "HAS_RESERVED"
-            );
         }
         if (toCents(inv.quantity_on_hand) > 0) {
             throw new AppError(
