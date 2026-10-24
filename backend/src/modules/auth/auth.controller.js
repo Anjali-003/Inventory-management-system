@@ -1,6 +1,5 @@
 const service = require("./auth.service");
 const AppError = require("../../shared/AppError");
-const activity = require("../activity/activity.service");
 const asyncHandler = require("../../middleware/asyncHandler");
 const env = require("../../config/env");
 const { cookieNameFor, roleFromRequest } = require("../../shared/session");
@@ -28,15 +27,7 @@ async function login(req, res) {
 
     res.cookie(cookieNameFor(user.role), token, { ...COOKIE_OPTIONS, maxAge: env.cookie.maxAgeMs });
 
-    // other super admins see "X logged in" (not awaited: never delays or fails the login)
-    activity.log({
-        userId: user.id,
-        userName: user.name,
-        resource: "auth",
-        action: "login",
-        summary: "Logged in",
-    });
-
+    // logins are not written to the activity feed: it only records real work (orders, stock, approvals ...)
     res.json({ message: "Login successful", user });
 }
 
