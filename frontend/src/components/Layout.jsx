@@ -29,6 +29,7 @@ import { cn } from "../lib/utils";
 import { authService } from "@/features/auth/authService"
 import { baseApi } from "../api/baseApi";
 import { usePermissions } from "@/features/auth/usePermissions";
+import NotificationBell from "@/features/notifications/NotificationBell";
 import { clearActiveRole, loginPathFor } from "@/lib/permissions";
 
 const GROUPS = [
@@ -341,8 +342,10 @@ export default function Layout() {
           </p>
         )}
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <span className="hidden text-xs text-muted-foreground xl:block">{today}</span>
+
+          {user && <NotificationBell />}
 
           {user && (
             <div className="hidden text-right leading-tight sm:block">

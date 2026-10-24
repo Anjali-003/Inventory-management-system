@@ -52,6 +52,17 @@ export const productsSummary = (items = []) => (items.length === 0 ? "No product
 export const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
 export const isDecided = (o) => ["APPROVED", "REJECTED"].includes(o.approval_status)
 
+/** Small line under a status: the quantity was revised (and maybe accepted by Marketing). */
+export function RevisionTag({ order, className }) {
+  if (!order?.revision) return null
+  const accepted = Boolean(order.revision_accepted_at)
+  return (
+    <span className={cn("mt-1 block text-[11px] font-medium leading-snug", accepted ? "text-emerald-700" : "text-orange-700", className)}>
+      {accepted ? "Marketing accepted revised qty" : "Qty revised, waiting for Marketing"}
+    </span>
+  )
+}
+
 /* -------------------------------------------------------------------- tiles */
 
 /** The grid of figures. Children are <StageTile/>; they rise in one after another. Three stages + "All" = four tiles. */
@@ -186,7 +197,10 @@ export function ApprovalPageCard({ order: o, canAct, busy, onOpen, onReject, onP
               {o.created_by_name ? `${o.created_by_name} · ` : ""}{timeAgo(o.created_at)}
             </p>
           </div>
-          <StatusPill value={o.approval_status} short />
+          <div className="shrink-0 text-end">
+            <StatusPill value={o.approval_status} short />
+            <RevisionTag order={o} />
+          </div>
         </div>
 
         <ul className="mt-3.5 space-y-1.5">
@@ -256,7 +270,7 @@ export function ApprovalList({ orders, onOpen }) {
                     <p className="break-words leading-snug">{productsSummary(items)}</p>
                     <p className="text-xs text-muted-foreground">{fmtQty(unitsOf(items))} units</p>
                   </TableCell>
-                  <TableCell><StatusPill value={o.approval_status} short /></TableCell>
+                  <TableCell><StatusPill value={o.approval_status} short /><RevisionTag order={o} /></TableCell>
                   <TableCell className="text-end"><ChevronRight className="ms-auto size-4 text-muted-foreground rtl:-scale-x-100" aria-hidden /></TableCell>
                 </TableRow>
               )

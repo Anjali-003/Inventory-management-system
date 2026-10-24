@@ -9,13 +9,13 @@
 --
 -- 1) Parts that already exist (same name + size) are reused: 37 of 111 lines.
 -- 2) The 74 parts that do not exist yet are added as CMP-0081..CMP-0154 (minimum stock 50, like the others),
---    each with 1000 on hand and a matching STOCK_IN ledger entry (same as the first 80 parts in 02_),
---    so ledger and stock stay in sync and every component starts at 1000.
--- 3) Lines with a blank quantity on the sheet (COATING, ADESIVE GLUE, OUTER BOX, SHOLDER) get NULL.
+--    each with 5000 on hand and a matching STOCK_IN ledger entry (same as the first 80 parts in 02_),
+--    so ledger and stock stay in sync and every component starts at 5000.
+-- 3) Lines with a blank quantity on the sheet (COATING, ADESIVE GLUE, OUTER BOX, SHOLDER) get 1.
 -- 4) SAFE TO RE-RUN, also on a database that was loaded with the older version of this file:
 --    parts that already exist are skipped, the BOM of PRD-002 is rebuilt, and every component that has
 --    0 on hand and no ledger history at all (the 74 parts the old version left at 0, or parts created by
---    "Create missing components" in the BOM import) gets 1000 on hand + a STOCK_IN ledger entry.
+--    "Create missing components" in the BOM import) gets 5000 on hand + a STOCK_IN ledger entry.
 --    Components that already have stock or any ledger row are never touched.
 -- =====================================================================
 
@@ -99,7 +99,7 @@ VALUES
 ('CMP-0153', 'RED PAINT', NULL, 'pcs', 'MISC', NULL, 50),
 ('CMP-0154', 'self screw (black)', NULL, 'pcs', 'MISC', '(4*9.5) mm', 50);
 
--- Inventory row for every component that has none yet (starts at 0, raised to 1000 just below)
+-- Inventory row for every component that has none yet (starts at 0, raised to 5000 just below)
 INSERT INTO inventory (component_id, quantity_on_hand, quantity_reserved)
 SELECT c.id, 0, 0 FROM components c
 WHERE NOT EXISTS (SELECT 1 FROM inventory i WHERE i.component_id = c.id)
@@ -116,12 +116,12 @@ START TRANSACTION;
 
 INSERT INTO inventory_transactions
     (component_id, transaction_type, direction, quantity, balance_after, reason, created_by)
-SELECT f.component_id, 'STOCK_IN', 'IN', 1000, 1000, 'Initial stock', (SELECT MIN(id) FROM users)
+SELECT f.component_id, 'STOCK_IN', 'IN', 5000, 5000, 'Initial stock', (SELECT MIN(id) FROM users)
 FROM tmp_fix_stock f
 ORDER BY f.component_id;
 
 UPDATE inventory
-SET quantity_on_hand = 1000
+SET quantity_on_hand = 5000
 WHERE component_id IN (SELECT component_id FROM tmp_fix_stock);
 
 COMMIT;
@@ -226,17 +226,17 @@ VALUES
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0149'), 1, NULL),  -- CABINET (130*97*66)MM
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0061'), 1, NULL),  -- FAN 60*60*15 MM
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0150'), 2, NULL),  -- SIDE PATI FRONT AND BACK
-((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0062'), NULL, NULL),  -- COATING
+((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0062'), 1, NULL),  -- COATING
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0151'), 4, NULL),  -- PAINHEAD SCREW(BLACK) 12*3MM
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0152'), 1, NULL),  -- RED WIRE 65MM*0.5MM
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0064'), 5, NULL),  -- STICKER
-((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0065'), NULL, NULL),  -- ADESIVE GLUE
+((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0065'), 1, NULL),  -- ADESIVE GLUE
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0153'), 4, NULL),  -- RED PAINT
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0066'), 1, NULL),  -- EP SHEET 1 SET
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0067'), 1, NULL),  -- INNER BOX
-((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0068'), NULL, NULL),  -- OUTER BOX
+((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0068'), 1, NULL),  -- OUTER BOX
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0069'), 1, NULL),  -- CABLE TYE 100MM
-((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0070'), NULL, NULL),  -- SHOLDER
+((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0070'), 1, NULL),  -- SHOLDER
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0071'), 1, NULL),  -- INSULATION SHEET (130*95)MM
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0072'), 1, NULL),  -- EARTHING WIRE 14*36 (55mm)
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0073'), 1, NULL),  -- GLASS SLEEVE (1*15)MM
@@ -245,17 +245,17 @@ VALUES
 ((SELECT id FROM products WHERE sku = 'PRD-002'), (SELECT id FROM components WHERE sku = 'CMP-0078'), 3, NULL);  -- Jumper wire
 
 -- Check (expect: 111 BOM rows for PRD-002, 154 components, 154 inventory rows,
---        154 with 1000 on hand, 154000 on hand, 154000 in the ledger)
+--        154 with 5000 on hand, 770000 on hand, 770000 in the ledger)
 SELECT (SELECT COUNT(*) FROM product_bom WHERE product_id = (SELECT id FROM products WHERE sku = 'PRD-002')) AS prd002_bom_rows,
        (SELECT COUNT(*) FROM components) AS components,
        (SELECT COUNT(*) FROM inventory)  AS inventory_rows,
-       (SELECT COUNT(*) FROM inventory WHERE quantity_on_hand = 1000)  AS at_1000,
+       (SELECT COUNT(*) FROM inventory WHERE quantity_on_hand = 5000)  AS at_5000,
        (SELECT SUM(quantity_on_hand) FROM inventory)                   AS total_on_hand,
        (SELECT SUM(quantity) FROM inventory_transactions)              AS ledger_total_in;
 
--- Anything not at 1000 is listed here (expect: no rows)
+-- Anything not at 5000 is listed here (expect: no rows)
 SELECT c.sku, c.name, i.quantity_on_hand, i.quantity_reserved
 FROM components c
 LEFT JOIN inventory i ON i.component_id = c.id
-WHERE COALESCE(i.quantity_on_hand, 0) <> 1000
+WHERE COALESCE(i.quantity_on_hand, 0) <> 5000
 ORDER BY c.sku;

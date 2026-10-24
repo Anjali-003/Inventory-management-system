@@ -26,6 +26,11 @@ export const marketingOrdersApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/marketing-orders/${id}/send`, method: "post" }),
       invalidatesTags: ["MarketingOrders", "OrderApprovals"],
     }),
+    // agree to the reduced quantity the Operations Admin proposed: the order goes back to the admin's queue
+    acceptOrderRevision: build.mutation({
+      query: (id) => ({ url: `/marketing-orders/${id}/accept-revision`, method: "post" }),
+      invalidatesTags: ["MarketingOrders", "OrderApprovals"],
+    }),
     deleteMarketingOrder: build.mutation({
       query: (id) => ({ url: `/marketing-orders/${id}`, method: "delete" }),
       invalidatesTags: ["MarketingOrders"],
@@ -39,4 +44,5 @@ export const {
   useCreateMarketingOrderMutation,
   useSendMarketingOrderMutation,
   useDeleteMarketingOrderMutation,
+  useAcceptOrderRevisionMutation,
 } = marketingOrdersApi;

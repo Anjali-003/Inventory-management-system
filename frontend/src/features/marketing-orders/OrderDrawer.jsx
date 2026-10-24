@@ -1,14 +1,15 @@
 import { useEffect, useId, useRef } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
-import { Calendar, Check, Clock3, Edit3, Loader2, Send, Trash2, X } from "lucide-react"
+import { Calendar, Check, CheckCircle2, Clock3, Edit3, Loader2, Scale, Send, Trash2, X } from "lucide-react"
 import { useState } from "react"
 import { useToast } from "@/components/toast"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useUpdateDeliveryDateMutation } from "@/features/order-approvals/orderApprovalsApi"
+import { useAcceptOrderRevisionMutation } from "./marketingOrdersApi"
 import UserCell from "@/components/UserCell"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { fmtDateTime, fmtQty } from "@/lib/stock"
+import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { MktBtn, StatusPill } from "./mktKit"
 import { SPRING, SPRING_SOFT } from "./mktMotion"
@@ -50,6 +51,71 @@ function Fact({ label, children }) {
   )
 }
 
+/* ------------------------------------------------------------------ quantity revision */
+
+const COPY_TONE = {
+  approved: { ring: "border-emerald-200 bg-emerald-50/60", ink: "text-emerald-800", label: "Will be made now" },
+  held: { ring: "border-orange-200 bg-orange-50/60", ink: "text-orange-800", label: "Not now · saved as a draft" },
+}
+
+/* One of the two copies of a revised order: the products with units in `field` (approved | held). */
+function RevisionCopy({ number, field, items }) {
+  const t = COPY_TONE[field]
+  const lines = items.filter((i) => Number(i[field]) > 0)
+  return (
+    <div className={cn("min-w-0 rounded-xl border p-3", t.ring)}>
+      <p className={cn("text-[10px] font-bold uppercase tracking-[0.5px]", t.ink)}>{t.label}</p>
+      <p className="mt-0.5 truncate text-sm font-semibold tabular-nums">{number || "-"}</p>
+      <ul className="mt-2 space-y-1">
+        {lines.map((i) => (
+          <li key={i.product_id} className="flex items-center justify-between gap-3 text-[13px]">
+            <span className="min-w-0 truncate">{i.name}</span>
+            <span className="shrink-0 font-semibold tabular-nums">{fmtQty(i[field])}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 border-t border-dashed pt-1.5 text-xs text-muted-foreground">
+        <span className="font-semibold tabular-nums text-foreground">{fmtQty(lines.reduce((s, i) => s + Number(i[field]), 0))}</span> units
+      </p>
+    </div>
+  )
+}
+
+/*
+  The Operations Admin makes only part of this order. Both copies are shown side by side: this order (what will be
+  made) and the held-back draft (the rest), with the admin's reason and whether Marketing has accepted yet.
+*/
+function RevisionSection({ order }) {
+  const r = order.revision
+  if (!r) return null
+  const waiting = order.approval_status === "QUANTITY_REVISED"
+  const items = r.items || []
+
+  return (
+    <section className="space-y-2.5">
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Scale className="size-4 text-orange-600" aria-hidden /> Quantity revised by Operations Admin</h3>
+      <div className="space-y-3 rounded-2xl bg-orange-50/40 px-4 py-3.5 ring-1 ring-inset ring-orange-200/70">
+        <UserCell name={order.revised_by_name} sub={fmtDateTime(order.revised_at)} />
+        {r.remarks && <p className="rounded-xl bg-white/70 px-3 py-2 text-sm leading-snug">{r.remarks}</p>}
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          <RevisionCopy number={order.order_number} field="approved" items={items} />
+          <RevisionCopy number={r.held_order_number} field="held" items={items} />
+        </div>
+        {waiting ? (
+          <p className="inline-flex items-center gap-1.5 text-sm font-medium text-orange-800">
+            <Clock3 className="size-4 motion-safe:animate-pulse" aria-hidden /> Waiting for the Marketing Manager to accept
+          </p>
+        ) : order.revision_accepted_at ? (
+          <p className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium text-emerald-800">
+            <CheckCircle2 className="size-4" aria-hidden /> Accepted by {order.revision_accepted_by_name || "Marketing"}
+            <span className="font-normal text-muted-foreground">· {fmtDateTime(order.revision_accepted_at)}</span>
+          </p>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
 /* ------------------------------------------------------------------ Overview */
 
 function OverviewTab({ order }) {
@@ -73,7 +139,7 @@ function OverviewTab({ order }) {
       setIsEditingDate(false)
       setDateChangeReason("")
     } catch (err) {
-      toast.error(err?.data?.message || "Failed to update delivery date")
+      toast.error(errorMessage(err, "Failed to update delivery date"))
     }
   }
   const stage = stageOf(order.approval_status)
@@ -157,12 +223,21 @@ function OverviewTab({ order }) {
         )}
       </div>
 
+      {order.parent_order_number && (
+        <p className="rounded-xl border border-orange-200 bg-orange-50/60 px-3.5 py-3 text-sm leading-snug text-orange-900">
+          The part of <span className="font-semibold tabular-nums">{order.parent_order_number}</span> the Operations Admin is not making now.
+          {order.approval_status === "DRAFT" && " Send it again when you are ready."}
+        </p>
+      )}
+
       <dl className="grid grid-cols-2 gap-2.5">
         <Fact label="Created by">{order.created_by_name || "-"}</Fact>
         <Fact label="Created on">{fmtDateTime(order.created_at)}</Fact>
         <Fact label="Sent to admin">{order.approval_status === "DRAFT" ? <span className="text-muted-foreground">Not sent yet</span> : order.sent_to_admin_at ? fmtDateTime(order.sent_to_admin_at) : "Sent"}</Fact>
         <Fact label="Products">{plural(order.items.length, "product")}</Fact>
       </dl>
+
+      <RevisionSection order={order} />
 
       <section className="space-y-2.5">
         <h3 className="text-sm font-semibold">Operations review</h3>
@@ -184,7 +259,11 @@ function OverviewTab({ order }) {
         ) : (
           <p className="inline-flex items-center gap-1.5 rounded-xl border border-dashed px-3.5 py-3 text-sm text-muted-foreground">
             {order.approval_status !== "DRAFT" && <Clock3 className="size-4 motion-safe:animate-pulse" aria-hidden />}
-            {order.approval_status === "DRAFT" ? "This order has not been sent for review yet." : "Waiting for the Operations Admin to decide."}
+            {order.approval_status === "DRAFT"
+              ? "This order has not been sent for review yet."
+              : order.approval_status === "QUANTITY_REVISED"
+                ? "The Operations Admin decides once Marketing accepts the revised quantity."
+                : "Waiting for the Operations Admin to decide."}
           </p>
         )}
       </section>
@@ -285,9 +364,11 @@ function timelineRows(order) {
       state: steps[2][1],
       sub: decided
         ? fmtWhen(order.approved_by_name || "-", order.approved_at)
-        : status === "PENDING_APPROVAL" ? "Waiting for the Operations Admin" : "Starts after you send the order",
-      extra: decided ? `${fmtQty(approved)} of ${fmtQty(requested)} units approved` : "",
-      remarks: decided ? order.approval_remarks : "",
+        : status === "QUANTITY_REVISED"
+          ? fmtWhen(order.revised_by_name || "-", order.revised_at)
+          : status === "PENDING_APPROVAL" ? "Waiting for the Operations Admin" : "Starts after you send the order",
+      extra: decided ? `${fmtQty(approved)} of ${fmtQty(requested)} units approved` : status === "QUANTITY_REVISED" ? "Waiting for Marketing to accept the reduced quantity" : "",
+      remarks: decided ? order.approval_remarks : status === "QUANTITY_REVISED" ? order.revision?.remarks : "",
     },
   ]
   return rows
@@ -339,7 +420,19 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
   const rtl = typeof document !== "undefined" && document.documentElement.dir === "rtl"
   const offscreen = `${rtl ? -100 : 100}%`
   const draft = order.approval_status === "DRAFT"
+  const revised = order.approval_status === "QUANTITY_REVISED"
   const units = sumQty(order.items)
+  const toast = useToast()
+  const [acceptRevision, { isLoading: accepting }] = useAcceptOrderRevisionMutation()
+
+  const accept = async () => {
+    try {
+      await acceptRevision(order.id).unwrap()
+      toast.success(`${order.order_number}: revised quantity accepted, back with the Operations Admin`)
+    } catch (err) {
+      toast.error(errorMessage(err, "Could not accept the revised quantity."))
+    }
+  }
 
   // Focus, scroll lock, Escape and Tab trapping while the drawer is mounted (same behaviour as the Modal).
   useEffect(() => {
@@ -481,6 +574,11 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
           )}
           <MktBtn onClick={onClose} className={actions ? "sm:me-auto" : undefined}>Close</MktBtn>
           {actions}
+          {editable && revised && (
+            <MktBtn variant="primary" disabled={accepting} onClick={accept}>
+              {accepting ? <Loader2 className="animate-spin" /> : <Check />} Accept revised quantity
+            </MktBtn>
+          )}
           {editable && draft && (
             <MktBtn variant="primary" disabled={busy} onClick={() => onSend(order)}>
               {busy ? <Loader2 className="animate-spin" /> : <Send />} Send to admin

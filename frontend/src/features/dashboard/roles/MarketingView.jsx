@@ -12,8 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "@/features/marketing-orders/marketingOrdersApi"
-import { useGetNotificationsQuery, useMarkNotificationDoneMutation } from "@/features/notifications/notificationsApi"
-import { Bell, CheckCircle } from "lucide-react"
+import { useGetNotificationsQuery, useMarkNotificationReadMutation } from "@/features/notifications/notificationsApi"
+import { severityOf } from "@/features/notifications/notificationStyle"
+import NotificationIcon from "@/features/notifications/NotificationIcon"
 import { HeroLink, MktBtn, MktHero, NewOrderFab, StageTile, StatusPill, TileGrid } from "@/features/marketing-orders/mktKit"
 import { rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { ALL_STAGE, OrderPipeline, STAGES, countByStatus, newestFirst, ordersHref, plural } from "@/features/marketing-orders/orderParts"
@@ -24,7 +25,8 @@ import OrderDrawer from "@/features/marketing-orders/OrderDrawer"
 const EMPTY = []
 
 /* Plain-language line under "Hello": the one thing worth doing next. */
-function nudge(counts) {
+function nudge(counts, revised) {
+  if (revised) return `${plural(revised, "order")} with a revised quantity. Open it to see both copies and accept.`
   if (counts.REJECTED) return `${plural(counts.REJECTED, "order")} rejected. Open it to read the admin's remarks.`
   if (counts.DRAFT) return `${plural(counts.DRAFT, "draft")} ready to send to the Operations Admin.`
   if (counts.PENDING_APPROVAL) return `${plural(counts.PENDING_APPROVAL, "order")} waiting for the Operations Admin.`
@@ -157,6 +159,49 @@ const RowList = ({ children }) => (
   </motion.ul>
 )
 
+/* "The Operations Admin moved a delivery date": one row per change, until the Marketing Manager acknowledges it. */
+function DeliveryDateNotices({ items, onOpen, onAcknowledge }) {
+  return (
+    <Card className="mt-4 overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b px-5 py-3">
+        <p className="text-sm font-bold">Delivery date changes</p>
+        <span className="rounded-full bg-cf-amber-soft px-2 py-0.5 text-[11px] font-semibold text-warning tabular-nums">{items.length} new</span>
+      </div>
+      <ul className="divide-y">
+        {items.map((n) => {
+          const s = severityOf(n)
+          // rows saved before notifications had a body: build the same line from the payload
+          const body = n.body || `${n.old_date ? `${n.old_date} → ` : "Set to "}${n.new_date}${n.reason ? ` · ${n.reason}` : ""}`
+          return (
+            <li key={n.id} className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center">
+              <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${s.soft} ${s.tone}`}>
+                <NotificationIcon n={n} className="size-[18px]" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold leading-snug">{n.title}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {body}
+                  <span className="text-cf-faint"> · {timeAgo(n.created_at)}{n.created_by_name ? ` by ${n.created_by_name}` : ""}</span>
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                {n.order_id && (
+                  <button type="button" onClick={() => onOpen(n)} className="inline-flex h-9 items-center gap-1 rounded-lg border px-3 text-xs font-semibold outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/30 sm:h-8">
+                    View order <ChevronRight className="size-3.5" />
+                  </button>
+                )}
+                <button type="button" onClick={() => onAcknowledge(n)} className="inline-flex h-9 items-center gap-1 rounded-lg bg-cf-green-soft px-3 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-hover focus-visible:ring-2 focus-visible:ring-primary/30 sm:h-8">
+                  <CheckCircle2 className="size-3.5" /> Got it
+                </button>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </Card>
+  )
+}
+
 export default function MarketingView() {
   const toast = useToast()
   const { data: me } = useGetMeQuery()
@@ -172,14 +217,15 @@ export default function MarketingView() {
   const openOrder = (o) => { setOpenedId(o.id); setTab("overview") }
   const closeOrder = () => { setOpenedId(null); setTab("overview") }
   const [confirmDelete, setConfirmDelete] = useState(null)
-  const { data: notifications = [] } = useGetNotificationsQuery()
-  const [markDone] = useMarkNotificationDoneMutation()
-  const dateNotifs = useMemo(() => notifications.filter((n) => !n.done && n.type === "DELIVERY_DATE_CHANGED"), [notifications])
+  const { data: inbox } = useGetNotificationsQuery()
+  const [markRead] = useMarkNotificationReadMutation()
+  // unread delivery-date changes stay on the dashboard until acknowledged (they are in the header bell too)
+  const dateNotifs = useMemo(() => (inbox?.items ?? EMPTY).filter((n) => !n.read && n.type === "DELIVERY_DATE_CHANGED"), [inbox])
 
   const counts = useMemo(() => countByStatus(data), [data])
   const latest = useMemo(() => [...data].sort(newestFirst), [data])
   const attention = useMemo(
-    () => [...latest.filter((o) => o.approval_status === "REJECTED"), ...latest.filter((o) => o.approval_status === "DRAFT")],
+    () => [...latest.filter((o) => o.approval_status === "QUANTITY_REVISED"), ...latest.filter((o) => o.approval_status === "REJECTED"), ...latest.filter((o) => o.approval_status === "DRAFT")],
     [latest]
   )
 
@@ -219,35 +265,16 @@ export default function MarketingView() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <MktHero eyebrow="Marketing dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={nudge(counts)}>
+      <MktHero eyebrow="Marketing dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={nudge(counts, data.filter((o) => o.approval_status === "QUANTITY_REVISED").length)}>
         {editable && <HeroLink wrap="hidden md:inline-flex" className="h-10" to={ordersHref(null, { new: 1 })}><Plus /> New order</HeroLink>}
       </MktHero>
 
-            {/* Operations Admin Delivery Date Notifications */}
       {dateNotifs.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {dateNotifs.map((n) => (
-            <div key={n.id} className="flex items-center justify-between gap-3 rounded-xl border border-amber-300/80 bg-amber-50/90 p-3.5 text-sm dark:bg-amber-950/30 dark:border-amber-700">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Bell className="size-4 shrink-0 text-amber-600" />
-                <div className="min-w-0">
-                  <p className="font-semibold text-amber-900 dark:text-amber-200 truncate">{n.title}</p>
-                  <p className="text-xs text-amber-800/90 dark:text-amber-300">
-                    Changed from <span className="font-medium">{n.old_date || "None"}</span> to <span className="font-bold underline">{n.new_date}</span>
-                    {n.reason ? ` · Reason: "${n.reason}"` : ""}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => markDone(n.id)}
-                className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-amber-200/80 hover:bg-amber-300 px-2.5 py-1 text-xs font-semibold text-amber-950 transition-colors"
-              >
-                <CheckCircle className="size-3.5" /> Acknowledge
-              </button>
-            </div>
-          ))}
-        </div>
+        <DeliveryDateNotices
+          items={dateNotifs}
+          onOpen={(n) => { markRead(n.id); openOrder({ id: n.order_id }) }}
+          onAcknowledge={(n) => markRead(n.id)}
+        />
       )}
 
       <TileGrid>
@@ -274,7 +301,7 @@ export default function MarketingView() {
       ) : (
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <Reveal delay={0.3}>
-            <Panel title="Needs your attention" description="Rejected orders first, then drafts to send." loading={isLoading} to={attention.length > 5 ? ordersHref("DRAFT") : null} toLabel={`View all (${attention.length})`}>
+            <Panel title="Needs your attention" description="Revised quantities to accept first, then rejected orders, then drafts to send." loading={isLoading} to={attention.length > 5 ? ordersHref("DRAFT") : null} toLabel={`View all (${attention.length})`}>
               {attention.length === 0 ? (
                 <EmptyState icon={CheckCircle2} title="Nothing needs attention">Every order has been sent and decided.</EmptyState>
               ) : (

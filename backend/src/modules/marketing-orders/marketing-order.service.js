@@ -2,11 +2,14 @@ const db = require("../../config/db");
 const AppError = require("../../shared/AppError");
 const inventory = require("../inventory/inventory.service");
 const approvals = require("../order-approvals/order-approval.service");
+const notifications = require("../notifications/notification.service");
 
 /*
     Marketing Manager: prepares orders and sends them to the Operations Admin.
         create  -> DRAFT            (editable by marketing only, can still be deleted)
         send    -> PENDING_APPROVAL (lands in the Operations Admin's queue; approve / reject is in order-approvals)
+        accept  -> QUANTITY_REVISED back to PENDING_APPROVAL: marketing agrees to the reduced quantity the admin proposed
+                   (the held-back part is already a separate draft, see order-approvals revise())
     Marketing sees every order raised by a marketing manager, with the admin's decision and reason.
 */
 
@@ -108,4 +111,35 @@ async function removeDraft(orderId) {
     });
 }
 
-module.exports = { listOrders, productOptions, createDraft, send, removeDraft };
+/* The Marketing Manager agrees to the reduced quantity: the order goes back to the admin's queue, marked as accepted. */
+async function acceptRevision(orderId, userId) {
+    return inventory.inTransaction(async (conn) => {
+        const [rows] = await conn.query(
+            `SELECT o.id, o.order_number, o.approval_status, u.role AS creator_role
+             FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ? FOR UPDATE`,
+            [orderId]
+        );
+        if (rows.length === 0 || rows[0].creator_role !== "MARKETING_MANAGER") throw AppError.notFound("Order not found", "NOT_FOUND");
+        if (rows[0].approval_status !== "QUANTITY_REVISED") {
+            throw AppError.conflict("This order is not waiting for your answer on a revised quantity. Refresh the page.", "NOT_REVISED");
+        }
+        await conn.query(
+            `UPDATE orders SET approval_status = 'PENDING_APPROVAL', revision_accepted_by = ?, revision_accepted_at = NOW() WHERE id = ?`,
+            [userId, orderId]
+        );
+        await notifications.notify(conn, {
+            role: "OPERATIONS_ADMIN",
+            type: "REVISION_ACCEPTED",
+            title: `Revised quantity accepted for order ${rows[0].order_number}`,
+            body: "Marketing agreed to the reduced quantity. The order is back in your queue.",
+            severity: "success",
+            link: `/order-approvals?order=${orderId}`,
+            orderId,
+            payload: { order_number: rows[0].order_number },
+            userId,
+        });
+        return approvals.getOrder(orderId, conn);
+    });
+}
+
+module.exports = { listOrders, productOptions, createDraft, send, removeDraft, acceptRevision };

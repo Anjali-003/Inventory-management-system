@@ -36,18 +36,20 @@ import {
 } from "@/features/marketing-orders/orderParts";
 import { fmtDateTime, fmtQty } from "@/lib/stock";
 import { cn } from "@/lib/utils";
-import { ClipboardCheck, Download, PackageCheck, RefreshCw, X } from "lucide-react";
+import { ClipboardCheck, Download, PackageCheck, RefreshCw, Scale, X } from "lucide-react";
 import { downloadPurchaseList } from "@/features/purchasing/purchasingUtils";
 import { MotionConfig, motion } from "motion/react";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import DecisionModal from "./DecisionModal";
 import OrderPlanModal from "./OrderPlanModal";
+import ReviseQuantityModal, { canRevise } from "./ReviseQuantityModal";
 import OpsTimelineTab from "./OpsTimelineTab";
 import {
   ApprovalPageCard,
   OPS_ALL,
   OPS_STAGES,
+  RevisionTag,
   OpsTileGrid,
   isDecided,
   isOpsStatus,
@@ -463,6 +465,7 @@ export default function OrderApprovals() {
   } = useGetOrderApprovalsQuery();
   const [deciding, setDeciding] = useState(null); // { order, mode } (reject)
   const [planning, setPlanning] = useState(null); // the order whose stock check is open
+  const [revising, setRevising] = useState(null); // the order whose quantity is being reduced
 
   const counts = useMemo(() => countByStatus(data), [data]);
   const selected = useMemo(
@@ -738,6 +741,7 @@ export default function OrderApprovals() {
                           value={o.approval_status}
                           className="px-2! py-0.5! text-[10px]!"
                         />
+                        <RevisionTag order={o} />
                       </TableCell>
                       <TableCell className="px-3! py-1! align-top! min-w-52 whitespace-normal">
                         {approvable ? (
@@ -793,7 +797,7 @@ export default function OrderApprovals() {
           Its Reject / Check stock buttons stay disabled while the list is refetching, so right after a decision
           the drawer cannot be used again on the old (still "waiting") copy of the order. */}
       <OrderDrawer
-        order={selected && !deciding && !planning ? selected : null}
+        order={selected && !deciding && !planning && !revising ? selected : null}
         tab={tab}
         onTab={(t) => patch({ tab: t === "overview" ? null : t }, true)}
         onClose={closeOrder}
@@ -805,6 +809,11 @@ export default function OrderApprovals() {
               {selected.approval_status === QUEUE && (
                 <MktBtn variant="danger" disabled={isFetching} onClick={() => askReject(selected)}>
                   <X /> Reject
+                </MktBtn>
+              )}
+              {canRevise(selected) && (
+                <MktBtn disabled={isFetching} onClick={() => setRevising(selected)}>
+                  <Scale /> Revise quantity
                 </MktBtn>
               )}
               <MktBtn variant="primary" disabled={isFetching} onClick={() => setPlanning(selected)}>
@@ -823,6 +832,9 @@ export default function OrderApprovals() {
       )}
       {planning && (
         <OrderPlanModal order={planning} onClose={() => setPlanning(null)} />
+      )}
+      {revising && (
+        <ReviseQuantityModal order={revising} onClose={() => setRevising(null)} />
       )}
     </MotionConfig>
   );

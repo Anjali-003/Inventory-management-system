@@ -1,6 +1,6 @@
 -- =====================================================================
 -- insert_components.sql
--- Loads the fresh data set: 2 products, 80 components, and 1000 pcs of stock
+-- Loads the fresh data set: 2 products, 80 components, and 5000 pcs of stock
 -- for every component (with a matching ledger entry for each).
 --
 -- RUN ORDER:
@@ -133,18 +133,18 @@ VALUES
 ('CMP-0080', 'A TAG (SMALL)', NULL, 'pcs', 'MISC', 'TH (MALE)', 50);
 
 -- ---------------------------------------------------------------------
--- 4) Inventory: one row per component with 1000 on hand.
+-- 4) Inventory: one row per component with 5000 on hand.
 -- ---------------------------------------------------------------------
 INSERT INTO inventory (component_id, quantity_on_hand, quantity_reserved)
-SELECT id, 1000, 0 FROM components ORDER BY id;
+SELECT id, 5000, 0 FROM components ORDER BY id;
 
--- 5) Ledger: one STOCK_IN entry per component for those 1000 pcs.
+-- 5) Ledger: one STOCK_IN entry per component for those 5000 pcs.
 --    Stock only ever changes together with a ledger row, so ledger and stock
 --    agree (the Stock page's sync check stays green) and Inventory History
---    counts it as received: 80 x 1000 = 80,000.
+--    counts it as received: 80 x 5000 = 400,000.
 INSERT INTO inventory_transactions
     (component_id, transaction_type, direction, quantity, balance_after, reason, created_by)
-SELECT c.id, 'STOCK_IN', 'IN', 1000, 1000, 'Initial stock', (SELECT MIN(id) FROM users)
+SELECT c.id, 'STOCK_IN', 'IN', 5000, 5000, 'Initial stock', (SELECT MIN(id) FROM users)
 FROM components c
 ORDER BY c.id;
 

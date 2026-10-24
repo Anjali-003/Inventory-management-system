@@ -72,7 +72,8 @@ function run(sql, params = []) {
   }
   if (has(sql, "SELECT order_number FROM orders WHERE id = ?")) return [[{ order_number: s.order.order_number }]];
   if (has(sql, "INSERT INTO notifications")) {
-    s.notifications.push({ id: s.notifications.length + 1, role: "STORE_MANAGER", type: params[0], title: params[1], order_id: params[2], payload: JSON.parse(params[3]) });
+    const [role, type, title, body, severity, link, requires_action, order_id, payload] = params;
+    s.notifications.push({ id: s.notifications.length + 1, role, type, title, body, severity, link, requires_action, order_id, payload: JSON.parse(payload) });
     return [{ insertId: s.notifications.length }];
   }
   if (has(sql, "UPDATE orders")) {

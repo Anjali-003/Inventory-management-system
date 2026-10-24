@@ -72,8 +72,9 @@ const MODULES = [
     { path: "/super-admins", router: superAdminRoutes, resource: "super-admins" },
     { path: "/activity", router: activityRoutes, guards: [requireRole("SUPER_ADMIN")] },
 
-    // dashboard notifications (Store Manager: components to issue). No broadcastChanges: the service pushes its own live event after commit.
-    { path: "/notifications", router: notificationRoutes, guards: [permit("notifications")] },
+    // notification inbox of the logged-in role (header bell + dashboard panels). Every role has one, so no permit():
+    // the service scopes every query to req.user.role. No broadcastChanges: the service pushes its own live event after commit.
+    { path: "/notifications", router: notificationRoutes },
 
     // live updates (Server-Sent Events)
     { path: "/events", router: eventsRoutes },

@@ -40,6 +40,11 @@ async function reject(req, res) {
     res.json(await service.reject(idOf(req), req.body, req.user.id));
 }
 
+/* POST /order-approvals/:id/revise: make only part of the order now; the rest goes back to Marketing as a draft */
+async function revise(req, res) {
+    res.json(await service.revise(idOf(req), req.body, req.user.id));
+}
+
 /* GET /order-approvals/:id/plan: what can be built from the stock right now + the components that are short */
 async function plan(req, res) {
     res.json(await service.getPlan(idOf(req)));
@@ -60,6 +65,7 @@ module.exports = {
     getOne: asyncHandler(getOne, { message: "Failed to fetch the order" }),
     approve: asyncHandler(approve, { message: "Failed to approve the order" }),
     reject: asyncHandler(reject, { message: "Failed to reject the order" }),
+    revise: asyncHandler(revise, { message: "Failed to revise the order quantity" }),
     plan: asyncHandler(plan, { message: "Failed to check the stock for this order" }),
     dispatch: asyncHandler(dispatch, { message: "Failed to send the order" }),
     updateDeliveryDate: asyncHandler(updateDeliveryDate, { message: "Failed to update delivery date" }),

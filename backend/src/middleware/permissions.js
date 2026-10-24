@@ -23,8 +23,6 @@ const ACCESS = {
         finishedGoods: "edit",
         // IQC-approved purchases waiting to be accepted into stock
         incomingStock: "edit",
-        // "issue these components" requests from approved orders (dashboard)
-        notifications: "edit",
         // can look at these, cannot change
         iqc: "view",
         purchase: "view"
@@ -32,8 +30,7 @@ const ACCESS = {
 
     // Marketing Manager: prepares orders and sends them to the Operations Admin
     MARKETING_MANAGER: {
-        marketingOrders: "edit",
-        notifications: "edit"
+        marketingOrders: "edit"
     },
 
     // Operations Admin: reviews the orders that come in (e.g. from marketing): sees what can be built from the

@@ -6,7 +6,7 @@ import { MktBtn, OrderItems } from "@/features/marketing-orders/mktKit"
 import { SPRING_SOFT } from "@/features/marketing-orders/mktMotion"
 import { OrderTimeline, plural, stageOf } from "@/features/marketing-orders/orderParts"
 import { usePermissions } from "@/features/auth/usePermissions"
-import { fmtQty } from "@/lib/stock"
+import { errorMessage, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import DecisionModal from "./DecisionModal"
 import OrderPlanModal from "./OrderPlanModal"
@@ -56,7 +56,7 @@ export default function ApprovalDetailModal({ orderId, onClose }) {
       setIsEditingDate(false)
       setDateChangeReason("")
     } catch (err) {
-      toast.error(err?.data?.message || "Failed to update delivery date")
+      toast.error(errorMessage(err, "Failed to update delivery date"))
     }
   }
 

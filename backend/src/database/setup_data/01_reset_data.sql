@@ -6,20 +6,37 @@
 -- WARNING: This permanently deletes selected business data.
 --
 -- Preserved:
---   users, employees, attendance, schema_migrations
+--   users (logins), schema_migrations
 --
 -- Reset:
 --   products, components, inventory, inventory_transactions,
 --   product_bom, purchase_orders, purchase_order_items,
---   order_purchase_items, orders, order_items,
+--   order_purchase_items, order_production_items, orders, order_items,
 --   production_orders, testing_records,
---   quality_control_records, finished_goods
+--   quality_control_records, finished_goods,
+--   notifications, notification_reads, activity_log, idempotency_keys,
+--   attendance, employees
+--
+-- Load again with `npm run seed`: 02..05 bring back products / components / stock / BOMs,
+-- 06_insert_employees.sql brings back the employees. Attendance, notifications and the
+-- activity feed start empty and are collected again from the moment of the reset.
 -- =====================================================================
 
 USE inventory_management;
 
--- 1. Stock ledger
+-- 1. Stock ledger (references components, orders and employees, so it goes first)
 TRUNCATE TABLE inventory_transactions;
+
+-- 1b. Notifications, activity feed, idempotency keys (reads are deleted with their notification)
+DELETE FROM notification_reads;
+DELETE FROM notifications;
+ALTER TABLE notifications AUTO_INCREMENT = 1;
+
+DELETE FROM activity_log;
+ALTER TABLE activity_log AUTO_INCREMENT = 1;
+
+DELETE FROM idempotency_keys;
+ALTER TABLE idempotency_keys AUTO_INCREMENT = 1;
 
 -- 2. Operations
 DELETE FROM finished_goods;
@@ -48,6 +65,7 @@ DELETE FROM orders;
 ALTER TABLE orders AUTO_INCREMENT = 1;
 
 ALTER TABLE order_items AUTO_INCREMENT = 1;
+ALTER TABLE order_production_items AUTO_INCREMENT = 1;
 ALTER TABLE production_orders AUTO_INCREMENT = 1;
 
 -- 6. Inventory
@@ -66,7 +84,14 @@ ALTER TABLE components AUTO_INCREMENT = 1;
 DELETE FROM products;
 ALTER TABLE products AUTO_INCREMENT = 1;
 
--- 10. Verify
+-- 10. HR: attendance first (it references employees)
+DELETE FROM attendance;
+ALTER TABLE attendance AUTO_INCREMENT = 1;
+
+DELETE FROM employees;
+ALTER TABLE employees AUTO_INCREMENT = 1;
+
+-- 11. Verify
 SELECT
     (SELECT COUNT(*) FROM products) AS products,
     (SELECT COUNT(*) FROM components) AS components,
@@ -81,4 +106,8 @@ SELECT
     (SELECT COUNT(*) FROM production_orders) AS production_orders,
     (SELECT COUNT(*) FROM testing_records) AS testing_records,
     (SELECT COUNT(*) FROM quality_control_records) AS qc_records,
-    (SELECT COUNT(*) FROM finished_goods) AS finished_goods;
+    (SELECT COUNT(*) FROM finished_goods) AS finished_goods,
+    (SELECT COUNT(*) FROM notifications) AS notifications,
+    (SELECT COUNT(*) FROM activity_log) AS activity_rows,
+    (SELECT COUNT(*) FROM attendance) AS attendance_rows,
+    (SELECT COUNT(*) FROM employees) AS employees;

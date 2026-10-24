@@ -10,6 +10,7 @@ router.get("/:id", controller.getOne);
 router.get("/:id/plan", controller.plan);
 router.post("/:id/approve", resolveUser, controller.approve);
 router.post("/:id/reject", resolveUser, controller.reject);
+router.post("/:id/revise", resolveUser, controller.revise);
 router.post("/:id/dispatch", resolveUser, controller.dispatch);
 router.patch("/:id/delivery-date", resolveUser, controller.updateDeliveryDate);
 

@@ -2,7 +2,7 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { motion } from "motion/react"
-import { Check, CheckCircle2, CircleDot, ClipboardList, FilePen, Hourglass, X, XCircle } from "lucide-react"
+import { Check, CheckCircle2, CircleDot, ClipboardList, FilePen, Hourglass, Scale, X, XCircle } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { fmtDateTime } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -65,7 +65,20 @@ export const ALL_STAGE = {
   },
 }
 
-export const stageOf = (status) => STAGES.find((s) => s.status === status)
+/*
+  The Operations Admin reduced the quantity and waits for Marketing to accept it. Kept out of STAGES (no tile / filter
+  of its own, the grids stay four wide), but pills, cards and the drawer find it through stageOf().
+*/
+export const REVISED_STAGE = {
+  status: "QUANTITY_REVISED", label: "QUANTITY REVISED BY OPERATIONS ADMIN", short: "Qty revised", icon: Scale, tone: "orange", dotTone: "warning",
+  bar: "bg-gradient-to-r from-orange-400 to-amber-600", dot: "bg-orange-500", hint: "Waiting for Marketing to accept the reduced quantity",
+  s: {
+    grad: "from-orange-400 to-amber-600", glow: "shadow-orange-500/30", soft: "bg-orange-50 ring-orange-200/70",
+    pill: "bg-orange-50 text-orange-800 ring-orange-200", ink: "text-orange-700",
+  },
+}
+
+export const stageOf = (status) => STAGES.find((s) => s.status === status) ?? (status === REVISED_STAGE.status ? REVISED_STAGE : undefined)
 export const isStatus = (value) => STAGES.some((s) => s.status === value)
 
 /** Link to the Marketing Orders page with a filter already applied: ordersHref("DRAFT"), ordersHref(null, { new: 1 }). */
@@ -173,6 +186,8 @@ export function orderSteps(status) {
   switch (status) {
     case "PENDING_APPROVAL":
       return [["Created", "done"], ["Sent to admin", "done"], ["Decision", "current"]]
+    case "QUANTITY_REVISED":
+      return [["Created", "done"], ["Sent to admin", "done"], ["Qty revised", "current"]]
     case "APPROVED":
       return [["Created", "done"], ["Sent to admin", "done"], ["Approved", "done"]]
     case "REJECTED":
@@ -260,7 +275,9 @@ export function OrderTimeline({ order }) {
       title: steps[2][0],
       sub: decided
         ? `${order.approved_by_name || "-"} · ${fmtDateTime(order.approved_at)}`
-        : status === "PENDING_APPROVAL"
+        : status === "QUANTITY_REVISED"
+          ? "Quantity reduced by the Operations Admin, waiting for Marketing to accept"
+          : status === "PENDING_APPROVAL"
           ? "Waiting for the Operations Admin"
           : "Starts after you send the order",
       remarks: decided ? order.approval_remarks : "",

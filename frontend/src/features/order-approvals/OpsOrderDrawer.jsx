@@ -1,12 +1,13 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useMemo, useState } from "react"
-import { PackageCheck, X } from "lucide-react"
+import { PackageCheck, Scale, X } from "lucide-react"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { MktBtn } from "@/features/marketing-orders/mktKit"
 import OrderDrawer from "@/features/marketing-orders/OrderDrawer"
 import DecisionModal from "./DecisionModal"
 import OrderPlanModal from "./OrderPlanModal"
 import OpsTimelineTab from "./OpsTimelineTab"
+import ReviseQuantityModal, { canRevise } from "./ReviseQuantityModal"
 import { FeasibilityTab, OPS_TABS } from "./OrderApprovals"
 import { approveLabel, canApprove } from "./approvalParts"
 import { useGetOrderApprovalsQuery } from "./orderApprovalsApi"
@@ -26,6 +27,7 @@ export default function OpsOrderDrawer({ orderId, onClose }) {
   const [tab, setTab] = useState("overview")
   const [deciding, setDeciding] = useState(null) // { order, mode } (reject)
   const [planning, setPlanning] = useState(null) // the order whose stock check is open
+  const [revising, setRevising] = useState(null) // the order whose quantity is being reduced
 
   const selected = useMemo(
     () => (orderId != null ? (data.find((o) => String(o.id) === String(orderId)) ?? null) : null),
@@ -40,7 +42,7 @@ export default function OpsOrderDrawer({ orderId, onClose }) {
   return (
     <>
       <OrderDrawer
-        order={selected && !deciding && !planning ? selected : null}
+        order={selected && !deciding && !planning && !revising ? selected : null}
         tab={tab}
         onTab={setTab}
         onClose={close}
@@ -54,6 +56,11 @@ export default function OpsOrderDrawer({ orderId, onClose }) {
                   <X /> Reject
                 </MktBtn>
               )}
+              {canRevise(selected) && (
+                <MktBtn disabled={isFetching} onClick={() => setRevising(selected)}>
+                  <Scale /> Revise quantity
+                </MktBtn>
+              )}
               <MktBtn variant="primary" disabled={isFetching} onClick={() => setPlanning(selected)}>
                 <PackageCheck /> {approveLabel(selected)}
               </MktBtn>
@@ -63,6 +70,7 @@ export default function OpsOrderDrawer({ orderId, onClose }) {
       />
       {deciding && <DecisionModal order={deciding.order} mode={deciding.mode} onClose={() => setDeciding(null)} />}
       {planning && <OrderPlanModal order={planning} onClose={() => setPlanning(null)} />}
+      {revising && <ReviseQuantityModal order={revising} onClose={() => setRevising(null)} />}
     </>
   )
 }

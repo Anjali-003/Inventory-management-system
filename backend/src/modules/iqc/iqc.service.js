@@ -1,7 +1,7 @@
 const AppError = require("../../shared/AppError");
 const inventory = require("../inventory/inventory.service");
 const purchases = require("../purchase/purchase.service");
-const hub = require("../../realtime/hub");
+const notifications = require("../notifications/notification.service");
 
 /*
     IQC (incoming quality control). For every purchased component the IQC manager records
@@ -98,14 +98,17 @@ async function inspect(purchaseId, body, userId) {
 
         // Tell the Store Manager ONLY after the transaction has committed (never for a rolled-back inspection)
         if (approvedTotal > 0) {
-            conn.afterCommit(() =>
-                hub.notifyRole("STORE_MANAGER", {
-                    type: "PURCHASE_READY_FOR_STORE",
-                    purchaseId,
-                    poNumber: rows[0].po_number,
-                    message: `${rows[0].po_number || "A purchase"} passed IQC and is waiting to be accepted into stock`
-                })
-            );
+            const poNumber = rows[0].po_number || `#${purchaseId}`;
+            await notifications.notify(conn, {
+                role: "STORE_MANAGER",
+                type: "PURCHASE_READY_FOR_STORE",
+                title: `Purchase ${poNumber} passed IQC`,
+                body: "Accept the approved components into stock.",
+                severity: "action",
+                link: "/incoming-stock?status=PENDING_STORE",
+                payload: { purchase_id: purchaseId, po_number: poNumber },
+                userId
+            });
         }
 
         return purchases.getPurchase(purchaseId, conn);

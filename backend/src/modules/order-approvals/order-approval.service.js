@@ -38,9 +38,15 @@ const { planOrder } = require("./order-planner");
          arrive with a round that is no longer current and are refused with 409 STALE_ROUND.
       3. ledger key  Every stock movement carries `approval-<order>-<round>-<component>`, UNIQUE in the database. If the
          two layers above were ever bypassed, the second deduction fails and the whole transaction rolls back.
+
+    Quantity revision (revise): while an order waits, the admin can say "we will make only this much for now".
+        PENDING_APPROVAL --revise--> QUANTITY_REVISED --Marketing accepts (marketing-orders)--> PENDING_APPROVAL
+    The order is split in two at once: the original keeps the quantities the admin will make, the rest becomes a new
+    marketing DRAFT (parent_order_id = original) that the Marketing Manager can send again later. orders.revision keeps
+    requested / approved / held per product. An order can be revised once; it moves no stock.
 */
 
-const APPROVAL_STATUSES = ["PENDING_APPROVAL", "APPROVED", "REJECTED"]; // DRAFT is marketing-only: never listed here
+const APPROVAL_STATUSES = ["PENDING_APPROVAL", "QUANTITY_REVISED", "APPROVED", "REJECTED"]; // DRAFT is marketing-only: never listed here
 const MAX_REMARKS = 500;
 const APPROVABLE = ["PENDING_APPROVAL"]; // statuses an order can be approved from
 
@@ -52,7 +58,15 @@ const ORDER_SELECT = `
         o.approval_status,
         o.approval_round,
         o.approval_remarks,
+        o.parent_order_id,
+        pa.order_number AS parent_order_number,
+        o.revision,
+        ru.name AS revised_by_name,
+        DATE_FORMAT(o.revised_at, '%Y-%m-%d %H:%i:%s') AS revised_at,
+        mu.name AS revision_accepted_by_name,
+        DATE_FORMAT(o.revision_accepted_at, '%Y-%m-%d %H:%i:%s') AS revision_accepted_at,
         cu.name AS created_by_name,
+        cu.role AS created_by_role,
         DATE_FORMAT(o.sent_to_admin_at, '%Y-%m-%d %H:%i:%s') AS sent_to_admin_at,
         DATE_FORMAT(o.estimated_delivery_date, '%Y-%m-%d') AS estimated_delivery_date,
         au.name AS approved_by_name,
@@ -61,7 +75,14 @@ const ORDER_SELECT = `
     FROM orders o
     LEFT JOIN users cu ON cu.id = o.created_by
     LEFT JOIN users au ON au.id = o.approved_by
+    LEFT JOIN users ru ON ru.id = o.revised_by
+    LEFT JOIN users mu ON mu.id = o.revision_accepted_by
+    LEFT JOIN orders pa ON pa.id = o.parent_order_id
 `;
+
+const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : value ?? null);
+// "2026-11-30" -> "30 Nov 2026" (for notification text)
+const fmtDate = (ymd) => new Date(`${ymd}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 /* Attaches the product lines (one query for all orders) and totals. */
 async function withItems(conn, orders) {
@@ -122,6 +143,8 @@ async function withItems(conn, orders) {
         const lines = byOrder.get(o.id) || [];
         return {
             ...o,
+            // { remarks, held_order_id, held_order_number, items: [{ product_id, sku, name, requested, approved, held }] } or null
+            revision: asObject(o.revision),
             items: lines,
             totals: { lines: lines.length, quantity: lines.reduce((s, l) => s + l.quantity, 0) },
             // what the Operations Admin sent on approval; null when nothing was sent
@@ -166,10 +189,10 @@ async function getOrdersByIds(ids, conn = db) {
     return withItems(conn, rows);
 }
 
-function parseRemarks(raw, { required }) {
+function parseRemarks(raw, { required, missing = "Please write the reason for rejecting this order (at least 3 characters)" }) {
     const remarks = typeof raw === "string" ? raw.trim().replace(/\s+/g, " ") : "";
     if (required && remarks.length < 3) {
-        throw new AppError(422, "Please write the reason for rejecting this order (at least 3 characters)", "VALIDATION", { field: "remarks" });
+        throw new AppError(422, missing, "VALIDATION", { field: "remarks" });
     }
     if (remarks.length > MAX_REMARKS) {
         throw new AppError(422, `Remarks must be ${MAX_REMARKS} characters or fewer`, "VALIDATION", { field: "remarks" });
@@ -514,7 +537,138 @@ async function dispatch(orderId, body, userId, opts) {
         return getOrder(orderId, conn);
     });
 }
+/* ------------------------------------------------------------------ quantity revision */
 
+/* [{ product_id, quantity }] -> Map(product_id -> units the admin will make). Whole numbers, 0 allowed. */
+function parseRevisedItems(raw) {
+    if (!Array.isArray(raw) || raw.length === 0) {
+        throw new AppError(422, "Enter the quantity you will make for each product", "VALIDATION", { field: "items" });
+    }
+    const out = new Map();
+    for (const row of raw) {
+        const id = Number(row && row.product_id);
+        const qty = Number(row && row.quantity);
+        if (!Number.isInteger(id) || id <= 0) throw new AppError(422, "items has an invalid product", "VALIDATION", { field: "items" });
+        if (!Number.isInteger(qty) || qty < 0) {
+            throw new AppError(422, "Quantity must be a whole number, 0 or more", "VALIDATION", { field: "items", product_id: id });
+        }
+        if (out.has(id)) throw new AppError(422, "items lists the same product twice", "VALIDATION", { field: "items" });
+        out.set(id, qty);
+    }
+    return out;
+}
+
+/*
+    POST /order-approvals/:id/revise  { items: [{ product_id, quantity }], remarks }
+    quantity = what the admin will make now (a product left out keeps its full quantity); it must be buildable from the
+    stock available right now (same planner as GET .../plan), else 409 NOT_ENOUGH_STOCK. Splits the order: the original
+    keeps those quantities and goes to QUANTITY_REVISED (waits for Marketing), the rest becomes a new marketing DRAFT.
+*/
+async function revise(orderId, body, userId) {
+    const remarks = parseRemarks(body && body.remarks, { required: true, missing: "Tell the Marketing Manager why the quantity is reduced (at least 3 characters)" });
+    const wanted = parseRevisedItems(body && body.items);
+
+    return inventory.inTransaction(async (conn) => {
+        const [rows] = await conn.query(
+            `SELECT o.id, o.order_number, o.approval_status, o.revision, o.created_by, o.estimated_delivery_date, u.role AS creator_role
+             FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ? FOR UPDATE`,
+            [orderId]
+        );
+        if (rows.length === 0) throw AppError.notFound("Order not found", "NOT_FOUND");
+        const order = rows[0];
+        if (order.approval_status !== "PENDING_APPROVAL") {
+            throw AppError.conflict("This order is no longer waiting for your decision. Refresh the page.", "ALREADY_DECIDED");
+        }
+        if (order.revision) throw AppError.conflict("The quantity of this order was already revised once.", "ALREADY_REVISED");
+        if (order.creator_role !== "MARKETING_MANAGER") {
+            throw new AppError(422, "Only orders raised by the Marketing Manager can be revised: approve or reject this one.", "NOT_MARKETING_ORDER");
+        }
+
+        const [lines] = await conn.query(
+            `SELECT oi.id, oi.product_id, p.sku, p.name, oi.quantity
+             FROM order_items oi JOIN products p ON p.id = oi.product_id
+             WHERE oi.order_id = ? ORDER BY oi.id FOR UPDATE`,
+            [orderId]
+        );
+        const known = new Set(lines.map((l) => l.product_id));
+        for (const id of wanted.keys()) {
+            if (!known.has(id)) throw new AppError(422, "A product in the list is not part of this order", "VALIDATION", { field: "items", product_id: id });
+        }
+
+        const items = lines.map((l) => {
+            const requested = Number(l.quantity);
+            const approved = wanted.has(l.product_id) ? wanted.get(l.product_id) : requested;
+            if (approved > requested) {
+                throw new AppError(422, `${l.name}: you can make at most the ${requested} units that were ordered`, "VALIDATION", { field: "items", product_id: l.product_id });
+            }
+            return { line_id: l.id, product_id: l.product_id, sku: l.sku, name: l.name, requested, approved, held: requested - approved };
+        });
+        if (items.every((i) => i.held === 0)) {
+            throw new AppError(422, "Nothing was reduced. To make the full order, use Check stock & send.", "VALIDATION", { field: "items" });
+        }
+        if (items.every((i) => i.approved === 0)) {
+            throw new AppError(422, "You would make nothing of this order: reject it instead.", "VALIDATION", { field: "items" });
+        }
+
+        // 1) the original keeps what will be made
+        for (const i of items) {
+            if (i.approved === 0) await conn.query(`DELETE FROM order_items WHERE id = ?`, [i.line_id]);
+            else if (i.held > 0) await conn.query(`UPDATE order_items SET quantity = ? WHERE id = ?`, [i.approved, i.line_id]);
+        }
+
+        // what will be made must come from the stock on the shelf now: plan the reduced order (shared components
+        // counted once) and refuse if any line cannot be built in full. Nothing is reserved; the transaction rolls back.
+        const check = await computePlan(conn, orderId);
+        const short = check.lines.filter((l) => l.remaining > 0);
+        if (short.length) {
+            throw AppError.conflict(
+                `Not enough stock: ${short.map((l) => `${l.name} can make only ${l.can_make}`).join(", ")}. Check the quantities and try again.`,
+                "NOT_ENOUGH_STOCK",
+                { lines: short.map((l) => ({ product_id: l.product_id, can_make: l.can_make })) }
+            );
+        }
+
+        // 2) the held-back part: a new marketing draft owned by the same Marketing Manager
+        const heldNumber = `${order.order_number}-H`;
+        const [created] = await conn.query(
+            `INSERT INTO orders (order_number, parent_order_id, status, approval_status, estimated_delivery_date, created_by)
+             VALUES (?, ?, 'PENDING', 'DRAFT', ?, ?)`,
+            [heldNumber, orderId, order.estimated_delivery_date || null, order.created_by]
+        );
+        const heldId = created.insertId;
+        const heldLines = items.filter((i) => i.held > 0);
+        await conn.query(
+            `INSERT INTO order_items (order_id, product_id, quantity) VALUES ?`,
+            [heldLines.map((i) => [heldId, i.product_id, i.held])]
+        );
+
+        // 3) the original now waits for Marketing to agree
+        const revision = {
+            remarks,
+            held_order_id: heldId,
+            held_order_number: heldNumber,
+            items: items.map(({ line_id, ...i }) => i),
+        };
+        const [saved] = await conn.query(
+            `UPDATE orders SET approval_status = 'QUANTITY_REVISED', revision = ?, revised_by = ?, revised_at = NOW() WHERE id = ?`,
+            [JSON.stringify(revision), userId, orderId]
+        );
+        assertSaved(saved);
+
+        await notifications.notify(conn, {
+            role: "MARKETING_MANAGER",
+            type: "QUANTITY_REVISED",
+            title: `Quantity reduced on order ${order.order_number}`,
+            body: `Review and accept the revised quantity. The held-back part is saved as draft ${heldNumber}.`,
+            severity: "action",
+            link: `/marketing-orders?order=${orderId}`,
+            orderId,
+            payload: { order_number: order.order_number, held_order_number: heldNumber, remarks },
+            userId,
+        });
+        return getOrder(orderId, conn);
+    });
+}
 
 async function updateDeliveryDate(orderId, body, user) {
     const newDate = (body && (body.estimated_delivery_date || body.estimatedDeliveryDate)) || null;
@@ -535,19 +689,23 @@ async function updateDeliveryDate(orderId, body, user) {
 
         await conn.query(`UPDATE orders SET estimated_delivery_date = ? WHERE id = ?`, [newDate, orderId]);
 
-        // Send notification to marketing manager
-        await notifications.createDeliveryDateNotification(conn, {
-            orderId,
-            orderNumber: order.order_number,
-            oldDate,
-            newDate,
-            reason,
-            userId: user.id
-        });
+        if (oldDate !== newDate) {
+            await notifications.notify(conn, {
+                role: "MARKETING_MANAGER",
+                type: "DELIVERY_DATE_CHANGED",
+                title: `Delivery date changed for order ${order.order_number}`,
+                body: `${oldDate ? `${fmtDate(oldDate)} → ` : "Set to "}${fmtDate(newDate)}${reason ? ` · ${reason}` : ""}`,
+                severity: "warning",
+                link: `/marketing-orders?order=${orderId}`,
+                orderId,
+                payload: { order_number: order.order_number, old_date: oldDate || null, new_date: newDate, reason },
+                userId: user.id
+            });
+        }
 
         return getOrder(orderId, conn);
     });
 }
 
 module.exports = {
-    updateDeliveryDate, APPROVAL_STATUSES, listOrders, getOrder, getOrdersByIds, approve, reject, getPlan, dispatch };
+    updateDeliveryDate, APPROVAL_STATUSES, listOrders, getOrder, getOrdersByIds, approve, reject, getPlan, dispatch, revise };

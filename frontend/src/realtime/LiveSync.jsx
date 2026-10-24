@@ -1,8 +1,10 @@
 //LiveSync.jsx doosre users ke changes ka pata lagata hai aur data refresh karwata hai.
 import { useEffect, useRef } from "react";
 import { useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import api, { isMock } from "@/api/api";
 import { baseApi } from "@/api/baseApi";
+import { notificationsApi } from "@/features/notifications/notificationsApi";
 import { useGetMeQuery } from "@/features/auth/authApi";
 import { useToast } from "@/components/toast";
 import { getActiveRole, loginPathFor } from "@/lib/permissions";
@@ -37,16 +39,30 @@ const TAGS = {
   "approved-orders": ["OrderApprovals"],
 };
 
+// notification type -> extra tags to refetch with the bell (the screens that notification is about)
+const NOTIFY_TAGS = {
+  ISSUE_COMPONENTS: ["Inventory"],
+  PURCHASE_READY_FOR_STORE: ["Purchases"],
+  QUANTITY_REVISED: ["MarketingOrders"],
+  DELIVERY_DATE_CHANGED: ["MarketingOrders"],
+  REVISION_ACCEPTED: ["OrderApprovals"],
+};
+
 export default function LiveSync() {
   const dispatch = useDispatch();
   const toast = useToast();
+  const navigate = useNavigate();
   const { data: me } = useGetMeQuery();
 
   // refs so the stream is not reopened when these change
   const meRef = useRef(null);
   const toastRef = useRef(toast);
-  meRef.current = me;
-  toastRef.current = toast;
+  const navigateRef = useRef(navigate);
+  useEffect(() => {
+    meRef.current = me;
+    toastRef.current = toast;
+    navigateRef.current = navigate;
+  });
 
   useEffect(() => {
     if (isMock || typeof EventSource === "undefined") return;
@@ -87,13 +103,29 @@ export default function LiveSync() {
       } catch { /* ignore malformed event */ }
     });
 
-    // targeted notification (sent by the backend only after its DB transaction committed)
+    // targeted notification (sent by the backend only after its DB transaction committed).
+    // A new one carries a title -> toast (with "Open" when it has a page); NOTIFICATIONS_CHANGED only refreshes the bell.
     es.addEventListener("notify", (e) => {
       try {
         const evt = JSON.parse(e.data);
-        if (evt.message) toastRef.current.success(evt.message);
-        // the dashboard list of "components to issue" (and the stock figures) refresh at once
-        dispatch(baseApi.util.invalidateTags(["Notifications", "Inventory"]));
+        if (evt.title) {
+          toastRef.current.notify({
+            type: evt.type,
+            title: evt.title,
+            body: evt.body,
+            severity: evt.severity,
+            action: evt.link
+              ? {
+                  label: "Open",
+                  onClick: () => {
+                    navigateRef.current(evt.link);
+                    if (evt.notificationId) dispatch(notificationsApi.endpoints.markNotificationRead.initiate(evt.notificationId));
+                  },
+                }
+              : undefined,
+          });
+        }
+        dispatch(baseApi.util.invalidateTags(["Notifications", ...(NOTIFY_TAGS[evt.type] || [])]));
       } catch { /* ignore malformed event */ }
     });
 

@@ -43,6 +43,13 @@ function notifyRole(role, data) {
     }
 }
 
+/* Only the open tabs of ONE user (e.g. "you read a notification in another tab, refresh the bell"). */
+function notifyUser(userId, data) {
+    for (const c of clients) {
+        if (c.userId === userId) send(c, "notify", { ...data, at: Date.now() });
+    }
+}
+
 /* Used when a super admin is deactivated: tell their open tabs to log out, then close. */
 function disconnectUser(userId) {
     for (const c of [...clients]) {
@@ -59,4 +66,4 @@ setInterval(() => {
     }
 }, 25000).unref();
 
-module.exports = { addClient, broadcast, notifyRole, disconnectUser };
+module.exports = { addClient, broadcast, notifyRole, notifyUser, disconnectUser };

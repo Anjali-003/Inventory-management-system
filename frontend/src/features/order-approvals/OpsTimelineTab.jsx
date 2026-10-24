@@ -54,6 +54,30 @@ function buildEvents(order) {
     });
   }
 
+  const rev = order.revision;
+  if (rev) {
+    const now = (rev.items || []).reduce((s, i) => s + Number(i.approved || 0), 0);
+    const asked = (rev.items || []).reduce((s, i) => s + Number(i.requested || 0), 0);
+    events.push({
+      key: "revised",
+      title: "Quantity revised",
+      state: "done",
+      at: order.revised_at,
+      sub: who(order.revised_by_name || "-", order.revised_at),
+      detail: `${fmtQty(now)} of ${fmtQty(asked)} units now, the rest saved for Marketing as ${rev.held_order_number || "a draft"}`,
+      remarks: rev.remarks,
+    });
+  }
+  if (order.revision_accepted_at) {
+    events.push({
+      key: "revision-accepted",
+      title: "Marketing accepted the revised quantity",
+      state: "done",
+      at: order.revision_accepted_at,
+      sub: who(order.revision_accepted_by_name || "-", order.revision_accepted_at),
+    });
+  }
+
   if (decided) {
     events.push({
       key: "decision",
@@ -104,6 +128,9 @@ function buildEvents(order) {
 
   if (status === "PENDING_APPROVAL") {
     ordered.push({ key: "waiting", title: "Waiting for your decision", state: "wait" });
+  }
+  if (status === "QUANTITY_REVISED") {
+    ordered.push({ key: "waiting", title: "Waiting for Marketing to accept the revised quantity", state: "wait" });
   }
   return ordered;
 }
