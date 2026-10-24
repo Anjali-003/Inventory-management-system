@@ -1,6 +1,7 @@
 const db = require("../../config/db");
 const AppError = require("../../shared/AppError");
 const { createFinishedGood } = require("../finished-goods/finished-goods.service");
+const notifications = require("../notifications/notification.service");
 
 // ordered_quantity = the quantity this production run must build for its order item.
 const productionQuery = `
@@ -721,6 +722,26 @@ async function decideBatch(productionId, decision, remarks, userId) {
     }
 
     await connection.commit();
+
+    // Production hears the decision on its batch: a failure is a rework task for them
+    const what = `${production.product_name} for order ${production.order_number}`;
+    await notifications.notifyCommitted(decision === "PASS"
+      ? {
+          role: "PRODUCTION_MANAGER", type: "QC_PASSED", severity: "success", link: "/production",
+          title: `${what} passed QC`,
+          body: finishedGoods?.readyForFinishedGoods
+            ? "The full order is now with Finished Goods for packaging."
+            : "It moves to Finished Goods once every product of the order has passed.",
+          orderId: production.order_id, userId,
+          payload: { order_number: production.order_number, production_id: productionId, attempt: attemptNumber },
+        }
+      : {
+          role: "PRODUCTION_MANAGER", type: "QC_FAILED", severity: "warning", link: "/qc-failed",
+          title: `${what} failed QC`,
+          body: `Rework needed (attempt ${attemptNumber}). QC remark: ${cleanRemarks}`.slice(0, 500),
+          orderId: production.order_id, userId,
+          payload: { order_number: production.order_number, production_id: productionId, attempt: attemptNumber },
+        });
 
     return {
       success: true,

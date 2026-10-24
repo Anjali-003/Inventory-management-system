@@ -97,8 +97,8 @@ async function inspect(purchaseId, body, userId) {
         );
 
         // Tell the Store Manager ONLY after the transaction has committed (never for a rolled-back inspection)
+        const poNumber = rows[0].po_number || `#${purchaseId}`;
         if (approvedTotal > 0) {
-            const poNumber = rows[0].po_number || `#${purchaseId}`;
             await notifications.notify(conn, {
                 role: "STORE_MANAGER",
                 type: "PURCHASE_READY_FOR_STORE",
@@ -110,6 +110,30 @@ async function inspect(purchaseId, body, userId) {
                 userId
             });
         }
+
+        // the Purchase Manager hears the result, above all what was rejected (to raise a replacement)
+        const rejected = items.filter((it) => it.decision === "REJECTED").length;
+        const defective = items.some((it) => it.defective > 0);
+        await notifications.notify(conn, {
+            role: "PURCHASE_MANAGER",
+            type: "IQC_RESULT",
+            title: approvedTotal === 0
+                ? `Purchase ${poNumber} was rejected by IQC`
+                : rejected
+                    ? `Purchase ${poNumber} partly rejected by IQC`
+                    : `Purchase ${poNumber} passed IQC`,
+            body: approvedTotal === 0
+                ? "Nothing was approved. Check the inspection and arrange a replacement."
+                : rejected
+                    ? `${rejected} component line${rejected === 1 ? "" : "s"} rejected. The approved parts went to the store.`
+                    : defective
+                        ? "Approved, with some defective pieces removed. The approved parts went to the store."
+                        : "Every component was approved and sent to the store.",
+            severity: approvedTotal === 0 || rejected || defective ? "warning" : "success",
+            link: "/purchase",
+            payload: { purchase_id: purchaseId, po_number: poNumber, rejected_lines: rejected },
+            userId
+        });
 
         return purchases.getPurchase(purchaseId, conn);
     });

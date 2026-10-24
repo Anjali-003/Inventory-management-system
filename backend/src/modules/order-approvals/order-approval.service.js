@@ -255,6 +255,43 @@ async function inGuardedTransaction(guard, work) {
     }
 }
 
+const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/*
+    One decision, every department it concerns: Marketing hears the outcome of its own order, Production gets the
+    products it can build now and Purchase the components to buy. Saved inside the decision's transaction.
+*/
+async function notifyDecision(conn, orderId, { approved, remarks, productionLines = [], shortages = [], userId }) {
+    const [rows] = await conn.query(
+        `SELECT o.order_number, u.role AS creator_role FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ?`,
+        [orderId]
+    );
+    const number = (rows[0] && rows[0].order_number) || `#${orderId}`;
+    const common = { orderId, userId, payload: { order_number: number } };
+
+    if (rows[0] && rows[0].creator_role === "MARKETING_MANAGER") {
+        await notifications.notify(conn, approved
+            ? { ...common, role: "MARKETING_MANAGER", type: "ORDER_APPROVED", severity: "success", link: `/marketing-orders?order=${orderId}`,
+                title: `Order ${number} approved`, body: remarks || "The Operations Admin approved your order. It is moving to production." }
+            : { ...common, role: "MARKETING_MANAGER", type: "ORDER_REJECTED", severity: "warning", link: `/marketing-orders?order=${orderId}`,
+                title: `Order ${number} rejected`, body: remarks || "The Operations Admin rejected your order." });
+    }
+    if (approved && productionLines.length) {
+        await notifications.notify(conn, {
+            ...common, role: "PRODUCTION_MANAGER", type: "PRODUCTION_ASSIGNED", severity: "action", link: "/production",
+            title: `Order ${number} is ready for production`,
+            body: `${count(productionLines.length, "product")} approved to build. Request the materials from the store to start.`,
+        });
+    }
+    if (approved && shortages.length) {
+        await notifications.notify(conn, {
+            ...common, role: "PURCHASE_MANAGER", type: "PURCHASE_REQUIRED", severity: "action", link: `/approved-orders?order=${orderId}`,
+            title: `${count(shortages.length, "component")} to buy for order ${number}`,
+            body: "The Operations Admin sent the shortfall list. Raise the purchase from Approved Orders.",
+        });
+    }
+}
+
 async function decide(orderId, decision, body, userId, opts) {
     const remarks = parseRemarks(body && body.remarks, { required: decision === "REJECTED" });
     const guard = decision === "APPROVED" ? parseGuard(body, { action: "order.approve", orderId, userId, opts }) : null;
@@ -271,12 +308,16 @@ async function decide(orderId, decision, body, userId, opts) {
         }
         if (guard) assertCurrentRound(rows[0], guard.expectedRound);
         let round = Number(rows[0].approval_round) || 0;
+        let productionLines = [];
+        let shortages = [];
 
         if (decision === "APPROVED") {
             const plan = await computePlan(conn, orderId, { lock: true });
             const producible = await saveApprovalRequests(conn, orderId, plan, userId);
             round += 1;
             await issueApprovedMaterials(conn, orderId, producible, userId, round);
+            productionLines = producible;
+            shortages = plan.shortages;
         }
 
         const [saved] = await conn.query(
@@ -288,6 +329,7 @@ async function decide(orderId, decision, body, userId, opts) {
             [outcome, remarks, userId, round, orderId]
         );
         assertSaved(saved);
+        await notifyDecision(conn, orderId, { approved: outcome === "APPROVED", remarks, productionLines, shortages, userId });
         return getOrder(orderId, conn);
     });
 }
@@ -531,6 +573,7 @@ async function dispatch(orderId, body, userId, opts) {
             ["APPROVED", remarks, userId, round, orderId]
         );
         assertSaved(saved);
+        await notifyDecision(conn, orderId, { approved: true, remarks, productionLines: selectedProduction, shortages: plan.shortages, userId });
         return getOrder(orderId, conn);
     });
 }

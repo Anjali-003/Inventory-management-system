@@ -71,6 +71,8 @@ function run(sql, params = []) {
     return [params[0].map((id) => ({ id, sku: names[id][0], name: names[id][1], unit: "pcs" }))];
   }
   if (has(sql, "SELECT order_number FROM orders WHERE id = ?")) return [[{ order_number: s.order.order_number }]];
+  // notifyDecision(): who raised the order decides whether Marketing hears the outcome
+  if (has(sql, "u.role AS creator_role FROM orders o LEFT JOIN users u")) return [[{ order_number: s.order.order_number, creator_role: s.order.creator_role ?? "MARKETING_MANAGER" }]];
   if (has(sql, "INSERT INTO notifications")) {
     const [role, type, title, body, severity, link, requires_action, order_id, payload] = params;
     s.notifications.push({ id: s.notifications.length + 1, role, type, title, body, severity, link, requires_action, order_id, payload: JSON.parse(payload) });
@@ -662,5 +664,28 @@ describe("Store Manager notification: which components to issue", () => {
     await service.dispatch(7, rightLists(), 5);
     expect(s.notifications).toHaveLength(1);
     expect(pushes).toHaveLength(1);
+  });
+});
+
+describe("every department hears the decision that concerns it", () => {
+  const sent = () => s.notifications.map((n) => [n.role, n.type]);
+
+  it("approval with nothing short: Marketing hears it, Production gets the build, Purchase gets nothing", async () => {
+    s.inventory[0].quantity_on_hand = "100.00";
+    await service.dispatch(7, { production_items: [{ product_id: 1, quantity: 10 }], purchase_items: [] }, 5);
+    expect(sent()).toEqual([["MARKETING_MANAGER", "ORDER_APPROVED"], ["PRODUCTION_MANAGER", "PRODUCTION_ASSIGNED"]]);
+    expect(s.notifications[1]).toMatchObject({ title: "Order ORD-007 is ready for production", link: "/production", severity: "action" });
+  });
+
+  it("a rejection goes to Marketing only, with the admin's reason", async () => {
+    await service.reject(7, { remarks: "Customer cancelled" }, 5);
+    expect(sent()).toEqual([["MARKETING_MANAGER", "ORDER_REJECTED"]]);
+    expect(s.notifications[0]).toMatchObject({ title: "Order ORD-007 rejected", body: "Customer cancelled", severity: "warning", link: "/marketing-orders?order=7" });
+  });
+
+  it("an order not raised by Marketing does not notify Marketing", async () => {
+    s.order.creator_role = "SUPER_ADMIN";
+    await service.reject(7, { remarks: "Duplicate" }, 5);
+    expect(s.notifications).toEqual([]);
   });
 });

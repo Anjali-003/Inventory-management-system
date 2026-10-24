@@ -1,4 +1,7 @@
-import { Bell, BellRing, CalendarClock, CircleCheck, Info, PackageMinus, PackageOpen, TriangleAlert, Truck } from "lucide-react"
+import {
+  BadgeCheck, Bell, BellRing, CalendarClock, CircleCheck, CircleX, ClipboardCheck, ClipboardList, Factory, Info, PackageCheck,
+  PackageMinus, PackageOpen, Receipt, RotateCcw, ShoppingCart, TestTube, TriangleAlert, Truck, Warehouse, Wrench,
+} from "lucide-react"
 
 /*
   One look per severity, shared by the header bell, the toasts and the dashboard panels.
@@ -15,12 +18,28 @@ export const SEVERITY = {
 }
 
 // a more specific icon for the notification types we know; anything new falls back to its severity's icon
+// (in the order of the workflow: marketing -> operations -> purchase -> IQC -> store -> production -> QC & FG -> marketing)
 const TYPE_ICONS = {
-  ISSUE_COMPONENTS: PackageOpen,
-  PURCHASE_READY_FOR_STORE: Truck,
+  ORDER_SENT: ClipboardList,
+  ORDER_APPROVED: CircleCheck,
+  ORDER_REJECTED: CircleX,
   QUANTITY_REVISED: PackageMinus,
-  DELIVERY_DATE_CHANGED: CalendarClock,
   REVISION_ACCEPTED: CircleCheck,
+  DELIVERY_DATE_CHANGED: CalendarClock,
+  PRODUCTION_ASSIGNED: Factory,
+  PURCHASE_REQUIRED: ShoppingCart,
+  PURCHASE_SENT_TO_IQC: ClipboardCheck,
+  IQC_RESULT: ClipboardCheck,
+  PURCHASE_READY_FOR_STORE: Truck,
+  PURCHASE_STORED: Warehouse,
+  ISSUE_COMPONENTS: PackageOpen,
+  MATERIAL_REQUESTED: PackageOpen,
+  MATERIAL_ISSUED: PackageCheck,
+  BATCH_READY_FOR_QC: TestTube,
+  QC_PASSED: BadgeCheck,
+  QC_FAILED: Wrench,
+  REWORK_SUBMITTED: RotateCcw,
+  ORDER_DISPATCHED: Receipt,
 }
 
 export const severityOf = (n) => SEVERITY[n?.severity] || SEVERITY.info

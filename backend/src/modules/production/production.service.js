@@ -1,6 +1,7 @@
 const db = require("../../config/db")
 const AppError = require("../../shared/AppError")
 const materialRequests = require("../material-requests/material-request.service")
+const notifications = require("../notifications/notification.service")
 
 async function getOrderItem(connection, orderItemId) {
   const [rows] = await connection.query(`
@@ -461,6 +462,21 @@ async function updateProductionProgress(productionId, quantity, userId) {
 
     await connection.commit();
 
+    // the whole batch is built: it moves to Quality Control (sent only now that it is committed)
+    if (itemCompleted) {
+      await notifications.notifyCommitted({
+        role: "QUALITY_FG_MANAGER",
+        type: "BATCH_READY_FOR_QC",
+        title: `${production.product_name} for order ${production.order_number} is ready for QC`,
+        body: `Production finished all ${newCompleted} units. Test the batch and record the decision.`,
+        severity: "action",
+        link: "/quality-control",
+        orderId: production.order_id,
+        payload: { order_number: production.order_number, production_id: production.id, quantity: newCompleted },
+        userId,
+      });
+    }
+
     return {
       success: true,
       productionId: production.id,
@@ -608,9 +624,28 @@ async function submitQualityControlRework(productionId, remarks, userId) {
     if (!updateResult.affectedRows) {
       throw new AppError(409, "The rework task changed before it could be submitted. Refresh and try again.")
     }
+    const [context] = await connection.query(
+      `SELECT o.order_number, p.name AS product_name FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id JOIN products p ON p.id = oi.product_id WHERE oi.id = ?`,
+      [production.order_item_id],
+    )
 
     await connection.commit()
     transactionStarted = false
+
+    // back in the QC queue for a retest
+    const orderNumber = (context[0] && context[0].order_number) || `#${production.order_id}`
+    await notifications.notifyCommitted({
+      role: "QUALITY_FG_MANAGER",
+      type: "REWORK_SUBMITTED",
+      title: `Rework done for order ${orderNumber}`,
+      body: `${(context[0] && context[0].product_name) || "The batch"} is back for retesting. Rework: ${cleanRemarks}`.slice(0, 500),
+      severity: "action",
+      link: "/quality-control",
+      orderId: production.order_id,
+      payload: { order_number: orderNumber, production_id: productionId, rework_id: cycle.id },
+      userId,
+    })
     return {
       success: true,
       productionId,

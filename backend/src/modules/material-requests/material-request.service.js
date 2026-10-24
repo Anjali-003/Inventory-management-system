@@ -1,7 +1,7 @@
 const db = require("../../config/db");
 const AppError = require("../../shared/AppError");
 const inventory = require("../inventory/inventory.service");
-const hub = require("../../realtime/hub");
+const notifications = require("../notifications/notification.service");
 
 const toCents = (value) => Math.round(Number(value || 0) * 100);
 const fromCents = (value) => Number((Number(value || 0) / 100).toFixed(2));
@@ -354,12 +354,21 @@ async function createRequest(body, userId) {
       `INSERT INTO production_material_request_items (request_id, component_id, quantity_per_product, requested_quantity) VALUES ?`,
       [[...options.values()].map((component) => [header.insertId, component.component_id, component.quantity_per_unit, fromCents(toCents(component.quantity_per_unit) * productQuantity)])]
     );
+    // Store hands these over (saved with the request, pushed after commit; a replayed key never gets here)
+    await notifications.notify(conn, {
+      role: "STORE_MANAGER",
+      type: "MATERIAL_REQUESTED",
+      title: `Production needs materials for order ${item.order_number}`,
+      body: `${item.product_name} × ${productQuantity}: ${options.size} component${options.size === 1 ? "" : "s"} to issue.`,
+      severity: "action",
+      link: "/store-material-requests",
+      orderId: Number(item.order_id),
+      payload: { order_number: item.order_number, request_id: Number(header.insertId), product_name: item.product_name, product_quantity: productQuantity },
+      userId,
+    });
     return { id: Number(header.insertId), replayed: false };
   });
 
-  if (!result.replayed) {
-    hub.notifyRole("STORE_MANAGER", { type: "MATERIAL_REQUESTS_CHANGED", message: `New production material request for order item #${orderItemId}` });
-  }
   return { success: true, request_id: result.id, replayed: result.replayed };
 }
 
@@ -547,13 +556,34 @@ async function issueRequest(requestId, body, userId) {
       ? "ISSUED"
       : startedIssueCount > 0 ? "PARTIALLY_ISSUED" : "PENDING";
     await conn.query(`UPDATE production_material_requests SET status = ? WHERE id = ?`, [status, requestId]);
+
+    // Production can start building with what the store handed over
+    const [context] = await conn.query(
+      `SELECT o.order_number, p.name AS product_name FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id JOIN products p ON p.id = oi.product_id WHERE oi.id = ?`,
+      [requests[0].order_item_id]
+    );
+    const orderNumber = (context[0] && context[0].order_number) || `#${requests[0].order_id}`;
+    const productName = (context[0] && context[0].product_name) || "the product";
+    await notifications.notify(conn, {
+      role: "PRODUCTION_MANAGER",
+      type: "MATERIAL_ISSUED",
+      title: status === "ISSUED"
+        ? `Materials issued for order ${orderNumber}`
+        : `Materials partly issued for order ${orderNumber}`,
+      body: status === "ISSUED"
+        ? `The store handed over every component for ${productName}. You can start production.`
+        : `The store handed over part of the components for ${productName}. The rest will follow.`,
+      severity: status === "ISSUED" ? "success" : "info",
+      link: "/production",
+      orderId: Number(requests[0].order_id),
+      payload: { order_number: orderNumber, request_id: requestId, status },
+      userId,
+    });
     return { id: requestId, status };
   });
 
-  if (!out.replayed) {
-    hub.notifyRole("STORE_MANAGER", { type: "MATERIAL_REQUESTS_CHANGED", message: `Material request #${requestId} updated: ${out.status.toLowerCase().replace(/_/g, " ")}` });
-    hub.notifyRole("PRODUCTION_MANAGER", { type: "MATERIAL_REQUESTS_CHANGED", message: `Material allotment updated for request #${requestId}` });
-  }
+  // other Store Managers' lists still refresh live through the activity broadcast of this request
   return { success: true, request_id: out.id, status: out.status, replayed: Boolean(out.replayed) };
 }
 

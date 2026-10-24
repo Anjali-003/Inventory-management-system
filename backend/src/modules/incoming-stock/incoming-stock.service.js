@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const AppError = require("../../shared/AppError");
 const inventory = require("../inventory/inventory.service");
 const purchases = require("../purchase/purchase.service");
+const notifications = require("../notifications/notification.service");
 
 /*
     Store manager side. A purchase shows up here once IQC approved it (PENDING_STORE).
@@ -17,7 +18,7 @@ async function list() {
 async function accept(purchaseId, userId) {
     return inventory.inTransaction(async (conn) => {
         const [rows] = await conn.query(
-            `SELECT id, po_number, supplier, status FROM purchase_orders WHERE id = ? FOR UPDATE`,
+            `SELECT id, po_number, supplier, status, order_id FROM purchase_orders WHERE id = ? FOR UPDATE`,
             [purchaseId]
         );
         if (rows.length === 0) throw AppError.notFound("Purchase not found", "NOT_FOUND");
@@ -51,6 +52,35 @@ async function accept(purchaseId, userId) {
             `UPDATE purchase_orders SET status = 'STORED', accepted_by = ?, accepted_at = NOW() WHERE id = ?`,
             [userId, purchaseId]
         );
+
+        // Purchase closes its loop; the Operations Admin knows the shortfall of that order is now on the shelf
+        const [orders] = po.order_id ? await conn.query(`SELECT order_number FROM orders WHERE id = ?`, [po.order_id]) : [[]];
+        const orderNumber = orders[0] && orders[0].order_number;
+        const payload = { purchase_id: purchaseId, po_number: po.po_number, order_number: orderNumber || null };
+        await notifications.notify(conn, {
+            role: "PURCHASE_MANAGER",
+            type: "PURCHASE_STORED",
+            title: `Purchase ${po.po_number} is in stock`,
+            body: `The Store Manager accepted the IQC approved parts${orderNumber ? ` for order ${orderNumber}` : ""}.`,
+            severity: "success",
+            link: "/purchase",
+            orderId: po.order_id || null,
+            payload,
+            userId,
+        });
+        if (po.order_id) {
+            await notifications.notify(conn, {
+                role: "OPERATIONS_ADMIN",
+                type: "PURCHASE_STORED",
+                title: `Parts for order ${orderNumber || `#${po.order_id}`} are in stock`,
+                body: `Purchase ${po.po_number} passed IQC and was accepted into the store.`,
+                severity: "info",
+                link: `/order-approvals?order=${po.order_id}`,
+                orderId: po.order_id,
+                payload,
+                userId,
+            });
+        }
         return purchases.getPurchase(purchaseId, conn);
     });
 }

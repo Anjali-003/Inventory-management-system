@@ -85,7 +85,7 @@ async function createDraft(body, userId) {
 /* Locks the order and checks that a marketing manager made it and it is still a draft. */
 async function lockDraft(conn, orderId) {
     const [rows] = await conn.query(
-        `SELECT o.id, o.approval_status, u.role AS creator_role
+        `SELECT o.id, o.order_number, o.approval_status, u.role AS creator_role
          FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ? FOR UPDATE`,
         [orderId]
     );
@@ -93,12 +93,24 @@ async function lockDraft(conn, orderId) {
     if (rows[0].approval_status !== "DRAFT") {
         throw AppError.conflict("This order has already been sent. Refresh the page.", "NOT_DRAFT");
     }
+    return rows[0];
 }
 
-async function send(orderId) {
+async function send(orderId, userId = null) {
     return inventory.inTransaction(async (conn) => {
-        await lockDraft(conn, orderId);
+        const order = await lockDraft(conn, orderId);
         await conn.query(`UPDATE orders SET approval_status = 'PENDING_APPROVAL', sent_to_admin_at = NOW() WHERE id = ?`, [orderId]);
+        await notifications.notify(conn, {
+            role: "OPERATIONS_ADMIN",
+            type: "ORDER_SENT",
+            title: `New order ${order.order_number} from Marketing`,
+            body: "Check the stock and approve, revise or reject it.",
+            severity: "action",
+            link: `/order-approvals?order=${orderId}`,
+            orderId,
+            payload: { order_number: order.order_number },
+            userId,
+        });
         return approvals.getOrder(orderId, conn);
     });
 }

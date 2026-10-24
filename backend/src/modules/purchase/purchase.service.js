@@ -1,6 +1,7 @@
 const db = require("../../config/db");
 const AppError = require("../../shared/AppError");
 const inventory = require("../inventory/inventory.service");
+const notifications = require("../notifications/notification.service");
 
 /*
     Purchase orders = components the purchase manager bought. They are the "lots" the other two
@@ -202,13 +203,18 @@ async function createPurchase(body, userId) {
         receive      ORDER_PLACED -> RECEIVED       "the goods have arrived"
         send-to-iqc  RECEIVED     -> PENDING_IQC    "hand them to the IQC manager"
 */
-async function advance(purchaseId, { from, to, byColumn, atColumn, conflictCode, conflictMessage }, userId) {
+async function advance(purchaseId, { from, to, byColumn, atColumn, conflictCode, conflictMessage, notice }, userId) {
     return inventory.inTransaction(async (conn) => {
-        const [rows] = await conn.query(`SELECT id, status FROM purchase_orders WHERE id = ? FOR UPDATE`, [purchaseId]);
+        const [rows] = await conn.query(`SELECT id, po_number, status FROM purchase_orders WHERE id = ? FOR UPDATE`, [purchaseId]);
         if (rows.length === 0) throw AppError.notFound("Purchase not found", "NOT_FOUND");
         if (rows[0].status !== from) throw AppError.conflict(conflictMessage, conflictCode);
 
         await conn.query(`UPDATE purchase_orders SET status = ?, ${byColumn} = ?, ${atColumn} = NOW() WHERE id = ?`, [to, userId, purchaseId]);
+        // the department that receives the purchase next (saved with this step, pushed after commit)
+        if (notice) {
+            const poNumber = rows[0].po_number || `#${purchaseId}`;
+            await notifications.notify(conn, { ...notice(poNumber), payload: { purchase_id: purchaseId, po_number: poNumber }, userId });
+        }
         return getPurchase(purchaseId, conn);
     });
 }
@@ -224,6 +230,11 @@ function sendToIqc(purchaseId, userId) {
     return advance(purchaseId, {
         from: "RECEIVED", to: "PENDING_IQC", byColumn: "sent_to_iqc_by", atColumn: "sent_to_iqc_at",
         conflictCode: "NOT_RECEIVED", conflictMessage: "Mark this purchase as received before sending it to IQC. Refresh the page.",
+        notice: (poNumber) => ({
+            role: "IQC_MANAGER", type: "PURCHASE_SENT_TO_IQC", severity: "action", link: "/iqc?status=PENDING_IQC",
+            title: `Purchase ${poNumber} is waiting for inspection`,
+            body: "The Purchase Manager sent the received goods to IQC.",
+        }),
     }, userId);
 }
 

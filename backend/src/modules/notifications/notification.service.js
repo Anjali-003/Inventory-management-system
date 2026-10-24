@@ -37,6 +37,19 @@ async function notify(conn, { role, type, title, body = null, severity = "info",
     return result.insertId;
 }
 
+/*
+    For services that run their own beginTransaction()/commit() (production, quality control, finished goods):
+    call it AFTER commit(). It never throws: the work is already saved, a failed notification must not undo it.
+*/
+async function notifyCommitted(entry) {
+    try {
+        return await notify(db, entry);
+    } catch (error) {
+        console.error("notification failed:", error.message);
+        return null;
+    }
+}
+
 /* Store Manager task: hand these components to production (stock was already deducted by the approval). */
 async function createIssueRequest(conn, { orderId, round, lines, userId }) {
     if (!lines.length) return null;
@@ -162,4 +175,4 @@ async function markDone(id, role, userId) {
     return shape(rows[0]);
 }
 
-module.exports = { notify, createIssueRequest, list, markRead, markAllRead, markDone };
+module.exports = { notify, notifyCommitted, createIssueRequest, list, markRead, markAllRead, markDone };

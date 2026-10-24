@@ -2,6 +2,7 @@
 const db = require("../../config/db");
 const AppError = require("../../shared/AppError");
 const { refreshOrderStatus } = require("../orders/order-status");
+const notifications = require("../notifications/notification.service");
 
 const selectSql = `
   SELECT
@@ -473,7 +474,28 @@ async function transition(
       }
     }
 
+    const [orderRows] = await connection.query(
+      "SELECT order_number FROM orders WHERE id = ?",
+      [rows[0].order_id]
+    );
+
     await connection.commit();
+
+    // packed and dispatched: the order goes back to Marketing for billing
+    if (to === "DISPATCHED") {
+      const orderNumber = orderRows[0]?.order_number || `#${rows[0].order_id}`;
+      await notifications.notifyCommitted({
+        role: "MARKETING_MANAGER",
+        type: "ORDER_DISPATCHED",
+        title: `Order ${orderNumber} is packed and dispatched`,
+        body: "Quality Control and Finished Goods released it. It is ready for billing.",
+        severity: "action",
+        link: `/marketing-orders?order=${rows[0].order_id}`,
+        orderId: rows[0].order_id,
+        payload: { order_number: orderNumber, finished_goods_id: id },
+        userId,
+      });
+    }
 
     return {
       success: true,

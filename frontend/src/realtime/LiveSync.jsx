@@ -43,12 +43,26 @@ const TAGS = {
 
 // notification type -> extra tags to refetch with the bell (the screens that notification is about)
 const NOTIFY_TAGS = {
-  ISSUE_COMPONENTS: ["Inventory"],
-  PURCHASE_READY_FOR_STORE: ["Purchases"],
+  ORDER_SENT: ["OrderApprovals"],
+  ORDER_APPROVED: ["MarketingOrders", "Orders"],
+  ORDER_REJECTED: ["MarketingOrders", "Orders"],
   QUANTITY_REVISED: ["MarketingOrders"],
-  DELIVERY_DATE_CHANGED: ["MarketingOrders"],
   REVISION_ACCEPTED: ["OrderApprovals"],
-  MATERIAL_REQUESTS_CHANGED: ["MaterialRequests", "Production", "Inventory"],
+  DELIVERY_DATE_CHANGED: ["MarketingOrders"],
+  PRODUCTION_ASSIGNED: ["Production", "MaterialRequests"],
+  PURCHASE_REQUIRED: ["OrderApprovals", "Purchases"],
+  PURCHASE_SENT_TO_IQC: ["Purchases"],
+  IQC_RESULT: ["Purchases"],
+  PURCHASE_READY_FOR_STORE: ["Purchases"],
+  PURCHASE_STORED: ["Purchases", "Inventory", "OrderApprovals"],
+  ISSUE_COMPONENTS: ["Inventory"],
+  MATERIAL_REQUESTED: ["MaterialRequests", "Inventory"],
+  MATERIAL_ISSUED: ["MaterialRequests", "Production"],
+  BATCH_READY_FOR_QC: ["QualityControl", "Production"],
+  QC_PASSED: ["Production", "QualityControl", "FinishedGoods"],
+  QC_FAILED: ["Production", "QualityControl"],
+  REWORK_SUBMITTED: ["QualityControl"],
+  ORDER_DISPATCHED: ["MarketingOrders", "FinishedGoods", "Orders"],
 };
 
 export default function LiveSync() {
