@@ -55,44 +55,26 @@ function Progress({ done, total }) {
   )
 }
 
-function MaterialReadiness({ item }) {
-  const ready = readyToStartQuantity(item)
-  const left = leftToBeAllottedQuantity(item)
-  const completed = num(item.quantity_completed)
-  const ordered = num(item.ordered_quantity)
-  const activeUnits = inProductionQuantity(item)
+/*
+  ONE plain sentence per product line: what happens next and who does it. "mine" = the Production Manager acts.
+  (Same rules as the buttons in ProductionActions.)
+*/
+function nextStep(item) {
   const workflow = productionWorkflowStatus(item)
-  const outstanding = num(item.material_request_outstanding_quantity)
+  const left = Math.max(0, num(item.ordered_quantity) - num(item.quantity_completed))
+  if (workflow.key === "awaiting_approval") return { label: "Waiting for Ops Admin approval", tone: "warning" }
+  if (workflow.key === "bom_review") return { label: "BOM needs fixing (Super Admin)", tone: "warning" }
+  if (isProductionCompleted(item)) return { label: `Done: all ${num(item.ordered_quantity)} built`, tone: "success" }
+  if (inProductionQuantity(item) > 0) return { label: "Building: record the finished units", tone: "info", mine: true }
+  if (canStartProduction(item)) return { label: `Material ready: start ${Math.min(readyToStartQuantity(item), left)} units`, tone: "success", mine: true }
+  if (num(item.material_request_outstanding_quantity) > 0) return { label: "Waiting for Store to hand over material", tone: "warning" }
+  if (canRequestMaterials(item)) return { label: "Ask Store for the material", tone: "warning", mine: true }
+  return { label: "Waiting for components to arrive (Purchase)", tone: "warning" }
+}
 
-  if (workflow.key === "awaiting_approval") {
-    return <div className="space-y-1"><Badge variant="warning">Awaiting approval</Badge><p className="text-xs text-muted-foreground">Operations approval is required</p></div>
-  }
-  if (workflow.key === "bom_review") {
-    return <div className="space-y-1"><Badge variant="warning">BOM needs review</Badge><p className="text-xs text-muted-foreground">Component requirements need fixing</p></div>
-  }
-  if (isProductionCompleted(item)) {
-    return <div className="space-y-1"><Badge variant="success">Production completed</Badge><p className="text-xs text-muted-foreground">All {ordered} ordered units are complete</p></div>
-  }
-  if (activeUnits > 0) {
-    const details = [
-      `${activeUnits} unit${activeUnits === 1 ? "" : "s"} in production`,
-      ready > 0 ? `${ready} ready to start` : "",
-      left > 0 ? `${left} left to be allotted` : "",
-    ].filter(Boolean)
-    return <div className="space-y-1"><Badge variant="info">Production in progress</Badge><p className="text-xs leading-snug text-muted-foreground">{details.join(" · ")}</p></div>
-  }
-  if (left > 0 && ready > 0) {
-    return <div className="space-y-1"><Badge variant="info">Partially allotted</Badge><p className="text-xs leading-snug text-muted-foreground">{ready} ready to start · {left} left to be allotted</p></div>
-  }
-  if (left > 0) {
-    const label = outstanding > 0 ? "Awaiting Store" : completed > 0 ? "More materials needed" : "Awaiting allotment"
-    const detail = outstanding > 0 ? "Material request is awaiting allotment" : `${left} unit${left === 1 ? "" : "s"} left to be allotted${completed > 0 ? ` · ${completed} completed` : ""}`
-    return <div className="space-y-1"><Badge variant="warning">{label}</Badge><p className="text-xs leading-snug text-muted-foreground">{detail}</p></div>
-  }
-  if (ready > 0) {
-    return <div className="space-y-1"><Badge variant="success">Materials allotted</Badge><p className="text-xs text-muted-foreground">Ready to start {ready} unit{ready === 1 ? "" : "s"}</p></div>
-  }
-  return <div className="space-y-1"><Badge variant={completed > 0 ? "info" : "secondary"}>{completed > 0 ? "More materials needed" : workflow.label}</Badge><p className="text-xs text-muted-foreground">{completed > 0 ? `${completed} units completed so far` : "Materials are not yet ready"}</p></div>
+function NextStep({ item }) {
+  const step = nextStep(item)
+  return <Badge variant={step.tone} className="whitespace-normal text-left">{step.mine ? "Your turn: " : ""}{step.label}</Badge>
 }
 
 function ProductionActions({ item, onUpdate, onRequest, onStart, editable = true, compact = false, marketing = false }) {
@@ -105,15 +87,14 @@ function ProductionActions({ item, onUpdate, onRequest, onStart, editable = true
   const ActionButton = marketing ? MktBtn : Button
 
   if (!eligibleToStart && !hasUpdate && !canRequest) {
-    const workflow = productionWorkflowStatus(item)
-    return <span className="text-xs font-medium text-muted-foreground">{workflow.label}</span>
+    return <span className="text-xs font-medium text-muted-foreground">Nothing to do now</span>
   }
 
   return (
     <div className={`flex flex-wrap gap-1.5 ${compact ? "justify-start" : "justify-end"}`}>
-      {canRequest && <ActionButton variant="outline" size="sm" onClick={() => onRequest(item)}><PackagePlus className="size-3.5" /> Request materials</ActionButton>}
-      {eligibleToStart && <ActionButton variant={marketing ? "primary" : "default"} size="sm" onClick={() => onStart(item)}>Start production</ActionButton>}
-      {hasUpdate && <ActionButton variant="outline" size="sm" onClick={() => onUpdate(item)}>Record completed units</ActionButton>}
+      {hasUpdate && <ActionButton variant={marketing ? "primary" : "default"} size="sm" onClick={() => onUpdate(item)}>Record finished units</ActionButton>}
+      {eligibleToStart && <ActionButton variant={hasUpdate ? "outline" : marketing ? "primary" : "default"} size="sm" onClick={() => onStart(item)}>Start production</ActionButton>}
+      {canRequest && <ActionButton variant={hasUpdate || eligibleToStart ? "outline" : marketing ? "primary" : "default"} size="sm" onClick={() => onRequest(item)}><PackagePlus className="size-3.5" /> Ask Store for material</ActionButton>}
     </div>
   )
 }
@@ -121,8 +102,6 @@ function ProductionActions({ item, onUpdate, onRequest, onStart, editable = true
 function ProductionCard({ item, onUpdate, onRequest, onStart, editable }) {
   const completed = num(item.quantity_completed)
   const ordered = num(item.ordered_quantity)
-  const allotted = materialAllottedQuantity(item)
-  const left = leftToBeAllottedQuantity(item)
 
   return (
     <div className="min-w-0 rounded-xl border bg-card p-4">
@@ -132,19 +111,14 @@ function ProductionCard({ item, onUpdate, onRequest, onStart, editable }) {
           <p className="mt-1 break-words text-sm font-medium text-slate-800">{item.product_name || "—"}</p>
           {item.product_sku && <p className="mt-1 text-xs text-muted-foreground">{item.product_sku}</p>}
         </div>
-        <div className="shrink-0"><MaterialReadiness item={item} /></div>
+        <div className="shrink-0 text-right">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Left to build</p>
+          <p className="text-2xl font-extrabold tabular-nums">{Math.max(0, ordered - completed)}</p>
+        </div>
       </div>
 
-      <div className="mt-4"><Progress done={completed} total={ordered} /></div>
-
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-        {[["Allotted", allotted], ["Left to be allotted", left], ["Completed", completed]].map(([label, value]) => (
-          <div key={label} className="min-w-0 rounded-lg border bg-muted/30 px-2 py-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
-            <p className="mt-1 text-lg font-extrabold tabular-nums">{value}</p>
-          </div>
-        ))}
-      </div>
+      <div className="mt-3"><NextStep item={item} /></div>
+      <div className="mt-3"><Progress done={completed} total={ordered} /></div>
 
       <div className="mt-3 flex flex-col gap-3 border-t pt-3">
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -217,14 +191,13 @@ export default function Production() {
 
   const productOptions = useMemo(() => uniqueStringOptions(items, (item) => item.product_name), [items])
   const workflowStatusOptions = [
-    { value: "all", label: "All production statuses" },
-    { value: "awaiting_approval", label: "Awaiting approval" },
-    { value: "bom_review", label: "BOM needs review" },
-    { value: "awaiting_allotment", label: "Awaiting allotment" },
-    { value: "partially_allotted", label: "Partially allotted" },
+    { value: "all", label: "All" },
+    { value: "awaiting_approval", label: "Waiting for approval" },
+    { value: "bom_review", label: "BOM needs fixing" },
+    { value: "awaiting_allotment", label: "Waiting for material" },
     { value: "ready_to_start", label: "Ready to start" },
-    { value: "in_production", label: "Production in progress" },
-    { value: "completed", label: "Production completed" },
+    { value: "in_production", label: "Building" },
+    { value: "completed", label: "Done" },
   ]
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -236,7 +209,8 @@ export default function Production() {
       if (productFilter !== "all" && item.product_name !== productFilter) return false
       if (workflowFilter === "ready_to_start" && (isProductionCompleted(item) || readyToStartQuantity(item) <= 0)) return false
       if (workflowFilter === "in_production" && (isProductionCompleted(item) || inProductionQuantity(item) <= 0)) return false
-      if (workflowFilter !== "all" && workflowFilter !== "ready_to_start" && workflowFilter !== "in_production" && workflow !== workflowFilter) return false
+      if (workflowFilter === "awaiting_allotment" && !["awaiting_allotment", "partially_allotted"].includes(workflow)) return false
+      if (!["all", "ready_to_start", "in_production", "awaiting_allotment"].includes(workflowFilter) && workflow !== workflowFilter) return false
       if (!isWithinDateRange(item.started_at || item.order_created_at || item.completed_at, fromDate, toDate)) return false
       return !q || `${item.order_number} ${item.product_name || ""} ${item.product_sku || ""} ${item.order_status || ""} ${item.status || ""} ${workflow} ${item.started_by_name || ""} ${item.updated_by_name || ""} ${item.qc_remarks || ""} ${item.rework_remarks || ""}`.toLowerCase().includes(q)
     })
@@ -267,7 +241,7 @@ export default function Production() {
   const sortOptions = [
     { value: "newest", label: "Newest orders first" },
     { value: "oldest", label: "Oldest orders first" },
-    { value: "most-left-to-allot", label: "Most units left to be allotted" },
+    { value: "most-left-to-allot", label: "Most units waiting for material" },
     { value: "most-ready", label: "Most units ready to start" },
     { value: "least-progress", label: "Lowest completion first" },
     { value: "most-progress", label: "Highest completion first" },
@@ -275,10 +249,10 @@ export default function Production() {
 
   // Keep this page focused on the current material-allotment production workflow.
   const stats = [
-    { key: "all", label: "All production", hint: "Every product line in production", icon: Factory, dot: "bg-slate-400", s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/20" }, value: counts.all, tone: "neutral", active: filter === "all", onClick: () => setFilterAndReset("all") },
-    { key: "awaiting", label: "Awaiting allotment", hint: "Products still needing material handover", icon: PackagePlus, dot: "bg-amber-500", s: { grad: "from-amber-700 to-orange-800", glow: "shadow-amber-500/20" }, value: counts.awaiting, tone: "warning", active: filter === "awaiting", onClick: () => setFilterAndReset("awaiting") },
-    { key: "ready", label: "Ready to start", hint: "Products covered by allotted materials", icon: PlayCircle, dot: "bg-blue-500", s: { grad: "from-blue-600 to-indigo-800", glow: "shadow-blue-600/20" }, value: counts.ready, tone: "info", active: filter === "ready", onClick: () => setFilterAndReset("ready") },
-    { key: "completed", label: "Production completed", hint: "All ordered units have been completed", icon: CheckCircle2, dot: "bg-emerald-500", s: { grad: "from-emerald-700 to-teal-800", glow: "shadow-emerald-500/20" }, value: counts.completed, tone: "success", active: filter === "completed", onClick: () => setFilterAndReset("completed") },
+    { key: "all", label: "All", hint: "Every product line", icon: Factory, dot: "bg-slate-400", s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/20" }, value: counts.all, tone: "neutral", active: filter === "all", onClick: () => setFilterAndReset("all") },
+    { key: "awaiting", label: "Waiting for material", hint: "Ask Store, or Store to hand over", icon: PackagePlus, dot: "bg-amber-500", s: { grad: "from-amber-700 to-orange-800", glow: "shadow-amber-500/20" }, value: counts.awaiting, tone: "warning", active: filter === "awaiting", onClick: () => setFilterAndReset("awaiting") },
+    { key: "ready", label: "Ready to start", hint: "Material in hand: start building", icon: PlayCircle, dot: "bg-blue-500", s: { grad: "from-blue-600 to-indigo-800", glow: "shadow-blue-600/20" }, value: counts.ready, tone: "info", active: filter === "ready", onClick: () => setFilterAndReset("ready") },
+    { key: "completed", label: "Done", hint: "Every unit built", icon: CheckCircle2, dot: "bg-emerald-500", s: { grad: "from-emerald-700 to-teal-800", glow: "shadow-emerald-500/20" }, value: counts.completed, tone: "success", active: filter === "completed", onClick: () => setFilterAndReset("completed") },
   ]
 
   const openUpdate = (item) => {
@@ -331,7 +305,7 @@ export default function Production() {
       <MktHero
         eyebrow="Operations"
         title="Production"
-        description={editable ? "Request materials, start allotted units, and record completed products." : "View material allotments and completed products."}
+        description={editable ? "Every line says what to do next. Ask Store for material, start building, record finished units." : "What Production is building and what it waits for."}
       >
         {editable && (
           <HeroButton onClick={() => setAskExtra(true)}>
@@ -388,7 +362,7 @@ export default function Production() {
               <ProductionOrderCard
                 key={item.order_item_id}
                 item={item}
-                readiness={<MaterialReadiness item={item} />}
+                readiness={<NextStep item={item} />}
                 actions={<ProductionActions item={item} onUpdate={openUpdate} onRequest={(row) => setRequestFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} marketing />}
               />
             ))}
@@ -397,20 +371,20 @@ export default function Production() {
           <div className={`hidden min-w-0 overflow-hidden ${view === "table" ? "lg:block" : "lg:hidden"}`}>
             <Table className="w-full table-fixed">
               <TableHeader><TableRow>
-                <TableHead className="w-[17%] whitespace-normal">Order</TableHead>
-                <TableHead className="w-[17%] whitespace-normal">Product</TableHead>
-                <TableHead className="w-[19%] whitespace-normal">Progress</TableHead>
-                <TableHead className="w-[18%] whitespace-normal">Material readiness</TableHead>
-                <TableHead className="w-[11%] whitespace-normal">Material allotment</TableHead>
-                <TableHead className="w-[18%] whitespace-normal">Actions</TableHead>
+                <TableHead className="w-[18%] whitespace-normal">Order</TableHead>
+                <TableHead className="w-[18%] whitespace-normal">Product</TableHead>
+                <TableHead className="w-[10%] whitespace-normal text-right">Left to build</TableHead>
+                <TableHead className="w-[17%] whitespace-normal">Progress</TableHead>
+                <TableHead className="w-[19%] whitespace-normal">Next step</TableHead>
+                <TableHead className="w-[18%] whitespace-normal">Action</TableHead>
               </TableRow></TableHeader>
               <TableBody>{pageRows.map((item) => (
                 <TableRow key={item.order_item_id}>
-                  <TableCell className="min-w-0 whitespace-normal align-top"><OrderDisplayNumber orderNumber={item.order_number} itemCount={item.item_count} itemIndex={item.item_index} fallback={`Order #${item.order_id}`} className="break-words font-semibold tabular-nums" /><p className="mt-1 break-words text-xs text-muted-foreground">{item.order_status || item.status || "Unknown status"}</p></TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><OrderDisplayNumber orderNumber={item.order_number} itemCount={item.item_count} itemIndex={item.item_index} fallback={`Order #${item.order_id}`} className="break-words font-semibold tabular-nums" /></TableCell>
                   <TableCell className="min-w-0 whitespace-normal align-top"><p className="break-words font-medium">{item.product_name || "Product unavailable"}</p><p className="mt-1 break-words text-xs text-muted-foreground">SKU {item.product_sku || "—"}</p></TableCell>
+                  <TableCell className="align-top text-right text-lg font-extrabold tabular-nums">{Math.max(0, num(item.ordered_quantity) - num(item.quantity_completed))}</TableCell>
                   <TableCell className="min-w-0 whitespace-normal align-top"><Progress done={num(item.quantity_completed)} total={num(item.ordered_quantity)} /></TableCell>
-                  <TableCell className="min-w-0 whitespace-normal align-top"><MaterialReadiness item={item} /></TableCell>
-                  <TableCell className="whitespace-normal align-top text-xs"><p className="font-semibold tabular-nums">{materialAllottedQuantity(item)} / {num(item.ordered_quantity)} units</p><p className="mt-1 text-muted-foreground">{leftToBeAllottedQuantity(item)} left to allot</p></TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><NextStep item={item} /></TableCell>
                   <TableCell className="min-w-0 whitespace-normal align-top"><ProductionActions item={item} onUpdate={openUpdate} onRequest={(row) => setRequestFor(toOrder(row))} onStart={(row) => setStartFor(toOrder(row))} editable={editable} compact marketing /></TableCell>
                 </TableRow>
               ))}</TableBody>

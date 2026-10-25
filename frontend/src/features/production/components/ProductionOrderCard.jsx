@@ -2,7 +2,7 @@ import { motion } from "motion/react"
 import { CalendarClock, Factory } from "lucide-react"
 import { cn } from "@/lib/utils"
 import OrderDisplayNumber from "@/components/OrderDisplayNumber"
-import { isProductionCompleted, leftToBeAllottedQuantity, materialAllottedQuantity, productionWorkflowStatus } from "@/features/production/productionWorkflow"
+import { isProductionCompleted, productionWorkflowStatus } from "@/features/production/productionWorkflow"
 
 const number = (value) => Math.max(0, Number(value || 0))
 const formatDate = (value) => (value
@@ -54,8 +54,6 @@ function QuantityTile({ label, value, tone = "neutral" }) {
 export default function ProductionOrderCard({ item, readiness, actions }) {
   const completed = number(item.quantity_completed)
   const ordered = number(item.ordered_quantity)
-  const allotted = materialAllottedQuantity(item)
-  const left = leftToBeAllottedQuantity(item)
   const status = productionWorkflowStatus(item)
   const complete = isProductionCompleted(item)
   const accentClass = complete
@@ -96,10 +94,8 @@ export default function ProductionOrderCard({ item, readiness, actions }) {
           <div className="mt-3">{readiness}</div>
         </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <QuantityTile label="Allotted" value={allotted} tone="success" />
-          <QuantityTile label="Left to be allotted" value={left} tone={left > 0 ? "warning" : "neutral"} />
-          <QuantityTile label="Completed" value={completed} tone="info" />
+        <div className="mt-3">
+          <QuantityTile label="Left to build" value={Math.max(0, ordered - completed)} tone={complete ? "neutral" : "info"} />
         </div>
 
         <div className="mt-4 flex min-w-0 flex-col gap-3 border-t border-dashed border-slate-200 pt-4">

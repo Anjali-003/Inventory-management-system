@@ -121,7 +121,7 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
         {items.length ? (
           <div className="overflow-hidden rounded-xl border border-slate-200">
             <div className="hidden grid-cols-[minmax(0,1fr)_76px_76px_76px] gap-2 bg-slate-50 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 sm:grid sm:px-4">
-              <span>Component</span><span className="text-right">Requested</span><span className="text-right">Allotted</span><span className="text-right">Remaining</span>
+              <span>Component</span><span className="text-right">Requested</span><span className="text-right">Handed over</span><span className="text-right">Remaining</span>
             </div>
             <div className="divide-y divide-slate-100">
               {items.map((item) => {

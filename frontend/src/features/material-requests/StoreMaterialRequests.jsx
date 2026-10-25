@@ -35,7 +35,7 @@ const PAGE_SIZE = 9
 
 const STATUS_META = {
   PENDING: {
-    label: "Needs allotment",
+    label: "To hand over",
     shortLabel: "Pending",
     variant: "warning",
     icon: Clock3,
@@ -44,7 +44,7 @@ const STATUS_META = {
     dot: "bg-amber-500",
   },
   PARTIALLY_ISSUED: {
-    label: "Partially allotted",
+    label: "Part given (old)",
     shortLabel: "Partial",
     variant: "info",
     icon: PackageOpen,
@@ -53,7 +53,7 @@ const STATUS_META = {
     dot: "bg-blue-500",
   },
   ISSUED: {
-    label: "Fully allotted",
+    label: "Handed over",
     shortLabel: "Complete",
     variant: "success",
     icon: BadgeCheck,
@@ -348,9 +348,9 @@ export default function StoreMaterialRequests() {
       value: activeFilter,
       options: [
         { value: "all", label: "All requests" },
-        { value: "open", label: "Needs allotment" },
+        { value: "open", label: "To hand over" },
         { value: "outstanding", label: "Any outstanding materials" },
-        { value: "partial", label: "Partially allotted" },
+        { value: "partial", label: "Part given (old)" },
         { value: "complete", label: "Completed" },
       ],
       onChange: updateFilter,
@@ -398,11 +398,11 @@ export default function StoreMaterialRequests() {
       active: activeFilter === "all", tone: "neutral", s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/20" }, onClick: () => updateFilter("all"),
     },
     {
-      key: "open", label: "Needs allotment", hint: "New requests waiting for Store", icon: Clock3, value: requestCounts.open,
+      key: "open", label: "To hand over", hint: "New requests waiting for Store", icon: Clock3, value: requestCounts.open,
       active: activeFilter === "open", tone: "warning", s: { grad: "from-amber-700 to-orange-800", glow: "shadow-amber-500/25" }, onClick: () => updateFilter("open"),
     },
     {
-      key: "partial", label: "Partially allotted", hint: "Can receive more material", icon: PackageOpen, value: requestCounts.partial,
+      key: "partial", label: "Part given (old)", hint: "Older requests given in parts", icon: PackageOpen, value: requestCounts.partial,
       active: activeFilter === "partial", tone: "info", s: { grad: "from-blue-600 to-indigo-800", glow: "shadow-blue-500/25" }, onClick: () => updateFilter("partial"),
     },
     {

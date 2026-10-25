@@ -384,6 +384,7 @@ async function listRequests() {
       JOIN order_items oi ON oi.id = r.order_item_id
       JOIN products p ON p.id = oi.product_id
       LEFT JOIN users requester ON requester.id = r.requested_by
+      WHERE o.approval_status <> 'CANCELLED'
       ORDER BY CASE r.status WHEN 'PENDING' THEN 0 WHEN 'PARTIALLY_ISSUED' THEN 1 ELSE 2 END,
                r.created_at DESC, r.id DESC
       LIMIT 300
@@ -491,7 +492,8 @@ async function issueRequest(requestId, body, userId) {
     if (productMode) {
       if (!Number.isInteger(productQuantity) || productQuantity <= 0) throw new AppError(422, "Select a whole number of product units to allot", "VALIDATION");
       const remainingProducts = Number(requests[0].requested_product_quantity) - Number(requests[0].issued_product_quantity || 0);
-      if (productQuantity > remainingProducts) throw AppError.conflict(`You can allot at most ${remainingProducts} more product units.`, "ISSUE_EXCEEDS_REMAINING_PRODUCTS");
+      // Store must hand over the whole request: Operations Admin approved that quantity (no partial handover)
+      if (productQuantity !== remainingProducts) throw AppError.conflict(`Hand over the full request: components for all ${remainingProducts} product units.`, "FULL_HANDOVER_REQUIRED");
       const [requestItemRows] = await conn.query(`
         SELECT id, component_id, quantity_per_product, requested_quantity, issued_quantity
         FROM production_material_request_items WHERE request_id = ? ORDER BY id FOR UPDATE
@@ -508,6 +510,18 @@ async function issueRequest(requestId, body, userId) {
       }
       if (quantities.size !== expectedQuantities.size || [...expectedQuantities].some(([id, qty]) => quantities.get(id) !== qty)) {
         throw new AppError(422, "Component allotment quantities must match the selected number of product units", "BOM_QUANTITY_MISMATCH");
+      }
+    }
+
+    // every component with something left must be handed over in full (no partial handover)
+    const [openRows] = await conn.query(
+      `SELECT id, requested_quantity, issued_quantity FROM production_material_request_items WHERE request_id = ? FOR UPDATE`,
+      [requestId]
+    );
+    for (const row of openRows) {
+      const left = toCents(row.requested_quantity) - toCents(row.issued_quantity);
+      if (left > 0 && expectedQuantities.get(Number(row.id)) !== left) {
+        throw AppError.conflict("Hand over the full request: every component, in full.", "FULL_HANDOVER_REQUIRED");
       }
     }
 
