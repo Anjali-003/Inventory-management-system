@@ -12,6 +12,11 @@ export const orderTrackerApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/order-tracker/${id}` }),
       providesTags: ["Orders", "OrderApprovals", "FinishedGoods", "Production", "Purchases", "MaterialRequests", "QualityControl"],
     }),
+    // Inventory History's balance: received - used = expected vs actual, and how the gap is explained
+    getStockBalance: build.query({
+      query: () => ({ url: "/inventory/history/balance" }),
+      providesTags: ["Inventory", "FinishedGoods", "ExtraMaterials"],
+    }),
     getMonthlyReport: build.query({
       query: (month) => ({ url: "/reports/monthly", params: { month } }),
       providesTags: ["Orders", "FinishedGoods", "Purchases", "QualityControl"],
@@ -19,4 +24,4 @@ export const orderTrackerApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useGetTrackedOrdersQuery, useGetOrderJourneyQuery, useGetMonthlyReportQuery } = orderTrackerApi;
+export const { useGetTrackedOrdersQuery, useGetOrderJourneyQuery, useGetMonthlyReportQuery, useGetStockBalanceQuery } = orderTrackerApi;

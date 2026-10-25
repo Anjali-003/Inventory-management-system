@@ -6,6 +6,9 @@
   2. starts the API on a free port and, signed in as each role in turn, walks one order from Marketing to delivery,
      plus a cancelled order, an extra-material ask and the checks that must refuse (wrong role, partial handover ...)
   3. prints one line per step and exits with code 1 when any step fails; the e2e database is dropped at the end
+
+  E2E_ONE_ROLE=SUPER_ADMIN npm run e2e  ->  the same walk with EVERY step done by that one role (the CEO doing each
+  team's work); the "wrong role is refused" checks are skipped then.
 */
 const fs = require("fs");
 const path = require("path");
@@ -19,6 +22,7 @@ const { connect } = require("../database/lib/connection");
 const jwt = require("jsonwebtoken");
 
 let failures = 0;
+const ONE_ROLE = process.env.E2E_ONE_ROLE || null;
 const ok = (label, pass, extra = "") => {
   if (!pass) failures++;
   console.log(`${pass ? "ok  " : "FAIL"} ${label}${extra ? `  (${extra})` : ""}`);
@@ -58,7 +62,8 @@ async function main() {
 
   try {
     const [users] = await db.query("SELECT id, email, role FROM users WHERE is_active = 1 ORDER BY id");
-    const as = (role) => async (method, url, body) => {
+    const as = (wanted) => async (method, url, body) => {
+      const role = ONE_ROLE || wanted;
       const u = users.find((x) => x.role === role);
       if (!u) throw new Error(`no active ${role} user to sign in as`);
       const token = jwt.sign({ userId: u.id, email: u.email, role }, env.jwt.secret, { expiresIn: "10m" });
@@ -81,6 +86,8 @@ async function main() {
        WHERE p.is_active = 1 AND b.quantity_required > 0 GROUP BY p.id ORDER BY p.id LIMIT 1`
     );
     const UNITS = 4;
+    ok("Super Admin sets the price list", (await SA("PUT", `/products/${product.id}/price`, { selling_price: 250, gst_percent: 18 })).status === 200, "₹250 + 18% GST");
+    if (!ONE_ROLE) ok("Marketing cannot change the price list", (await MKT("PUT", `/products/${product.id}/price`, { selling_price: 1, gst_percent: 18 })).status === 403);
 
     /* ---- 1. Marketing raises the order, Operations Admin approves it ---- */
     const created = await MKT("POST", "/marketing-orders", { items: [{ productId: product.id, quantity: UNITS }], estimated_delivery_date: "2026-12-31" });
@@ -97,7 +104,7 @@ async function main() {
       purchase_items: plan.shortages.map((x) => ({ component_id: x.component_id, quantity: x.shortage })),
     });
     ok("Operations Admin approves (stock taken from shelf)", send.status === 200, `can make ${plan.lines[0]?.can_make}`);
-    ok("Marketing cannot approve", (await MKT("POST", `/order-approvals/${orderId}/dispatch`, {})).status === 403);
+    if (!ONE_ROLE) ok("Marketing cannot approve", (await MKT("POST", `/order-approvals/${orderId}/dispatch`, {})).status === 403);
 
     /* ---- 2. Production asks for material, Store must hand over all of it ---- */
     const [[line]] = await db.query("SELECT id FROM order_items WHERE order_id = ?", [orderId]);
@@ -115,8 +122,8 @@ async function main() {
 
     /* ---- 3. Production builds; a damaged piece needs extra material ---- */
     ok("Production starts building", (await PROD("POST", `/orders/${line.id}/start-production`, { quantity: UNITS })).status < 300);
-    ok("Production cannot change stock by hand", (await PROD("POST", "/inventory/stock-in", {})).status === 403);
-    ok("Store cannot change stock by hand", (await STORE("POST", "/inventory/stock-in", {})).status === 403);
+    if (!ONE_ROLE) ok("Production cannot change stock by hand", (await PROD("POST", "/inventory/stock-in", {})).status === 403);
+    if (!ONE_ROLE) ok("Store cannot change stock by hand", (await STORE("POST", "/inventory/stock-in", {})).status === 403);
     const comp = options.items[0];
     const extra = await PROD("POST", "/extra-materials", { order_id: orderId, component_id: comp.component_id, quantity: 2, reason_code: "DAMAGED", reason: "2 pieces burnt while soldering" });
     ok("Production asks extra material with a reason", extra.status === 201);
@@ -133,7 +140,7 @@ async function main() {
     /* ---- 5. After QC: one owner per step ---- */
     const fg = (await MKT("GET", "/finished-goods")).data.find((f) => f.orderId === orderId);
     ok("Order reaches Finished Goods", fg?.status === "PACKAGING");
-    ok("Store cannot do QC & FG's packing", (await STORE("POST", `/finished-goods/${fg.id}/pack`)).status === 403);
+    if (!ONE_ROLE) ok("Store cannot do QC & FG's packing", (await STORE("POST", `/finished-goods/${fg.id}/pack`)).status === 403);
     ok("QC & FG packs", (await QC("POST", `/finished-goods/${fg.id}/pack`)).status === 200);
     ok("Operations Admin hands over to Store", (await OPS("POST", `/finished-goods/${fg.id}/hand-over`)).status === 200);
     const before = (await STORE("GET", "/product-stock")).data.find((p) => p.productId === product.id)?.onHand ?? 0;
@@ -142,11 +149,25 @@ async function main() {
     ok("Product stock went up by the order", after - before === UNITS, `${before} -> ${after}`);
     const customer = await MKT("POST", "/customers", { name: `E2E Customer ${Date.now()}`, gstin: "27ABCDE1234F1Z5" });
     ok("Marketing saves a customer", customer.status === 201);
-    const bill = await MKT("POST", `/finished-goods/${fg.id}/bill`, { customer_id: customer.data.id, customer_name: customer.data.name, gst_percent: 18, items: [{ product_id: product.id, rate: 250 }] });
-    ok("Marketing makes the bill", bill.status === 201, bill.data?.billNumber);
+    const billBody = (rate, note) => ({ customer_id: customer.data.id, customer_name: customer.data.name, items: [{ product_id: product.id, rate, note }] });
+    const noReason = await MKT("POST", `/finished-goods/${fg.id}/bill`, billBody(200));
+    ok("A rate below the price list needs a reason", noReason.status === 422, noReason.data?.code);
+    const first = await MKT("POST", `/finished-goods/${fg.id}/bill`, billBody(200, "Old customer, bulk order"));
+    ok("Marketing bills with a discount and its reason", first.status === 201, first.data?.billNumber);
+    if (!ONE_ROLE) ok("Marketing cannot cancel a bill", (await MKT("POST", `/finished-goods/${fg.id}/bill/cancel`, { reason: "try" })).status === 403);
+    ok("Super Admin cancels the bill (goods still in Store)", (await SA("POST", `/finished-goods/${fg.id}/bill/cancel`, { reason: "Wrong rate on the bill" })).status === 201);
+    const bill = await MKT("POST", `/finished-goods/${fg.id}/bill`, billBody(250));
+    ok("Marketing makes the bill again at the list price", bill.status === 201, `${bill.data?.billNumber}: 4 x 250 + 18% = 1180`);
     ok("Store gives out for delivery", (await STORE("POST", `/finished-goods/${fg.id}/dispatch`, { note: "e2e truck" })).status === 200);
     ok("Product stock went back down", (await STORE("GET", "/product-stock")).data.find((p) => p.productId === product.id)?.onHand === before);
     ok("Marketing confirms delivery", (await MKT("POST", `/finished-goods/${fg.id}/deliver`)).status === 200);
+    const today = new Date().toISOString().slice(0, 10);
+    ok("Marketing records a part payment", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 500, paid_on: today, method: "UPI", reference: "UTR123" })).status === 201);
+    ok("A payment above what is due is refused", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 5000, paid_on: today, method: "CASH" })).status === 409);
+    ok("Super Admin makes a credit note (1 piece returned)", (await SA("POST", `/finished-goods/${fg.id}/credit-note`, { amount: 295, reason: "1 piece returned damaged" })).status === 201);
+    const paidBill = (await MKT("GET", `/finished-goods/${fg.id}/bill`)).data;
+    ok("Bill: 1180 - 295 credit - 500 paid = 385 to collect", paidBill.due === 385 && paidBill.paymentStatus === "PART_PAID", `due ${paidBill.due}`);
+    ok("Marketing collects the rest", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 385, paid_on: today, method: "BANK" })).status === 201);
     ok("Tracker: delivered, waiting for nobody", (await stage(orderId))?.done === true);
     const journey = (await SA("GET", `/order-tracker/${orderId}`)).data;
     ok("Journey lists every step", journey?.events?.length >= 15, `${journey?.events?.length} events`);
@@ -161,12 +182,48 @@ async function main() {
       purchase_items: plan2.shortages.map((x) => ({ component_id: x.component_id, quantity: x.shortage })),
     });
     const [[stock1]] = await db.query("SELECT SUM(quantity_on_hand) AS s FROM inventory");
-    ok("Marketing cannot cancel", (await MKT("POST", `/order-approvals/${o2}/cancel`, { remarks: "nope" })).status === 403);
+    if (!ONE_ROLE) ok("Marketing cannot cancel", (await MKT("POST", `/order-approvals/${o2}/cancel`, { remarks: "nope" })).status === 403);
     const cancel = await OPS("POST", `/order-approvals/${o2}/cancel`, { remarks: "Customer cancelled on the phone" });
     const [[stock2]] = await db.query("SELECT SUM(quantity_on_hand) AS s FROM inventory");
     ok("Operations Admin cancels the approved order", cancel.status === 200, `${cancel.data?.returned_components} components back`);
     ok("Its stock came back", Number(stock2.s) > Number(stock1.s));
     ok("A cancelled order leaves the Production list", !(await PROD("GET", "/production")).data.some((r) => r.order_id === o2));
+
+    /* ---- 6b. A component runs out: Purchase buys it, IQC checks it, Store accepts it ---- */
+    const PUR = as("PURCHASE_MANAGER"), IQC = as("IQC_MANAGER");
+    const [[inv]] = await db.query("SELECT id, quantity_on_hand FROM inventory WHERE component_id = ?", [comp.component_id]);
+    const emptied = await SA("POST", `/inventory/${inv.id}/stock-out`, {
+      quantity: Number(inv.quantity_on_hand), reason: "e2e: sent back so the next order is short", reason_code: "RETURNED_TO_SUPPLIER", idempotency_key: key("out"),
+    });
+    ok("Super Admin corrects stock by hand, with a reason", emptied.status < 300, `${emptied.status} ${emptied.data?.message || ""}`);
+    const o3 = (await MKT("POST", "/marketing-orders", { items: [{ productId: product.id, quantity: 2 }], estimated_delivery_date: "2026-12-31" })).data.id;
+    await MKT("POST", `/marketing-orders/${o3}/send`);
+    const plan3 = (await OPS("GET", `/order-approvals/${o3}/plan`)).data;
+    ok("Approval plan shows the short component", plan3.shortages.some((x) => x.component_id === comp.component_id), `${plan3.shortages.length} short`);
+    await OPS("POST", `/order-approvals/${o3}/dispatch`, {
+      idempotency_key: key("dispatch"), expected_round: plan3.approval_round,
+      production_items: plan3.lines.filter((l) => l.can_make > 0).map((l) => ({ product_id: l.product_id, quantity: l.can_make })),
+      purchase_items: plan3.shortages.map((x) => ({ component_id: x.component_id, quantity: x.shortage })),
+    });
+    ok("Tracker: waiting for Purchase", (await stage(o3))?.waitingFor === "PURCHASE_MANAGER", (await stage(o3))?.stage);
+    const approved = (await PUR("GET", "/approved-orders")).data.find((o) => o.id === o3);
+    const toBuy = approved?.purchase_request?.items ?? [];
+    const po = await PUR("POST", "/purchase", {
+      supplier: "E2E Components", expected_delivery_date: "2026-12-15",
+      items: toBuy.map((i) => ({ component_id: i.component_id, quantity: Math.ceil(Number(i.quantity)), rate: 1.5, request_item_ids: [i.request_item_id] })),
+    });
+    const noRate = await PUR("POST", "/purchase", { supplier: "X", expected_delivery_date: "2026-12-15", items: [{ component_id: comp.component_id, quantity: 1 }] });
+    ok("A purchase without a rate is refused", noRate.status === 422);
+    ok("Purchase places one order for the shortage", po.status === 201, `${po.data?.po_number}, ${toBuy.length} lines`);
+    ok("Purchase marks it received", (await PUR("POST", `/purchase/${po.data.id}/receive`, {})).status === 200);
+    ok("Purchase sends it to IQC", (await PUR("POST", `/purchase/${po.data.id}/send-to-iqc`, {})).status === 200);
+    ok("Tracker: waiting for IQC", (await stage(o3))?.waitingFor === "IQC_MANAGER", (await stage(o3))?.stage);
+    const lines = (await IQC("GET", `/iqc/${po.data.id}`)).data.items;
+    const checked = await IQC("POST", `/iqc/${po.data.id}/inspect`, { items: lines.map((l, i) => ({ id: l.id, rejected: i === 0 ? 1 : 0, remarks: i === 0 ? "Bent leg" : "" })) });
+    ok("IQC checks it (1 piece rejected)", checked.status < 300, `${checked.status} ${checked.data?.message || ""}`);
+    ok("Tracker: waiting for Store", (await stage(o3))?.waitingFor === "STORE_MANAGER", (await stage(o3))?.stage);
+    ok("Store accepts it into stock", (await STORE("POST", `/incoming-stock/${po.data.id}/accept`, {})).status === 200);
+    ok("Tracker: back with Production", (await stage(o3))?.waitingFor === "PRODUCTION_MANAGER", (await stage(o3))?.stage);
 
     /* ---- 7. The books still balance; the month report sees the sale ---- */
     const balance = (await SA("GET", "/inventory/history/balance")).data;
@@ -174,7 +231,17 @@ async function main() {
     const month = new Date().toISOString().slice(0, 7);
     const report = (await SA("GET", `/reports/monthly?month=${month}`)).data;
     ok("Report counts the sale", report.sales.total > 0 && report.orderTime.delivered === 1, `₹${report.sales.total}`);
+    ok("Report: net sales after the credit note, the cancelled bill not counted", report.sales.net === 885 && report.sales.bills === 1, `net ₹${report.sales.net}`);
+    ok("Report: money received and nothing left to collect", report.sales.collected === 885 && report.sales.toCollect === 0, `received ₹${report.sales.collected}`);
+    ok("Report: money spent on purchases", report.money.spent > 0, `₹${report.money.spent}`);
     ok("Report: QC passed first try", report.qualityCheck.firstTryPassPct === 100);
+
+    /* ---- 8. The CEO's dashboard (Super Admin) gets every figure it shows ---- */
+    const ceo = await Promise.all(["/order-tracker", `/reports/monthly?month=${month}`, "/inventory/history/balance", "/inventory?status=active",
+      "/product-stock", "/extra-materials", `/attendance?date=${new Date().toISOString().slice(0, 10)}`].map((u) => SA("GET", u)));
+    ok("CEO dashboard: every figure loads", ceo.every((x) => x.status === 200), ceo.map((x) => x.status).join(","));
+    const tracked = ceo[0].data.find((o) => o.id === orderId);
+    ok("CEO dashboard: promised date comes as a plain day", /^\d{4}-\d{2}-\d{2}$/.test(tracked?.promisedDate || ""), tracked?.promisedDate);
   } finally {
     server.close();
     await db.end().catch(() => {});
@@ -185,6 +252,6 @@ main()
   .catch((error) => { failures++; console.error("FAIL", error); })
   .finally(async () => {
     await dropCopy().catch((e) => console.error("could not drop the e2e database:", e.message));
-    console.log(failures ? `\n${failures} step(s) failed` : "\nall steps passed");
+    console.log(`${failures ? `\n${failures} step(s) failed` : "\nall steps passed"}${ONE_ROLE ? ` (every step as ${ONE_ROLE})` : ""}`);
     process.exit(failures ? 1 : 0);
   });

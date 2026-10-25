@@ -41,7 +41,8 @@ const n = (v) => Number(v || 0);
 
 async function list() {
     const [rows] = await db.query(
-        `SELECT o.id, o.order_number, o.status, o.approval_status, o.created_at, o.updated_at, o.estimated_delivery_date,
+        `SELECT o.id, o.order_number, o.status, o.approval_status, o.created_at, o.updated_at,
+                DATE_FORMAT(o.estimated_delivery_date, '%Y-%m-%d') AS estimated_delivery_date,
                 u.name AS created_by_name, fg.status AS fg_status,
                 GREATEST(o.updated_at, COALESCE(fg.delivered_at, fg.dispatched_at, fg.received_at, fg.handed_over_at, fg.packed_at, fg.created_at, o.updated_at)) AS last_change_at,
                 (SELECT GROUP_CONCAT(CONCAT(p.name, ' × ', CAST(oi.quantity AS SIGNED)) ORDER BY oi.id SEPARATOR ', ')
@@ -187,7 +188,7 @@ async function timeline(orderId) {
          LEFT JOIN users pu ON pu.id = fg.packed_by LEFT JOIN users hu ON hu.id = fg.handed_over_by
          LEFT JOIN users ru ON ru.id = fg.received_by LEFT JOIN users du ON du.id = fg.dispatched_by
          LEFT JOIN users lu ON lu.id = fg.delivered_by
-         LEFT JOIN bills b ON b.finished_goods_id = fg.id LEFT JOIN users bu ON bu.id = b.created_by
+         LEFT JOIN bills b ON b.finished_goods_id = fg.id AND b.status = 'ACTIVE' LEFT JOIN users bu ON bu.id = b.created_by
          WHERE fg.order_id = ?`,
         [orderId]
     );
@@ -199,6 +200,28 @@ async function timeline(orderId) {
         add(fg.billed_at, "Dispatch", `Bill ${fg.bill_number} made for ${fg.customer_name}`, fg.billed_by_name, `₹${n(fg.total).toLocaleString("en-IN")}`);
         add(fg.dispatched_at, "Dispatch", "Given out for delivery", fg.dispatched_by_name, fg.dispatch_note);
         add(fg.delivered_at, "Dispatch", "Delivered to customer", fg.delivered_by_name, fg.delivery_note);
+
+        // money: cancelled bills, payments received and credit notes
+        const [cancelled] = await db.query(
+            `SELECT b.bill_number, b.cancelled_at, b.cancel_reason, u.name AS by_name
+             FROM bills b LEFT JOIN users u ON u.id = b.cancelled_by WHERE b.finished_goods_id = ? AND b.status = 'CANCELLED'`,
+            [fg.id]
+        );
+        for (const c of cancelled) add(c.cancelled_at, "Money", `Bill ${c.bill_number} cancelled`, c.by_name, c.cancel_reason, "danger");
+        const [paid] = await db.query(
+            `SELECT bp.amount, bp.method, bp.created_at, u.name AS by_name
+             FROM bill_payments bp JOIN bills b ON b.id = bp.bill_id LEFT JOIN users u ON u.id = bp.created_by
+             WHERE b.finished_goods_id = ? AND b.status = 'ACTIVE'`,
+            [fg.id]
+        );
+        for (const x of paid) add(x.created_at, "Money", `Payment received: ₹${n(x.amount).toLocaleString("en-IN")} (${x.method})`, x.by_name);
+        const [credits] = await db.query(
+            `SELECT cn.credit_number, cn.amount, cn.reason, cn.created_at, u.name AS by_name
+             FROM bill_credit_notes cn JOIN bills b ON b.id = cn.bill_id LEFT JOIN users u ON u.id = cn.created_by
+             WHERE b.finished_goods_id = ?`,
+            [fg.id]
+        );
+        for (const c of credits) add(c.created_at, "Money", `Credit note ${c.credit_number}: ₹${n(c.amount).toLocaleString("en-IN")} less`, c.by_name, c.reason, "warning");
     }
 
     events.sort((a, b) => new Date(a.at) - new Date(b.at));
