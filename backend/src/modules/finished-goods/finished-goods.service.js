@@ -541,7 +541,10 @@ function parseBill(body) {
     if (item.rate === "" || !Number.isFinite(rate) || rate < 0) throw new AppError(422, "Rate must be zero or more", "VALIDATION");
     rates.set(productId, Math.round(rate * 100));
   }
+  const customerId = body.customer_id === undefined || body.customer_id === null || body.customer_id === "" ? null : Number(body.customer_id);
+  if (customerId !== null && (!Number.isInteger(customerId) || customerId <= 0)) throw new AppError(422, "The customer is invalid", "VALIDATION");
   return {
+    customerId,
     customerName,
     customerAddress: cleanText(body.customer_address, 500),
     customerGstin: cleanText(body.customer_gstin, 20),
@@ -556,6 +559,10 @@ async function createBill(id, body = {}, userId = null) {
 
   return inTransaction(async (conn) => {
     const record = await lockRecord(conn, id, "IN_STORE");
+    if (bill.customerId) {
+      const [found] = await conn.query("SELECT id FROM customers WHERE id = ?", [bill.customerId]);
+      if (!found.length) throw new AppError(422, "The selected customer no longer exists", "VALIDATION");
+    }
     const lines = await orderLines(conn, record.order_id);
     if (bill.rates.size !== lines.length || lines.some((l) => !bill.rates.has(l.productId))) {
       throw new AppError(422, "Enter a rate for every product of this order", "VALIDATION");
@@ -578,10 +585,10 @@ async function createBill(id, body = {}, userId = null) {
     const billNumber = `BILL-${year}-${String(Number(last.n) + 1).padStart(4, "0")}`;
 
     const [result] = await conn.query(
-      `INSERT INTO bills (bill_number, finished_goods_id, order_id, customer_name, customer_address, customer_gstin,
+      `INSERT INTO bills (bill_number, finished_goods_id, order_id, customer_id, customer_name, customer_address, customer_gstin,
                           gst_percent, subtotal, gst_amount, total, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [billNumber, record.id, record.order_id, bill.customerName, bill.customerAddress, bill.customerGstin,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [billNumber, record.id, record.order_id, bill.customerId, bill.customerName, bill.customerAddress, bill.customerGstin,
         bill.gstBasisPoints / 100, money(subtotal), money(gstAmount), money(subtotal + gstAmount), bill.notes, userId]
     );
     for (const item of items) {

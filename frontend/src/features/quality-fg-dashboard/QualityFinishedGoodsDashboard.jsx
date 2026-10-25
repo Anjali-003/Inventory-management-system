@@ -14,6 +14,7 @@ import FinishedGoodsPipeline from "@/features/quality-fg-dashboard/components/Fi
 import ProductionReadOnlyPanel from "@/features/quality-fg-dashboard/components/ProductionReadOnlyPanel"
 import { InteractiveBarChart, InteractiveDonutChart } from "@/features/dashboard/components/InteractiveDashboardCharts"
 import { countFinishedGoods, getQcPendingBatches, getQcFailedBatches, getQcReadyForRetest } from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
+import WaitingForYou from "@/features/dashboard/WaitingForYou"
 
 const asArray = (value) => Array.isArray(value) ? value : []
 
@@ -127,7 +128,7 @@ export default function QualityFinishedGoodsDashboard() {
       <MktHero
         eyebrow="Quality & release dashboard"
         title={user?.name ? `Hello, ${user.name}` : "Quality & Finished Goods"}
-        description="See which completed batches need a QC decision, which batches need correction, and which finished goods need to move forward."
+        description="Batches to check, batches back from rework, and orders to pack."
       >
         <HeroButton onClick={() => navigate("/quality-control")}><ClipboardCheck /> Open Quality Control</HeroButton>
         <HeroButton variant="glass" onClick={() => navigate("/finished-goods")}><PackageCheck /> Open Finished Goods</HeroButton>
@@ -135,6 +136,7 @@ export default function QualityFinishedGoodsDashboard() {
           <RefreshCw className={qcQuery.isFetching || finishedQuery.isFetching || productionQuery.isFetching ? "animate-spin" : ""} /> Refresh
         </HeroButton>
       </MktHero>
+      <WaitingForYou className="mb-4" />
 
       {(qcError || finishedError || productionError) && (
         <div className="mb-4 space-y-2">

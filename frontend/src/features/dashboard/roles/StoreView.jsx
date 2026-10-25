@@ -28,6 +28,7 @@ import {
   onOrderByComponent,
   stockRow,
 } from "../rows";
+import WaitingForYou from "@/features/dashboard/WaitingForYou"
 
 const EMPTY = [];
 const ACCEPT_PAGE = "/incoming-stock?status=PENDING_STORE";
@@ -100,6 +101,7 @@ export default function StoreView({ readOnly = false }) {
   return (
     <>
       <Greeting description="What is waiting for the store today." />
+      {!readOnly && <WaitingForYou className="mb-4" />}
 
       {!readOnly && (
         <div
@@ -123,7 +125,7 @@ export default function StoreView({ readOnly = false }) {
 
               <div className="min-w-0">
                 <p className="font-semibold">
-                  Production material requests
+                  Production is asking for material
                 </p>
 
                 <p className="mt-0.5 text-sm text-muted-foreground">
@@ -134,7 +136,7 @@ export default function StoreView({ readOnly = false }) {
                           pendingMaterialRequests.length === 1
                             ? " is"
                             : "s are"
-                        } waiting for a full or partial allotment.`
+                        } waiting for you to hand over.`
                       : "No material requests are waiting. New requests from Production will appear here."}
                 </p>
               </div>
@@ -144,7 +146,7 @@ export default function StoreView({ readOnly = false }) {
               onClick={() => navigate("/store-material-requests")}
               className="shrink-0"
             >
-              Open Material Allotment
+              Open Issue to Production
               <ArrowRight className="size-4" />
             </Button>
           </div>
@@ -203,7 +205,7 @@ export default function StoreView({ readOnly = false }) {
           description="IQC-approved purchases."
           rows={waiting}
           to={direct ? ACCEPT_PAGE : "/incoming-stock"}
-          toLabel={direct ? "Accept now" : "Open Incoming Stock"}
+          toLabel={direct ? "Accept now" : "Open Receive from IQC"}
           emptyIcon={PackageCheck}
           empty="Nothing waiting for the store"
         />

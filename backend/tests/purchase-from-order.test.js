@@ -38,7 +38,7 @@ function run(sql, p = []) {
   if (has(sql, "FROM order_purchase_items WHERE id IN (?) FOR UPDATE")) return [s.requests.filter((r) => p[0].includes(r.id))];
   if (has(sql, "INSERT INTO purchase_orders")) {
     const id = s.pos.length + 1;
-    s.pos.push({ id, order_id: p[0], supplier: p[1], notes: p[2], status: "ORDER_PLACED", created_by: p[3] });
+    s.pos.push({ id, order_id: p[0], supplier: p[1], notes: p[2], expected_delivery_date: p[3], status: "ORDER_PLACED", created_by: p[4] });
     return [{ insertId: id }];
   }
   if (has(sql, "UPDATE purchase_orders SET po_number")) { s.pos.find((x) => x.id === p[1]).po_number = p[0]; return [{}]; }
@@ -52,7 +52,7 @@ const conn = { query: async (sql, p) => run(sql, p), beginTransaction: async () 
 require.cache[require.resolve("../src/config/db.js")] = { id: "db", filename: "db", loaded: true, exports: { query: conn.query, getConnection: async () => conn } };
 const service = require("../src/modules/purchase/purchase.service.js");
 
-const body = (extra = {}) => ({ order_id: 7, supplier: "Sharma Electronics", request_item_ids: [1, 2], ...extra });
+const body = (extra = {}) => ({ order_id: 7, supplier: "Sharma Electronics", expected_delivery_date: "2026-11-30", request_item_ids: [1, 2], ...extra });
 
 beforeEach(() => { s = fresh(); });
 
@@ -80,8 +80,19 @@ describe("createPurchase", () => {
     expect(s.poItems).toEqual([{ po: 1, component_id: 11, quantity_ordered: "8.00" }]);
   });
 
+  it("needs the date the supplier will deliver", async () => {
+    await expect(service.createPurchase(body({ expected_delivery_date: "" }), 99)).rejects.toMatchObject({ status: 422 });
+    await expect(service.createPurchase(body({ expected_delivery_date: "30-11-2026" }), 99)).rejects.toMatchObject({ status: 422 });
+    expect(s.pos).toHaveLength(0);
+  });
+
+  it("saves the promised delivery date on the purchase", async () => {
+    await service.createPurchase(body(), 99);
+    expect(s.pos[0]).toMatchObject({ expected_delivery_date: "2026-11-30" });
+  });
+
   it("refuses a free purchase with no list line", async () => {
-    await expect(service.createPurchase({ supplier: "X Traders", order_id: 7, items: [{ component_id: 11, quantity: 5 }] }, 99)).rejects.toMatchObject({ status: 422 });
+    await expect(service.createPurchase({ supplier: "X Traders", expected_delivery_date: "2026-11-30", order_id: 7, items: [{ component_id: 11, quantity: 5 }] }, 99)).rejects.toMatchObject({ status: 422 });
     await expect(service.createPurchase(body({ request_item_ids: [] }), 99)).rejects.toMatchObject({ status: 422 });
     expect(s.pos).toHaveLength(0);
   });
@@ -120,7 +131,7 @@ describe("the purchase manager's own order: combined orders and stock", () => {
     s.orders.push({ id: 9, order_number: "ORD-009", approval_status: "APPROVED" });
     s.requests.push({ id: 4, order_id: 9, component_id: 11, quantity: "12.50", purchase_order_id: null });
   });
-  const combined = (items, extra = {}) => ({ supplier: "Sharma Electronics", items, ...extra });
+  const combined = (items, extra = {}) => ({ supplier: "Sharma Electronics", expected_delivery_date: "2026-11-30", items, ...extra });
 
   it("combines several orders' needs of one component into one line, rounded up, surplus to stock", async () => {
     const po = await service.createPurchase(combined([{ component_id: 11, quantity: 50, request_item_ids: [1, 4] }]), 99);

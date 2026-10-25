@@ -8,6 +8,8 @@ import { plural } from "@/features/marketing-orders/orderParts"
 import { PurchaseStatusPill, PurchaseSteps, StepButton, buyState, buyStageOf, purchaseStageOf } from "@/features/purchasing/purchaseKit"
 import { WAS_INSPECTED, downloadRejected, purchaseFor, qtyWithUnit, rejectedLines } from "@/features/purchasing/purchasingUtils"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
+import { DueLine } from "@/features/purchasing/PurchaseParts"
+import { fmtDueDate } from "@/features/purchasing/purchasingUtils"
 import { cn } from "@/lib/utils"
 import { Lines, PurchaseTimeline } from "./PurchaseDetail"
 
@@ -72,6 +74,7 @@ function OverviewTab({ purchase: p }) {
 
       <dl className="grid grid-cols-2 gap-2.5">
         <Fact label="Supplier">{p.supplier || "-"}</Fact>
+        <Fact label="Supplier will deliver by">{p.expected_delivery_date ? <>{fmtDueDate(p.expected_delivery_date)}<DueLine purchase={p} /></> : <span className="font-normal text-muted-foreground">Not recorded</span>}</Fact>
         <Fact label="For">{purchaseFor(p) || <span className="text-muted-foreground">-</span>}</Fact>
         <Fact label="Placed by">{p.created_by_name || "-"}</Fact>
         <Fact label="Placed on">{fmtDateTime(p.created_at)}</Fact>

@@ -30,6 +30,8 @@ const ApprovedOrders = lazy(() => import("@/features/approved-orders/ApprovedOrd
 const StoreStatus = lazy(() => import("@/features/store-status/StoreStatus"));
 const StoreMaterialRequests = lazy(() => import("@/features/material-requests/StoreMaterialRequests"));
 const ProductStock = lazy(() => import("@/features/product-stock/ProductStock"));
+const OrderTracker = lazy(() => import("@/features/order-tracker/OrderTracker"));
+const Reports = lazy(() => import("@/features/order-tracker/Reports"));
 
 /** { path, module (see MODULE_PATHS in lib/permissions.js), Page, title } */
 //Page batata hai kya render karna hai, module batata hai kis permission ko check karna hai, aur path batata hai kis URL par route match karna hai.
@@ -37,6 +39,8 @@ export const PAGES = [
   { path: "/dashboard", module: "dashboard", Page: Dashboard, title: "Dashboard" },
   { path: "/inventory-history", module: "inventoryHistory", Page: InventoryHistory, title: "Inventory history" },
   { path: "/activity", module: "activity", Page: Activity, title: "Activity" },
+  { path: "/order-tracker", module: "orderTracker", Page: OrderTracker, title: "Order tracker" },
+  { path: "/reports", module: "reports", Page: Reports, title: "Reports" },
   { path: "/orders", module: "orders", Page: Orders, title: "Orders" },
   { path: "/products", module: "products", Page: Products, title: "Products" },
   { path: "/inventory", module: "inventory", Page: Inventory, title: "Component stock" },

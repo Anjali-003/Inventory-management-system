@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/toast"
 import { usePermissions } from "@/features/auth/usePermissions"
+import { useGetCustomersQuery, useSaveCustomerMutation } from "./customersApi"
 import { cn } from "@/lib/utils"
 
 const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -123,7 +124,16 @@ function StepDialog({ item, step, onClose, onDone }) {
 function BillDialog({ item, onClose, onDone }) {
   const toast = useToast()
   const [form, setForm] = useState({ customer_name: "", customer_address: "", customer_gstin: "", gst_percent: "18", notes: "" })
+  const [customerId, setCustomerId] = useState("")
+  const [saveNew, setSaveNew] = useState(true)
+  const { data: customers = [] } = useGetCustomersQuery()
+  const [saveCustomer] = useSaveCustomerMutation()
   const [rates, setRates] = useState({})
+  const pickCustomer = (id) => {
+    setCustomerId(id)
+    const c = customers.find((x) => String(x.id) === id)
+    setForm((f) => ({ ...f, customer_name: c?.name || "", customer_address: c?.address || "", customer_gstin: c?.gstin || "" }))
+  }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
@@ -137,11 +147,16 @@ function BillDialog({ item, onClose, onDone }) {
     try {
       setBusy(true)
       setError("")
-      const { data } = await finishedGoodsService.createBill(item.id, { ...form, items: item.lines.map((l) => ({ product_id: l.productId, rate: rates[l.productId] })) })
+      // a new customer is saved first (when ticked), so the next bill can just pick it
+      let id = customerId ? Number(customerId) : null
+      if (!id && saveNew) {
+        id = (await saveCustomer({ name: form.customer_name, address: form.customer_address, gstin: form.customer_gstin }).unwrap()).id
+      }
+      const { data } = await finishedGoodsService.createBill(item.id, { ...form, customer_id: id, items: item.lines.map((l) => ({ product_id: l.productId, rate: rates[l.productId] })) })
       toast.success(`Bill ${data.billNumber} made. Store has been told to give out the goods.`)
       onDone()
     } catch (err) {
-      setError(err.response?.data?.message || "Could not make the bill.")
+      setError(errorMessage(err, "Could not make the bill."))
     } finally {
       setBusy(false)
     }
@@ -152,9 +167,20 @@ function BillDialog({ item, onClose, onDone }) {
       footer={<><Button type="button" variant="outline" size="lg" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" size="lg" disabled={busy || !ready}>{busy ? "Saving..." : "Make bill"}</Button></>}>
       <div className="space-y-4 text-sm">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Customer name" htmlFor="bill-customer" required><TextInput id="bill-customer" value={form.customer_name} maxLength={150} onChange={set("customer_name")} /></Field>
+          <Field label="Saved customer" htmlFor="bill-saved" className="sm:col-span-2" hint={customers.length ? undefined : "No customer saved yet: type the details below."}>
+            <select id="bill-saved" className="h-9 w-full rounded-[8px] border border-cf-line-strong bg-card px-3 text-[13px]" value={customerId} onChange={(e) => pickCustomer(e.target.value)}>
+              <option value="">New customer (type below)</option>
+              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.gstin ? ` · ${c.gstin}` : ""}</option>)}
+            </select>
+          </Field>
+          <Field label="Customer name" htmlFor="bill-customer" required><TextInput id="bill-customer" value={form.customer_name} maxLength={150} onChange={set("customer_name")} disabled={!!customerId} /></Field>
           <Field label="Customer GSTIN" htmlFor="bill-gstin"><TextInput id="bill-gstin" value={form.customer_gstin} maxLength={20} onChange={set("customer_gstin")} /></Field>
           <Field label="Delivery address" htmlFor="bill-address" className="sm:col-span-2"><TextInput id="bill-address" value={form.customer_address} maxLength={500} onChange={set("customer_address")} /></Field>
+          {!customerId && (
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
+              <input type="checkbox" checked={saveNew} onChange={(e) => setSaveNew(e.target.checked)} /> Save this customer for the next bill
+            </label>
+          )}
         </div>
 
         <div className="overflow-hidden rounded-xl border">

@@ -4,6 +4,7 @@ import { useGetIqcQueueQuery } from "@/features/purchasing/purchasingApi"
 import DepartmentOverview from "../DepartmentOverview"
 import { Greeting, ListPanel, StatRow, useDrill } from "../DashboardKit"
 import { purchaseRow } from "../rows"
+import WaitingForYou from "@/features/dashboard/WaitingForYou"
 
 const EMPTY = []
 
@@ -24,6 +25,7 @@ export default function IqcView() {
   return (
     <>
       <Greeting description="Purchases that need inspection, and what has already been inspected." />
+      <WaitingForYou className="mb-4" />
       <StatRow
         drill={drill}
         stats={[

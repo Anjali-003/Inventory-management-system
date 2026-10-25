@@ -209,6 +209,8 @@ export const MODULE_PATHS = {
   incomingStock: "/incoming-stock",
   storeMaterialRequests: "/store-material-requests",
   productStock: "/product-stock",
+  orderTracker: "/order-tracker",
+  reports: "/reports",
   employees: "/employees",
   attendance: "/attendance",
 
@@ -240,6 +242,7 @@ const ACCESS = {
   // (accept from IQC, issue to production, extra material); manual stock in / out is Super Admin only.
   STORE_MANAGER: {
     dashboard: "view",
+    orderTracker: "view", // "waiting for you" on the dashboard
     inventory: "view",
     inventoryHistory: "edit",
     finishedGoods: "edit",
@@ -255,6 +258,7 @@ const ACCESS = {
   // IQC Manager owns IQC and can view related departments.
   IQC_MANAGER: {
     dashboard: "view",
+    orderTracker: "view", // "waiting for you" on the dashboard
     iqc: "edit",
     purchase: "view",
     inventory: "view",
@@ -265,6 +269,7 @@ const ACCESS = {
   // Purchase Manager owns Purchase.
   PURCHASE_MANAGER: {
     dashboard: "view",
+    orderTracker: "view", // "waiting for you" on the dashboard
     purchase: "edit",
     approvedOrders: "view",
     iqc: "view",
@@ -276,6 +281,7 @@ const ACCESS = {
   // Production Manager handles production.
   PRODUCTION_MANAGER: {
     dashboard: "view",
+    orderTracker: "view", // "waiting for you" on the dashboard
     production: "edit",
     qcFailed: "edit",
     // can only LOOK at Store's stock; extra material is asked from the Production page
@@ -288,6 +294,7 @@ const ACCESS = {
   // Quality Control & Finished Goods workspace.
   QUALITY_FG_MANAGER: {
     dashboard: "view",
+    orderTracker: "view", // "waiting for you" on the dashboard
     qualityControl: "edit",
     finishedGoods: "edit",
     qcFailed: "edit",
@@ -302,6 +309,8 @@ const ACCESS = {
     // makes the bill and confirms delivery
     finishedGoods: "edit",
     productStock: "view",
+    customers: "edit",
+    orderTracker: "view",
   },
 
   // HR owns employee records and attendance.
@@ -324,6 +333,8 @@ const ACCESS = {
     // hands packed goods over to the Store
     finishedGoods: "edit",
     productStock: "view",
+    orderTracker: "view",
+    reports: "view",
 
     // Read-only access to IQC and Purchase.
     iqc: "view",

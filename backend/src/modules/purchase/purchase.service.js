@@ -37,6 +37,9 @@ const PO_SELECT = `
         o.order_number,
         po.supplier,
         po.notes,
+        DATE_FORMAT(po.expected_delivery_date, '%Y-%m-%d') AS expected_delivery_date,
+        -- days past the promised date: until it arrives, or how late it arrived (0 = on time / not due yet)
+        GREATEST(0, DATEDIFF(COALESCE(DATE(po.received_at), CURDATE()), po.expected_delivery_date)) AS late_days,
         po.status,
         po.iqc_remarks,
         cu.name AS created_by_name,
@@ -149,11 +152,16 @@ function parseSupplier(body) {
     }
     const notes = typeof body.notes === "string" ? body.notes.trim() : "";
     if (notes.length > 500) throw new AppError(422, "Notes must be 500 characters or fewer", "VALIDATION", { field: "notes" });
-    return { supplier, notes: notes || null };
+    // when the supplier promised to deliver: lets everyone see late deliveries (and per-supplier delays in Reports)
+    const raw = typeof body.expected_delivery_date === "string" ? body.expected_delivery_date.trim() : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || Number.isNaN(new Date(`${raw}T00:00:00Z`).getTime())) {
+        throw new AppError(422, "Enter the date the supplier will deliver", "VALIDATION", { field: "expected_delivery_date" });
+    }
+    return { supplier, notes: notes || null, expectedDate: raw };
 }
 
 function parseCreate(body) {
-    const { supplier, notes } = parseSupplier(body);
+    const { supplier, notes, expectedDate } = parseSupplier(body);
 
     const orderId = Number(body.order_id);
     if (!Number.isInteger(orderId) || orderId <= 0) {
@@ -173,7 +181,7 @@ function parseCreate(body) {
         throw new AppError(422, "The same component is selected twice", "VALIDATION");
     }
 
-    return { orderId, supplier, notes, requestItemIds: ids };
+    return { orderId, supplier, notes, expectedDate, requestItemIds: ids };
 }
 
 const MAX_ITEMS = 500;
@@ -187,7 +195,7 @@ const positiveIds = (raw, label) => {
 
 /* { supplier, notes?, items: [{ component_id, quantity, request_item_ids? }] } -> checked, quantities in cents */
 function parseCombined(body) {
-    const { supplier, notes } = parseSupplier(body);
+    const { supplier, notes, expectedDate } = parseSupplier(body);
     if (!Array.isArray(body.items) || body.items.length === 0) {
         throw new AppError(422, "Add at least one component to the order", "VALIDATION", { field: "items" });
     }
@@ -218,7 +226,7 @@ function parseCombined(body) {
         }
         return { componentId, cents, requestItemIds };
     });
-    return { supplier, notes, items };
+    return { supplier, notes, expectedDate, items };
 }
 
 /*
@@ -233,12 +241,12 @@ async function createPurchase(body, userId) {
 }
 
 /* Inserts the purchase order with its lines and links the covered requirement lines to it. Returns its id. */
-async function insertPurchase(conn, { orderId, supplier, notes, userId, lines, requestItemIds }) {
+async function insertPurchase(conn, { orderId, supplier, notes, expectedDate, userId, lines, requestItemIds }) {
     // po_number is derived from the id, so insert with a throw-away unique value first
     const [res] = await conn.query(
-        `INSERT INTO purchase_orders (po_number, order_id, supplier, notes, status, created_by)
-         VALUES (CONCAT('TMP-', UUID()), ?, ?, ?, 'ORDER_PLACED', ?)`,
-        [orderId, supplier, notes, userId]
+        `INSERT INTO purchase_orders (po_number, order_id, supplier, notes, expected_delivery_date, status, created_by)
+         VALUES (CONCAT('TMP-', UUID()), ?, ?, ?, ?, 'ORDER_PLACED', ?)`,
+        [orderId, supplier, notes, expectedDate, userId]
     );
     const poId = res.insertId;
     await conn.query(`UPDATE purchase_orders SET po_number = ? WHERE id = ?`, [`PO-${String(poId).padStart(4, "0")}`, poId]);
@@ -259,7 +267,7 @@ async function insertPurchase(conn, { orderId, supplier, notes, userId, lines, r
     quantity he chooses (a round figure is fine) but never below what the covered requirement lines need.
 */
 async function createCombined(body, userId) {
-    const { supplier, notes, items } = parseCombined(body);
+    const { supplier, notes, expectedDate, items } = parseCombined(body);
 
     return inventory.inTransaction(async (conn) => {
         const componentIds = items.map((i) => i.componentId);
@@ -312,6 +320,7 @@ async function createCombined(body, userId) {
             orderId: orderIds.size === 1 ? [...orderIds][0] : null,
             supplier,
             notes,
+            expectedDate,
             userId,
             lines: items.map((i) => ({ componentId: i.componentId, quantity: inventory.fromCents(i.cents) })),
             requestItemIds: allLineIds,
@@ -322,7 +331,7 @@ async function createCombined(body, userId) {
 
 /* One approved order's list, at the quantities the Operations Admin sent. */
 async function createForOrder(body, userId) {
-    const { orderId, supplier, notes, requestItemIds } = parseCreate(body);
+    const { orderId, supplier, notes, expectedDate, requestItemIds } = parseCreate(body);
 
     return inventory.inTransaction(async (conn) => {
         const [orders] = await conn.query(`SELECT id, approval_status FROM orders WHERE id = ? FOR UPDATE`, [orderId]);
@@ -351,6 +360,7 @@ async function createForOrder(body, userId) {
             orderId,
             supplier,
             notes,
+            expectedDate,
             userId,
             lines: requestItemIds.map((id) => ({ componentId: byId.get(id).component_id, quantity: byId.get(id).quantity })),
             requestItemIds,

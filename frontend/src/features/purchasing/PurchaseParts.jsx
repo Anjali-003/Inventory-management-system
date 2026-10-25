@@ -1,3 +1,4 @@
+import { fmtDueDate } from "./purchasingUtils"
 import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/Modal"
 import { Button } from "@/components/ui/button"
@@ -118,5 +119,20 @@ export function PurchaseDetailModal({ purchase, onClose }) {
         )}
       </div>
     </Modal>
+  )
+}
+
+
+/* "Due 12 Nov" under the supplier, red "Late by 3 days" once the promised date has passed and the goods are not in */
+export function DueLine({ purchase: p }) {
+  if (!p?.expected_delivery_date) return null
+  const late = Number(p.late_days) || 0
+  const arrived = !!p.received_at
+  return (
+    <span className={`block text-xs ${late > 0 ? "font-semibold text-destructive" : "text-muted-foreground"}`}>
+      {late > 0
+        ? arrived ? `Arrived ${late} day${late === 1 ? "" : "s"} late` : `Late by ${late} day${late === 1 ? "" : "s"}`
+        : arrived ? "Arrived on time" : `Due ${fmtDueDate(p.expected_delivery_date)}`}
+    </span>
   )
 }

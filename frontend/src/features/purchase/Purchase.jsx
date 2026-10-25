@@ -18,6 +18,7 @@ import {
 } from "@/features/purchasing/purchaseKit"
 import { ordersToOrder, purchaseFor } from "@/features/purchasing/purchasingUtils"
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
+import { DueLine } from "@/features/purchasing/PurchaseParts"
 import { cn } from "@/lib/utils"
 import PurchaseDrawer, { isPurchaseTab } from "./PurchaseDrawer"
 import ReceiveModal from "./ReceiveModal"
@@ -133,7 +134,7 @@ export default function Purchase() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <MktHero eyebrow="Purchase" title="Purchase" description="Combine what the orders need into one purchase order (or buy for stock), mark it received when the goods arrive, then send it to IQC.">
+      <MktHero eyebrow="Purchase" title="Purchase Orders" description="Every purchase order: mark it received when the supplier delivers, then send it to IQC.">
         {editable && (
           <HeroButton onClick={openRequests}>
             <ShoppingCart /> New purchase order
@@ -264,7 +265,10 @@ export default function Purchase() {
                       <button type="button" className="block text-left font-semibold tabular-nums outline-none transition-colors hover:text-primary focus-visible:text-primary focus-visible:underline">{p.po_number}</button>
                       {purchaseFor(p) && <span className="block text-xs text-muted-foreground">for {purchaseFor(p)}</span>}
                     </TableCell>
-                    <TableCell>{p.supplier}</TableCell>
+                    <TableCell>
+                      {p.supplier}
+                      <DueLine purchase={p} />
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{p.totals.lines} item{p.totals.lines === 1 ? "" : "s"} · {fmtQty(p.totals.ordered)} ordered</TableCell>
                     <TableCell>
                       <div className="flex w-44 flex-col items-start gap-2">

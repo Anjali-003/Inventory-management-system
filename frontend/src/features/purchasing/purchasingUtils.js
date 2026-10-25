@@ -76,3 +76,6 @@ export function ordersToOrder(orders) {
     .map((order) => ({ order, lines: (order.purchase_request?.items || []).filter(isToOrder) }))
     .filter((g) => g.lines.length > 0)
 }
+
+/* "12 Nov 2026" for a purchase's promised delivery date (YYYY-MM-DD) */
+export const fmtDueDate = (d) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "")

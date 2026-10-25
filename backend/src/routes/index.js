@@ -41,6 +41,9 @@ const pushRoutes = require("../modules/push/push.routes");
 const materialRequestRoutes = require("../modules/material-requests/material-request.routes");
 const extraMaterialRoutes = require("../modules/extra-materials/extra-material.routes");
 const productStockRoutes = require("../modules/product-stock/product-stock.routes");
+const customerRoutes = require("../modules/customers/customer.routes");
+const reportRoutes = require("../modules/reports/report.routes");
+const orderTrackerRoutes = require("../modules/reports/order-tracker.routes");
 const eventsRoutes = require("../realtime/events.routes");
 
 const MODULES = [
@@ -66,6 +69,11 @@ const MODULES = [
     { path: "/finished-goods", router: finishedGoodsRoutes, resource: "finished-goods", guards: [permit("finishedGoods")] },
     // finished products held by Store (read only; it changes through the finished-goods steps)
     { path: "/product-stock", router: productStockRoutes, resource: "product-stock", guards: [permit("productStock")] },
+    // customers saved by Marketing and picked on the bill
+    { path: "/customers", router: customerRoutes, resource: "customers", guards: [permit("customers")] },
+    // read only: where every order is and its whole journey; the month report
+    { path: "/order-tracker", router: orderTrackerRoutes, guards: [permit("orderTracker")] },
+    { path: "/reports", router: reportRoutes, guards: [permit("reports")] },
 
     // Incoming goods:  Purchase manager buys -> IQC inspects -> Store manager accepts into stock
     { path: "/purchase", router: purchaseRoutes, resource: "purchase", guards: [permit("purchase")] },

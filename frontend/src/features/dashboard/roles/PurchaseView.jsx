@@ -15,6 +15,7 @@ import { useDrill } from "../DashboardKit"
 import DepartmentOverview, { shortageOf } from "../DepartmentOverview"
 import UrgentPurchaseSection from "../UrgentPurchaseSection"
 import IqcRejectionsSection from "../IqcRejectionsSection"
+import WaitingForYou from "@/features/dashboard/WaitingForYou"
 
 const EMPTY = []
 
@@ -88,6 +89,7 @@ export default function PurchaseView() {
           <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to="/purchase"><ShoppingCart /> Open purchase</HeroLink>
         )}
       </MktHero>
+      <WaitingForYou className="mb-4" />
 
       <PurchaseTileGrid className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {tiles.filter(Boolean).map((t) => (

@@ -48,7 +48,7 @@ export default function PurchaseRequests() {
     <MotionConfig reducedMotion="user">
       <MktHero
         eyebrow="Purchase"
-        title="Purchase requests"
+        title="What to Buy"
         description="Everything the approved orders are still waiting for, and one combined purchase order to buy it all."
       />
 
@@ -136,6 +136,7 @@ function CombinedOrder({ rows, loading }) {
   const [qty, setQty] = useState({}) // component_id -> typed quantity (missing = the suggestion)
   const [adding, setAdding] = useState("")
   const [supplier, setSupplier] = useState("")
+  const [expectedDate, setExpectedDate] = useState("")
   const [notes, setNotes] = useState("")
   const [showErrors, setShowErrors] = useState(false)
   const [serverError, setServerError] = useState("")
@@ -164,7 +165,7 @@ function CombinedOrder({ rows, loading }) {
   }
 
   const orderCount = new Set(lines.flatMap((r) => r.lines.map((l) => l.order_id))).size
-  const supplierError = supplier.trim().length < 2 ? "Enter the supplier name" : ""
+  const supplierError = supplier.trim().length < 2 ? "Enter the supplier name" : !expectedDate ? "Enter the date the supplier will deliver" : ""
   const bad = lines.filter((r) => errorOf(r))
 
   const submit = async (e) => {
@@ -181,6 +182,7 @@ function CombinedOrder({ rows, loading }) {
     try {
       const po = await create({
         supplier: supplier.trim(),
+        expected_delivery_date: expectedDate,
         notes: notes.trim(),
         items: lines.map((r) => ({
           component_id: r.component_id,
@@ -219,6 +221,10 @@ function CombinedOrder({ rows, loading }) {
               {showErrors && supplierError && <p className="mt-1.5 text-xs font-medium text-destructive">{supplierError}</p>}
             </div>
             <div>
+              <label htmlFor="co-expected" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Supplier will deliver by <span className="text-destructive" aria-hidden>*</span></label>
+              <input id="co-expected" type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} aria-invalid={showErrors && !expectedDate} className={cn(INPUT, showErrors && !expectedDate && "border-destructive")} />
+            </div>
+            <div className="sm:col-span-2">
               <label htmlFor="co-notes" className="mb-1.5 block text-xs font-semibold text-muted-foreground">Notes</label>
               <input id="co-notes" maxLength={500} autoComplete="off" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" className={INPUT} />
             </div>
@@ -370,7 +376,7 @@ function CombinedOrder({ rows, loading }) {
             {/* why the order did not go, right next to the button */}
             {showErrors && (supplierError || bad.length > 0 || serverError) && (
               <p role="alert" className="mt-0.5 text-sm font-medium text-destructive">
-                {serverError || (supplierError ? "Enter the supplier name (top of the form)." : `Fix the quantity of ${bad.map((r) => r.name).join(", ")}.`)}
+                {serverError || (supplierError ? `${supplierError} (top of the form).` : `Fix the quantity of ${bad.map((r) => r.name).join(", ")}.`)}
               </p>
             )}
           </div>

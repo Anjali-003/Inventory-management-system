@@ -20,6 +20,7 @@ const ACCESS = {
     // Component stock changes only through its own steps (accept from IQC, issue to production, extra material);
     // manual stock in / out / edit / archive on the Inventory page is Super Admin only.
     STORE_MANAGER: {
+        orderTracker: "view", // "waiting for you" on the dashboard
         inventory: "view",
         inventoryHistory: "edit",
         // receives packed goods and gives them out for delivery (its steps are checked in finished-goods.routes.js)
@@ -39,7 +40,9 @@ const ACCESS = {
         marketingOrders: "edit",
         // makes the bill and confirms delivery (finished-goods steps)
         finishedGoods: "edit",
-        productStock: "view"
+        productStock: "view",
+        customers: "edit",
+        orderTracker: "view"
     },
 
     // HR owns employee records and attendance.
@@ -63,6 +66,8 @@ const ACCESS = {
         // hands packed goods over to the Store (finished-goods step)
         finishedGoods: "edit",
         productStock: "view",
+        orderTracker: "view",
+        reports: "view",
         incomingStock: "view",
         // IQC manager + purchase manager pages
         iqc: "view",
@@ -71,6 +76,7 @@ const ACCESS = {
 
     // Incoming Quality Control manager: edits IQC, views purchase + the store pages
     IQC_MANAGER: {
+        orderTracker: "view", // "waiting for you" on the dashboard
         iqc: "edit",
         purchase: "view",
         inventory: "view",
@@ -83,6 +89,7 @@ const ACCESS = {
     // on dispatch (POST /purchase checks every line against order_purchase_items). He then marks it received and
     // sends it to IQC.
     PURCHASE_MANAGER: {
+        orderTracker: "view", // "waiting for you" on the dashboard
         purchase: "edit",
         approvedOrders: "view", // orders approved by the Operations Admin
         iqc: "view",
@@ -93,6 +100,7 @@ const ACCESS = {
 
     // Production updates production runs and asks Store for material; it can only LOOK at Store's stock.
     PRODUCTION_MANAGER: {
+        orderTracker: "view", // "waiting for you" on the dashboard
         dashboard: "view",
         production: "edit",
         materialRequests: "edit",
@@ -106,6 +114,7 @@ const ACCESS = {
     // Quality Control can record test/QC results and manage finished-goods transitions;
     // Production is visible as a read-only reference.
     QUALITY_FG_MANAGER: {
+        orderTracker: "view", // "waiting for you" on the dashboard
         dashboard: "view",
         qualityControl: "edit",
         finishedGoods: "edit",
@@ -187,7 +196,8 @@ const RESOURCE_MODULE = {
     attendance: "attendance",
     "material-requests": "materialRequests",
     "extra-materials": "materialRequests",
-    "product-stock": "productStock"
+    "product-stock": "productStock",
+    customers: "customers"
     // "auth" and "super-admins" are not listed on purpose: super admin only
 };
 

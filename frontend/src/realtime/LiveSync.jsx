@@ -40,6 +40,7 @@ const TAGS = {
   "approved-orders": ["OrderApprovals"],
   "material-requests": ["MaterialRequests", "Production"],
   "extra-materials": ["ExtraMaterials", "Inventory"],
+  customers: ["Customers"],
 };
 
 // notification type -> extra tags to refetch with the bell (the screens that notification is about)
@@ -64,6 +65,7 @@ const NOTIFY_TAGS = {
   QC_FAILED: ["Production", "QualityControl"],
   REWORK_SUBMITTED: ["QualityControl"],
   ORDER_DISPATCHED: ["MarketingOrders", "FinishedGoods", "Orders"],
+  ORDER_CANCELLED: ["OrderApprovals", "MarketingOrders", "Orders", "Production", "MaterialRequests", "Inventory"],
   EXTRA_MATERIAL_REQUESTED: ["ExtraMaterials"],
   EXTRA_MATERIAL_ISSUED: ["ExtraMaterials", "Inventory"],
   EXTRA_MATERIAL_REJECTED: ["ExtraMaterials"],

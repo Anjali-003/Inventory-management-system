@@ -33,7 +33,7 @@ const axiosBaseQuery = () => async ({ url, method = "get", data, params }) => {
 export const baseApi = createApi({
   reducerPath: "api",
   baseQuery: axiosBaseQuery(),
-  tagTypes: ["Orders", "Products", "Inventory", "Attendance", "Me", "Activity", "Production", "FinishedGoods", "Employees", "QualityControl", "Purchases", "OrderApprovals", "MarketingOrders", "Notifications", "MaterialRequests", "ProductStock", "ExtraMaterials"],
+  tagTypes: ["Orders", "Products", "Inventory", "Attendance", "Me", "Activity", "Production", "FinishedGoods", "Employees", "QualityControl", "Purchases", "OrderApprovals", "MarketingOrders", "Notifications", "MaterialRequests", "ProductStock", "ExtraMaterials", "Customers"],
   refetchOnMountOrArgChange: true,
   endpoints: () => ({}),
 });

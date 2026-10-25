@@ -25,6 +25,8 @@ import {
   Package,
   PackageOpen,
   Wrench,
+  Route,
+  BarChart3,
 } from "lucide-react";
 
 import { cn } from "../lib/utils";
@@ -46,6 +48,8 @@ const GROUPS = [
     label: "Overview",
     items: [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard", end: true },
+      { to: "/order-tracker", label: "Order Tracker", icon: Route, module: "orderTracker" },
+      { to: "/reports", label: "Reports", icon: BarChart3, module: "reports" },
       { to: "/activity", label: "Activity", icon: Activity, module: "activity" },
     ],
   },
