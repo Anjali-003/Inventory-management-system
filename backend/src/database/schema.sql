@@ -37,13 +37,35 @@ CREATE TABLE IF NOT EXISTS `attendance` (
   CONSTRAINT `chk_attendance_status` CHECK ((`status` in (_utf8mb4'PRESENT',_utf8mb4'ABSENT',_utf8mb4'HALF_DAY',_utf8mb4'LEAVE')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS `bill_credit_notes` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `credit_number` varchar(30) NOT NULL,
+  `bill_id` int NOT NULL,
+  `amount` decimal(14,2) NOT NULL,
+  `reason` varchar(255) NOT NULL,
+  `created_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_bill_credit_number` (`credit_number`),
+  KEY `fk_bill_credit_bill` (`bill_id`),
+  KEY `fk_bill_credit_user` (`created_by`),
+  KEY `idx_bill_credit_created` (`created_at`),
+  CONSTRAINT `fk_bill_credit_bill` FOREIGN KEY (`bill_id`) REFERENCES `bills` (`id`),
+  CONSTRAINT `fk_bill_credit_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `chk_bill_credit_amount` CHECK ((`amount` > 0))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS `bill_items` (
   `id` int NOT NULL AUTO_INCREMENT,
   `bill_id` int NOT NULL,
   `product_id` int NOT NULL,
   `quantity` int NOT NULL,
   `rate` decimal(12,2) NOT NULL,
+  `list_price` decimal(12,2) DEFAULT NULL,
   `amount` decimal(14,2) NOT NULL,
+  `gst_percent` decimal(5,2) NOT NULL DEFAULT '18.00',
+  `gst_amount` decimal(14,2) NOT NULL DEFAULT '0.00',
+  `price_note` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `fk_bill_items_bill` (`bill_id`),
   KEY `fk_bill_items_product` (`product_id`),
@@ -51,6 +73,25 @@ CREATE TABLE IF NOT EXISTS `bill_items` (
   CONSTRAINT `fk_bill_items_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`),
   CONSTRAINT `chk_bill_items_quantity` CHECK ((`quantity` > 0)),
   CONSTRAINT `chk_bill_items_rate` CHECK ((`rate` >= 0))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS `bill_payments` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `bill_id` int NOT NULL,
+  `amount` decimal(14,2) NOT NULL,
+  `paid_on` date NOT NULL,
+  `method` varchar(12) NOT NULL,
+  `reference` varchar(100) DEFAULT NULL,
+  `created_by` int DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `fk_bill_payments_bill` (`bill_id`),
+  KEY `fk_bill_payments_user` (`created_by`),
+  KEY `idx_bill_payments_paid_on` (`paid_on`),
+  CONSTRAINT `fk_bill_payments_bill` FOREIGN KEY (`bill_id`) REFERENCES `bills` (`id`),
+  CONSTRAINT `fk_bill_payments_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `chk_bill_payments_amount` CHECK ((`amount` > 0)),
+  CONSTRAINT `chk_bill_payments_method` CHECK ((`method` in (_utf8mb4'CASH',_utf8mb4'BANK',_utf8mb4'UPI',_utf8mb4'CHEQUE',_utf8mb4'OTHER')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `bills` (
@@ -69,16 +110,24 @@ CREATE TABLE IF NOT EXISTS `bills` (
   `notes` varchar(500) DEFAULT NULL,
   `created_by` int DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `status` varchar(12) NOT NULL DEFAULT 'ACTIVE',
+  `cancelled_by` int DEFAULT NULL,
+  `cancelled_at` datetime DEFAULT NULL,
+  `cancel_reason` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_bills_number` (`bill_number`),
-  UNIQUE KEY `uq_bills_finished_goods` (`finished_goods_id`),
   KEY `fk_bills_order` (`order_id`),
   KEY `fk_bills_user` (`created_by`),
   KEY `fk_bills_customer` (`customer_id`),
+  KEY `idx_bills_finished_goods` (`finished_goods_id`),
+  KEY `idx_bills_status_created` (`status`,`created_at`),
+  KEY `fk_bills_cancelled_by` (`cancelled_by`),
+  CONSTRAINT `fk_bills_cancelled_by` FOREIGN KEY (`cancelled_by`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_bills_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
   CONSTRAINT `fk_bills_finished_goods` FOREIGN KEY (`finished_goods_id`) REFERENCES `finished_goods` (`id`),
   CONSTRAINT `fk_bills_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`),
-  CONSTRAINT `fk_bills_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`)
+  CONSTRAINT `fk_bills_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `chk_bills_status` CHECK ((`status` in (_utf8mb4'ACTIVE',_utf8mb4'CANCELLED')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `components` (
@@ -517,6 +566,8 @@ CREATE TABLE IF NOT EXISTS `products` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `created_by` int DEFAULT NULL,
+  `selling_price` decimal(12,2) DEFAULT NULL,
+  `gst_percent` decimal(5,2) NOT NULL DEFAULT '18.00',
   PRIMARY KEY (`id`),
   UNIQUE KEY `sku` (`sku`),
   KEY `fk_products_created_by` (`created_by`),
@@ -528,6 +579,7 @@ CREATE TABLE IF NOT EXISTS `purchase_order_items` (
   `purchase_order_id` int NOT NULL,
   `component_id` int NOT NULL,
   `quantity_ordered` decimal(12,2) NOT NULL,
+  `rate` decimal(12,2) DEFAULT NULL,
   `quantity_received` decimal(12,2) DEFAULT NULL,
   `quantity_defective` decimal(12,2) NOT NULL DEFAULT '0.00',
   `quantity_approved` decimal(12,2) DEFAULT NULL,

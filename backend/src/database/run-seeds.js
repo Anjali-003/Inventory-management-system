@@ -42,7 +42,8 @@ const ask = (q) =>
 
   if (resetMode) {
     console.log("\nWARNING: this deletes products, components, stock, the stock ledger, BOMs, orders, production data,");
-    console.log("notifications, the activity feed, employees and attendance. Logins (users) are kept.");
+    console.log("bills, payments, credit notes, customers, product stock, notifications, the activity feed, employees and attendance.");
+    console.log("Logins (users) are kept.");
     if (!process.stdin.isTTY) {
       console.error("Not an interactive terminal, so the confirmation cannot be asked. Run `npm run seed:reset` from a normal terminal.");
       process.exit(1);
