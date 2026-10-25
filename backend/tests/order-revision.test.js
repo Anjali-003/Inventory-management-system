@@ -160,9 +160,16 @@ describe("Operations Admin revises the quantity", () => {
     await approvals.revise(7, { remarks: "60 now", items: [{ product_id: 1, quantity: 60 }] }, 5);
     await expect(approvals.revise(7, { remarks: "50 now", items: [{ product_id: 1, quantity: 50 }] }, 5)).rejects.toMatchObject({ code: "ALREADY_DECIDED" });
 
+    // an order raised by another role (not Marketing, not the Super Admin doing Marketing's work) cannot be revised
     s = fresh();
-    s.orders[0].creator_role = "SUPER_ADMIN";
+    s.orders[0].creator_role = "PRODUCTION_MANAGER";
     await expect(approvals.revise(7, { remarks: "60 now", items: [{ product_id: 1, quantity: 60 }] }, 5)).rejects.toMatchObject({ code: "NOT_MARKETING_ORDER" });
+  });
+
+  it("revises an order the Super Admin raised (the CEO can do Marketing's work)", async () => {
+    s.orders[0].creator_role = "SUPER_ADMIN";
+    const order = await approvals.revise(7, { remarks: "60 now", items: [{ product_id: 1, quantity: 60 }] }, 5);
+    expect(order.approval_status).toBe("QUANTITY_REVISED");
   });
 });
 

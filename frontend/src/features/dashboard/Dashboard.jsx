@@ -70,6 +70,12 @@ const DEPT_VIEWS = {
     module: "purchase",
     View: PurchaseView,
   },
+  // the other departments, so the Super Admin (CEO) can see any team's own screen from the dashboard
+  marketing: { label: "Marketing", module: "marketingOrders", View: MarketingView },
+  operations: { label: "Operations", module: "orderApprovals", View: OperationsView },
+  production: { label: "Production", module: "production", View: ProductionDashboard },
+  quality: { label: "QC & Finished Goods", module: "qualityControl", View: QualityFinishedGoodsDashboard },
+  hr: { label: "HR", module: "employees", View: HRView },
 };
 
 export default function Dashboard() {

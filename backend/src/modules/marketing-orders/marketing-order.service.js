@@ -14,11 +14,14 @@ const notifications = require("../notifications/notification.service");
 */
 
 const MAX_ITEMS = 30;
+// whose orders are "Marketing orders": the Marketing Manager's, and the Super Admin's (the CEO can do Marketing's work)
+const SALES_ROLES = ["MARKETING_MANAGER", "SUPER_ADMIN"];
 
 async function listOrders(conn = db) {
     const [rows] = await conn.query(
         `SELECT o.id FROM orders o JOIN users u ON u.id = o.created_by
-         WHERE u.role = 'MARKETING_MANAGER' ORDER BY o.id DESC LIMIT 300`
+         WHERE u.role IN (?) ORDER BY o.id DESC LIMIT 300`,
+        [SALES_ROLES]
     );
     return approvals.getOrdersByIds(rows.map((r) => r.id), conn);
 }
@@ -89,7 +92,7 @@ async function lockDraft(conn, orderId) {
          FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ? FOR UPDATE`,
         [orderId]
     );
-    if (rows.length === 0 || rows[0].creator_role !== "MARKETING_MANAGER") throw AppError.notFound("Order not found", "NOT_FOUND");
+    if (rows.length === 0 || !SALES_ROLES.includes(rows[0].creator_role)) throw AppError.notFound("Order not found", "NOT_FOUND");
     if (rows[0].approval_status !== "DRAFT") {
         throw AppError.conflict("This order has already been sent. Refresh the page.", "NOT_DRAFT");
     }
@@ -131,7 +134,7 @@ async function acceptRevision(orderId, userId) {
              FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ? FOR UPDATE`,
             [orderId]
         );
-        if (rows.length === 0 || rows[0].creator_role !== "MARKETING_MANAGER") throw AppError.notFound("Order not found", "NOT_FOUND");
+        if (rows.length === 0 || !SALES_ROLES.includes(rows[0].creator_role)) throw AppError.notFound("Order not found", "NOT_FOUND");
         if (rows[0].approval_status !== "QUANTITY_REVISED") {
             throw AppError.conflict("This order is not waiting for your answer on a revised quantity. Refresh the page.", "NOT_REVISED");
         }

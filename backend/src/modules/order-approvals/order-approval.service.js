@@ -620,8 +620,8 @@ async function revise(orderId, body, userId) {
             throw AppError.conflict("This order is no longer waiting for your decision. Refresh the page.", "ALREADY_DECIDED");
         }
         if (order.revision) throw AppError.conflict("The quantity of this order was already revised once.", "ALREADY_REVISED");
-        if (order.creator_role !== "MARKETING_MANAGER") {
-            throw new AppError(422, "Only orders raised by the Marketing Manager can be revised: approve or reject this one.", "NOT_MARKETING_ORDER");
+        if (!["MARKETING_MANAGER", "SUPER_ADMIN"].includes(order.creator_role)) {
+            throw new AppError(422, "Only orders raised by Marketing (or the Super Admin) can be revised: approve or reject this one.", "NOT_MARKETING_ORDER");
         }
 
         const [lines] = await conn.query(

@@ -20,7 +20,7 @@ import { approveLabel, canApprove, planTotals } from "./approvalParts"
  */
 export function reviseBlockReason(o, plan) {
   if (!o || o.approval_status !== "PENDING_APPROVAL") return "Only an order waiting for approval can be revised."
-  if (o.created_by_role !== "MARKETING_MANAGER") return "Only orders raised by the Marketing Manager can be revised."
+  if (!["MARKETING_MANAGER", "SUPER_ADMIN"].includes(o.created_by_role)) return "Only orders raised by Marketing (or the Super Admin) can be revised."
   if (o.revision) return "The quantity of this order was already revised once."
   if (plan?.missing_bom?.length) return "Complete the bill of materials first."
   if (plan && planTotals(plan).canMake === 0) return "Nothing can be built from the current stock, so there is nothing to make now."
