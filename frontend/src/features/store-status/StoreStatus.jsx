@@ -63,7 +63,7 @@ export default function StoreStatus() {
 
   return (
     <>
-      <PageHeader title="Store" description="What is waiting for the store. Pick a figure to see its list.">
+      <PageHeader title="Store: waiting for you" description="Goods to accept, stock to reorder, goods to receive and goods to give out. Pick one to see its list.">
         <Button variant="outline" onClick={refetch} disabled={fetching}><RefreshCw className={fetching ? "animate-spin" : ""} /> Refresh</Button>
       </PageHeader>
 

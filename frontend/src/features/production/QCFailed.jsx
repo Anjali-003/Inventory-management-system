@@ -73,8 +73,8 @@ export default function QCFailed() {
     <>
       <MktHero
         eyebrow="Quality & Production"
-        title="QC Failed"
-        description="Review batches that failed Quality Control, record the correction, and submit them for retesting. Submitted batches move to Ready for QC."
+        title="QC Failed / Rework"
+        description="Batches that failed the quality check. Fix them (ask extra material if a piece is damaged), then send them back to QC."
       >
         <HeroButton variant="glass" onClick={load} disabled={loading} aria-label="Refresh QC failed batches">
           <RefreshCw className={loading ? "animate-spin" : ""} /> Refresh

@@ -82,7 +82,7 @@ export default function Orders() {
 
   return (
     <>
-      <PageHeader title="Orders" description="Manage and monitor manufacturing orders.">
+      <PageHeader title="All Orders" description="Every order in the company and its status. For where an order is stuck, use the Order Tracker.">
         <Button size="lg" onClick={() => setCreating(true)}><Plus /> Create order</Button>
       </PageHeader>
 

@@ -4,7 +4,8 @@
   It mirrors the real Express API for everything the Inventory area needs:
     /inventory (list, item, ledger, components, next-sku, stock-in, stock-in/batch, stock-out, edit, archive,
                 history, history/daily, history/products, history/balance)
-  plus the small lists other pages need to open without errors (/orders, /products, /attendance, /auth/*).
+  plus the small lists other pages need to open without errors (/orders, /products, /attendance, /auth/*), and
+  empty answers for the pages that read one object (/reports/monthly, /product-stock, /order-tracker/:id).
   Anything else: GET -> [] , write -> 501 "not available in mock mode".
 
   State lives in memory: changes you make (stock in/out ...) show up until you reload the page.
@@ -657,6 +658,17 @@ const ROUTES = [
   ["GET", /^\/products$/, () => ok(state().products)],
   ["GET", /^\/products\/next-sku$/, () => ok({ sku: `PRD-${String(state().products.length + 1).padStart(3, "0")}` })],
   ["GET", /^\/attendance$/, () => ok([])],
+  // pages that read ONE object (not a list): an empty month report, finished products with nothing in stock,
+  // and "not in mock mode" for an order's journey, so those pages open instead of breaking
+  ["GET", /^\/reports\/monthly$/, (m, q) => ok({
+    month: q.month || "",
+    sales: { bills: 0, total: 0, gst: 0, byCustomer: [] },
+    suppliers: { received: 0, rejected: 0, rejectedPct: null, due: 0, late: 0, bySupplier: [] },
+    qualityCheck: { firstTryBatches: 0, firstTryPassed: 0, firstTryPassPct: null, decisions: 0, failed: 0, failsByProduct: [] },
+    orderTime: { delivered: 0, avgDays: null, avgApprovalDays: null, avgBuildDays: null, avgDispatchDays: null, slowest: [] },
+  })],
+  ["GET", /^\/product-stock$/, () => ok(state().products.map((p) => ({ productId: p.id, sku: p.sku, name: p.name, onHand: 0, totalIn: 0, totalOut: 0, lastMovementAt: null })))],
+  ["GET", /^\/order-tracker\/(\d+)$/, () => ok({ message: "Order journeys are not available in mock mode (VITE_DATA_MODE=mock)", code: "MOCK_NOT_IMPLEMENTED" }, 501)],
 ]
 
 /** method, path ("/inventory/5"), query params object, parsed body -> { status, data } (never throws) */

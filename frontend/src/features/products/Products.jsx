@@ -109,7 +109,7 @@ export default function Products() {
 
   return (
     <>
-      <PageHeader title="Products" description="Finished products and the components each one needs.">
+      <PageHeader title="Products & BOM" description="Products the company makes and the components each one needs (BOM).">
         <div className="flex flex-wrap items-center gap-2">
           <SearchBar value={search} onChange={setSearch} placeholder="Search products" />
           <Button variant="outline" size="lg" onClick={() => setImportingProducts(true)}>

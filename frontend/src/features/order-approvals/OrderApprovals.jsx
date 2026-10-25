@@ -287,7 +287,7 @@ export default function OrderApprovals() {
     <MotionConfig reducedMotion="user">
       <MktHero
         eyebrow="Operations"
-        title="Incoming Orders"
+        title="Orders to Approve"
         description="Open an order to see what the current stock can build, then send it on, revise its quantity, or reject it."
       >
         <HeroButton

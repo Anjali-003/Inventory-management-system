@@ -154,7 +154,7 @@ export default function IncomingStock() {
 
   return (
     <>
-      <PageHeader title="Incoming Stock" description="Components approved by IQC. Accept them to add them to inventory.">
+      <PageHeader title="Receive from IQC" description="Components IQC passed. Count them and accept them: Component Stock goes up.">
         <Button variant="outline" onClick={refetch} disabled={isFetching}><RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh</Button>
       </PageHeader>
 

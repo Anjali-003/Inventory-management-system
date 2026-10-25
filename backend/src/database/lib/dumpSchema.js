@@ -33,7 +33,8 @@ async function dumpSchema(db, { idempotent = false } = {}) {
   const [triggers] = await db.query("SHOW TRIGGERS");
   for (const t of triggers.sort((a, b) => a.Trigger.localeCompare(b.Trigger))) {
     const [[row]] = await db.query(`SHOW CREATE TRIGGER \`${t.Trigger}\``);
-    const sql = clean(row["SQL Original Statement"]);
+    // a trigger created from schema.sql keeps its own ";" in the stored statement: drop it, one ";" is added below
+    const sql = clean(row["SQL Original Statement"]).replace(/;\s*$/, "");
     out.push(`${idempotent ? `DROP TRIGGER IF EXISTS \`${t.Trigger}\`;\n` : ""}${sql};`);
   }
   return out.join("\n\n") + "\n";

@@ -210,7 +210,7 @@ export default function MarketingOrders() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <MktHero eyebrow="Marketing" title="Marketing Orders" description="Prepare an order, then send it to the Operations Admin for approval.">
+      <MktHero eyebrow="Marketing" title="Customer Orders" description="Write the customer's order, then send it to the Operations Admin for approval.">
         <HeroButton variant="glass" onClick={refetch} disabled={isFetching} aria-label="Refresh orders">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
         </HeroButton>

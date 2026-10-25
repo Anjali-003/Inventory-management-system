@@ -170,8 +170,8 @@ export default function QualityControl() {
     <div className="min-w-0 space-y-4">
       <MktHero
         eyebrow="Quality & release"
-        title="Quality Control"
-        description="Review completed production batches, record Pass/Fail decisions and send failed batches back for correction."
+        title="Quality Check (QC)"
+        description="Check random sample pieces of every finished batch. One bad piece fails the whole batch and it goes back to Production."
       >
         <HeroButton variant="glass" onClick={refresh} disabled={loading || isFetching} aria-label="Refresh quality control">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
