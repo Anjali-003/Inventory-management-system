@@ -39,6 +39,8 @@ const activityRoutes = require("../modules/activity/activity.routes");
 const notificationRoutes = require("../modules/notifications/notification.routes");
 const pushRoutes = require("../modules/push/push.routes");
 const materialRequestRoutes = require("../modules/material-requests/material-request.routes");
+const extraMaterialRoutes = require("../modules/extra-materials/extra-material.routes");
+const productStockRoutes = require("../modules/product-stock/product-stock.routes");
 const eventsRoutes = require("../realtime/events.routes");
 
 const MODULES = [
@@ -54,11 +56,16 @@ const MODULES = [
     { path: "/orders", router: orderRoutes, resource: "orders" },
     { path: "/production", router: productionRoutes, resource: "production", guards: [permit("production")] },
     { path: "/material-requests", router: materialRequestRoutes, resource: "material-requests", guards: [permit("materialRequests")] },
+    // extra components for pieces damaged in production: Production asks (with a reason), Store issues
+    { path: "/extra-materials", router: extraMaterialRoutes, resource: "extra-materials", guards: [permit("materialRequests")] },
     { path: "/qc-failed", router: qcFailedRoutes, resource: "qc-failed", guards: [permit("qcFailed")] },
     { path: "/quality-control", router: qualityControlRoutes, resource: "quality-control", guards: [permit("qualityControl")] },
 
-    // QC PASS -> Finished goods -> Packaging -> Dispatched -> Completed
+    // QC PASS -> packed (QC & FG) -> handed over (Ops Admin) -> in store (Store) -> billed (Marketing)
+    //         -> dispatched (Store) -> delivered (Marketing). Each step checks its owner role in finished-goods.routes.js
     { path: "/finished-goods", router: finishedGoodsRoutes, resource: "finished-goods", guards: [permit("finishedGoods")] },
+    // finished products held by Store (read only; it changes through the finished-goods steps)
+    { path: "/product-stock", router: productStockRoutes, resource: "product-stock", guards: [permit("productStock")] },
 
     // Incoming goods:  Purchase manager buys -> IQC inspects -> Store manager accepts into stock
     { path: "/purchase", router: purchaseRoutes, resource: "purchase", guards: [permit("purchase")] },

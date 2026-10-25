@@ -7,5 +7,7 @@ export const qualityControlService = {
   redoTesting: (id, body) => api.patch(`/quality-control/${id}/testing/redo`, body),
   redoQc: (id, body) => api.patch(`/quality-control/${id}/qc/redo`, body),
   saveQc: (id, body) => api.post(`/quality-control/${id}/qc`, body),
-  decideBatch: (id, decision, remarks = "") => api.post(`/quality-control/${id}/decision`, { decision, remarks }),
+  // sample: { size, failed } random pieces checked from the batch (one failed piece fails the whole batch)
+  decideBatch: (id, decision, remarks = "", sample = {}) =>
+    api.post(`/quality-control/${id}/decision`, { decision, remarks, sample_size: sample.size, sample_failed: sample.failed }),
 };

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 import { useDispatch } from "react-redux"
-import { CheckCircle2, Factory, PackagePlus, PlayCircle, RefreshCw } from "lucide-react"
+import { CheckCircle2, Factory, PackageOpen, PackagePlus, PlayCircle, RefreshCw } from "lucide-react"
 import { productionService } from "@/features/production/productionService"
 import { useGetProductionQuery } from "@/features/production/productionApi"
 import { baseApi } from "@/api/baseApi"
@@ -22,6 +22,8 @@ import ListViewControls from "@/components/ListViewControls"
 import OrderDisplayNumber from "@/components/OrderDisplayNumber"
 import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import RequestMaterialsModal from "@/features/material-requests/RequestMaterialsModal"
+import ExtraMaterialModal from "@/features/material-requests/ExtraMaterialModal"
+import ExtraMaterialList from "@/features/material-requests/ExtraMaterialList"
 import ProductionStartModal from "@/features/production/components/ProductionStartModal"
 import { inProductionQuantity, isApprovedForProduction, isProductionCompleted, leftToBeAllottedQuantity, materialAllottedQuantity, productionWorkflowStatus, readyToStartQuantity, remainingToStart } from "@/features/production/productionWorkflow"
 
@@ -191,6 +193,7 @@ export default function Production() {
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState(null)
   const [requestFor, setRequestFor] = useState(null)
+  const [askExtra, setAskExtra] = useState(false)
   const [startFor, setStartFor] = useState(null)
   const [quantity, setQuantity] = useState("1")
   const [saving, setSaving] = useState(false)
@@ -330,6 +333,11 @@ export default function Production() {
         title="Production"
         description={editable ? "Request materials, start allotted units, and record completed products." : "View material allotments and completed products."}
       >
+        {editable && (
+          <HeroButton onClick={() => setAskExtra(true)}>
+            <PackageOpen /> Ask for extra material
+          </HeroButton>
+        )}
         <HeroButton variant="glass" onClick={load} disabled={loading} aria-label="Refresh production">
           <RefreshCw className={loading ? "animate-spin" : ""} /> Refresh
         </HeroButton>
@@ -417,8 +425,17 @@ export default function Production() {
         </>
       )}
     </Card>
+
+    <Card className="min-w-0 overflow-hidden rounded-2xl">
+      <div className="border-b px-4 py-3 sm:px-5">
+        <p className="font-semibold">Extra material asked from Store</p>
+        <p className="text-xs text-muted-foreground">For pieces damaged or wasted during production. Store issues it or rejects it with a note.</p>
+      </div>
+      <ExtraMaterialList canDecide={false} />
+    </Card>
     </div>
 
+      {editable && <ExtraMaterialModal open={askExtra} onClose={() => setAskExtra(false)} />}
       {editable && requestFor && <RequestMaterialsModal order={requestFor} onClose={() => setRequestFor(null)} onSubmitted={load} />}
       {editable && startFor && <ProductionStartModal order={startFor} onClose={() => setStartFor(null)} onStarted={started} />}
 

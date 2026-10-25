@@ -27,7 +27,7 @@ const TAGS = {
   production: ["Orders", "Inventory", "Production", "QualityControl"],
   "qc-failed": ["Production", "QualityControl", "FinishedGoods", "Orders"],
   "quality-control": ["Orders", "Inventory", "QualityControl"],
-  "finished-goods": ["Orders", "FinishedGoods"],
+  "finished-goods": ["Orders", "FinishedGoods", "ProductStock"],
   employees: ["Attendance", "Employees"],
   attendance: ["Attendance"],
   // incoming goods: purchase -> IQC -> store. Accepting also changes stock.
@@ -39,6 +39,7 @@ const TAGS = {
   "marketing-orders": ["MarketingOrders", "OrderApprovals", "Orders"],
   "approved-orders": ["OrderApprovals"],
   "material-requests": ["MaterialRequests", "Production"],
+  "extra-materials": ["ExtraMaterials", "Inventory"],
 };
 
 // notification type -> extra tags to refetch with the bell (the screens that notification is about)
@@ -63,6 +64,15 @@ const NOTIFY_TAGS = {
   QC_FAILED: ["Production", "QualityControl"],
   REWORK_SUBMITTED: ["QualityControl"],
   ORDER_DISPATCHED: ["MarketingOrders", "FinishedGoods", "Orders"],
+  EXTRA_MATERIAL_REQUESTED: ["ExtraMaterials"],
+  EXTRA_MATERIAL_ISSUED: ["ExtraMaterials", "Inventory"],
+  EXTRA_MATERIAL_REJECTED: ["ExtraMaterials"],
+  FINISHED_GOODS_PACKED: ["FinishedGoods", "Orders"],
+  FINISHED_GOODS_HANDED_OVER: ["FinishedGoods", "Orders"],
+  FINISHED_GOODS_IN_STORE: ["FinishedGoods", "Orders", "ProductStock"],
+  FINISHED_GOODS_BILLED: ["FinishedGoods", "Orders"],
+  FINISHED_GOODS_DISPATCHED: ["FinishedGoods", "Orders", "ProductStock"],
+  FINISHED_GOODS_DELIVERED: ["FinishedGoods", "Orders", "MarketingOrders"],
 };
 
 export default function LiveSync() {

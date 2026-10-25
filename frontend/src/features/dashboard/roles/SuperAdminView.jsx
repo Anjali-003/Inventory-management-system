@@ -20,7 +20,15 @@ const STATUSES = [
   ["MATERIAL_SHORTAGE", "Material shortage", "bg-destructive", "danger"],
   ["READY_FOR_PRODUCTION", "Ready for production", "bg-success", "success"],
   ["IN_PRODUCTION", "In production", "bg-primary", "info"],
-  ["COMPLETED", "Completed", "bg-muted-foreground/50", "neutral"],
+  ["TESTING", "In QC", "bg-primary", "info"],
+  // after QC, one owner per step (features/finished-goods/fgFlow.js)
+  ["PACKAGING", "Packing (QC & FG)", "bg-warning", "warning"],
+  ["PACKED", "Packed, Ops Admin to hand over", "bg-warning", "warning"],
+  ["HANDED_OVER", "Store to receive", "bg-warning", "warning"],
+  ["IN_STORE", "In stock, Marketing to bill", "bg-primary", "info"],
+  ["BILLED", "Billed, Store to give out", "bg-primary", "info"],
+  ["DISPATCHED", "On the way", "bg-primary", "info"],
+  ["COMPLETED", "Delivered", "bg-success", "success"],
 ]
 const ATT = [["Present", "PRESENT", "text-success", "success"], ["Absent", "ABSENT", "text-destructive", "danger"], ["Half day", "HALF_DAY", "text-warning", "warning"], ["On leave", "LEAVE", "text-primary", "info"]]
 

@@ -34,6 +34,7 @@ export default function QualityControl() {
   const [selected, setSelected] = useState(null)
   const [decision, setDecision] = useState(null)
   const [remarks, setRemarks] = useState("")
+  const [sample, setSample] = useState({ size: "", failed: "" })
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState("")
 
@@ -127,6 +128,7 @@ export default function QualityControl() {
     if (!editable || !item || item.batchDecision) return
     setActionError("")
     setRemarks("")
+    setSample({ size: "", failed: nextDecision === "PASS" ? "0" : "" })
     setSelected(item)
     setDecision(nextDecision)
   }
@@ -149,7 +151,7 @@ export default function QualityControl() {
     try {
       setBusy(true)
       setActionError("")
-      const { data } = await qualityControlService.decideBatch(selected.productionId || selected.id, decision, remarks)
+      const { data } = await qualityControlService.decideBatch(selected.productionId || selected.id, decision, remarks, sample)
       setSelected(null)
       setDecision(null)
       setRemarks("")
@@ -289,7 +291,7 @@ export default function QualityControl() {
         />
       )}
 
-      {editable && <BatchDecisionConfirm item={selected} decision={decision} remarks={remarks} onRemarksChange={changeRemarks} busy={busy} error={actionError} onClose={closeConfirm} onConfirm={submitDecision} />}
+      {editable && <BatchDecisionConfirm item={selected} decision={decision} remarks={remarks} onRemarksChange={changeRemarks} sample={sample} onSampleChange={(next) => { setSample(next); if (actionError) setActionError("") }} busy={busy} error={actionError} onClose={closeConfirm} onConfirm={submitDecision} />}
     </div>
   )
 }

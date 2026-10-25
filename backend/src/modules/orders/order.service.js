@@ -26,6 +26,10 @@ const ORDER_STATUSES = [
     "IN_PRODUCTION",
     "TESTING",
     "PACKAGING",
+    "PACKED",
+    "HANDED_OVER",
+    "IN_STORE",
+    "BILLED",
     "DISPATCHED",
     "COMPLETED"
 ];

@@ -216,7 +216,7 @@ async function startProduction(orderItemId, quantity, userId) {
       SET status = 'IN_PRODUCTION',
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
-        AND status NOT IN ('PACKAGING', 'DISPATCHED', 'COMPLETED')
+        AND status NOT IN ('PACKAGING', 'PACKED', 'HANDED_OVER', 'IN_STORE', 'BILLED', 'DISPATCHED', 'COMPLETED')
     `, [item.order_id]);
 
     await connection.commit();
@@ -371,7 +371,7 @@ async function syncParentOrderProductionStatus(connection, orderId) {
     : startedItems > 0 ? "IN_PRODUCTION" : "PENDING"
   await connection.query(`
     UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND status NOT IN ('PACKAGING', 'DISPATCHED', 'COMPLETED')
+    WHERE id = ? AND status NOT IN ('PACKAGING', 'PACKED', 'HANDED_OVER', 'IN_STORE', 'BILLED', 'DISPATCHED', 'COMPLETED')
   `, [nextStatus, orderId])
   return nextStatus
 }

@@ -558,9 +558,25 @@ async function saveQualityControlResult(
   }
 }
 
-async function decideBatch(productionId, decision, remarks, userId) {
+async function decideBatch(productionId, decision, remarks, userId, sample = {}) {
   if (!["PASS", "FAIL"].includes(decision)) {
     throw new AppError(400, "Batch decision must be PASS or FAIL");
+  }
+
+  // QC checks random sample pieces of the batch: a single bad piece fails the WHOLE batch
+  const sampleSize = Number(sample.size);
+  const sampleFailed = Number(sample.failed);
+  if (!Number.isInteger(sampleSize) || sampleSize <= 0) {
+    throw new AppError(400, "Enter how many sample pieces were checked");
+  }
+  if (!Number.isInteger(sampleFailed) || sampleFailed < 0 || sampleFailed > sampleSize) {
+    throw new AppError(400, "Failed pieces must be between 0 and the number checked");
+  }
+  if (decision === "PASS" && sampleFailed > 0) {
+    throw new AppError(400, "A batch with even one failed sample piece must be failed");
+  }
+  if (decision === "FAIL" && sampleFailed === 0) {
+    throw new AppError(400, "Enter how many sample pieces failed");
   }
 
   const cleanRemarks = String(remarks || "").trim();
@@ -608,6 +624,10 @@ async function decideBatch(productionId, decision, remarks, userId) {
         409,
         "Quality Control is available only after the entire production batch is completed",
       );
+    }
+
+    if (sampleSize > completed) {
+      throw new AppError(400, `The sample cannot be bigger than the batch (${completed} pieces)`);
     }
 
     const [latestRows] = await connection.query(
@@ -686,13 +706,15 @@ async function decideBatch(productionId, decision, remarks, userId) {
     const [insertResult] = await connection.query(
       `
         INSERT INTO quality_control_batch_decisions
-          (production_id, attempt_number, decision, remarks, decided_by)
-        VALUES (?, ?, ?, ?, ?)
+          (production_id, attempt_number, decision, sample_size, sample_failed, remarks, decided_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
       [
         productionId,
         attemptNumber,
         decision,
+        sampleSize,
+        sampleFailed,
         cleanRemarks || null,
         userId || null,
       ],
@@ -873,7 +895,7 @@ async function getQualityControlOrders() {
     `);
 
     const [historyRows] = await connection.query(`
-      SELECT d.id, d.production_id, d.attempt_number, d.decision, d.remarks,
+      SELECT d.id, d.production_id, d.attempt_number, d.decision, d.remarks, d.sample_size, d.sample_failed,
              d.decided_at, u.name AS decided_by_name,
              r.status AS rework_status, r.rework_remarks,
              r.started_at AS rework_started_at,
@@ -899,6 +921,8 @@ async function getQualityControlOrders() {
         id: entry.id,
         attemptNumber: Number(entry.attempt_number),
         decision: entry.decision,
+        sampleSize: entry.sample_size === null ? null : Number(entry.sample_size),
+        sampleFailed: entry.sample_failed === null ? null : Number(entry.sample_failed),
         remarks: entry.remarks || "",
         decidedAt: entry.decided_at,
         decidedByName: entry.decided_by_name || null,

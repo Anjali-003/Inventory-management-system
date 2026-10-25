@@ -1,246 +1,290 @@
-import { useCallback, useMemo, useState } from "react"
-import { CheckCircle2, PackageCheck, RefreshCw, Truck, Package, CircleCheck } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { Check, FileText, PackageCheck, RefreshCw } from "lucide-react"
 import { finishedGoodsService } from "@/features/finished-goods/finishedGoodsService"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
+import { FG_STEPS, fgBadge, fgIndexOf, fgStepDone, fgStepOf, myFgStep } from "@/features/finished-goods/fgFlow"
 import { errorMessage } from "@/lib/stock"
-import { HeroButton, MktHero, SearchField, StageTile, TileGrid, StageChips } from "@/features/marketing-orders/mktKit"
+import { HeroButton, MktHero, SearchField } from "@/features/marketing-orders/mktKit"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
+import { Modal } from "@/components/Modal"
+import { Field, TextInput } from "@/components/FormField"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import ListViewControls from "@/components/ListViewControls"
-import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import { Badge } from "@/components/ui/badge"
-import UserCell from "@/components/UserCell"
+import { useToast } from "@/components/toast"
 import { usePermissions } from "@/features/auth/usePermissions"
+import { cn } from "@/lib/utils"
 
+const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const when = (at) => (at ? new Date(at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "")
 
-// the person behind the latest step of this batch (approved -> dispatched -> completed)
-const actorOf = (item) =>
-  item.status === "COMPLETED" && item.completedByName ? { name: item.completedByName, sub: "Completed" }
-  : item.dispatchedByName && item.status !== "PACKAGING" ? { name: item.dispatchedByName, sub: "Dispatched" }
-  : { name: item.createdByName, sub: item.createdByName ? "Added" : null }
-
-function nextStepText(status) {
-  if (status === "PACKAGING") return "Next: mark dispatched when packaging is finished."
-  if (status === "DISPATCHED") return "Next: confirm completion after handover."
-  if (status === "COMPLETED") return "All Finished Goods steps are complete."
-  return "Check the batch status before taking action."
-}
-
-function Status({ value }) {
-  const [variant, label] = value === "PACKAGING" ? ["warning", "Packaging"] : value === "DISPATCHED" ? ["info", "Dispatched"] : value === "COMPLETED" ? ["success", "Completed"] : ["neutral", value || "Unknown"]
-  return <Badge variant={variant}>{label}</Badge>
-}
-
-function Confirm({ item, action, busy, onClose, onConfirm }) {
-  if (!item || !action) return null
-  const dispatch = action === "DISPATCH"
+/* the 7 steps as a line of dots: done (green), current (amber), still to come (grey) */
+function StepLine({ item }) {
+  const current = fgIndexOf(item.status)
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-3" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <div className="w-full max-w-md rounded-2xl border bg-background shadow-2xl">
-        <div className="border-b px-5 py-4">
-          <p className="text-lg font-semibold">{dispatch ? "Mark as dispatched?" : "Mark as completed?"}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{item.orderNumber} · {item.productName}</p>
-        </div>
-        <div className="p-5 text-sm text-muted-foreground">
-          {dispatch ? "This moves the finished goods from packaging to dispatched." : "This completes the finished-goods batch and may complete the customer order."}
-        </div>
-        <div className="flex justify-end gap-2 border-t px-5 py-4">
-          <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>
-          <Button onClick={onConfirm} disabled={busy}>{busy ? "Updating..." : dispatch ? "Mark dispatched" : "Mark completed"}</Button>
-        </div>
-      </div>
-    </div>
+    <ol className="grid grid-cols-7 gap-1" aria-label="Steps after Quality Control">
+      {FG_STEPS.map((step, i) => {
+        const done = i < current || item.status === "DELIVERED"
+        const now = i === current && item.status !== "DELIVERED"
+        const info = fgStepDone(item, step.status)
+        return (
+          <li key={step.status} className="min-w-0" title={info.by ? `${step.label}: ${info.by}, ${when(info.at)}` : step.label}>
+            <div className={cn("h-1.5 rounded-full", done ? "bg-emerald-500" : now ? "bg-amber-500" : "bg-slate-200")} />
+            <p className={cn("mt-1 truncate text-[10px] sm:text-[11px]", now ? "font-bold text-amber-800" : done ? "text-emerald-800" : "text-muted-foreground")}>{step.label}</p>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 
-function ItemCard({ item, onAction, editable }) {
+function OrderCard({ item, role, onAct, onBill }) {
+  const step = fgStepOf(item.status)
+  const mine = myFgStep(item, role)
   return (
-    <div className="min-w-0 overflow-hidden rounded-2xl border border-[#E3E6EB] bg-white p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.04)] transition-shadow hover:shadow-md">
-      <div className="flex items-start justify-between gap-3">
+    <div className={cn("min-w-0 rounded-2xl border bg-white p-4 shadow-sm", mine && "border-amber-300 ring-1 ring-amber-200")}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="break-all font-medium tabular-nums">{item.orderNumber || "-"}</p>
-          <p className="mt-0.5 break-words text-sm text-muted-foreground">{item.productName || "-"}</p>
-          <p className="text-xs text-muted-foreground">{item.productSku || "-"}</p>
+          <p className="font-semibold tabular-nums">{item.orderNumber}</p>
+          <ul className="mt-1 space-y-0.5 text-sm text-muted-foreground">
+            {item.lines.map((l) => <li key={l.productId} className="break-words"><span className="font-medium text-foreground">{l.name}</span> × {l.quantity}</li>)}
+          </ul>
         </div>
-        <Status value={item.status} />
+        <Badge variant={fgBadge(item.status).variant}>{fgBadge(item.status).label}</Badge>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border text-center">
-        <div className="bg-card py-2.5"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Quantity</p><p className="font-semibold tabular-nums">{item.quantity ?? 0}</p></div>
-        <div className="bg-card py-2.5"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Batch</p><p className="font-semibold tabular-nums">#{item.id}</p></div>
+
+      <div className="mt-4"><StepLine item={item} /></div>
+
+      <div className={cn("mt-4 rounded-xl px-3 py-2.5 text-sm", mine ? "bg-amber-50 text-amber-950" : "bg-slate-50 text-slate-700")}>
+        {step?.owner
+          ? <><span className="font-semibold">{mine ? "Your turn: " : `Waiting for ${step.ownerLabel}: `}</span>{step.todo}</>
+          : <span className="font-semibold text-emerald-800">{step?.todo}</span>}
       </div>
-      <div className="mt-3 rounded-xl border border-[#E3E6EB] bg-slate-50/80 px-3 py-2.5">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">What happens next</p>
-        <p className="mt-1 text-xs leading-relaxed text-slate-700">{nextStepText(item.status)}</p>
-      </div>
-      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span>Last action</span>
-        <UserCell {...actorOf(item)} className="text-foreground" />
-      </div>
-      <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-[#e7eee9] pt-3">
-        {editable && item.status === "PACKAGING" && <Button size="sm" onClick={() => onAction(item, "DISPATCH")}><Truck /> Mark dispatched</Button>}
-        {editable && item.status === "DISPATCHED" && <Button size="sm" onClick={() => onAction(item, "COMPLETE")}><CheckCircle2 /> Mark completed</Button>}
-        {(!editable || item.status === "COMPLETED") && <span className="text-xs text-muted-foreground">{editable ? "No action" : "View only"}</span>}
+
+      {(item.bill || item.dispatchNote) && (
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {item.bill && <span>Bill <span className="font-semibold text-foreground">{item.bill.billNumber}</span> · {item.bill.customerName} · {rupees(item.bill.total)}</span>}
+          {item.dispatchNote && <span>Delivery: {item.dispatchNote}</span>}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap justify-end gap-2 border-t pt-3">
+        {item.bill && <Button size="sm" variant="outline" onClick={() => onBill(item)}><FileText /> View bill</Button>}
+        {mine && <Button size="sm" onClick={() => onAct(item, mine)}><Check /> {mine.button}</Button>}
       </div>
     </div>
   )
 }
 
-export default function FinishedGoods() {
-  const { canEdit } = usePermissions()
-  const editable = canEdit("finishedGoods") // false = read-only role: no dispatch / complete
-  // the list is cached by RTK Query and refetched live (see realtime/LiveSync.jsx)
-  const { data: items = [], isLoading: loading, error: loadError, refetch } = useGetFinishedGoodsQuery()
-  const [actionError, setError] = useState("")
-  const error = actionError || (loadError ? errorMessage(loadError, "Failed to load finished goods.") : "")
-  const [query, setQuery] = useState("")
-  const [status, setStatus] = useState("all") // set by clicking a figure in the strip
-  const [productFilter, setProductFilter] = useState("all")
-  const [fromDate, setFromDate] = useState("")
-  const [toDate, setToDate] = useState("")
-  const [sortBy, setSortBy] = useState("newest")
-  const [view, setView] = useState("table")
-  const [selected, setSelected] = useState(null)
-  const [action, setAction] = useState(null)
+/* confirm one step; dispatch / deliver can carry a short note (vehicle number, who received it ...) */
+function StepDialog({ item, step, onClose, onDone }) {
+  const toast = useToast()
+  const [note, setNote] = useState("")
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const withNote = step?.action === "dispatch" || step?.action === "deliver"
+  const stockText = step?.action === "receive" ? "Product stock goes UP by these quantities." : step?.action === "dispatch" ? "Product stock goes DOWN by these quantities." : null
 
-  const load = useCallback(async () => {
-    setError("")
-    await refetch()
-  }, [refetch])
-
-  const productOptions = useMemo(() => uniqueStringOptions(items, (item) => item.productName), [items])
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const filtered = items.filter((item) => {
-      if (status !== "all" && item.status !== status) return false
-      if (productFilter !== "all" && item.productName !== productFilter) return false
-      if (!isWithinDateRange(item.createdAt, fromDate, toDate)) return false
-      return !q || `${item.orderNumber} ${item.id} ${item.productionId || ""} ${item.orderId || ""} ${item.productName} ${item.productSku} ${item.status} ${item.createdByName || ""} ${item.dispatchedByName || ""} ${item.completedByName || ""}`.toLowerCase().includes(q)
-    })
-    const waitingTime = (item) => recordTimestamp(item.status === "PACKAGING" ? item.createdAt : item.status === "DISPATCHED" ? item.dispatchedAt || item.createdAt : item.completedAt || item.dispatchedAt || item.createdAt)
-    return filtered.sort((a, b) => {
-      if (sortBy === "oldest") return recordTimestamp(a.createdAt) - recordTimestamp(b.createdAt)
-      if (sortBy === "waiting") return waitingTime(a) - waitingTime(b)
-      if (sortBy === "dispatched") return recordTimestamp(b.dispatchedAt) - recordTimestamp(a.dispatchedAt)
-      return recordTimestamp(b.createdAt) - recordTimestamp(a.createdAt)
-    })
-  }, [items, query, status, productFilter, fromDate, toDate, sortBy])
-  const clearToolbarFilters = () => { setProductFilter("all"); setFromDate(""); setToDate(""); setStatus("all") }
-  const toolbarFilters = [
-    { key: "product", label: "Product", value: productFilter, options: productOptions, onChange: setProductFilter },
-    { key: "from-date", label: "Created date from", type: "date", value: fromDate, onChange: setFromDate },
-    { key: "to-date", label: "Created date to", type: "date", value: toDate, onChange: setToDate },
-  ]
-  const sortOptions = [
-    { value: "newest", label: "Newest batches first" },
-    { value: "oldest", label: "Oldest batches first" },
-    { value: "waiting", label: "Waiting longest" },
-    { value: "dispatched", label: "Recently dispatched" },
-  ]
-
-  const counts = useMemo(() => ({
-    packaging: items.filter((x) => x.status === "PACKAGING").length,
-    dispatched: items.filter((x) => x.status === "DISPATCHED").length,
-    completed: items.filter((x) => x.status === "COMPLETED").length,
-  }), [items])
-
-  const confirm = (item, nextAction) => { setSelected(item); setAction(nextAction) }
-  const close = () => { if (!busy) { setSelected(null); setAction(null) } }
-
-  const submit = async () => {
-    if (!selected || !action) return
+  const submit = async (e) => {
+    e.preventDefault()
     try {
       setBusy(true)
-      await (action === "DISPATCH" ? finishedGoodsService.dispatch(selected.id) : finishedGoodsService.complete(selected.id))
-      setSelected(null)
-      setAction(null)
-      await load()
+      setError("")
+      await finishedGoodsService.step(item.id, step.action, withNote ? { note } : {})
+      toast.success(`${item.orderNumber}: ${step.button.toLowerCase()} done`)
+      onDone()
     } catch (err) {
-      console.error(err)
-      setError(err.response?.data?.message || "Failed to update finished goods.")
+      setError(err.response?.data?.message || "Could not save this step.")
     } finally {
       setBusy(false)
     }
   }
 
   return (
+    <Modal open={!!item} onClose={onClose} busy={busy} size="sm" title={`${step?.button}?`} description={item?.orderNumber} onSubmit={submit}
+      footer={<><Button type="button" variant="outline" size="lg" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" size="lg" disabled={busy}>{busy ? "Saving..." : `Yes, ${step?.button.toLowerCase()}`}</Button></>}>
+      <div className="space-y-4 text-sm">
+        <ul className="divide-y rounded-xl border">
+          {item?.lines.map((l) => <li key={l.productId} className="flex justify-between gap-3 px-3 py-2"><span className="min-w-0 break-words">{l.name}</span><span className="font-semibold tabular-nums">{l.quantity}</span></li>)}
+        </ul>
+        {stockText && <p className="text-muted-foreground">{stockText}</p>}
+        {withNote && (
+          <Field label={step.action === "dispatch" ? "Vehicle / transport details (optional)" : "Received by / remarks (optional)"} htmlFor="fg-note">
+            <TextInput id="fg-note" value={note} maxLength={255} onChange={(e) => setNote(e.target.value)} placeholder={step.action === "dispatch" ? "e.g. Truck MH12 AB 1234, driver Ramesh" : "e.g. Received by Mr. Sharma"} />
+          </Field>
+        )}
+        {error && <p role="alert" className="rounded-lg bg-cf-red-soft px-3 py-2 text-destructive">{error}</p>}
+      </div>
+    </Modal>
+  )
+}
+
+/* Marketing's bill: customer + a rate for every product; GST and totals are worked out live */
+function BillDialog({ item, onClose, onDone }) {
+  const toast = useToast()
+  const [form, setForm] = useState({ customer_name: "", customer_address: "", customer_gstin: "", gst_percent: "18", notes: "" })
+  const [rates, setRates] = useState({})
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+
+  const subtotal = (item?.lines || []).reduce((sum, l) => sum + (Number(rates[l.productId]) || 0) * l.quantity, 0)
+  const gst = (subtotal * (Number(form.gst_percent) || 0)) / 100
+  const ready = form.customer_name.trim() && item?.lines.every((l) => rates[l.productId] !== undefined && rates[l.productId] !== "")
+
+  const submit = async (e) => {
+    e.preventDefault()
+    try {
+      setBusy(true)
+      setError("")
+      const { data } = await finishedGoodsService.createBill(item.id, { ...form, items: item.lines.map((l) => ({ product_id: l.productId, rate: rates[l.productId] })) })
+      toast.success(`Bill ${data.billNumber} made. Store has been told to give out the goods.`)
+      onDone()
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not make the bill.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open={!!item} onClose={onClose} busy={busy} size="lg" title="Make bill" description={item?.orderNumber} onSubmit={submit}
+      footer={<><Button type="button" variant="outline" size="lg" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" size="lg" disabled={busy || !ready}>{busy ? "Saving..." : "Make bill"}</Button></>}>
+      <div className="space-y-4 text-sm">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Customer name" htmlFor="bill-customer" required><TextInput id="bill-customer" value={form.customer_name} maxLength={150} onChange={set("customer_name")} /></Field>
+          <Field label="Customer GSTIN" htmlFor="bill-gstin"><TextInput id="bill-gstin" value={form.customer_gstin} maxLength={20} onChange={set("customer_gstin")} /></Field>
+          <Field label="Delivery address" htmlFor="bill-address" className="sm:col-span-2"><TextInput id="bill-address" value={form.customer_address} maxLength={500} onChange={set("customer_address")} /></Field>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border">
+          <div className="grid grid-cols-[1fr_4rem_7rem_7rem] gap-2 bg-slate-50 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Product</span><span className="text-right">Qty</span><span className="text-right">Rate (₹)</span><span className="text-right">Amount</span></div>
+          {item?.lines.map((l) => (
+            <div key={l.productId} className="grid grid-cols-[1fr_4rem_7rem_7rem] items-center gap-2 border-t px-3 py-2">
+              <span className="min-w-0 break-words">{l.name}</span>
+              <span className="text-right tabular-nums">{l.quantity}</span>
+              <TextInput aria-label={`Rate for ${l.name}`} type="number" min="0" step="0.01" className="text-right" value={rates[l.productId] ?? ""} onChange={(e) => setRates((r) => ({ ...r, [l.productId]: e.target.value }))} />
+              <span className="text-right tabular-nums">{rupees((Number(rates[l.productId]) || 0) * l.quantity)}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
+          <Field label="GST %" htmlFor="bill-gst" required><TextInput id="bill-gst" type="number" min="0" max="100" step="0.01" value={form.gst_percent} onChange={set("gst_percent")} /></Field>
+          <dl className="space-y-1 self-end rounded-xl bg-slate-50 px-3 py-2 text-right tabular-nums">
+            <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd>{rupees(subtotal)}</dd></div>
+            <div className="flex justify-between"><dt className="text-muted-foreground">GST</dt><dd>{rupees(gst)}</dd></div>
+            <div className="flex justify-between text-base font-bold"><dt>Total</dt><dd>{rupees(subtotal + gst)}</dd></div>
+          </dl>
+        </div>
+        <Field label="Notes (optional)" htmlFor="bill-notes"><TextInput id="bill-notes" value={form.notes} maxLength={500} onChange={set("notes")} /></Field>
+        {error && <p role="alert" className="rounded-lg bg-cf-red-soft px-3 py-2 text-destructive">{error}</p>}
+      </div>
+    </Modal>
+  )
+}
+
+function BillView({ item, onClose }) {
+  const [bill, setBill] = useState(null)
+  const [error, setError] = useState("")
+  useEffect(() => {
+    if (!item) return undefined
+    let live = true
+    finishedGoodsService.getBill(item.id)
+      .then((r) => live && setBill(r.data))
+      .catch((err) => live && setError(err.response?.data?.message || "Could not load the bill."))
+    return () => { live = false; setBill(null); setError("") }
+  }, [item])
+  return (
+    <Modal open={!!item} onClose={onClose} size="lg" title={bill ? `Bill ${bill.billNumber}` : "Bill"} description={item?.orderNumber}
+      footer={<><Button type="button" variant="outline" size="lg" onClick={() => window.print()} disabled={!bill}>Print</Button><Button type="button" size="lg" onClick={onClose}>Close</Button></>}>
+      {error ? <p className="text-destructive">{error}</p> : !bill ? <TableSkeleton rows={3} /> : (
+        <div className="space-y-4 text-sm">
+          <div>
+            <p className="font-semibold">{bill.customerName}</p>
+            {bill.customerAddress && <p className="text-muted-foreground">{bill.customerAddress}</p>}
+            {bill.customerGstin && <p className="text-muted-foreground">GSTIN {bill.customerGstin}</p>}
+            <p className="mt-1 text-xs text-muted-foreground">Made by {bill.createdByName} · {when(bill.createdAt)}</p>
+          </div>
+          <table className="w-full text-left">
+            <thead className="text-xs text-muted-foreground"><tr><th className="py-1">Product</th><th className="py-1 text-right">Qty</th><th className="py-1 text-right">Rate</th><th className="py-1 text-right">Amount</th></tr></thead>
+            <tbody className="divide-y border-y">{bill.items.map((i) => <tr key={i.productId}><td className="py-1.5">{i.name}</td><td className="text-right tabular-nums">{i.quantity}</td><td className="text-right tabular-nums">{rupees(i.rate)}</td><td className="text-right tabular-nums">{rupees(i.amount)}</td></tr>)}</tbody>
+          </table>
+          <dl className="ml-auto max-w-xs space-y-1 tabular-nums">
+            <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd>{rupees(bill.subtotal)}</dd></div>
+            <div className="flex justify-between"><dt className="text-muted-foreground">GST {bill.gstPercent}%</dt><dd>{rupees(bill.gstAmount)}</dd></div>
+            <div className="flex justify-between text-base font-bold"><dt>Total</dt><dd>{rupees(bill.total)}</dd></div>
+          </dl>
+          {bill.notes && <p className="text-muted-foreground">{bill.notes}</p>}
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+export default function FinishedGoods() {
+  const { role } = usePermissions()
+  const { data: items = [], isLoading: loading, isFetching, error: loadError, refetch } = useGetFinishedGoodsQuery()
+  const [query, setQuery] = useState("")
+  const [filter, setFilter] = useState("mine") // "mine" | "all" | a step status
+  const [acting, setActing] = useState({ item: null, step: null })
+  const [billFor, setBillFor] = useState(null)
+  const [viewBill, setViewBill] = useState(null)
+  const error = loadError ? errorMessage(loadError, "Failed to load finished goods.") : ""
+
+  const mine = useMemo(() => items.filter((i) => myFgStep(i, role)), [items, role])
+  const activeFilter = filter === "mine" && mine.length === 0 && !loading ? "all" : filter
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return items.filter((i) => {
+      if (activeFilter === "mine" && !myFgStep(i, role)) return false
+      if (activeFilter !== "mine" && activeFilter !== "all" && i.status !== activeFilter) return false
+      return !q || `${i.orderNumber} ${i.lines.map((l) => `${l.name} ${l.sku}`).join(" ")} ${i.bill?.billNumber || ""} ${i.bill?.customerName || ""}`.toLowerCase().includes(q)
+    })
+  }, [items, query, activeFilter, role])
+
+  const act = (item, step) => setActing({ item, step })
+  const done = () => { setActing({ item: null, step: null }); refetch() }
+
+  const chip = (key, label, count) => (
+    <button key={key} type="button" onClick={() => setFilter(key)} aria-pressed={activeFilter === key}
+      className={cn("inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+        activeFilter === key ? "border-primary bg-primary text-primary-foreground" : "bg-white text-slate-700 hover:bg-slate-50")}>
+      {label}<span className="tabular-nums opacity-80">{count}</span>
+    </button>
+  )
+
+  return (
     <>
-      <MktHero eyebrow="Quality & release" title="Finished Goods" description="Move batches that passed Quality Control through packaging, dispatch and final completion.">
-        <HeroButton variant="glass" onClick={load} disabled={loading} aria-label="Refresh finished goods">
-          <RefreshCw className={loading ? "animate-spin" : ""} /> Refresh
+      <MktHero eyebrow="After Quality Control" title="Finished Goods" description="Packing → Ops Admin hands over → Store receives → Marketing bills → Store gives out → Marketing confirms delivery.">
+        <HeroButton variant="glass" onClick={refetch} disabled={isFetching} aria-label="Refresh finished goods">
+          <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
         </HeroButton>
       </MktHero>
 
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
-      <div className="min-w-0 space-y-4">
-        {(() => {
-          const filters = [
-            { key: "all", label: "Total batches", hint: "Every finished-goods batch", icon: PackageCheck, dot: "bg-slate-400", s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/20" }, value: items.length, tone: "neutral", active: status === "all", onClick: () => setStatus("all") },
-            { key: "PACKAGING", label: "Packaging", hint: "Ready to be dispatched", icon: Package, dot: "bg-amber-500", s: { grad: "from-amber-700 to-orange-800", glow: "shadow-amber-500/20" }, value: counts.packaging, tone: "warning", active: status === "PACKAGING", onClick: () => setStatus(status === "PACKAGING" ? "all" : "PACKAGING") },
-            { key: "DISPATCHED", label: "Dispatched", hint: "Awaiting final completion", icon: Truck, dot: "bg-blue-500", s: { grad: "from-blue-600 to-indigo-800", glow: "shadow-blue-500/20" }, value: counts.dispatched, tone: "info", active: status === "DISPATCHED", onClick: () => setStatus(status === "DISPATCHED" ? "all" : "DISPATCHED") },
-            { key: "COMPLETED", label: "Completed", hint: "All steps finished", icon: CircleCheck, dot: "bg-emerald-500", s: { grad: "from-emerald-700 to-teal-800", glow: "shadow-emerald-500/20" }, value: counts.completed, tone: "success", active: status === "COMPLETED", onClick: () => setStatus(status === "COMPLETED" ? "all" : "COMPLETED") },
-          ]
-          return <>
-            <div className="hidden min-w-0 md:block">
-              <TileGrid className="md:grid-cols-4 xl:grid-cols-4">
-                {filters.map((item) => <StageTile key={item.key} stage={item} value={item.value} loading={loading} active={item.active} onClick={item.onClick} />)}
-              </TileGrid>
-            </div>
-            <div className="md:hidden">
-              <StageChips label="Finished goods status filters" items={filters.map((item) => ({ key: item.key, label: item.label, value: item.value, grad: item.s.grad, dot: item.dot, active: item.active, onClick: item.onClick }))} />
-            </div>
-          </>
-        })()}
-
-        <Card className="min-w-0 overflow-hidden rounded-2xl border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
-          <div className="flex min-w-0 flex-wrap items-center gap-3 border-b border-[#e7eee9] bg-slate-50/70 px-3 py-3 sm:px-5">
-            <SearchField className="min-w-0 flex-1 sm:max-w-md" value={query} onChange={setQuery} placeholder="Search order, product, SKU or person..." />
-            <span className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">{rows.length} batch{rows.length === 1 ? "" : "es"}</span>
-            <ListViewControls view={view} onViewChange={setView} sortBy={sortBy} onSortChange={setSortBy} sortOptions={sortOptions} filters={toolbarFilters} onClearFilters={clearToolbarFilters} hasActiveFilters={productFilter !== "all" || !!fromDate || !!toDate || status !== "all"} />
+      <Card className="min-w-0 overflow-hidden rounded-2xl">
+        <div className="flex flex-wrap items-center gap-2 border-b bg-slate-50/70 px-3 py-3 sm:px-5">
+          {chip("mine", "Waiting for me", mine.length)}
+          {chip("all", "All", items.length)}
+          {FG_STEPS.map((s) => chip(s.status, s.label, items.filter((i) => i.status === s.status).length))}
+          <SearchField className="w-full min-w-0 sm:ml-auto sm:w-64" value={query} onChange={setQuery} placeholder="Search order, product, bill..." />
+        </div>
+        {loading ? <div className="p-3"><TableSkeleton rows={4} /></div> : rows.length === 0 ? (
+          <EmptyState icon={PackageCheck} title={items.length ? "Nothing here" : "No finished goods yet"}>
+            {items.length ? "Pick another step above or clear the search." : "An order appears here when every product of it passes Quality Control."}
+          </EmptyState>
+        ) : (
+          <div className="grid min-w-0 gap-3 p-3 sm:p-4 lg:grid-cols-2">
+            {rows.map((item) => <OrderCard key={item.id} item={item} role={role} onAct={(i, s) => (s.action === "bill" ? setBillFor(i) : act(i, s))} onBill={setViewBill} />)}
           </div>
-          {loading ? <div className="p-3"><TableSkeleton rows={4} /></div> : rows.length === 0 ? (
-            <EmptyState icon={PackageCheck} title={query || status !== "all" || productFilter !== "all" || fromDate || toDate ? "No matching finished goods" : "No finished goods yet"}>
-              {query || status !== "all" || productFilter !== "all" || fromDate || toDate ? "Try another search or clear one or more filters." : "Approved products will appear here after Quality Control."}
-            </EmptyState>
-          ) : (
-            <>
-              <div className={`hidden min-w-0 grid-cols-2 gap-3 p-3 sm:p-4 2xl:grid-cols-3 ${view === "cards" ? "lg:grid" : "lg:hidden"}`}>
-                {rows.map((item) => <ItemCard key={item.id} item={item} onAction={confirm} editable={editable} />)}
-              </div>
-              <div className={`hidden min-w-0 overflow-hidden ${view === "table" ? "lg:block" : "lg:hidden"}`}>
-                <Table className="w-full table-fixed">
-                  <TableHeader><TableRow>
-                    <TableHead className="w-[18%] whitespace-normal">Order / Batch</TableHead>
-                    <TableHead className="w-[22%] whitespace-normal">Product / SKU</TableHead>
-                    <TableHead className="w-[9%] whitespace-normal">Quantity</TableHead>
-                    <TableHead className="w-[21%] whitespace-normal">Status / Next step</TableHead>
-                    <TableHead className="w-[15%] whitespace-normal">Last action by</TableHead>
-                    <TableHead className="w-[15%] whitespace-normal text-right">Action</TableHead>
-                  </TableRow></TableHeader>
-                  <TableBody>{rows.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="min-w-0 whitespace-normal align-top"><p className="break-words font-semibold tabular-nums">{item.orderNumber || "—"}</p><p className="mt-1 break-words text-xs text-muted-foreground">Batch #{item.id}</p></TableCell>
-                      <TableCell className="min-w-0 whitespace-normal align-top"><p className="break-words font-medium">{item.productName || "Product unavailable"}</p><p className="mt-1 break-words text-xs text-muted-foreground">{item.productSku || "SKU unavailable"}</p></TableCell>
-                      <TableCell className="whitespace-normal align-top font-semibold tabular-nums">{Number(item.quantity || 0).toLocaleString()}</TableCell>
-                      <TableCell className="min-w-0 whitespace-normal align-top"><Status value={item.status} /><p className="mt-1 break-words text-xs leading-relaxed text-slate-600">{nextStepText(item.status)}</p></TableCell>
-                      <TableCell className="min-w-0 whitespace-normal align-top"><UserCell {...actorOf(item)} className="min-w-0 max-w-full text-foreground" /></TableCell>
-                      <TableCell className="min-w-0 whitespace-normal align-top text-right"><div className="flex min-w-0 flex-wrap justify-end gap-1.5">{editable && item.status === "PACKAGING" && <Button size="sm" onClick={() => confirm(item, "DISPATCH")}><Truck /> Dispatch</Button>}{editable && item.status === "DISPATCHED" && <Button size="sm" onClick={() => confirm(item, "COMPLETE")}><CheckCircle2 /> Complete</Button>}{(!editable || item.status === "COMPLETED") && <span className="text-xs text-muted-foreground">{editable ? "No action" : "View only"}</span>}</div></TableCell>
-                    </TableRow>
-                  ))}</TableBody>
-                </Table>
-              </div>
-              <div className="grid min-w-0 gap-3 p-3 lg:hidden">
-                {rows.map((item) => <ItemCard key={item.id} item={item} onAction={confirm} editable={editable} />)}
-              </div>
-            </>
-          )}
-        </Card>
-      </div>
+        )}
+      </Card>
 
-      {editable && <Confirm item={selected} action={action} busy={busy} onClose={close} onConfirm={submit} />}
+      {acting.item && <StepDialog item={acting.item} step={acting.step} onClose={() => setActing({ item: null, step: null })} onDone={done} />}
+      {billFor && <BillDialog item={billFor} onClose={() => setBillFor(null)} onDone={() => { setBillFor(null); refetch() }} />}
+      <BillView item={viewBill} onClose={() => setViewBill(null)} />
     </>
   )
 }

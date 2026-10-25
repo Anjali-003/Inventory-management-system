@@ -21,6 +21,7 @@ import { ALL_STAGE, OrderPipeline, STAGES, countByStatus, newestFirst, ordersHre
 import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtQty } from "@/lib/stock"
 import OrderDrawer from "@/features/marketing-orders/OrderDrawer"
+import FinishedGoodsTodo from "../FinishedGoodsTodo"
 
 const EMPTY = []
 
@@ -316,6 +317,8 @@ export default function MarketingView() {
           </Reveal>
         </div>
       )}
+
+      <FinishedGoodsTodo className="mt-6" title="Ready to bill / confirm delivery" />
 
       <OrderDrawer
         order={opened && !confirmDelete ? opened : null}

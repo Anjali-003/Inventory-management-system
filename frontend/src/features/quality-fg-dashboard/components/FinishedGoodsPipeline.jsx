@@ -12,21 +12,21 @@ export default function FinishedGoodsPipeline({ items = [], loading }) {
   const navigate = useNavigate()
   const recent = [...items].slice(0, 5)
   const packaging = countFinishedGoods(items, "PACKAGING")
-  const dispatched = countFinishedGoods(items, "DISPATCHED")
-  const completed = countFinishedGoods(items, "COMPLETED")
+  const packed = items.filter((item) => ["PACKED", "HANDED_OVER"].includes(item.status)).length
+  const completed = items.filter((item) => !["PACKAGING", "PACKED", "HANDED_OVER"].includes(item.status)).length
 
   return (
     <Card className="overflow-hidden rounded-2xl border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader>
         <div>
           <CardTitle>Finished Goods pipeline</CardTitle>
-          <CardDescription>Batches that passed QC move through these steps: pack them, mark them dispatched, then mark them complete.</CardDescription>
+          <CardDescription>You pack every order that passed QC. Operations Admin then hands it over to the Store.</CardDescription>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate("/finished-goods")}>View all <ArrowRight /></Button>
       </CardHeader>
 
       <div className="grid grid-cols-3 divide-x border-b">
-        {[ ["Packaging", packaging, "warning"], ["Dispatched", dispatched, "info"], ["Completed", completed, "success"] ].map(([label, value, tone]) => (
+        {[ ["To pack (you)", packaging, "warning"], ["Packed, going to Store", packed, "info"], ["In Store or later", completed, "success"] ].map(([label, value, tone]) => (
           <button key={label} type="button" onClick={() => navigate("/finished-goods")} className="min-w-0 px-3 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
             <p className="truncate text-xs text-muted-foreground">{label}</p>
             <p className={`mt-1 text-2xl font-bold tabular-nums ${tone === "warning" ? "text-amber-700" : tone === "info" ? "text-blue-700" : "text-emerald-700"}`}>{loading ? "—" : value}</p>

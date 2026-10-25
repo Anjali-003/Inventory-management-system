@@ -17,10 +17,14 @@ const ACCESS = {
     SUPER_ADMIN: "*",
 
     // Each of the 3 department roles EDITS its own module(s) and can only VIEW the other two.
+    // Component stock changes only through its own steps (accept from IQC, issue to production, extra material);
+    // manual stock in / out / edit / archive on the Inventory page is Super Admin only.
     STORE_MANAGER: {
-        inventory: "edit",
+        inventory: "view",
         inventoryHistory: "edit",
+        // receives packed goods and gives them out for delivery (its steps are checked in finished-goods.routes.js)
         finishedGoods: "edit",
+        productStock: "view",
         // IQC-approved purchases waiting to be accepted into stock
         incomingStock: "edit",
         // production material requests (allot / issue components to production)
@@ -32,7 +36,10 @@ const ACCESS = {
 
     // Marketing Manager: prepares orders and sends them to the Operations Admin
     MARKETING_MANAGER: {
-        marketingOrders: "edit"
+        marketingOrders: "edit",
+        // makes the bill and confirms delivery (finished-goods steps)
+        finishedGoods: "edit",
+        productStock: "view"
     },
 
     // HR owns employee records and attendance.
@@ -53,7 +60,9 @@ const ACCESS = {
         // store manager pages
         inventory: "view",
         inventoryHistory: "view",
-        finishedGoods: "view",
+        // hands packed goods over to the Store (finished-goods step)
+        finishedGoods: "edit",
+        productStock: "view",
         incomingStock: "view",
         // IQC manager + purchase manager pages
         iqc: "view",
@@ -66,7 +75,6 @@ const ACCESS = {
         purchase: "view",
         inventory: "view",
         inventoryHistory: "view",
-        finishedGoods: "view",
         incomingStock: "view"
     },
 
@@ -80,19 +88,19 @@ const ACCESS = {
         iqc: "view",
         inventory: "view", // stock levels for the purchase order planner (low / out of stock)
         inventoryHistory: "view",
-        finishedGoods: "view",
         incomingStock: "view"
     },
 
-    // Production can update production runs and inventory, and view QC / finished goods.
+    // Production updates production runs and asks Store for material; it can only LOOK at Store's stock.
     PRODUCTION_MANAGER: {
         dashboard: "view",
         production: "edit",
         materialRequests: "edit",
         qcFailed: "edit",
-        inventory: "edit",
+        inventory: "view",
         qualityControl: "view",
-        finishedGoods: "view"
+        finishedGoods: "view",
+        productStock: "view"
     },
 
     // Quality Control can record test/QC results and manage finished-goods transitions;
@@ -102,7 +110,8 @@ const ACCESS = {
         qualityControl: "edit",
         finishedGoods: "edit",
         qcFailed: "edit",
-        production: "view"
+        production: "view",
+        productStock: "view"
     }
 };
 
@@ -176,13 +185,17 @@ const RESOURCE_MODULE = {
     "approved-orders": "approvedOrders",
     employees: "employees",
     attendance: "attendance",
-    "material-requests": "materialRequests"
+    "material-requests": "materialRequests",
+    "extra-materials": "materialRequests",
+    "product-stock": "productStock"
     // "auth" and "super-admins" are not listed on purpose: super admin only
 };
 
 const REFRESH_ONLY = {
-    inventory: ["orders", "production", "quality-control", "qc-failed", "finished-goods", "incoming-stock"],
-    finishedGoods: ["orders", "production", "quality-control", "qc-failed", "inventory"],
+    inventory: ["orders", "production", "quality-control", "qc-failed", "finished-goods", "incoming-stock", "extra-materials", "material-requests"],
+    finishedGoods: ["orders", "production", "quality-control", "qc-failed", "inventory", "product-stock"],
+    productStock: ["finished-goods"],
+    materialRequests: ["inventory"],
     // incoming goods: each department's screen refreshes when another department moves a purchase along
     purchase: ["iqc", "incoming-stock"],
     iqc: ["purchase", "incoming-stock"],

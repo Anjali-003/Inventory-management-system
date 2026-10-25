@@ -6,6 +6,7 @@ import UserCell from "@/components/UserCell"
 import { APPROVAL_META, OrderLines } from "@/features/order-approvals/approvalParts"
 import { PurchaseDetailModal } from "@/features/purchasing/PurchaseParts"
 import { STATUS_META } from "@/features/purchasing/purchasingUtils"
+import { fgBadge, fgStepOf } from "@/features/finished-goods/fgFlow"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { InfoModal } from "./DashboardKit"
 
@@ -125,20 +126,19 @@ export const stockRow = (i, onOrder = 0) => {
   }
 }
 
-const FG_BADGE = { PACKAGING: { variant: "warning", label: "Packaging" }, DISPATCHED: { variant: "info", label: "Dispatched" }, COMPLETED: { variant: "success", label: "Completed" } }
 
 export const finishedRow = (f) => ({
   id: `f${f.id ?? `${f.orderNumber}-${f.productSku}`}`,
   title: f.productName,
   sub: `${f.orderNumber} · ${f.productSku}`,
   right: fmtQty(f.quantity ?? 0),
-  badge: FG_BADGE[f.status] || { variant: "neutral", label: f.status || "Unknown" },
+  badge: fgBadge(f.status),
   detail: (close) => (
     <InfoModal
       title={f.productName}
       description={f.orderNumber}
-      badge={FG_BADGE[f.status]}
-      fields={[["Product SKU", f.productSku], ["Quantity", fmtQty(f.quantity ?? 0)], ["Added by", f.createdByName], ["Dispatched by", f.dispatchedByName], ["Completed by", f.completedByName]]}
+      badge={fgBadge(f.status)}
+      fields={[["Products", (f.lines || []).map((l) => `${l.name} × ${l.quantity}`).join(", ") || f.productSku], ["Quantity", fmtQty(f.quantity ?? 0)], ["Next", fgStepOf(f.status)?.owner ? `${fgStepOf(f.status).ownerLabel}: ${fgStepOf(f.status).todo}` : "Done"], ["Bill", f.bill ? `${f.bill.billNumber} · ${f.bill.customerName}` : null]]}
       onClose={close}
     />
   ),

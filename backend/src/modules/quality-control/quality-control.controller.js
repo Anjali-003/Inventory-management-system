@@ -48,7 +48,8 @@ async function decideBatch(req, res) {
     const id = productionIdOf(req);
     const decision = String(req.body?.decision || "").toUpperCase();
     const remarks = typeof req.body?.remarks === "string" ? req.body.remarks : "";
-    res.status(201).json(await service.decideBatch(id, decision, remarks, req.user.id));
+    const sample = { size: req.body?.sample_size, failed: req.body?.sample_failed };
+    res.status(201).json(await service.decideBatch(id, decision, remarks, req.user.id, sample));
 }
 
 module.exports = {

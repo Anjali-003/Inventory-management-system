@@ -1,3 +1,4 @@
+import { fgBadge } from "@/features/finished-goods/fgFlow"
 const number = (value) => Math.max(0, Number(value) || 0)
 
 export function getQcPendingBatches(items = []) {
@@ -42,8 +43,5 @@ export function getProductionCompletion(item) {
 }
 
 export function getFinishedGoodsStatus(status) {
-  if (status === "PACKAGING") return { label: "Packaging / ready to dispatch", variant: "warning" }
-  if (status === "DISPATCHED") return { label: "Dispatched / awaiting completion", variant: "info" }
-  if (status === "COMPLETED") return { label: "Completed", variant: "success" }
-  return { label: status || "Unknown", variant: "neutral" }
+  return fgBadge(status)
 }

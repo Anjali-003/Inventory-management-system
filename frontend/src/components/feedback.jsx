@@ -130,7 +130,18 @@ const ORDER_STATUS = {
   -----------------------------------------------
   */
 
-  PACKAGING: ["warning", "Packaging"],
+  PACKAGING: ["warning", "Packing"],
+
+  /*
+  -----------------------------------------------
+  AFTER PACKING (finished-goods steps, see features/finished-goods/fgFlow.js)
+  -----------------------------------------------
+  */
+
+  PACKED: ["warning", "Packed"],
+  HANDED_OVER: ["warning", "With Store"],
+  IN_STORE: ["info", "In stock"],
+  BILLED: ["info", "Billed"],
 
   /*
   -----------------------------------------------
@@ -138,7 +149,7 @@ const ORDER_STATUS = {
   -----------------------------------------------
   */
 
-  DISPATCHED: ["success", "Dispatched"],
+  DISPATCHED: ["info", "On the way"],
 
   /*
   -----------------------------------------------
@@ -146,7 +157,7 @@ const ORDER_STATUS = {
   -----------------------------------------------
   */
 
-  COMPLETED: ["neutral", "Completed"],
+  COMPLETED: ["success", "Delivered"],
 
   /*
   =================================================

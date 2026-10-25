@@ -1072,8 +1072,41 @@ async function postReceiptLines(conn, lines, userId) {
     return results;
 }
 
+/*
+    Stock-out inside the caller's transaction (extra material for damaged pieces, see extra-materials).
+    Same rules as stockOut(): enough stock, append-only ledger row with the reason.
+*/
+async function postIssueLine(conn, { componentId, cents, reason, reasonCode, orderId, referenceNo = null, userId }) {
+    const [rows] = await conn.query(`SELECT * FROM inventory WHERE component_id = ? FOR UPDATE`, [componentId]);
+    const inv = rows[0];
+    if (!inv || !inv.is_active) throw new AppError(409, "This component is not in the active inventory", "NOT_IN_STOCK");
+
+    const onHand = toCents(inv.quantity_on_hand);
+    if (cents > onHand) {
+        throw new AppError(409, `Insufficient stock: only ${show(Math.max(onHand, 0))} available to issue`, "INSUFFICIENT_STOCK", {
+            available: fromCents(Math.max(onHand, 0)),
+        });
+    }
+    const after = onHand - cents;
+    await conn.query(`UPDATE inventory SET quantity_on_hand = ? WHERE id = ?`, [fromCents(after), inv.id]);
+    return insertLedger(conn, {
+        componentId,
+        type: "STOCK_OUT",
+        direction: "OUT",
+        cents,
+        balanceAfterCents: after,
+        reason,
+        reasonCode,
+        orderId,
+        referenceNo,
+        userId,
+        key: null,
+    });
+}
+
 module.exports = {
     postReceiptLines,
+    postIssueLine,
     inTransaction,
     parseQty,
     toCents,

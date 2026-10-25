@@ -208,6 +208,7 @@ export const MODULE_PATHS = {
   finishedGoods: "/finished-goods",
   incomingStock: "/incoming-stock",
   storeMaterialRequests: "/store-material-requests",
+  productStock: "/product-stock",
   employees: "/employees",
   attendance: "/attendance",
 
@@ -235,12 +236,14 @@ const ACCESS = {
   // Full access to every module.
   SUPER_ADMIN: "*",
 
-  // Store Manager owns the store modules.
+  // Store Manager owns the store modules. Component stock changes only through its steps
+  // (accept from IQC, issue to production, extra material); manual stock in / out is Super Admin only.
   STORE_MANAGER: {
     dashboard: "view",
-    inventory: "edit",
+    inventory: "view",
     inventoryHistory: "edit",
     finishedGoods: "edit",
+    productStock: "view",
     incomingStock: "edit",
     storeMaterialRequests: "edit",
 
@@ -256,7 +259,6 @@ const ACCESS = {
     purchase: "view",
     inventory: "view",
     inventoryHistory: "view",
-    finishedGoods: "view",
     incomingStock: "view",
   },
 
@@ -268,7 +270,6 @@ const ACCESS = {
     iqc: "view",
     inventory: "view",
     inventoryHistory: "view",
-    finishedGoods: "view",
     incomingStock: "view",
   },
 
@@ -277,9 +278,11 @@ const ACCESS = {
     dashboard: "view",
     production: "edit",
     qcFailed: "edit",
-    inventory: "edit",
+    // can only LOOK at Store's stock; extra material is asked from the Production page
+    inventory: "view",
     qualityControl: "view",
     finishedGoods: "view",
+    productStock: "view",
   },
 
   // Quality Control & Finished Goods workspace.
@@ -289,12 +292,16 @@ const ACCESS = {
     finishedGoods: "edit",
     qcFailed: "edit",
     production: "view",
+    productStock: "view",
   },
 
   // Marketing Manager prepares orders for Operations Admin.
   MARKETING_MANAGER: {
     dashboard: "view",
     marketingOrders: "edit",
+    // makes the bill and confirms delivery
+    finishedGoods: "edit",
+    productStock: "view",
   },
 
   // HR owns employee records and attendance.
@@ -313,8 +320,10 @@ const ACCESS = {
     // Read-only access to store modules.
     inventory: "view",
     inventoryHistory: "view",
-    finishedGoods: "view",
     incomingStock: "view",
+    // hands packed goods over to the Store
+    finishedGoods: "edit",
+    productStock: "view",
 
     // Read-only access to IQC and Purchase.
     iqc: "view",

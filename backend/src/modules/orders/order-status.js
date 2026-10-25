@@ -7,7 +7,8 @@
       TESTING        all units built, but not every unit has been boxed as finished goods yet
       PACKAGING      everything boxed, some boxes not dispatched yet
       DISPATCHED     everything boxed and dispatched
-  COMPLETED is set by finished-goods.service when all ordered units are completed and is never overwritten here.
+  Once the order has its finished-goods record, finished-goods.service owns the status (PACKED ... COMPLETED)
+  and this function leaves it alone.
 */
 const { targetQuantitySql } = require("../production/production-target")
 
@@ -21,6 +22,9 @@ function statusFromRuns(runs) {
 }
 
 async function refreshOrderStatus(connection, orderId) {
+  const [boxed] = await connection.query("SELECT id FROM finished_goods WHERE order_id = ? LIMIT 1", [orderId])
+  if (boxed.length) return null
+
   const [rows] = await connection.query(
     `SELECT oi.product_id,
             ${targetQuantitySql("oi", "o")} AS target,

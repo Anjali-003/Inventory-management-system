@@ -20,7 +20,14 @@ const STATUSES = [
   ["MATERIAL_SHORTAGE", "Material shortage", "bg-destructive"],
   ["READY_FOR_PRODUCTION", "Ready for production", "bg-success"],
   ["IN_PRODUCTION", "In production", "bg-primary"],
-  ["COMPLETED", "Completed", "bg-muted-foreground/50"],
+  ["TESTING", "In QC", "bg-primary"],
+  ["PACKAGING", "Packing", "bg-warning"],
+  ["PACKED", "Packed", "bg-warning"],
+  ["HANDED_OVER", "With Store", "bg-warning"],
+  ["IN_STORE", "In stock", "bg-primary"],
+  ["BILLED", "Billed", "bg-primary"],
+  ["DISPATCHED", "On the way", "bg-primary"],
+  ["COMPLETED", "Delivered", "bg-success"],
 ]
 
 const EMPTY = []

@@ -12,17 +12,24 @@ async function getOne(req, res) {
     res.json(await service.getFinishedGood(idOf(req)));
 }
 
-async function dispatch(req, res) {
-    res.json(await service.markDispatched(idOf(req), req.user.id));
+async function getBill(req, res) {
+    res.json(await service.getBill(idOf(req)));
 }
 
-async function complete(req, res) {
-    res.json(await service.markCompleted(idOf(req), req.user.id));
+async function createBill(req, res) {
+    res.status(201).json(await service.createBill(idOf(req), req.body || {}, req.user.id));
 }
+
+/* pack / handOver / receive / dispatch / deliver */
+const step = (name) =>
+    asyncHandler(async (req, res) => {
+        res.json(await service.advance(name, idOf(req), req.body || {}, req.user.id));
+    }, { message: "Failed to update finished goods" });
 
 module.exports = {
     list: asyncHandler(list, { message: "Failed to fetch finished goods" }),
     getOne: asyncHandler(getOne, { message: "Failed to fetch finished goods record" }),
-    dispatch: asyncHandler(dispatch, { message: "Failed to mark finished goods as dispatched" }),
-    complete: asyncHandler(complete, { message: "Failed to mark finished goods as completed" }),
+    getBill: asyncHandler(getBill, { message: "Failed to fetch the bill" }),
+    createBill: asyncHandler(createBill, { message: "Failed to create the bill" }),
+    step,
 };

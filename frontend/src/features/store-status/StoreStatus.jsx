@@ -14,20 +14,21 @@ import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
 import { StockBadge } from "@/features/inventory/components/StockBadge"
 import { StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
 import { useGetIncomingStockQuery } from "@/features/purchasing/purchasingApi"
+import { usePermissions } from "@/features/auth/usePermissions"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 
 const EMPTY = []
 
 /*
-  The four figures of the Store Manager dashboard, all in one place: /store-status?status=ACCEPT|LOW|PACKAGING|DISPATCHED.
+  The four figures of the Store Manager dashboard, all in one place: /store-status?status=ACCEPT|LOW|RECEIVE|GIVE_OUT.
   Same four names as the dashboard cards. One list is shown at a time; the chosen filter matches the URL.
   This page only lists. Accepting stock, issuing stock and dispatching stay on their own pages (a link on every list).
 */
 const VIEWS = {
   ACCEPT: { label: "To accept into stock", detail: "Approved by IQC", description: "IQC approved these purchases. Accept them into stock.", to: "/incoming-stock?status=PENDING_STORE", toLabel: "Open Incoming Stock", icon: Truck, tone: "amber", grad: "from-amber-700 to-orange-800", pill: "bg-amber-50 text-amber-800 ring-amber-200", dot: "bg-amber-500" },
   LOW: { label: "At or below minimum", detail: "Needs reordering", description: "Stock on hand is at or below the minimum level.", to: "/inventory?filter=low", toLabel: "Open Inventory", icon: AlertTriangle, tone: "amber", grad: "from-rose-600 to-red-800", pill: "bg-rose-50 text-rose-800 ring-rose-200", dot: "bg-rose-500" },
-  PACKAGING: { label: "In packaging", detail: "Ready to dispatch", description: "Finished goods in packaging. Mark them dispatched from the Finished Goods page.", to: "/finished-goods?status=PACKAGING", toLabel: "Open Finished Goods", icon: Warehouse, tone: "blue", grad: "from-sky-700 to-blue-800", pill: "bg-sky-50 text-sky-800 ring-sky-200", dot: "bg-sky-500" },
-  DISPATCHED: { label: "Dispatched", detail: "Waiting to be completed", description: "Dispatched batches that are not completed yet.", to: "/finished-goods?status=DISPATCHED", toLabel: "Open Finished Goods", icon: Truck, tone: "violet", grad: "from-violet-600 to-purple-800", pill: "bg-violet-50 text-violet-800 ring-violet-200", dot: "bg-violet-500" },
+  RECEIVE: { label: "Goods to receive", detail: "Handed over by Ops Admin", description: "Packed goods Operations Admin handed over. Count them and receive them into product stock.", to: "/finished-goods", toLabel: "Open Finished Goods", icon: Warehouse, tone: "blue", grad: "from-sky-700 to-blue-800", pill: "bg-sky-50 text-sky-800 ring-sky-200", dot: "bg-sky-500" },
+  GIVE_OUT: { label: "Goods to give out", detail: "Billed by Marketing", description: "Marketing has billed these orders. Give the goods out for delivery.", to: "/finished-goods", toLabel: "Open Finished Goods", icon: Truck, tone: "violet", grad: "from-violet-600 to-purple-800", pill: "bg-violet-50 text-violet-800 ring-violet-200", dot: "bg-violet-500" },
 }
 const KEYS = Object.keys(VIEWS)
 
@@ -37,16 +38,17 @@ export default function StoreStatus() {
 
   const inc = useGetIncomingStockQuery()
   const inv = useGetInventoryQuery("active")
-  const fg = useGetFinishedGoodsQuery()
+  const { canView } = usePermissions()
+  const fg = useGetFinishedGoodsQuery(undefined, { skip: !canView("finishedGoods") })
 
   const lists = useMemo(() => ({
     ACCEPT: (inc.data ?? EMPTY).filter((p) => p.status === "PENDING_STORE"),
     LOW: (inv.data ?? EMPTY).filter((i) => Number(i.quantity_on_hand) <= Number(i.minimum_stock_level)),
-    PACKAGING: (fg.data ?? EMPTY).filter((x) => x.status === "PACKAGING"),
-    DISPATCHED: (fg.data ?? EMPTY).filter((x) => x.status === "DISPATCHED"),
+    RECEIVE: (fg.data ?? EMPTY).filter((x) => x.status === "HANDED_OVER"),
+    GIVE_OUT: (fg.data ?? EMPTY).filter((x) => x.status === "BILLED"),
   }), [inc.data, inv.data, fg.data])
 
-  const loadingOf = { ACCEPT: inc.isLoading, LOW: inv.isLoading, PACKAGING: fg.isLoading, DISPATCHED: fg.isLoading }
+  const loadingOf = { ACCEPT: inc.isLoading, LOW: inv.isLoading, RECEIVE: fg.isLoading, GIVE_OUT: fg.isLoading }
   const failed = inc.error || inv.error || fg.error
   const fetching = inc.isFetching || inv.isFetching || fg.isFetching
   const refetch = () => { inc.refetch(); inv.refetch(); fg.refetch() }
@@ -130,7 +132,7 @@ export default function StoreStatus() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader><TableRow>
-                <TableHead>Order</TableHead><TableHead>Product</TableHead><TableHead>SKU</TableHead><TableHead className="text-right">Qty</TableHead><TableHead>{view === "DISPATCHED" ? "Dispatched by" : "Added by"}</TableHead>
+                <TableHead>Order</TableHead><TableHead>Product</TableHead><TableHead>SKU</TableHead><TableHead className="text-right">Qty</TableHead><TableHead>{view === "GIVE_OUT" ? "Billed by" : "Handed over by"}</TableHead>
               </TableRow></TableHeader>
               <TableBody>{rows.map((x) => (
                 <TableRow key={x.id ?? `${x.orderNumber}-${x.productSku}`}>
@@ -138,7 +140,7 @@ export default function StoreStatus() {
                   <TableCell>{x.productName || "-"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{x.productSku || "-"}</TableCell>
                   <TableCell className="text-right tabular-nums"><Badge variant="neutral">{fmtQty(x.quantity ?? 0)}</Badge></TableCell>
-                  <TableCell><UserCell name={view === "DISPATCHED" ? x.dispatchedByName : x.createdByName} /></TableCell>
+                  <TableCell><UserCell name={view === "GIVE_OUT" ? x.billedByName : x.handedOverByName} /></TableCell>
                 </TableRow>
               ))}</TableBody>
             </Table>

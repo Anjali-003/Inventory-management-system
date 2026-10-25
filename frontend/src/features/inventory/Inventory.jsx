@@ -143,7 +143,9 @@ export default function Inventory() {
 
   return (
     <>
-      <PageHeader title="Inventory" description="Track on-hand and usable stock, backed by an append-only movement ledger.">
+      <PageHeader title="Component Stock" description={editable
+        ? "Components in the Store. You can correct stock by hand here; every change is kept in the stock ledger."
+        : "Components in the Store. Stock goes up when Store accepts goods from IQC and down when it issues them to Production. Only Super Admin can correct it by hand."}>
         {editable && <Button size="lg" onClick={() => open("in")}><Plus /> Stock in</Button>}
       </PageHeader>
 
@@ -190,7 +192,7 @@ export default function Inventory() {
               <TableSkeleton rows={8} />
             ) : rows.length === 0 ? (
               <EmptyState icon={Warehouse} title={query || filter !== "all" ? "No matching components" : view === "archived" ? "Nothing archived" : "No inventory yet"}>
-                {query || filter !== "all" ? "Try a different search or clear the filter." : "Use Stock in to receive your first stock."}
+                {query || filter !== "all" ? "Try a different search or clear the filter." : "Stock appears here when Store accepts goods from IQC."}
               </EmptyState>
             ) : (
               <>
@@ -202,7 +204,7 @@ export default function Inventory() {
                         <TableHead className="hidden lg:table-cell">Category / Size</TableHead>
                         <TableHead className="hidden lg:table-cell">Location</TableHead>
                         <TableHead className="text-right">On hand</TableHead>
-                        {rows.some((r) => Number(r.quantity_reserved) > 0) && <TableHead className="text-right">Available</TableHead>}
+                        <TableHead className="text-right">Available</TableHead>
                         <TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>

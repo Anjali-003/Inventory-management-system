@@ -45,7 +45,8 @@ export default function StoreView({ readOnly = false }) {
   const direct = !readOnly && canView("incomingStock");
 
   const inv = useGetInventoryQuery("active");
-  const fg = useGetFinishedGoodsQuery();
+  // the finished-goods steps are Store's own work, so only Store (not a read-only viewer) loads them
+  const fg = useGetFinishedGoodsQuery(undefined, { skip: readOnly || !canView("finishedGoods") });
   const inc = useGetIncomingStockQuery();
 
   // Used to calculate component quantities that are already on order.
@@ -66,7 +67,7 @@ export default function StoreView({ readOnly = false }) {
   const dashboardLoading =
     loading || buys.isLoading || (!readOnly && requests.isLoading);
 
-  const { low, waiting, packaging, dispatched } = useMemo(() => {
+  const { low, waiting, toReceive, toGiveOut } = useMemo(() => {
     const onOrder = onOrderByComponent(buys.data);
 
     return {
@@ -84,13 +85,15 @@ export default function StoreView({ readOnly = false }) {
             : incomingRow(item)
         ),
 
-      packaging: (fg.data ?? EMPTY)
-        .filter((item) => item.status === "PACKAGING")
-        .map(finishedRow),
+      // handed over by Operations Admin: count and receive into product stock
+      toReceive: (fg.data ?? EMPTY)
+        .filter((item) => item.status === "HANDED_OVER")
+        .map((item) => ({ ...finishedRow(item), to: "/finished-goods" })),
 
-      dispatched: (fg.data ?? EMPTY)
-        .filter((item) => item.status === "DISPATCHED")
-        .map(finishedRow),
+      // billed by Marketing: give the goods out for delivery
+      toGiveOut: (fg.data ?? EMPTY)
+        .filter((item) => item.status === "BILLED")
+        .map((item) => ({ ...finishedRow(item), to: "/finished-goods" })),
     };
   }, [inv.data, fg.data, inc.data, buys.data, direct]);
 
@@ -172,22 +175,22 @@ export default function StoreView({ readOnly = false }) {
             to: "/store-status?status=LOW",
           },
           {
-            label: "In packaging",
-            value: packaging.length,
+            label: "Goods to receive",
+            value: toReceive.length,
             icon: Warehouse,
-            tone: "blue",
+            tone: toReceive.length ? "amber" : "green",
             loading: dashboardLoading,
-            detail: "Ready to dispatch",
-            to: "/store-status?status=PACKAGING",
+            detail: "Handed over by Ops Admin",
+            to: "/finished-goods",
           },
           {
-            label: "Dispatched",
-            value: dispatched.length,
+            label: "Goods to give out",
+            value: toGiveOut.length,
             icon: Truck,
-            tone: "violet",
+            tone: toGiveOut.length ? "amber" : "green",
             loading: dashboardLoading,
-            detail: "Waiting to be completed",
-            to: "/store-status?status=DISPATCHED",
+            detail: "Billed by Marketing",
+            to: "/finished-goods",
           },
         ]}
       />
@@ -217,18 +220,20 @@ export default function StoreView({ readOnly = false }) {
           empty="All components are above minimum"
         />
 
-        <ListPanel
-          drill={drill}
-          loading={dashboardLoading}
-          className="lg:col-span-2"
-          title="Finished goods in packaging"
-          description="Mark them dispatched from the Finished Goods page."
-          rows={packaging}
-          to="/finished-goods"
-          toLabel="Open Finished Goods"
-          emptyIcon={Warehouse}
-          empty="No batch in packaging"
-        />
+        {!readOnly && (
+          <ListPanel
+            drill={drill}
+            loading={dashboardLoading}
+            className="lg:col-span-2"
+            title="Finished goods waiting for you"
+            description="Receive what Ops Admin handed over; give out what Marketing has billed."
+            rows={[...toReceive, ...toGiveOut]}
+            to="/finished-goods"
+            toLabel="Open Finished Goods"
+            emptyIcon={Warehouse}
+            empty="Nothing to receive or give out"
+          />
+        )}
       </div>
 
       <DepartmentOverview

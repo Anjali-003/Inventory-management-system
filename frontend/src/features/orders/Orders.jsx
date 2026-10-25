@@ -25,6 +25,9 @@ const EMPTY = []
 
 const when = (v) => (v ? new Date(v).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : null)
 
+// after QC: packed, handed over, in store, billed, on the way (see features/finished-goods/fgFlow.js)
+const AFTER_QC = new Set(["PACKAGING", "PACKED", "HANDED_OVER", "IN_STORE", "BILLED", "DISPATCHED"])
+
 export default function Orders() {
   const toast = useToast()
   const { data: ordersData, isLoading: loading, error: ordersError, refetch: loadOrders } = useGetOrdersQuery()
@@ -47,15 +50,15 @@ export default function Orders() {
   const [startFor, setStartFor] = useState(null)
 
   const counts = useMemo(() => {
-    const c = { all: orders.length, PENDING: 0, IN_PRODUCTION: 0, TESTING: 0, PACKAGING: 0, COMPLETED: 0 }
-    orders.forEach((o) => { if (o.status in c) c[o.status]++ })
+    const c = { all: orders.length, PENDING: 0, IN_PRODUCTION: 0, TESTING: 0, AFTER_QC: 0, COMPLETED: 0 }
+    orders.forEach((o) => { const k = AFTER_QC.has(o.status) ? "AFTER_QC" : o.status; if (k in c) c[k]++ })
     return c
   }, [orders])
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     return orders.filter((o) => {
-      if (filter !== "all" && o.status !== filter) return false
+      if (filter === "AFTER_QC" ? !AFTER_QC.has(o.status) : filter !== "all" && o.status !== filter) return false
       return !q || `${o.order_number} ${o.product_name} ${o.status} ${o.created_by_name || ""}`.toLowerCase().includes(q)
     })
   }, [orders, query, filter])
@@ -69,8 +72,8 @@ export default function Orders() {
     { key: "PENDING", label: "Pending", value: counts.PENDING, tone: "warning", active: filter === "PENDING", onClick: toggle("PENDING") },
     { key: "IN_PRODUCTION", label: "In production", value: counts.IN_PRODUCTION, tone: "info", active: filter === "IN_PRODUCTION", onClick: toggle("IN_PRODUCTION") },
     { key: "TESTING", label: "Testing", value: counts.TESTING, tone: "info", active: filter === "TESTING", onClick: toggle("TESTING") },
-    { key: "PACKAGING", label: "Packaging", value: counts.PACKAGING, tone: "warning", active: filter === "PACKAGING", onClick: toggle("PACKAGING") },
-    { key: "COMPLETED", label: "Completed", value: counts.COMPLETED, tone: "success", active: filter === "COMPLETED", onClick: toggle("COMPLETED") },
+    { key: "AFTER_QC", label: "Packing to delivery", value: counts.AFTER_QC, tone: "warning", active: filter === "AFTER_QC", onClick: toggle("AFTER_QC") },
+    { key: "COMPLETED", label: "Delivered", value: counts.COMPLETED, tone: "success", active: filter === "COMPLETED", onClick: toggle("COMPLETED") },
   ]
 
   const startFromCheck = (order) => { setCheckFor(null); setStartFor(order) }

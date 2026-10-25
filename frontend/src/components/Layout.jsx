@@ -13,7 +13,6 @@ import {
   ClipboardList,
   ClipboardCheck,
   PackageCheck,
-  
   Factory,
   History,
   LayoutDashboard,
@@ -23,6 +22,9 @@ import {
   Activity,
   ShoppingCart,
   Truck,
+  Package,
+  PackageOpen,
+  Wrench,
 } from "lucide-react";
 
 import { cn } from "../lib/utils";
@@ -34,122 +36,71 @@ import NotificationBell from "@/features/notifications/NotificationBell";
 import ProfileMenu from "@/features/auth/ProfileMenu";
 import { clearActiveRole, loginPathFor } from "@/lib/permissions";
 
+/*
+  The sidebar follows the work, in order: an order comes in -> components are bought and checked -> Store keeps
+  and issues them -> Production builds and QC checks -> the goods are packed, billed and delivered.
+  Each role only sees the pages it may open, so every role gets a short list in the same order.
+*/
 const GROUPS = [
   {
     label: "Overview",
     items: [
-      {
-        to: "/dashboard",
-        label: "Dashboard",
-        icon: LayoutDashboard,
-        module: "dashboard",
-        end: true,
-      },
-      {
-        to: "/activity",
-        label: "Activity",
-        icon: Activity,
-        module: "activity",
-      },
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, module: "dashboard", end: true },
+      { to: "/activity", label: "Activity", icon: Activity, module: "activity" },
     ],
   },
-
   {
-    label: "Catalog",
+    label: "1 · Orders",
     items: [
-      {
-        to: "/products",
-        label: "Products",
-        icon: Boxes,
-        module: "products",
-      },
-      {
-        to: "/inventory",
-        label: "Inventory",
-        icon: Warehouse,
-        module: "inventory",
-      },
-      {
-        to: "/inventory-history",
-        label: "Inventory History",
-        icon: History,
-        module: "inventoryHistory",
-      },
-    ],
-  },
-
-  {
-    label: "Operations",
-    items: [
-      {
-        to: "/orders",
-        label: "Orders",
-        icon: ClipboardList,
-        module: "orders",
-      },
-      // {
-      //   to: "/existing-orders",
-      //   label: "Existing Orders",
-      //   icon: History,
-      // },
-      {
-        to: "/production",
-        label: "Production",
-        icon: Factory,
-        module: "production",
-      },
-      {
-        to: "/quality-control",
-        label: "Quality Control",
-        icon: ClipboardCheck,
-        module: "qualityControl",
-      },
-      {
-        to: "/qc-failed",
-        label: "QC Failed",
-        icon: ClipboardCheck,
-        module: "qcFailed",
-      },
-      {
-        to: "/finished-goods",
-        label: "Finished Goods",
-        icon: PackageCheck,
-        module: "finishedGoods",
-      },
-    ],
-  },
-
-  {
-    label: "Quality & Purchase",
-    items: [
-      { to: "/marketing-orders", label: "Marketing Orders", icon: ClipboardList, module: "marketingOrders" },
-      // order approval: Operations Admin decides, then the Purchase Manager sees the approved orders
-      { to: "/order-approvals", label: "Incoming Orders", icon: ClipboardCheck, module: "orderApprovals" },
+      { to: "/marketing-orders", label: "Customer Orders", icon: ClipboardList, module: "marketingOrders" },
+      { to: "/order-approvals", label: "Orders to Approve", icon: ClipboardCheck, module: "orderApprovals" },
       { to: "/approved-orders", label: "Approved Orders", icon: ClipboardList, module: "approvedOrders" },
-      // the incoming-goods flow, in order: buy -> inspect -> accept into stock
-      { to: "/purchase", label: "Purchase", icon: ShoppingCart, module: "purchase" },
-      { to: "/purchase-requests", label: "Purchase Requests", icon: ClipboardList, module: "purchase" },
-      { to: "/iqc", label: "IQC", icon: ClipboardCheck, module: "iqc" },
-      { to: "/incoming-stock", label: "Incoming Stock", icon: Truck, module: "incomingStock" },
-      { to: "/store-material-requests", label: "Material Allotment", icon: ClipboardList, module: "storeMaterialRequests" },
+      { to: "/orders", label: "All Orders", icon: ClipboardList, module: "orders" },
     ],
   },
-
+  {
+    label: "2 · Buying",
+    items: [
+      { to: "/purchase-requests", label: "What to Buy", icon: ClipboardList, module: "purchase" },
+      { to: "/purchase", label: "Purchase Orders", icon: ShoppingCart, module: "purchase" },
+      { to: "/iqc", label: "IQC Check", icon: ClipboardCheck, module: "iqc" },
+    ],
+  },
+  {
+    label: "3 · Store",
+    items: [
+      { to: "/incoming-stock", label: "Receive from IQC", icon: Truck, module: "incomingStock" },
+      { to: "/store-material-requests", label: "Issue to Production", icon: PackageOpen, module: "storeMaterialRequests" },
+      { to: "/inventory", label: "Component Stock", icon: Warehouse, module: "inventory" },
+      { to: "/product-stock", label: "Product Stock", icon: Package, module: "productStock" },
+      { to: "/inventory-history", label: "Stock History", icon: History, module: "inventoryHistory" },
+    ],
+  },
+  {
+    label: "4 · Production",
+    items: [
+      { to: "/production", label: "Production", icon: Factory, module: "production" },
+      { to: "/quality-control", label: "Quality Check (QC)", icon: ClipboardCheck, module: "qualityControl" },
+      { to: "/qc-failed", label: "QC Failed / Rework", icon: Wrench, module: "qcFailed" },
+    ],
+  },
+  {
+    label: "5 · Dispatch",
+    items: [
+      { to: "/finished-goods", label: "Finished Goods & Dispatch", icon: PackageCheck, module: "finishedGoods" },
+    ],
+  },
+  {
+    label: "Setup",
+    items: [
+      { to: "/products", label: "Products & BOM", icon: Boxes, module: "products" },
+    ],
+  },
   {
     label: "HR",
     items: [
-      {
-        to: "/employees",
-        label: "Employees",
-        icon: Users,
-        module: "employees",
-      },
-      {
-        to: "/attendance",
-        label: "Attendance",
-        icon: CalendarCheck,
-        module: "attendance",
-      },
+      { to: "/employees", label: "Employees", icon: Users, module: "employees" },
+      { to: "/attendance", label: "Attendance", icon: CalendarCheck, module: "attendance" },
     ],
   },
 ];

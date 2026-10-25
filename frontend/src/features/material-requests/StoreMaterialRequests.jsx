@@ -24,6 +24,9 @@ import Pagination from "@/components/Pagination"
 import { useGetMaterialRequestsQuery } from "./materialRequestsApi"
 import IssueMaterialRequestModal from "./IssueMaterialRequestModal"
 import MaterialRequestDetailsModal from "./MaterialRequestDetailsModal"
+import ExtraMaterialList from "./ExtraMaterialList"
+import { useGetExtraMaterialsQuery } from "./extraMaterialsApi"
+import { usePermissions } from "@/features/auth/usePermissions"
 import { errorMessage, fmtDateTime } from "@/lib/stock"
 import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import { HeroButton, MktHero, SearchField, StageTile, TileGrid } from "@/features/marketing-orders/mktKit"
@@ -246,6 +249,9 @@ function RequestActions({ request, onView, onAllot }) {
 }
 
 export default function StoreMaterialRequests() {
+  const { canEdit } = usePermissions()
+  const { data: extraRows = [] } = useGetExtraMaterialsQuery()
+  const extraPending = extraRows.filter((r) => r.status === "PENDING").length
   const { data = [], isLoading, isFetching, error, refetch } = useGetMaterialRequestsQuery()
   const [detailsRequest, setDetailsRequest] = useState(null)
   const [issueRequest, setIssueRequest] = useState(null)
@@ -415,8 +421,8 @@ export default function StoreMaterialRequests() {
     <>
       <MktHero
         eyebrow="Store operations"
-        title="Material Allotment"
-        description="Review requests from Production and record full or partial material handovers."
+        title="Issue to Production"
+        description="Hand Production the components for the units Operations Admin approved, and extra material for damaged pieces."
       >
         <HeroButton variant="glass" onClick={refetch} disabled={isFetching} aria-label="Refresh material requests">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
@@ -426,6 +432,18 @@ export default function StoreMaterialRequests() {
       {error && <div className="mb-4"><Notice title="Couldn't load material requests">{errorMessage(error, "Refresh to try again.")}</Notice></div>}
 
       <div className="min-w-0 space-y-4">
+        <Card className="min-w-0 overflow-hidden rounded-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 sm:px-5">
+            <div>
+              <p className="font-semibold">Extra material for damaged pieces</p>
+              <p className="text-xs text-muted-foreground">Production asked for more with a reason. Issuing it takes the quantity out of component stock.</p>
+            </div>
+            {extraPending > 0 && <Badge variant="warning">{extraPending} waiting</Badge>}
+          </div>
+          <ExtraMaterialList canDecide={canEdit("storeMaterialRequests")} />
+        </Card>
+
+        <p className="px-1 pt-2 text-sm font-semibold text-slate-700">Planned material for approved orders</p>
         <div className="hidden md:block">
           <TileGrid className="md:grid-cols-4 xl:grid-cols-4">
             {stats.map((item) => (

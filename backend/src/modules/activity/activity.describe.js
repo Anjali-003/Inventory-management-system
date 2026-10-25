@@ -22,7 +22,10 @@ const LABELS = {
     "approved-orders": "order",
     employees: "employee",
     attendance: "attendance",
-    "super-admins": "super admin"
+    "super-admins": "super admin",
+    "extra-materials": "extra material request",
+    "material-requests": "material request",
+    "product-stock": "product stock"
 };
 
 const VERBS = { POST: "Created", PUT: "Updated", PATCH: "Updated", DELETE: "Deleted" };
