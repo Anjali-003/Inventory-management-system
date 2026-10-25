@@ -134,6 +134,7 @@ function CombinedOrder({ rows, loading }) {
   // starts with every component a pending request asks for
   const [list, setList] = useState(() => rows.filter((r) => r.lines.length > 0).map((r) => r.component_id))
   const [qty, setQty] = useState({}) // component_id -> typed quantity (missing = the suggestion)
+  const [rate, setRate] = useState({}) // component_id -> rate per piece agreed with the supplier (₹)
   const [adding, setAdding] = useState("")
   const [supplier, setSupplier] = useState("")
   const [expectedDate, setExpectedDate] = useState("")
@@ -150,8 +151,11 @@ function CombinedOrder({ rows, loading }) {
     if (!/^\d+(\.\d{1,2})?$/.test(text)) return "Up to 2 decimals"
     const need = needOf(r)
     if (n < need) return `Orders need at least ${fmtQty(need)}`
+    const price = String(rate[r.component_id] ?? "").trim()
+    if (!price || !/^\d+(\.\d{1,2})?$/.test(price)) return "Enter the rate per piece"
     return ""
   }
+  const value = lines.reduce((sum, r) => sum + (Number(qtyOf(r)) || 0) * (Number(rate[r.component_id]) || 0), 0)
   const remove = (id) => setList((l) => l.filter((x) => x !== id))
   const addable = rows.filter((r) => !list.includes(r.component_id))
   // low / out of stock and not on the order yet: out of stock first
@@ -187,6 +191,7 @@ function CombinedOrder({ rows, loading }) {
         items: lines.map((r) => ({
           component_id: r.component_id,
           quantity: qtyOf(r).trim(),
+          rate: String(rate[r.component_id] ?? "").trim(),
           request_item_ids: r.lines.map((l) => l.request_item_id),
         })),
       }).unwrap()
@@ -241,12 +246,13 @@ function CombinedOrder({ rows, loading }) {
                     <th className="px-3 py-2 text-end font-semibold">Orders need</th>
                     <th className="hidden px-3 py-2 text-end font-semibold sm:table-cell">In stock</th>
                     <th className="w-40 px-3 py-2 text-end font-semibold">Order qty</th>
+                    <th className="w-32 px-3 py-2 text-end font-semibold">Rate / piece (₹)</th>
                     <th className="w-10 px-2 py-2"><span className="sr-only">Remove</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {lines.length === 0 && (
-                    <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">Nothing on the order. Add low or out of stock components from below, or any other component.</td></tr>
+                    <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">Nothing on the order. Add low or out of stock components from below, or any other component.</td></tr>
                   )}
                   {lines.map((r) => {
                     const need = needOf(r)
@@ -289,6 +295,19 @@ function CombinedOrder({ rows, loading }) {
                           </span>
                           {err && <span className="mt-1 block text-end text-xs font-medium text-destructive">{err}</span>}
                         </td>
+                        <td className="px-3 py-2">
+                          <input
+                            inputMode="decimal"
+                            aria-label={`Rate per piece of ${r.name}`}
+                            value={rate[r.component_id] ?? ""}
+                            onChange={(e) => setRate((x) => ({ ...x, [r.component_id]: e.target.value }))}
+                            placeholder="0.00"
+                            className={cn(INPUT, "text-end tabular-nums", showErrors && !String(rate[r.component_id] ?? "").trim() && "border-destructive")}
+                          />
+                          <span className="mt-1 block text-end text-xs text-muted-foreground tabular-nums">
+                            ₹{((Number(qtyOf(r)) || 0) * (Number(rate[r.component_id]) || 0)).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                          </span>
+                        </td>
                         <td className="px-2 py-2.5">
                           <button
                             type="button"
@@ -322,7 +341,7 @@ function CombinedOrder({ rows, loading }) {
               </div>
             </div>
           )}
-          {showErrors && bad.length > 0 && <p className="text-sm font-medium text-destructive">Fix the quantity of {bad.map((r) => r.name).join(", ")}.</p>}
+          {showErrors && bad.length > 0 && <p className="text-sm font-medium text-destructive">Fix the quantity or rate of {bad.map((r) => r.name).join(", ")}.</p>}
 
           {!loading && (
             <section aria-labelledby="co-low-title" className="rounded-xl border">
@@ -376,10 +395,11 @@ function CombinedOrder({ rows, loading }) {
             {/* why the order did not go, right next to the button */}
             {showErrors && (supplierError || bad.length > 0 || serverError) && (
               <p role="alert" className="mt-0.5 text-sm font-medium text-destructive">
-                {serverError || (supplierError ? `${supplierError} (top of the form).` : `Fix the quantity of ${bad.map((r) => r.name).join(", ")}.`)}
+                {serverError || (supplierError ? `${supplierError} (top of the form).` : `Fix the quantity or rate of ${bad.map((r) => r.name).join(", ")}.`)}
               </p>
             )}
           </div>
+          <span className="text-sm text-muted-foreground">Order value <b className="tabular-nums text-foreground">₹{value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</b></span>
           <MktBtn type="submit" variant="primary" disabled={saving || loading || lines.length === 0}>
             {saving ? <Loader2 className="animate-spin" /> : <ShoppingCart />} Place order
           </MktBtn>

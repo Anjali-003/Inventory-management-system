@@ -20,6 +20,11 @@ async function createBill(req, res) {
     res.status(201).json(await service.createBill(idOf(req), req.body || {}, req.user.id));
 }
 
+const withBody = (name, message) =>
+    asyncHandler(async (req, res) => {
+        res.status(201).json(await service[name](idOf(req), req.body || {}, req.user.id));
+    }, { message });
+
 /* pack / handOver / receive / dispatch / deliver */
 const step = (name) =>
     asyncHandler(async (req, res) => {
@@ -32,4 +37,7 @@ module.exports = {
     getBill: asyncHandler(getBill, { message: "Failed to fetch the bill" }),
     createBill: asyncHandler(createBill, { message: "Failed to create the bill" }),
     step,
+    addPayment: withBody("addPayment", "Failed to record the payment"),
+    cancelBill: withBody("cancelBill", "Failed to cancel the bill"),
+    addCreditNote: withBody("addCreditNote", "Failed to make the credit note"),
 };

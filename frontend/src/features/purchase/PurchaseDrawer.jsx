@@ -79,6 +79,7 @@ function OverviewTab({ purchase: p }) {
         <Fact label="Placed by">{p.created_by_name || "-"}</Fact>
         <Fact label="Placed on">{fmtDateTime(p.created_at)}</Fact>
         <Fact label="Components">{plural(p.totals?.lines ?? p.items?.length ?? 0, "line")}</Fact>
+        <Fact label="Order value">{p.totals?.unpriced_lines === p.totals?.lines ? <span className="font-normal text-muted-foreground">No rate recorded</span> : `₹${Number(p.totals?.value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`}</Fact>
         <Fact label="Received on">{p.received_at ? fmtDateTime(p.received_at) : <span className="font-normal text-muted-foreground">Not yet</span>}</Fact>
       </dl>
 

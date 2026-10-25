@@ -18,10 +18,12 @@ import ImportProductsModal from "./components/ImportProductsModal"
 import ImportBomModal from "./components/ImportBomModal"
 import BomEditorModal from "./components/BomEditorModal"
 import { productsApi, useGetProductsQuery } from "./productsApi"
+import SetPriceDialog from "./SetPriceDialog"
 
 const EMPTY = []
 
 export default function Products() {
+  const [pricing, setPricing] = useState(null) // product whose selling price is being set
   const dispatch = useDispatch()
   const { data, isLoading: loading, error: loadError, refetch: loadProducts } = useGetProductsQuery()
   const products = data ?? EMPTY
@@ -138,6 +140,7 @@ export default function Products() {
                 <TableHead>SKU</TableHead>
                 <TableHead>Product</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead className="text-right">Price (₹)</TableHead>
                 <TableHead>Added by</TableHead>
                 <TableHead className="text-right"><span className="sr-only">Actions</span></TableHead>
               </TableRow>
@@ -148,9 +151,17 @@ export default function Products() {
                   <TableCell className="font-medium tabular-nums">{p.sku}</TableCell>
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="min-w-56 max-w-xs whitespace-normal text-muted-foreground">{p.description}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {p.selling_price === null || p.selling_price === undefined
+                      ? <span className="text-xs font-semibold text-warning">Not set</span>
+                      : <>{Number(p.selling_price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}<span className="block text-xs text-muted-foreground">GST {Number(p.gst_percent)}%</span></>}
+                  </TableCell>
                   <TableCell className="min-w-40"><UserCell name={p.created_by_name} /></TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm" onClick={() => openBom(p)}>View BOM</Button>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setPricing(p)}>Set price</Button>
+                      <Button variant="outline" size="sm" onClick={() => openBom(p)}>View BOM</Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -158,6 +169,8 @@ export default function Products() {
           </Table>
         )}
       </Card>
+
+      {pricing && <SetPriceDialog product={pricing} onClose={() => setPricing(null)} onSaved={() => { setPricing(null); loadProducts() }} />}
 
       <Modal
         open={!!selected}

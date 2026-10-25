@@ -70,6 +70,7 @@ const ITEM_SELECT = `
         c.name,
         c.unit,
         i.quantity_ordered,
+        i.rate,
         i.quantity_received,
         i.quantity_defective,
         i.quantity_approved,
@@ -125,6 +126,9 @@ async function withItems(conn, orders) {
                 defective: lines.reduce((s, l) => s + Number(l.quantity_defective), 0),
                 approved: lines.reduce((s, l) => s + (num(l.quantity_approved) ?? 0), 0),
                 rejected_lines: lines.filter((l) => l.iqc_decision === "REJECTED").length,
+                // money: ordered quantity x the rate agreed with the supplier (lines without a rate count as 0)
+                value: Number(lines.reduce((s, l) => s + Number(l.quantity_ordered) * (num(l.rate) ?? 0), 0).toFixed(2)),
+                unpriced_lines: lines.filter((l) => l.rate === null || l.rate === undefined).length,
             },
         };
     });
@@ -193,7 +197,7 @@ const positiveIds = (raw, label) => {
     return ids;
 };
 
-/* { supplier, notes?, items: [{ component_id, quantity, request_item_ids? }] } -> checked, quantities in cents */
+/* { supplier, notes?, items: [{ component_id, quantity, rate, request_item_ids? }] } -> checked, quantities in cents */
 function parseCombined(body) {
     const { supplier, notes, expectedDate } = parseSupplier(body);
     if (!Array.isArray(body.items) || body.items.length === 0) {
@@ -224,7 +228,12 @@ function parseCombined(body) {
             if (lineIds.has(id)) throw new AppError(422, "The same requirement line is on the order twice", "VALIDATION", { field: "items", line });
             lineIds.add(id);
         }
-        return { componentId, cents, requestItemIds };
+        // the rate agreed with the supplier, per piece: what the purchase costs (and the cost of what is sold)
+        const rate = Number(raw.rate);
+        if (raw.rate === undefined || raw.rate === null || raw.rate === "" || !Number.isFinite(rate) || rate < 0 || Math.round(rate * 100) !== rate * 100) {
+            throw new AppError(422, "Enter the rate per piece for every component", "VALIDATION", { field: "items", line });
+        }
+        return { componentId, cents, rate, requestItemIds };
     });
     return { supplier, notes, expectedDate, items };
 }
@@ -252,8 +261,8 @@ async function insertPurchase(conn, { orderId, supplier, notes, expectedDate, us
     await conn.query(`UPDATE purchase_orders SET po_number = ? WHERE id = ?`, [`PO-${String(poId).padStart(4, "0")}`, poId]);
     for (const l of lines) {
         await conn.query(
-            `INSERT INTO purchase_order_items (purchase_order_id, component_id, quantity_ordered) VALUES (?, ?, ?)`,
-            [poId, l.componentId, l.quantity]
+            `INSERT INTO purchase_order_items (purchase_order_id, component_id, quantity_ordered, rate) VALUES (?, ?, ?, ?)`,
+            [poId, l.componentId, l.quantity, l.rate ?? null]
         );
     }
     for (const id of requestItemIds) {
@@ -322,7 +331,7 @@ async function createCombined(body, userId) {
             notes,
             expectedDate,
             userId,
-            lines: items.map((i) => ({ componentId: i.componentId, quantity: inventory.fromCents(i.cents) })),
+            lines: items.map((i) => ({ componentId: i.componentId, quantity: inventory.fromCents(i.cents), rate: i.rate })),
             requestItemIds: allLineIds,
         });
         return getPurchase(poId, conn);

@@ -12,6 +12,8 @@ router.post("/", resolveUser, controller.create);
 router.post("/import", resolveUser, controller.importMany);
 
 router.get("/:id", controller.getOne);
+// price list: selling price + GST % (products module is Super Admin only, so only the Super Admin sets prices)
+router.put("/:id/price", controller.setPrice);
 
 router.get("/:id/bom", controller.getBom);
 router.put("/:id/bom", controller.saveBom);

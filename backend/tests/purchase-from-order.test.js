@@ -42,7 +42,7 @@ function run(sql, p = []) {
     return [{ insertId: id }];
   }
   if (has(sql, "UPDATE purchase_orders SET po_number")) { s.pos.find((x) => x.id === p[1]).po_number = p[0]; return [{}]; }
-  if (has(sql, "INSERT INTO purchase_order_items")) { s.poItems.push({ po: p[0], component_id: p[1], quantity_ordered: p[2] }); return [{}]; }
+  if (has(sql, "INSERT INTO purchase_order_items")) { s.poItems.push({ po: p[0], component_id: p[1], quantity_ordered: p[2], ...(p[3] !== null && p[3] !== undefined ? { rate: p[3] } : {}) }); return [{}]; }
   if (has(sql, "UPDATE order_purchase_items SET purchase_order_id")) { s.requests.find((r) => r.id === p[1]).purchase_order_id = p[0]; return [{}]; }
   if (has(sql, "FROM purchase_orders po") && has(sql, "WHERE po.id = ?")) return [s.pos.filter((x) => x.id === p[0]).map((x) => ({ ...x }))];
   if (has(sql, "FROM purchase_order_items i")) return [s.poItems.filter((i) => p[0].includes(i.po)).map((i) => ({ ...i, purchase_order_id: i.po, quantity_defective: 0 }))];
@@ -78,6 +78,12 @@ describe("createPurchase", () => {
   it("ignores any component / quantity typed by the client", async () => {
     await service.createPurchase(body({ items: [{ component_id: 999, quantity: 100000 }], request_item_ids: [1] }), 99);
     expect(s.poItems).toEqual([{ po: 1, component_id: 11, quantity_ordered: "8.00" }]);
+  });
+
+  it("needs the rate per piece on every line of a combined order", async () => {
+    await expect(service.createPurchase({ supplier: "Sharma Electronics", expected_delivery_date: "2026-11-30", items: [{ component_id: 11, quantity: 5 }] }, 99))
+      .rejects.toMatchObject({ status: 422 });
+    expect(s.pos).toHaveLength(0);
   });
 
   it("needs the date the supplier will deliver", async () => {
@@ -131,12 +137,12 @@ describe("the purchase manager's own order: combined orders and stock", () => {
     s.orders.push({ id: 9, order_number: "ORD-009", approval_status: "APPROVED" });
     s.requests.push({ id: 4, order_id: 9, component_id: 11, quantity: "12.50", purchase_order_id: null });
   });
-  const combined = (items, extra = {}) => ({ supplier: "Sharma Electronics", expected_delivery_date: "2026-11-30", items, ...extra });
+  const combined = (items, extra = {}) => ({ supplier: "Sharma Electronics", expected_delivery_date: "2026-11-30", items: items.map((i) => ({ rate: 2.5, ...i })), ...extra });
 
   it("combines several orders' needs of one component into one line, rounded up, surplus to stock", async () => {
     const po = await service.createPurchase(combined([{ component_id: 11, quantity: 50, request_item_ids: [1, 4] }]), 99);
     expect(s.pos[0].order_id).toBe(null); // two orders: tied to neither
-    expect(s.poItems).toEqual([{ po: 1, component_id: 11, quantity_ordered: "50.00" }]);
+    expect(s.poItems).toEqual([{ po: 1, component_id: 11, quantity_ordered: "50.00", rate: 2.5 }]);
     expect(s.requests.filter((r) => [1, 4].includes(r.id)).map((r) => r.purchase_order_id)).toEqual([1, 1]);
     expect(po).toMatchObject({ kind: "COMBINED", orders: ["ORD-007", "ORD-009"] });
     expect(po.items[0]).toMatchObject({ component_id: 11, for_orders: 20.5 }); // 8 + 12.5 for orders, the rest for stock

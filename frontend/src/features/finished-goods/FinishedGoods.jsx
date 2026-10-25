@@ -64,7 +64,8 @@ function OrderCard({ item, role, onAct, onBill }) {
 
       {(item.bill || item.dispatchNote) && (
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          {item.bill && <span>Bill <span className="font-semibold text-foreground">{item.bill.billNumber}</span> · {item.bill.customerName} · {rupees(item.bill.total)}</span>}
+          {item.bill && <span>Bill <span className="font-semibold text-foreground">{item.bill.billNumber}</span> · {item.bill.customerName} · {rupees(item.bill.net)}
+            {item.bill.due > 0 ? <span className="ml-1 font-semibold text-destructive">· {rupees(item.bill.due)} to collect</span> : <span className="ml-1 font-semibold text-success">· paid</span>}</span>}
           {item.dispatchNote && <span>Delivery: {item.dispatchNote}</span>}
         </div>
       )}
@@ -120,27 +121,39 @@ function StepDialog({ item, step, onClose, onDone }) {
   )
 }
 
-/* Marketing's bill: customer + a rate for every product; GST and totals are worked out live */
+/*
+  Marketing's bill: customer + a rate for every product. The rate starts from the price list (Super Admin); a lower
+  rate is a discount and needs a reason. Each product has its own GST %, and the totals are worked out live.
+*/
 function BillDialog({ item, onClose, onDone }) {
   const toast = useToast()
-  const [form, setForm] = useState({ customer_name: "", customer_address: "", customer_gstin: "", gst_percent: "18", notes: "" })
+  const [form, setForm] = useState({ customer_name: "", customer_address: "", customer_gstin: "", notes: "" })
   const [customerId, setCustomerId] = useState("")
   const [saveNew, setSaveNew] = useState(true)
   const { data: customers = [] } = useGetCustomersQuery()
   const [saveCustomer] = useSaveCustomerMutation()
-  const [rates, setRates] = useState({})
+  const [rates, setRates] = useState(() => Object.fromEntries((item?.lines || []).map((l) => [l.productId, l.listPrice ?? ""])))
+  const [notes, setNotes] = useState({})
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
   const pickCustomer = (id) => {
     setCustomerId(id)
     const c = customers.find((x) => String(x.id) === id)
     setForm((f) => ({ ...f, customer_name: c?.name || "", customer_address: c?.address || "", customer_gstin: c?.gstin || "" }))
   }
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState("")
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
-  const subtotal = (item?.lines || []).reduce((sum, l) => sum + (Number(rates[l.productId]) || 0) * l.quantity, 0)
-  const gst = (subtotal * (Number(form.gst_percent) || 0)) / 100
-  const ready = form.customer_name.trim() && item?.lines.every((l) => rates[l.productId] !== undefined && rates[l.productId] !== "")
+  const rows = (item?.lines || []).map((l) => {
+    const rate = Number(rates[l.productId]) || 0
+    const amount = rate * l.quantity
+    const discount = l.listPrice !== null && rates[l.productId] !== "" && rate < l.listPrice
+    return { ...l, rate, amount, gst: (amount * l.gstPercent) / 100, discount }
+  })
+  const subtotal = rows.reduce((sum, r) => sum + r.amount, 0)
+  const gst = rows.reduce((sum, r) => sum + r.gst, 0)
+  const ready = form.customer_name.trim()
+    && rows.every((r) => rates[r.productId] !== undefined && rates[r.productId] !== "")
+    && rows.every((r) => !r.discount || String(notes[r.productId] || "").trim().length >= 3)
 
   const submit = async (e) => {
     e.preventDefault()
@@ -152,7 +165,10 @@ function BillDialog({ item, onClose, onDone }) {
       if (!id && saveNew) {
         id = (await saveCustomer({ name: form.customer_name, address: form.customer_address, gstin: form.customer_gstin }).unwrap()).id
       }
-      const { data } = await finishedGoodsService.createBill(item.id, { ...form, customer_id: id, items: item.lines.map((l) => ({ product_id: l.productId, rate: rates[l.productId] })) })
+      const { data } = await finishedGoodsService.createBill(item.id, {
+        ...form, customer_id: id,
+        items: rows.map((r) => ({ product_id: r.productId, rate: rates[r.productId], note: notes[r.productId] || "" })),
+      })
       toast.success(`Bill ${data.billNumber} made. Store has been told to give out the goods.`)
       onDone()
     } catch (err) {
@@ -184,25 +200,29 @@ function BillDialog({ item, onClose, onDone }) {
         </div>
 
         <div className="overflow-hidden rounded-xl border">
-          <div className="grid grid-cols-[1fr_4rem_7rem_7rem] gap-2 bg-slate-50 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Product</span><span className="text-right">Qty</span><span className="text-right">Rate (₹)</span><span className="text-right">Amount</span></div>
-          {item?.lines.map((l) => (
-            <div key={l.productId} className="grid grid-cols-[1fr_4rem_7rem_7rem] items-center gap-2 border-t px-3 py-2">
-              <span className="min-w-0 break-words">{l.name}</span>
-              <span className="text-right tabular-nums">{l.quantity}</span>
-              <TextInput aria-label={`Rate for ${l.name}`} type="number" min="0" step="0.01" className="text-right" value={rates[l.productId] ?? ""} onChange={(e) => setRates((r) => ({ ...r, [l.productId]: e.target.value }))} />
-              <span className="text-right tabular-nums">{rupees((Number(rates[l.productId]) || 0) * l.quantity)}</span>
+          <div className="grid grid-cols-[1fr_3.5rem_7rem_4rem_6.5rem] gap-2 bg-slate-50 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Product</span><span className="text-right">Qty</span><span className="text-right">Rate (₹)</span><span className="text-right">GST</span><span className="text-right">Amount</span></div>
+          {rows.map((r) => (
+            <div key={r.productId} className="border-t px-3 py-2">
+              <div className="grid grid-cols-[1fr_3.5rem_7rem_4rem_6.5rem] items-center gap-2">
+                <span className="min-w-0 break-words">{r.name}<span className="block text-xs text-muted-foreground">{r.listPrice === null ? "No price in the list yet" : `List price ${rupees(r.listPrice)}`}</span></span>
+                <span className="text-right tabular-nums">{r.quantity}</span>
+                <TextInput aria-label={`Rate for ${r.name}`} type="number" min="0" step="0.01" className="text-right" value={rates[r.productId] ?? ""} onChange={(e) => setRates((x) => ({ ...x, [r.productId]: e.target.value }))} />
+                <span className="text-right tabular-nums text-muted-foreground">{r.gstPercent}%</span>
+                <span className="text-right tabular-nums">{rupees(r.amount)}</span>
+              </div>
+              {r.discount && (
+                <TextInput aria-label={`Reason for the discount on ${r.name}`} className="mt-2" maxLength={255} value={notes[r.productId] || ""}
+                  onChange={(e) => setNotes((x) => ({ ...x, [r.productId]: e.target.value }))} placeholder={`Below the list price: why? (e.g. bulk order, old customer)`} />
+              )}
             </div>
           ))}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
-          <Field label="GST %" htmlFor="bill-gst" required><TextInput id="bill-gst" type="number" min="0" max="100" step="0.01" value={form.gst_percent} onChange={set("gst_percent")} /></Field>
-          <dl className="space-y-1 self-end rounded-xl bg-slate-50 px-3 py-2 text-right tabular-nums">
-            <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd>{rupees(subtotal)}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted-foreground">GST</dt><dd>{rupees(gst)}</dd></div>
-            <div className="flex justify-between text-base font-bold"><dt>Total</dt><dd>{rupees(subtotal + gst)}</dd></div>
-          </dl>
-        </div>
+        <dl className="ml-auto max-w-xs space-y-1 rounded-xl bg-slate-50 px-3 py-2 text-right tabular-nums">
+          <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd>{rupees(subtotal)}</dd></div>
+          <div className="flex justify-between"><dt className="text-muted-foreground">GST</dt><dd>{rupees(gst)}</dd></div>
+          <div className="flex justify-between text-base font-bold"><dt>Total</dt><dd>{rupees(subtotal + gst)}</dd></div>
+        </dl>
         <Field label="Notes (optional)" htmlFor="bill-notes"><TextInput id="bill-notes" value={form.notes} maxLength={500} onChange={set("notes")} /></Field>
         {error && <p role="alert" className="rounded-lg bg-cf-red-soft px-3 py-2 text-destructive">{error}</p>}
       </div>
@@ -210,38 +230,134 @@ function BillDialog({ item, onClose, onDone }) {
   )
 }
 
-function BillView({ item, onClose }) {
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10) }
+const METHODS = [["UPI", "UPI"], ["BANK", "Bank transfer"], ["CASH", "Cash"], ["CHEQUE", "Cheque"], ["OTHER", "Other"]]
+const PAY_BADGE = { PAID: ["success", "Paid"], PART_PAID: ["warning", "Part paid"], UNPAID: ["danger", "Not paid"] }
+
+/* One small form inside the bill: record a payment, or (Super Admin) cancel the bill / make a credit note */
+function BillAction({ kind, bill, finishedGoodsId, onDone, onClose }) {
+  const toast = useToast()
+  const [form, setForm] = useState({ amount: kind === "payment" ? String(bill.due) : "", paid_on: today(), method: "UPI", reference: "", reason: "" })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+  const submit = async () => {
+    try {
+      setBusy(true)
+      setError("")
+      if (kind === "payment") await finishedGoodsService.addPayment(finishedGoodsId, form)
+      if (kind === "credit") await finishedGoodsService.creditNote(finishedGoodsId, { amount: form.amount, reason: form.reason })
+      if (kind === "cancel") await finishedGoodsService.cancelBill(finishedGoodsId, { reason: form.reason })
+      toast.success(kind === "payment" ? "Payment recorded" : kind === "credit" ? "Credit note made" : "Bill cancelled. Marketing can bill the order again.")
+      onDone()
+    } catch (err) {
+      setError(errorMessage(err, "Could not save."))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="space-y-3 rounded-xl border bg-slate-50 p-3">
+      <p className="font-semibold">{kind === "payment" ? "Record a payment" : kind === "credit" ? "Credit note (bill reduced after the goods left)" : "Cancel this bill"}</p>
+      {kind !== "cancel" && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Amount (₹)" htmlFor="ba-amount" required><TextInput id="ba-amount" type="number" min="0.01" step="0.01" value={form.amount} onChange={set("amount")} /></Field>
+          {kind === "payment" && <Field label="Received on" htmlFor="ba-date" required><TextInput id="ba-date" type="date" value={form.paid_on} onChange={set("paid_on")} /></Field>}
+          {kind === "payment" && (
+            <Field label="How" htmlFor="ba-method" required>
+              <select id="ba-method" className="h-9 w-full rounded-[8px] border bg-card px-3 text-[13px]" value={form.method} onChange={set("method")}>
+                {METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </Field>
+          )}
+          {kind === "payment" && <Field label="Reference (optional)" htmlFor="ba-ref"><TextInput id="ba-ref" maxLength={100} value={form.reference} onChange={set("reference")} placeholder="UTR / cheque no." /></Field>}
+        </div>
+      )}
+      {kind !== "payment" && (
+        <Field label="Reason" htmlFor="ba-reason" required>
+          <TextInput id="ba-reason" maxLength={255} value={form.reason} onChange={set("reason")} placeholder={kind === "cancel" ? "e.g. wrong customer on the bill" : "e.g. 2 pieces returned damaged"} />
+        </Field>
+      )}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Back</Button>
+        <Button type="button" variant={kind === "cancel" ? "destructive" : "default"} onClick={submit} disabled={busy}>{busy ? "Saving..." : kind === "payment" ? "Save payment" : kind === "credit" ? "Make credit note" : "Yes, cancel bill"}</Button>
+      </div>
+    </div>
+  )
+}
+
+function BillView({ item, role, onClose, onChanged }) {
   const [bill, setBill] = useState(null)
   const [error, setError] = useState("")
+  const [action, setAction] = useState(null) // "payment" | "credit" | "cancel"
+  const [version, setVersion] = useState(0)
   useEffect(() => {
     if (!item) return undefined
     let live = true
     finishedGoodsService.getBill(item.id)
       .then((r) => live && setBill(r.data))
       .catch((err) => live && setError(err.response?.data?.message || "Could not load the bill."))
-    return () => { live = false; setBill(null); setError("") }
-  }, [item])
+    return () => { live = false; setBill(null); setError(""); setAction(null) }
+  }, [item, version])
+  const admin = role === "SUPER_ADMIN"
+  const canPay = (admin || role === "MARKETING_MANAGER") && bill?.due > 0
+  const canCancel = admin && bill?.goodsStatus === "BILLED" && bill?.paid === 0
+  const canCredit = admin && bill && bill.goodsStatus !== "BILLED" && bill.net > 0
+  const done = () => { setAction(null); setVersion((v) => v + 1); onChanged() }
+
   return (
     <Modal open={!!item} onClose={onClose} size="lg" title={bill ? `Bill ${bill.billNumber}` : "Bill"} description={item?.orderNumber}
       footer={<><Button type="button" variant="outline" size="lg" onClick={() => window.print()} disabled={!bill}>Print</Button><Button type="button" size="lg" onClick={onClose}>Close</Button></>}>
       {error ? <p className="text-destructive">{error}</p> : !bill ? <TableSkeleton rows={3} /> : (
         <div className="space-y-4 text-sm">
-          <div>
-            <p className="font-semibold">{bill.customerName}</p>
-            {bill.customerAddress && <p className="text-muted-foreground">{bill.customerAddress}</p>}
-            {bill.customerGstin && <p className="text-muted-foreground">GSTIN {bill.customerGstin}</p>}
-            <p className="mt-1 text-xs text-muted-foreground">Made by {bill.createdByName} · {when(bill.createdAt)}</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold">{bill.customerName}</p>
+              {bill.customerAddress && <p className="text-muted-foreground">{bill.customerAddress}</p>}
+              {bill.customerGstin && <p className="text-muted-foreground">GSTIN {bill.customerGstin}</p>}
+              <p className="mt-1 text-xs text-muted-foreground">Made by {bill.createdByName} · {when(bill.createdAt)}</p>
+            </div>
+            <Badge variant={PAY_BADGE[bill.paymentStatus][0]}>{PAY_BADGE[bill.paymentStatus][1]}</Badge>
           </div>
           <table className="w-full text-left">
-            <thead className="text-xs text-muted-foreground"><tr><th className="py-1">Product</th><th className="py-1 text-right">Qty</th><th className="py-1 text-right">Rate</th><th className="py-1 text-right">Amount</th></tr></thead>
-            <tbody className="divide-y border-y">{bill.items.map((i) => <tr key={i.productId}><td className="py-1.5">{i.name}</td><td className="text-right tabular-nums">{i.quantity}</td><td className="text-right tabular-nums">{rupees(i.rate)}</td><td className="text-right tabular-nums">{rupees(i.amount)}</td></tr>)}</tbody>
+            <thead className="text-xs text-muted-foreground"><tr><th className="py-1">Product</th><th className="py-1 text-right">Qty</th><th className="py-1 text-right">Rate</th><th className="py-1 text-right">GST</th><th className="py-1 text-right">Amount</th></tr></thead>
+            <tbody className="divide-y border-y">{bill.items.map((i) => (
+              <tr key={i.productId}>
+                <td className="py-1.5">{i.name}{i.priceNote && <span className="block text-xs text-muted-foreground">Discount: {i.priceNote} (list {rupees(i.listPrice)})</span>}</td>
+                <td className="text-right tabular-nums">{i.quantity}</td><td className="text-right tabular-nums">{rupees(i.rate)}</td>
+                <td className="text-right tabular-nums">{i.gstPercent}%</td><td className="text-right tabular-nums">{rupees(i.amount)}</td>
+              </tr>
+            ))}</tbody>
           </table>
           <dl className="ml-auto max-w-xs space-y-1 tabular-nums">
             <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd>{rupees(bill.subtotal)}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted-foreground">GST {bill.gstPercent}%</dt><dd>{rupees(bill.gstAmount)}</dd></div>
-            <div className="flex justify-between text-base font-bold"><dt>Total</dt><dd>{rupees(bill.total)}</dd></div>
+            <div className="flex justify-between"><dt className="text-muted-foreground">GST</dt><dd>{rupees(bill.gstAmount)}</dd></div>
+            <div className="flex justify-between font-bold"><dt>Total</dt><dd>{rupees(bill.total)}</dd></div>
+            {bill.credited > 0 && <div className="flex justify-between text-warning"><dt>Credit notes</dt><dd>− {rupees(bill.credited)}</dd></div>}
+            <div className="flex justify-between text-success"><dt>Received</dt><dd>{rupees(bill.paid)}</dd></div>
+            <div className={cn("flex justify-between text-base font-bold", bill.due > 0 && "text-destructive")}><dt>Still to collect</dt><dd>{rupees(bill.due)}</dd></div>
+            {bill.refund > 0 && <div className="flex justify-between font-semibold text-warning"><dt>To refund</dt><dd>{rupees(bill.refund)}</dd></div>}
           </dl>
+
+          {(bill.payments.length > 0 || bill.creditNotes.length > 0 || bill.cancelledBills.length > 0) && (
+            <ul className="space-y-1 rounded-xl border p-3 text-xs">
+              {bill.payments.map((x) => <li key={`p${x.id}`}><b className="text-success">+ {rupees(x.amount)}</b> {x.method}{x.reference ? ` (${x.reference})` : ""} on {x.paidOn} · {x.byName}</li>)}
+              {bill.creditNotes.map((x) => <li key={`c${x.id}`}><b className="text-warning">{x.number}: − {rupees(x.amount)}</b> {x.reason} · {x.byName}</li>)}
+              {bill.cancelledBills.map((x) => <li key={x.number} className="text-muted-foreground">Earlier bill {x.number} ({rupees(x.total)}) cancelled: {x.reason} · {x.byName}</li>)}
+            </ul>
+          )}
           {bill.notes && <p className="text-muted-foreground">{bill.notes}</p>}
+
+          {action ? (
+            <BillAction kind={action} bill={bill} finishedGoodsId={item.id} onDone={done} onClose={() => setAction(null)} />
+          ) : (canPay || canCancel || canCredit) && (
+            <div className="flex flex-wrap justify-end gap-2">
+              {canCancel && <Button type="button" variant="outline" onClick={() => setAction("cancel")}>Cancel bill</Button>}
+              {canCredit && <Button type="button" variant="outline" onClick={() => setAction("credit")}>Credit note</Button>}
+              {canPay && <Button type="button" onClick={() => setAction("payment")}>Record payment</Button>}
+            </div>
+          )}
         </div>
       )}
     </Modal>
@@ -310,7 +426,7 @@ export default function FinishedGoods() {
 
       {acting.item && <StepDialog item={acting.item} step={acting.step} onClose={() => setActing({ item: null, step: null })} onDone={done} />}
       {billFor && <BillDialog item={billFor} onClose={() => setBillFor(null)} onDone={() => { setBillFor(null); refetch() }} />}
-      <BillView item={viewBill} onClose={() => setViewBill(null)} />
+      <BillView item={viewBill} role={role} onClose={() => setViewBill(null)} onChanged={refetch} />
     </>
   )
 }

@@ -24,7 +24,7 @@ const mapRow = (r) => ({ id: r.id, name: r.name, address: r.address, gstin: r.gs
 
 async function list() {
     const [rows] = await db.query(
-        `SELECT c.*, (SELECT COUNT(*) FROM bills b WHERE b.customer_id = c.id) AS bills
+        `SELECT c.*, (SELECT COUNT(*) FROM bills b WHERE b.customer_id = c.id AND b.status = 'ACTIVE') AS bills
          FROM customers c ORDER BY c.name`
     );
     return rows.map(mapRow);

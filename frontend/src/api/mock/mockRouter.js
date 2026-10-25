@@ -662,7 +662,8 @@ const ROUTES = [
   // and "not in mock mode" for an order's journey, so those pages open instead of breaking
   ["GET", /^\/reports\/monthly$/, (m, q) => ok({
     month: q.month || "",
-    sales: { bills: 0, total: 0, gst: 0, byCustomer: [] },
+    sales: { bills: 0, total: 0, gst: 0, credited: 0, creditNotes: 0, net: 0, collected: 0, payments: 0, toCollect: 0, owed: [], byCustomer: [], subtotal: 0 },
+    money: { spent: 0, purchases: 0, costOfSold: 0, profit: null, marginPct: null, unpricedProducts: 0 },
     suppliers: { received: 0, rejected: 0, rejectedPct: null, due: 0, late: 0, bySupplier: [] },
     qualityCheck: { firstTryBatches: 0, firstTryPassed: 0, firstTryPassPct: null, decisions: 0, failed: 0, failsByProduct: [] },
     orderTime: { delivered: 0, avgDays: null, avgApprovalDays: null, avgBuildDays: null, avgDispatchDays: null, slowest: [] },

@@ -3,7 +3,7 @@ const AppError = require("../../shared/AppError");
 
 /*
     The month report for the Super Admin / Operations Admin: four questions, one figure each, with the rows behind it.
-        1. Sales          bills made in the month (₹), by customer
+        1. Money          sales, credit notes, money collected and still to collect, purchases, estimated profit
         2. Suppliers      per supplier: what IQC received / rejected (%), deliveries late against the promised date
         3. Quality check  batches decided for the FIRST time in the month: how many passed on the first try (%)
         4. Order time     orders delivered in the month: days from sent for approval to delivered, and where the time went
@@ -23,23 +23,111 @@ const n = (v) => Number(v || 0);
 const pct = (part, whole) => (whole > 0 ? Number(((part / whole) * 100).toFixed(2)) : null);
 const days = (v) => (v === null || v === undefined ? null : Number(Number(v).toFixed(1)));
 
+/*
+    Money of the month.
+      billed      ACTIVE bills made in the month (a cancelled bill does not count)
+      credited    credit notes made in the month (goods returned / bill reduced after the goods left)
+      net sales   billed - credited
+      collected   payments received in the month (by the date the money came)
+      to collect  what customers still owe on every ACTIVE bill, whatever its month
+      spent       purchase orders placed in the month: ordered quantity x rate per piece
+      profit      on this month's bills: amount before GST - what the sold products cost, where a product costs its
+                  BOM at the latest purchase rate of each component (an estimate: products with a component never
+                  bought with a rate are counted in `unpricedProducts` and left out)
+*/
 async function sales({ start, end }) {
-    const [[total]] = await db.query(
-        `SELECT COUNT(*) AS bills, COALESCE(SUM(total), 0) AS total, COALESCE(SUM(gst_amount), 0) AS gst
-         FROM bills WHERE created_at >= ? AND created_at < ?`,
+    const [[billed]] = await db.query(
+        `SELECT COUNT(*) AS bills, COALESCE(SUM(total), 0) AS total, COALESCE(SUM(gst_amount), 0) AS gst, COALESCE(SUM(subtotal), 0) AS subtotal
+         FROM bills WHERE status = 'ACTIVE' AND created_at >= ? AND created_at < ?`,
         [start, end]
+    );
+    const [[credited]] = await db.query(
+        `SELECT COUNT(*) AS notes, COALESCE(SUM(amount), 0) AS amount FROM bill_credit_notes WHERE created_at >= ? AND created_at < ?`,
+        [start, end]
+    );
+    const [[collected]] = await db.query(
+        `SELECT COUNT(*) AS payments, COALESCE(SUM(amount), 0) AS amount FROM bill_payments WHERE paid_on >= ? AND paid_on < ?`,
+        [start, end]
+    );
+    // what is still owed, bill by bill (oldest first)
+    const [owed] = await db.query(
+        `SELECT b.bill_number, b.customer_name, b.created_at,
+                b.total - COALESCE((SELECT SUM(amount) FROM bill_credit_notes WHERE bill_id = b.id), 0)
+                        - COALESCE((SELECT SUM(amount) FROM bill_payments WHERE bill_id = b.id), 0) AS due
+         FROM bills b WHERE b.status = 'ACTIVE'
+         HAVING due > 0.004 ORDER BY b.created_at`
     );
     const [byCustomer] = await db.query(
         `SELECT customer_name AS name, COUNT(*) AS bills, SUM(total) AS total
-         FROM bills WHERE created_at >= ? AND created_at < ?
+         FROM bills WHERE status = 'ACTIVE' AND created_at >= ? AND created_at < ?
          GROUP BY customer_name ORDER BY total DESC LIMIT 10`,
         [start, end]
     );
+    const now = Date.now();
     return {
-        bills: n(total.bills),
-        total: n(total.total),
-        gst: n(total.gst),
+        bills: n(billed.bills),
+        total: n(billed.total),
+        gst: n(billed.gst),
+        credited: n(credited.amount),
+        creditNotes: n(credited.notes),
+        net: Number((n(billed.total) - n(credited.amount)).toFixed(2)),
+        collected: n(collected.amount),
+        payments: n(collected.payments),
+        toCollect: Number(owed.reduce((sum, r) => sum + n(r.due), 0).toFixed(2)),
+        owed: owed.slice(0, 10).map((r) => ({
+            billNumber: r.bill_number, customer: r.customer_name, due: Number(n(r.due).toFixed(2)),
+            days: Math.floor((now - new Date(r.created_at).getTime()) / 86400000),
+        })),
         byCustomer: byCustomer.map((r) => ({ name: r.name, bills: n(r.bills), total: n(r.total) })),
+        subtotal: n(billed.subtotal),
+    };
+}
+
+async function costs({ start, end }, salesFigures) {
+    const [[spent]] = await db.query(
+        `SELECT COALESCE(SUM(poi.quantity_ordered * poi.rate), 0) AS amount, COUNT(DISTINCT po.id) AS purchases
+         FROM purchase_orders po JOIN purchase_order_items poi ON poi.purchase_order_id = po.id
+         WHERE po.created_at >= ? AND po.created_at < ?`,
+        [start, end]
+    );
+    // latest purchase rate of every component
+    const [rates] = await db.query(
+        `SELECT poi.component_id, poi.rate
+         FROM purchase_order_items poi
+         JOIN (SELECT component_id, MAX(id) AS id FROM purchase_order_items WHERE rate IS NOT NULL GROUP BY component_id) last
+           ON last.id = poi.id`
+    );
+    const rateOf = new Map(rates.map((r) => [r.component_id, n(r.rate)]));
+    const [bom] = await db.query(`SELECT product_id, component_id, quantity_required FROM product_bom`);
+    const costOf = new Map();
+    const unpriced = new Set();
+    for (const b of bom) {
+        if (!rateOf.has(b.component_id)) { unpriced.add(b.product_id); continue; }
+        costOf.set(b.product_id, (costOf.get(b.product_id) || 0) + n(b.quantity_required) * rateOf.get(b.component_id));
+    }
+    const [sold] = await db.query(
+        `SELECT bi.product_id, SUM(bi.quantity) AS quantity, SUM(bi.amount) AS amount
+         FROM bill_items bi JOIN bills b ON b.id = bi.bill_id
+         WHERE b.status = 'ACTIVE' AND b.created_at >= ? AND b.created_at < ?
+         GROUP BY bi.product_id`,
+        [start, end]
+    );
+    let revenue = 0, cost = 0;
+    const skipped = new Set();
+    for (const r of sold) {
+        if (unpriced.has(r.product_id) || !costOf.has(r.product_id)) { skipped.add(r.product_id); continue; }
+        revenue += n(r.amount);
+        cost += n(r.quantity) * costOf.get(r.product_id);
+    }
+    // a credit note lowers the month's income
+    const profit = revenue - cost - salesFigures.credited;
+    return {
+        spent: Number(n(spent.amount).toFixed(2)),
+        purchases: n(spent.purchases),
+        costOfSold: Number(cost.toFixed(2)),
+        profit: sold.length && skipped.size < sold.length ? Number(profit.toFixed(2)) : null,
+        marginPct: revenue > 0 ? Number(((profit / revenue) * 100).toFixed(1)) : null,
+        unpricedProducts: skipped.size,
     };
 }
 
@@ -148,7 +236,8 @@ async function orderTime({ start, end }) {
 async function monthly(rawMonth) {
     const range = monthRange(rawMonth);
     const [s, sup, qc, time] = await Promise.all([sales(range), suppliers(range), qualityCheck(range), orderTime(range)]);
-    return { month: range.month, sales: s, suppliers: sup, qualityCheck: qc, orderTime: time };
+    const money = await costs(range, s);
+    return { month: range.month, sales: s, money, suppliers: sup, qualityCheck: qc, orderTime: time };
 }
 
 module.exports = { monthly };

@@ -43,7 +43,7 @@ export default function Reports() {
       {isLoading || !r ? <TableSkeleton rows={6} /> : (
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Figure label="Sales" value={rupees(r.sales.total)} sub={`${r.sales.bills} bill${r.sales.bills === 1 ? "" : "s"} · GST ${rupees(r.sales.gst)}`} />
+            <Figure label="Net sales" value={rupees(r.sales.net)} sub={`${r.sales.bills} bill${r.sales.bills === 1 ? "" : "s"}${r.sales.credited ? ` · credit notes − ${rupees(r.sales.credited)}` : ""} · received ${rupees(r.sales.collected)}`} />
             <Figure label="IQC rejected" value={show(r.suppliers.rejectedPct, "%")} bad={r.suppliers.rejectedPct > 2}
               sub={`${fmtQty(r.suppliers.rejected)} of ${fmtQty(r.suppliers.received)} pieces · ${r.suppliers.late} of ${r.suppliers.due} deliveries late`} />
             <Figure label="QC passed first try" value={show(r.qualityCheck.firstTryPassPct, "%")} bad={r.qualityCheck.firstTryPassPct !== null && r.qualityCheck.firstTryPassPct < 90}
@@ -51,7 +51,37 @@ export default function Reports() {
             <Figure label="Order to delivery" value={show(r.orderTime.avgDays, " days")} sub={`${r.orderTime.delivered} order${r.orderTime.delivered === 1 ? "" : "s"} delivered`} />
           </div>
 
+          <Section title="Money">
+            <div className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
+              {[
+                ["Billed (incl. GST)", rupees(r.sales.total)],
+                ["Credit notes", r.sales.credited ? `− ${rupees(r.sales.credited)}` : rupees(0)],
+                ["Net sales", rupees(r.sales.net)],
+                ["Money received this month", rupees(r.sales.collected)],
+                ["Still to collect (all bills)", rupees(r.sales.toCollect), r.sales.toCollect > 0],
+                ["Spent on purchases", rupees(r.money.spent)],
+                ["Cost of what was sold", rupees(r.money.costOfSold)],
+                ["Estimated profit", r.money.profit === null ? "—" : `${rupees(r.money.profit)}${r.money.marginPct !== null ? ` (${r.money.marginPct}%)` : ""}`, r.money.profit !== null && r.money.profit < 0],
+              ].map(([l, v, bad]) => (
+                <div key={l} className="flex justify-between border-b border-dashed py-1.5"><span>{l}</span><span className={cn("font-semibold tabular-nums", bad && "text-destructive")}>{v}</span></div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Profit = amount billed before GST − what the sold products cost (each product's BOM at the latest purchase rate of every component) − credit notes.
+              {r.money.unpricedProducts > 0 && ` ${r.money.unpricedProducts} sold product${r.money.unpricedProducts === 1 ? " is" : "s are"} left out: a component of it was never bought with a rate.`}
+            </p>
+          </Section>
+
           <div className="grid gap-4 lg:grid-cols-2">
+            <Section title="Still to collect (oldest first)">
+              {r.sales.owed.length === 0 ? <p className="text-muted-foreground">Every bill is paid.</p> : r.sales.owed.map((o) => (
+                <div key={o.billNumber} className="flex justify-between py-1">
+                  <span>{o.billNumber} <span className="text-xs text-muted-foreground">· {o.customer} · {o.days} d</span></span>
+                  <span className={cn("font-semibold tabular-nums", o.days > 30 && "text-destructive")}>{rupees(o.due)}</span>
+                </div>
+              ))}
+            </Section>
+
             <Section title="Suppliers (worst first)">
               {r.suppliers.bySupplier.length === 0 ? <p className="text-muted-foreground">No IQC check or due delivery this month.</p> : (
                 <table className="w-full text-left">

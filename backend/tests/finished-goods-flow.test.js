@@ -18,6 +18,10 @@ const fresh = () => ({
   bills: [],
   billItems: [],
   notifications: [],
+  // price list: product 1 has a price (100), product 2 none yet; GST differs per product
+  products: [{ id: 1, name: "Fan", selling_price: "100.00", gst_percent: "18.00" }, { id: 2, name: "Bulb", selling_price: null, gst_percent: "12.00" }],
+  payments: [],
+  credits: [],
 });
 
 const norm = (sql) => sql.replace(/\s+/g, " ").trim();
@@ -40,6 +44,18 @@ function run(raw, p = []) {
   if (sql.startsWith("INSERT INTO bills")) { s.bills.push(p); return [{ insertId: s.bills.length }]; }
   if (sql.startsWith("INSERT INTO bill_items")) { s.billItems.push(p); return [{}]; }
   if (sql.startsWith("SELECT id FROM customers WHERE id = ?")) return [[{ id: p[0] }]];
+  if (sql.startsWith("SELECT id, name, selling_price, gst_percent FROM products WHERE id IN (?)")) return [s.products.filter((x) => p[0].includes(x.id))];
+  if (sql.includes("FROM bills b JOIN orders o ON o.id = b.order_id JOIN finished_goods fg") && sql.includes("FOR UPDATE")) {
+    const bill = s.bills.length ? { id: 1, bill_number: "BILL-2026-0001", order_id: s.order.id, order_number: s.order.order_number, total: s.bills[0][10], fg_status: s.fg.status } : null;
+    return [bill ? [bill] : []];
+  }
+  if (sql.startsWith("SELECT (SELECT COALESCE(SUM(amount), 0) FROM bill_payments")) {
+    return [[{ paid: s.payments.reduce((a, x) => a + x, 0), credited: s.credits.reduce((a, x) => a + x, 0) }]];
+  }
+  if (sql.startsWith("INSERT INTO bill_payments")) { s.payments.push(Number(p[1])); return [{}]; }
+  if (sql.includes("FROM bill_credit_notes WHERE credit_number LIKE ? FOR UPDATE")) return [[{ n: s.credits.length }]];
+  if (sql.startsWith("INSERT INTO bill_credit_notes")) { s.credits.push(Number(p[2])); return [{}]; }
+  if (sql.startsWith("UPDATE bills SET status = 'CANCELLED'")) { s.billCancelled = true; return [{}]; }
   throw new Error(`fake db: unexpected SQL: ${sql}`);
 }
 
@@ -52,7 +68,7 @@ const fg = require("../src/modules/finished-goods/finished-goods.service.js");
 
 beforeEach(() => { s = fresh(); });
 
-const BILL = { customer_name: "ABC Traders", gst_percent: 18, items: [{ product_id: 1, rate: 100 }, { product_id: 2, rate: 250.5 }] };
+const BILL = { customer_name: "ABC Traders", items: [{ product_id: 1, rate: 100 }, { product_id: 2, rate: 250.5 }] };
 
 describe("finished goods after QC", () => {
   it("runs every step in order, each telling the next owner", async () => {
@@ -93,12 +109,47 @@ describe("finished goods after QC", () => {
     await expect(fg.advance("dispatch", 5, {}, 1)).rejects.toMatchObject({ status: 409, code: "INSUFFICIENT_STOCK" });
   });
 
-  it("adds the bill up: rate x quantity per product, then GST", async () => {
+  it("adds the bill up: rate x quantity per product, each product with its own GST", async () => {
     s.fg.status = "IN_STORE";
     const res = await fg.createBill(5, BILL, 1);
     expect(res.billNumber).toMatch(/^BILL-\d{4}-0001$/);
-    const [, , , customerId, name, , , gst, subtotal, gstAmount, total] = s.bills[0];
-    expect({ customerId, name, gst, subtotal, gstAmount, total }).toEqual({ customerId: null, name: "ABC Traders", gst: 18, subtotal: 1251.5, gstAmount: 225.27, total: 1476.77 });
+    const [, , , customerId, name, , , , subtotal, gstAmount, total] = s.bills[0];
+    // 5 x 100 at 18% = 90 GST, 3 x 250.50 at 12% = 90.18 GST
+    expect({ customerId, name, subtotal, gstAmount, total }).toEqual({ customerId: null, name: "ABC Traders", subtotal: 1251.5, gstAmount: 180.18, total: 1431.68 });
+  });
+
+  it("a rate below the price list needs the reason for the discount", async () => {
+    s.fg.status = "IN_STORE";
+    const cheap = { ...BILL, items: [{ product_id: 1, rate: 90 }, { product_id: 2, rate: 250.5 }] };
+    await expect(fg.createBill(5, cheap, 1)).rejects.toMatchObject({ code: "DISCOUNT_REASON_REQUIRED" });
+    await fg.createBill(5, { ...cheap, items: [{ product_id: 1, rate: 90, note: "bulk order" }, { product_id: 2, rate: 250.5 }] }, 1);
+    expect(s.fg.status).toBe("BILLED");
+  });
+
+  it("takes payments up to what is due, never more", async () => {
+    s.fg.status = "IN_STORE";
+    await fg.createBill(5, BILL, 1);
+    await fg.addPayment(5, { amount: 1000, paid_on: "2026-10-26", method: "UPI" }, 1);
+    await expect(fg.addPayment(5, { amount: 500, paid_on: "2026-10-26", method: "UPI" }, 1)).rejects.toMatchObject({ code: "MORE_THAN_DUE" });
+    const res = await fg.addPayment(5, { amount: 431.68, paid_on: "2026-10-26", method: "CASH" }, 1);
+    expect(res.due).toBe(0);
+  });
+
+  it("cancels a bill only while the goods are in the Store; after that it is a credit note", async () => {
+    s.fg.status = "IN_STORE";
+    await fg.createBill(5, BILL, 1);
+    await expect(fg.addCreditNote(5, { amount: 100, reason: "2 returned" }, 1)).rejects.toMatchObject({ code: "GOODS_IN_STORE" });
+    await fg.cancelBill(5, { reason: "wrong customer" }, 1);
+    expect([s.billCancelled, s.fg.status]).toEqual([true, "IN_STORE"]);
+
+    s = fresh();
+    s.fg.status = "IN_STORE";
+    await fg.createBill(5, BILL, 1);
+    s.fg.status = "DELIVERED";
+    await expect(fg.cancelBill(5, { reason: "wrong customer" }, 1)).rejects.toMatchObject({ code: "GOODS_LEFT" });
+    const cn = await fg.addCreditNote(5, { amount: 100, reason: "1 piece returned damaged" }, 1);
+    expect(cn.creditNumber).toMatch(/^CN-\d{4}-0001$/);
+    await expect(fg.addCreditNote(5, { amount: 5000, reason: "too much" }, 1)).rejects.toMatchObject({ code: "MORE_THAN_BILL" });
   });
 
   it("needs a customer and a rate for every product", async () => {
