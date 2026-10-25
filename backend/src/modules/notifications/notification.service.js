@@ -7,7 +7,9 @@ const hub = require("../../realtime/hub");
 
     notify(conn, {...}) is the ONLY way to create one. It is called INSIDE the transaction of the change that
     caused it, so the row exists only if that change committed, and the live push to the role's open tabs is
-    queued with conn.afterCommit(): nobody is told about something that was rolled back.
+    queued with conn.afterCommit(): nobody is told about something that was rolled back. The same push also goes to
+    the role's phones / desktops that turned on push notifications (push.service.js), so it reaches them even when
+    the app is closed.
 
     Two kinds:
       * information (requires_action = 0): each user reads it on their own (notification_reads).
@@ -30,7 +32,11 @@ async function notify(conn, { role, type, title, body = null, severity = "info",
         [role, type, title, body, severity, link, requiresAction ? 1 : 0, orderId, JSON.stringify(payload), userId]
     );
 
-    const push = () => hub.notifyRole(role, { type, notificationId: result.insertId, title, body, severity, link });
+    const push = () => {
+        hub.notifyRole(role, { type, notificationId: result.insertId, title, body, severity, link });
+        // phone / desktop (never throws; loaded here so the services that only save notifications never load web-push)
+        require("../push/push.service").sendToRole(role, { id: result.insertId, type, title, body, severity, link }, { exceptUserId: userId });
+    };
     // outside a transaction (plain db pool) the row is already committed
     if (conn.afterCommit) conn.afterCommit(push);
     else push();

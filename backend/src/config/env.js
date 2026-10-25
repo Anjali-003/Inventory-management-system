@@ -65,6 +65,14 @@ const env = {
     clientOrigin: process.env.CLIENT_ORIGIN || "",
     // the Vite dev server port, used to allow localhost / LAN origins in development
     clientDevPort: toInt(process.env.CLIENT_DEV_PORT, 5173),
+
+    // Web Push (phone / desktop notifications while the app is closed). Free, no account needed: generate the keys
+    // once with  npx web-push generate-vapid-keys  and put them in .env. Without the keys push stays off.
+    push: Object.freeze({
+        publicKey: process.env.VAPID_PUBLIC_KEY || "",
+        privateKey: process.env.VAPID_PRIVATE_KEY || "",
+        subject: process.env.VAPID_SUBJECT || "mailto:admin@example.com",
+    }),
 };
 
 /** Called once by server.js: the API also needs the settings the database scripts do not. */

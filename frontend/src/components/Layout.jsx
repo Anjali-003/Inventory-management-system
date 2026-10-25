@@ -27,6 +27,7 @@ import {
 
 import { cn } from "../lib/utils";
 import { authService } from "@/features/auth/authService"
+import { disablePush } from "@/lib/push";
 import { baseApi } from "../api/baseApi";
 import { usePermissions } from "@/features/auth/usePermissions";
 import NotificationBell from "@/features/notifications/NotificationBell";
@@ -282,6 +283,7 @@ export default function Layout() {
 
   const handleLogout = async () => {
     try {
+      await disablePush(); // this browser stops getting this role's phone / desktop notifications
       await authService.logout(); // clears only THIS role's login; other roles stay logged in
       clearActiveRole();
       dispatch(baseApi.util.resetApiState()); // never show the previous user's cached data

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { ArrowLeftRight, Check, ChevronRight, Eye, EyeOff, KeyRound, Loader2, LogIn, LogOut, UserRound } from "lucide-react"
+import { ArrowLeftRight, BellRing, Check, ChevronRight, Eye, EyeOff, KeyRound, Loader2, LogIn, LogOut, UserRound } from "lucide-react"
 import { Modal } from "@/components/Modal"
 import { Field } from "@/components/FormField"
 import { Notice } from "@/components/feedback"
@@ -9,6 +9,7 @@ import { MktBtn } from "@/features/marketing-orders/mktKit"
 import { authService } from "@/features/auth/authService"
 import { useChangePasswordMutation } from "@/features/auth/authApi"
 import { ROLE_LABELS, setActiveRole } from "@/lib/permissions"
+import { disablePush, enablePush, pushState } from "@/lib/push"
 import { errorMessage, fmtDateTime } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils"
     - who is logged in (name, email, role)
     - My account          details of this login
     - Change password     own password (current one required)
+    - Phone & desktop alerts  this role's notifications pop up on this device even when the app is closed (Web Push)
     - Switch workspace    the other roles logged in on this browser, one click each (every role has its own login)
     - Log in to another role  the home page's workflow logins
     - Log out             this role only; the others stay logged in
@@ -36,6 +38,9 @@ export default function ProfileMenu({ user, roleLabel, onLogout }) {
   const [open, setOpen] = useState(false)
   const [dialog, setDialog] = useState(null) // "account" | "password"
   const [others, setOthers] = useState(null) // other logged-in roles on this browser, loaded when the menu opens
+  const [push, setPush] = useState(null) // see lib/push.js pushState(); null = checking
+  const [pushBusy, setPushBusy] = useState(false)
+  const toast = useToast()
   const rootRef = useRef(null)
 
   useEffect(() => {
@@ -45,6 +50,9 @@ export default function ProfileMenu({ user, roleLabel, onLogout }) {
       .sessions()
       .then((list) => alive && setOthers(list.filter((s) => s.role !== user?.role)))
       .catch(() => alive && setOthers([]))
+    pushState()
+      .then((state) => alive && setPush(state))
+      .catch(() => alive && setPush("disabled"))
     const onDown = (e) => rootRef.current && !rootRef.current.contains(e.target) && setOpen(false)
     const onKey = (e) => e.key === "Escape" && setOpen(false)
     document.addEventListener("pointerdown", onDown)
@@ -64,6 +72,25 @@ export default function ProfileMenu({ user, roleLabel, onLogout }) {
     setDialog(which)
   }
   // a full page load: this tab now works as the other role, and nothing cached from this one is shown to it
+  const togglePush = async () => {
+    setPushBusy(true)
+    try {
+      if (push === "on") {
+        await disablePush()
+        setPush("off")
+        toast.success("Phone and desktop alerts turned off")
+      } else {
+        await enablePush()
+        setPush("on")
+        toast.success("Phone and desktop alerts turned on")
+      }
+    } catch (err) {
+      setPush(typeof Notification !== "undefined" && Notification.permission === "denied" ? "blocked" : push)
+      toast.error(err?.message && !err.response ? err.message : errorMessage(err, "Could not change the alerts."))
+    } finally {
+      setPushBusy(false)
+    }
+  }
   const switchTo = (role) => {
     setActiveRole(role)
     window.location.assign("/dashboard")
@@ -113,6 +140,31 @@ export default function ProfileMenu({ user, roleLabel, onLogout }) {
               <button type="button" role="menuitem" className={ITEM} onClick={() => show("password")}>
                 <KeyRound className="size-4 text-muted-foreground" /> Change password
               </button>
+              {push !== "unsupported" && push !== "disabled" && (
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={push === "on"}
+                  className={cn(ITEM, "disabled:opacity-100")}
+                  disabled={push === null || push === "blocked" || pushBusy}
+                  onClick={togglePush}
+                >
+                  <BellRing className="size-4 text-muted-foreground" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block">Phone &amp; desktop alerts</span>
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      {push === "blocked" ? "Blocked. Allow notifications in the browser's site settings." : "Even when the app is closed"}
+                    </span>
+                  </span>
+                  {pushBusy || push === null ? (
+                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                  ) : (
+                    <span aria-hidden className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", push === "on" ? "bg-primary" : "bg-cf-line-strong")}>
+                      <span className={cn("absolute top-0.5 size-4 rounded-full bg-white shadow transition-[left]", push === "on" ? "left-[18px]" : "left-0.5")} />
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* other roles logged in on this browser */}

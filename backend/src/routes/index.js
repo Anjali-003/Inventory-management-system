@@ -37,6 +37,7 @@ const attendanceRoutes = require("../modules/attendance/attendance.routes");
 const superAdminRoutes = require("../modules/super-admins/super-admin.routes");
 const activityRoutes = require("../modules/activity/activity.routes");
 const notificationRoutes = require("../modules/notifications/notification.routes");
+const pushRoutes = require("../modules/push/push.routes");
 const materialRequestRoutes = require("../modules/material-requests/material-request.routes");
 const eventsRoutes = require("../realtime/events.routes");
 
@@ -79,6 +80,8 @@ const MODULES = [
     // notification inbox of the logged-in role (header bell + dashboard panels). Every role has one, so no permit():
     // the service scopes every query to req.user.role. No broadcastChanges: the service pushes its own live event after commit.
     { path: "/notifications", router: notificationRoutes },
+    // phone / desktop notifications (Web Push) of the logged-in role: turn on / off for this browser
+    { path: "/push", router: pushRoutes },
 
     // live updates (Server-Sent Events)
     { path: "/events", router: eventsRoutes },
