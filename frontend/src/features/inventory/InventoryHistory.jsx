@@ -14,7 +14,6 @@ import ErrorBanner from "@/components/ErrorBanner";
 import { EmptyState, TableSkeleton } from "@/components/feedback";
 import BalanceSheetCard from "./components/BalanceSheetCard";
 import { ShortfallDetail } from "./components/balance/ShortfallDetail";
-import { balanceStatus } from "./components/balance/balanceTheme";
 import FinishedProductCards from "./components/FinishedProductCards";
 import {
   CfButton,
@@ -54,7 +53,6 @@ const monthOnly = (m) =>
     month: "short",
   });
 const signed = (n) => `${n > 0 ? "+" : ""}${fmtQty(n)}`;
-const STAT_TONE = { success: "green", danger: "red", warning: "amber" };
 
 function FlowRow({ label, value, sign, hint, strong }) {
   return (
@@ -169,8 +167,11 @@ export default function InventoryHistory() {
   };
 
   const diff = balance ? Number(balance.difference) : 0;
-  const st = balanceStatus(diff);
   const isShort = !!balance && diff < 0;
+  const inProduction = balance ? Number(balance.shortfall?.in_production || 0) : 0;
+  const withReason = balance ? Number(balance.shortfall?.explained_total || 0) : 0;
+  // shortfall.unexplained > 0 = pieces short with no explanation, shown as a negative stock figure
+  const unexplained = balance ? -Number(balance.shortfall?.unexplained || 0) : 0;
   const activeTab = tab === "shortfall" && !isShort ? "balance" : tab;
 
   // growth of the picked month relative to what was carried in (drawing only; figures come from the server)
@@ -357,15 +358,19 @@ export default function InventoryHistory() {
                 detail="All time"
                 onClick={() => goTab("products")}
               />
+              {/* the real question: of the gap between expected and actual stock, how much has NO explanation
+                  (waiting in production and taken out with a reason are both accounted for) */}
               <StatCard
                 index={3}
                 icon={Scale}
-                tone={STAT_TONE[st.tone]}
-                label="Stock difference"
-                value={balance ? diff : null}
+                tone={!balance ? "green" : unexplained === 0 ? "green" : "red"}
+                label="Unexplained difference"
+                value={balance ? unexplained : null}
                 format={signed}
                 loading={!balance && !detailError}
-                detail={balance ? st.short : undefined}
+                detail={balance ? (diff === 0
+                  ? "Stock matches the records"
+                  : `Gap ${fmtQty(Math.abs(diff))}: ${fmtQty(inProduction)} in production, ${fmtQty(withReason)} with a reason`) : undefined}
                 onClick={() => goTab(isShort ? "shortfall" : "balance")}
               />
             </div>

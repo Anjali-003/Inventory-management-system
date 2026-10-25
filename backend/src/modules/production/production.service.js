@@ -294,6 +294,7 @@ async function getProductionOrders() {
       )
       LEFT JOIN users rework_start_user ON rework_start_user.id = rc.started_by
       LEFT JOIN users rework_submit_user ON rework_submit_user.id = rc.submitted_by
+      WHERE o.approval_status <> 'CANCELLED'
       ORDER BY COALESCE(po.started_at, o.created_at) DESC, o.id DESC, oi.id ASC
     `)
 

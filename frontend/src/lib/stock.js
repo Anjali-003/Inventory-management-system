@@ -50,6 +50,7 @@ export const TYPE_META = {
   ADJUSTMENT_OUT: { label: "Adjustment (−)", tone: "warning" },
   RESERVED: { label: "Reserved", tone: "neutral" },
   CONSUMED: { label: "Consumed", tone: "danger" },
+  RETURNED_FROM_ORDER: { label: "Returned (order cancelled)", tone: "success" },
   RELEASED: { label: "Released", tone: "neutral" },
   ARCHIVED: { label: "Archived", tone: "neutral" },
 }

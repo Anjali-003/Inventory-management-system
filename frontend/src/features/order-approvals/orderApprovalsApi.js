@@ -49,6 +49,11 @@ export const orderApprovalsApi = baseApi.injectEndpoints({
       query: ({ id, ...data }) => ({ url: `/order-approvals/${id}/revise`, method: "post", data }),
       invalidatesTags: ["OrderApprovals", "MarketingOrders", "Orders"],
     }),
+    // an APPROVED order that has not started production: its components go back into stock (reason required)
+    cancelOrder: build.mutation({
+      query: ({ id, remarks }) => ({ url: `/order-approvals/${id}/cancel`, method: "post", data: { remarks } }),
+      invalidatesTags: ["OrderApprovals", "Orders", "MarketingOrders", "Production", "MaterialRequests", "Inventory"],
+    }),
     rejectOrder: build.mutation({
       query: ({ id, remarks }) => ({ url: `/order-approvals/${id}/reject`, method: "post", data: { remarks } }),
       invalidatesTags: ["OrderApprovals", "Orders"],
@@ -63,6 +68,7 @@ export const {
   useDispatchOrderMutation,
   useApproveOrderMutation,
   useRejectOrderMutation,
+  useCancelOrderMutation,
   useReviseOrderMutation,
   useUpdateDeliveryDateMutation,
 } = orderApprovalsApi;

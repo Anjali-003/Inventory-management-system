@@ -40,6 +40,11 @@ async function reject(req, res) {
     res.json(await service.reject(idOf(req), req.body, req.user.id));
 }
 
+/* POST /order-approvals/:id/cancel: an approved order that has not started production; its stock comes back */
+async function cancel(req, res) {
+    res.json(await service.cancel(idOf(req), req.body, req.user.id));
+}
+
 /* POST /order-approvals/:id/revise: make only part of the order now; the rest goes back to Marketing as a draft */
 async function revise(req, res) {
     res.json(await service.revise(idOf(req), req.body, req.user.id));
@@ -62,6 +67,7 @@ async function dispatch(req, res) {
 module.exports = {
     list: asyncHandler(list, { message: "Failed to fetch orders" }),
     listApproved: asyncHandler(listApproved, { message: "Failed to fetch approved orders" }),
+    cancel: asyncHandler(cancel, { message: "Failed to cancel the order" }),
     getOne: asyncHandler(getOne, { message: "Failed to fetch the order" }),
     approve: asyncHandler(approve, { message: "Failed to approve the order" }),
     reject: asyncHandler(reject, { message: "Failed to reject the order" }),

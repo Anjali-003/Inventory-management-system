@@ -7,6 +7,9 @@ import { DecisionButtons } from "./DecisionButtons"
 import useOrderDecisions from "./useOrderDecisions"
 import { canApprove } from "./approvalParts"
 import { useGetOrderApprovalsQuery, useGetOrderPlanQuery } from "./orderApprovalsApi"
+import CancelOrderDialog from "./CancelOrderDialog"
+import { MktBtn } from "@/features/marketing-orders/mktKit"
+import { Ban } from "lucide-react"
 
 const EMPTY = []
 
@@ -26,6 +29,7 @@ export default function OpsOrderDrawer({ orderId, onClose, tab: tabProp, onTab }
   const { data = EMPTY, isFetching } = useGetOrderApprovalsQuery()
   const [ownTab, setOwnTab] = useState(null)
   const decisions = useOrderDecisions()
+  const [cancelling, setCancelling] = useState(null)
 
   const selected = useMemo(
     () => (orderId != null ? (data.find((o) => String(o.id) === String(orderId)) ?? null) : null),
@@ -49,7 +53,7 @@ export default function OpsOrderDrawer({ orderId, onClose, tab: tabProp, onTab }
       {/* hidden while a decision popup is open; the buttons stay disabled while the list refetches, so right after a
           decision the drawer cannot act again on the old (still "waiting") copy of the order */}
       <OrderDrawer
-        order={selected && !decisions.active ? selected : null}
+        order={selected && !decisions.active && !cancelling ? selected : null}
         tab={tab}
         onTab={setTab}
         onClose={close}
@@ -63,9 +67,16 @@ export default function OpsOrderDrawer({ orderId, onClose, tab: tabProp, onTab }
               }
             : undefined
         }
-        actions={selected && editable ? <DecisionButtons order={selected} plan={plan} disabled={isFetching} onDecide={decide} /> : null}
+        actions={selected && editable ? (
+          selected.approval_status === "APPROVED" ? (
+            <MktBtn variant="danger" disabled={isFetching} onClick={() => setCancelling(selected)}><Ban /> Cancel order</MktBtn>
+          ) : (
+            <DecisionButtons order={selected} plan={plan} disabled={isFetching} onDecide={decide} />
+          )
+        ) : null}
       />
       {decisions.popup}
+      <CancelOrderDialog order={cancelling} onClose={() => setCancelling(null)} />
     </>
   )
 }

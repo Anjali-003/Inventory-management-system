@@ -78,7 +78,19 @@ export const REVISED_STAGE = {
   },
 }
 
-export const stageOf = (status) => STAGES.find((s) => s.status === status) ?? (status === REVISED_STAGE.status ? REVISED_STAGE : undefined)
+/* An approved order cancelled before production (its components went back into stock). No tile of its own either. */
+export const CANCELLED_STAGE = {
+  ...STAGES.find((s) => s.status === "REJECTED"),
+  status: "CANCELLED", label: "Cancelled", short: "Cancelled", tone: "neutral", dotTone: "neutral",
+  bar: "bg-gradient-to-r from-slate-600 to-slate-800", dot: "bg-slate-400", hint: "Cancelled after approval: see the remarks",
+  s: {
+    grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/30", soft: "bg-slate-50 ring-slate-200/70",
+    pill: "bg-slate-100 text-slate-700 ring-slate-200", ink: "text-slate-600",
+  },
+}
+
+export const stageOf = (status) => STAGES.find((s) => s.status === status)
+  ?? (status === REVISED_STAGE.status ? REVISED_STAGE : status === CANCELLED_STAGE.status ? CANCELLED_STAGE : undefined)
 export const isStatus = (value) => STAGES.some((s) => s.status === value)
 
 /** Link to the Marketing Orders page with a filter already applied: ordersHref("DRAFT"), ordersHref(null, { new: 1 }). */

@@ -48,10 +48,8 @@ function ItemCard({ item: i, actions }) {
           ))}
         </dl>
       )}
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border text-center">
-        {[["On hand", i.quantity_on_hand], ["Available", i.available]].map(([l, v]) => (
-          <div key={l} className="bg-card py-2"><p className="text-[11px] uppercase tracking-wide text-muted-foreground">{l}</p><p className="font-semibold tabular-nums">{fmtQty(v)}</p></div>
-        ))}
+      <div className="overflow-hidden rounded-lg border bg-card py-2 text-center">
+        <p className="text-[11px] uppercase tracking-wide text-muted-foreground">On hand</p><p className="font-semibold tabular-nums">{fmtQty(i.quantity_on_hand)}</p>
       </div>
       <p className="text-xs text-muted-foreground">Minimum level {fmtQty(i.minimum_stock_level)} {i.unit}</p>
       <div className="mt-auto border-t pt-2">{actions}</div>
@@ -204,7 +202,6 @@ export default function Inventory() {
                         <TableHead className="hidden lg:table-cell">Category / Size</TableHead>
                         <TableHead className="hidden lg:table-cell">Location</TableHead>
                         <TableHead className="text-right">On hand</TableHead>
-                        <TableHead className="text-right">Available</TableHead>
                         <TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -227,7 +224,6 @@ export default function Inventory() {
                             {fmtQty(i.quantity_on_hand)}
                             <span className="block text-xs text-muted-foreground">min {fmtQty(i.minimum_stock_level)}</span>
                           </TableCell>
-                          <TableCell className="text-right font-medium tabular-nums">{fmtQty(i.available)}</TableCell>
                           <TableCell><StockBadge item={i} /></TableCell>
                           <TableCell><Actions item={i} /></TableCell>
                         </TableRow>

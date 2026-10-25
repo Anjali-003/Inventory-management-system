@@ -19,7 +19,8 @@ const fresh = () => ({
     { product_id: 1, component_id: 2, quantity_required: "1.00", sku: "CMP-002", name: "Capacitor", unit: "pcs" },
   ],
   inventory: [
-    { component_id: 1, quantity_on_hand: "15.00", quantity_reserved: "3.00" }, // 12 available -> 6 units
+    // nothing is reserved any more: on hand is what the plan can use (12 -> 6 units at 2 per unit)
+    { component_id: 1, quantity_on_hand: "12.00", quantity_reserved: "0.00" },
     { component_id: 2, quantity_on_hand: "100.00", quantity_reserved: "0.00" },
   ],
   ledger: [],

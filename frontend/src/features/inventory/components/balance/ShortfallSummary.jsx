@@ -77,7 +77,7 @@ export default function ShortfallSummary({
             dot="bg-muted-foreground/45"
             label="Waiting in production"
             value={fmtQty(inProduction)}
-            sub="Used, not finished yet. Not missing"
+            sub="Taken by approved orders, not finished yet. Not missing"
             onClick={() => open({ kind: "production" })}
           />
           <Stat

@@ -158,6 +158,7 @@ const ORDER_STATUS = {
   */
 
   COMPLETED: ["success", "Delivered"],
+  CANCELLED: ["neutral", "Cancelled"],
 
   /*
   =================================================

@@ -197,7 +197,9 @@ async function getDailyHistory(monthRaw) {
 /* ------------------------------------------------- finished products view */
 /*
     One entry per finished product:
-        produced            = units of it in finished_goods (all statuses: packaging, dispatched, completed)
+        produced            = units of it in orders that passed QC (one finished_goods record per order, any step).
+                              Counted from order_items: finished_goods.quantity is the whole order's total,
+                              so using it per product would count a Fan x5 + Bulb x3 order as 8 of each.
         components_per_unit = sum of the BOM quantities for ONE unit of that product
         components_used     = produced x components_per_unit
     Read-only, derived from finished_goods / order_items / product_bom. Stock is never touched.
@@ -210,7 +212,7 @@ async function getFinishedProductsUsage() {
                COALESCE(b.per_unit, 0) AS components_per_unit,
                COALESCE(b.bom_lines, 0) AS bom_lines
         FROM (
-            SELECT oi.product_id, SUM(fg.quantity) AS produced
+            SELECT oi.product_id, SUM(oi.quantity) AS produced
             FROM finished_goods fg
             JOIN order_items oi ON oi.order_id = fg.order_id
             GROUP BY oi.product_id
@@ -253,7 +255,8 @@ async function getFinishedProductsUsage() {
     When actual is short, the ledger says WHERE the pieces went. Everything that lowers on-hand stock
     other than finished goods is listed with its reason, quantity and order:
 
-        consumed in production but not finished yet   (CONSUMED  - components_used)
+        consumed in production but not finished yet   (CONSUMED - RETURNED_FROM_ORDER - components_used)
+                                                      (a cancelled order's stock comes back as RETURNED_FROM_ORDER)
         manual stock-out, by reason                   (STOCK_OUT: damaged, R&D, returned to supplier, ...)
         count adjustments                             (ADJUSTMENT_OUT minus ADJUSTMENT_IN)
 
@@ -315,9 +318,10 @@ async function getBalanceSheet() {
     const differenceC = actualC - expectedC;
 
     const [[cons]] = await db.query(
-        `SELECT COALESCE(SUM(quantity), 0) AS consumed
+        `SELECT COALESCE(SUM(CASE WHEN transaction_type = 'CONSUMED' AND direction = 'OUT' THEN quantity
+                                WHEN transaction_type = 'RETURNED_FROM_ORDER' AND direction = 'IN' THEN -quantity ELSE 0 END), 0) AS consumed
            FROM inventory_transactions
-          WHERE transaction_type = 'CONSUMED' AND direction = 'OUT'`
+          WHERE transaction_type IN ('CONSUMED', 'RETURNED_FROM_ORDER')`
     );
     const inProductionC = cents(cons.consumed) - usedC;
 
@@ -376,7 +380,7 @@ async function getBalanceSheet() {
     const [usedRows] = await db.query(
         `SELECT bom.component_id, SUM(f.produced * bom.quantity_required) AS qty
            FROM (
-                SELECT oi.product_id, SUM(fg.quantity) AS produced
+                SELECT oi.product_id, SUM(oi.quantity) AS produced
                   FROM finished_goods fg
                   JOIN order_items oi ON oi.order_id = fg.order_id
                  GROUP BY oi.product_id
@@ -388,9 +392,10 @@ async function getBalanceSheet() {
         `SELECT component_id, SUM(quantity_on_hand) AS qty FROM inventory GROUP BY component_id`
     );
     const [consumedRows] = await db.query(
-        `SELECT t.component_id, SUM(t.quantity) AS qty
+        `SELECT t.component_id, SUM(CASE WHEN t.transaction_type = 'CONSUMED' AND t.direction = 'OUT' THEN t.quantity
+                                WHEN t.transaction_type = 'RETURNED_FROM_ORDER' AND t.direction = 'IN' THEN -t.quantity ELSE 0 END) AS qty
            FROM inventory_transactions t
-          WHERE t.transaction_type = 'CONSUMED' AND t.direction = 'OUT'
+          WHERE t.transaction_type IN ('CONSUMED', 'RETURNED_FROM_ORDER')
           GROUP BY t.component_id`
     );
     const [leftRows] = await db.query(
@@ -447,6 +452,45 @@ async function getBalanceSheet() {
             quantity: num(r.inProd),
         }));
 
+    // The same "waiting in production" stock, order by order: what each order took out of stock on approval
+    // (CONSUMED rows carry the order) minus what its products used once the order passed QC.
+    const [orderConsumed] = await db.query(
+        `SELECT t.order_id, o.order_number, o.status, t.component_id, SUM(CASE WHEN t.transaction_type = 'CONSUMED' AND t.direction = 'OUT' THEN t.quantity
+                                WHEN t.transaction_type = 'RETURNED_FROM_ORDER' AND t.direction = 'IN' THEN -t.quantity ELSE 0 END) AS qty
+           FROM inventory_transactions t
+           JOIN orders o ON o.id = t.order_id
+          WHERE t.transaction_type IN ('CONSUMED', 'RETURNED_FROM_ORDER')
+          GROUP BY t.order_id, o.order_number, o.status, t.component_id`
+    );
+    const [orderUsed] = await db.query(
+        `SELECT oi.order_id, bom.component_id, SUM(oi.quantity * bom.quantity_required) AS qty
+           FROM finished_goods fg
+           JOIN order_items oi ON oi.order_id = fg.order_id
+           JOIN product_bom bom ON bom.product_id = oi.product_id
+          GROUP BY oi.order_id, bom.component_id`
+    );
+    const usedByOrder = new Map(orderUsed.map((r) => [`${r.order_id}:${r.component_id}`, cents(r.qty)]));
+    const compById = new Map(comps.map((c) => [c.id, c]));
+    const orderMap = new Map();
+    for (const r of orderConsumed) {
+        const left = cents(r.qty) - (usedByOrder.get(`${r.order_id}:${r.component_id}`) || 0);
+        if (left <= 0) continue;
+        if (!orderMap.has(r.order_id)) {
+            orderMap.set(r.order_id, { order_id: r.order_id, order_number: r.order_number, status: r.status, totalC: 0, components: [] });
+        }
+        const o = orderMap.get(r.order_id);
+        const c = compById.get(r.component_id) || {};
+        o.totalC += left;
+        o.components.push({ component_id: r.component_id, sku: c.sku, name: c.name, unit: c.unit, quantity: num(left) });
+    }
+    const unfinishedOrders = [...orderMap.values()]
+        .sort((a, b) => b.totalC - a.totalC)
+        .map(({ totalC, components: list, ...o }) => ({
+            ...o,
+            quantity: num(totalC),
+            components: list.sort((a, b) => b.quantity - a.quantity),
+        }));
+
     return {
         received_total: num(receivedC),
         components_used: num(usedC),
@@ -459,6 +503,7 @@ async function getBalanceSheet() {
             components,
             components_missing_total: num(componentsMissingTotalC),
             unfinished_components: unfinishedComponents,
+            unfinished_orders: unfinishedOrders,
             explained_total: num(explainedC),
             unexplained: num(-differenceC - inProductionC - explainedC),
             movements: moves.map((m) => ({

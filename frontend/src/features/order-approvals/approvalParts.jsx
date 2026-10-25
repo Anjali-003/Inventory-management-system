@@ -8,6 +8,7 @@ export const APPROVAL_META = {
   PENDING_APPROVAL: { variant: "warning", label: "Waiting for approval" },
   APPROVED: { variant: "success", label: "Approved" },
   REJECTED: { variant: "danger", label: "Rejected" },
+  CANCELLED: { variant: "neutral", label: "Cancelled" },
 }
 
 export function ApprovalStatus({ value }) {

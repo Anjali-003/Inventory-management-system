@@ -62,7 +62,7 @@ const BY_TYPE = ["CONSUMED", "ARCHIVED"]
 export function LedgerPanel({ componentFilter, onClearComponent, refreshToken }) {
   const [q, setQ] = useState("")
   const [dq, setDq] = useState("")
-  const [kind, setKind] = useState("") // "" | IN | OUT | RESERVE | CONSUMED | ARCHIVED
+  const [kind, setKind] = useState("") // "" | IN | OUT | CONSUMED | ARCHIVED
   const [from, setFrom] = useState("")
   const [to, setTo] = useState("")
   const [page, setPage] = useState(1)
@@ -99,7 +99,6 @@ export function LedgerPanel({ componentFilter, onClearComponent, refreshToken })
           <option value="">All movements</option>
           <option value="IN">Stock in</option>
           <option value="OUT">Stock out</option>
-          <option value="RESERVE">Reservations</option>
           <option value="CONSUMED">Consumed</option>
           <option value="ARCHIVED">Archived</option>
         </select>

@@ -47,7 +47,7 @@ const { planOrder } = require("./order-planner");
     requested / approved / held per product. An order can be revised once; it moves no stock.
 */
 
-const APPROVAL_STATUSES = ["PENDING_APPROVAL", "QUANTITY_REVISED", "APPROVED", "REJECTED"]; // DRAFT is marketing-only: never listed here
+const APPROVAL_STATUSES = ["PENDING_APPROVAL", "QUANTITY_REVISED", "APPROVED", "REJECTED", "CANCELLED"]; // DRAFT is marketing-only: never listed here
 const MAX_REMARKS = 500;
 const APPROVABLE = ["PENDING_APPROVAL"]; // statuses an order can be approved from
 
@@ -747,5 +747,106 @@ async function updateDeliveryDate(orderId, body, user) {
     });
 }
 
+/*
+    Cancel an APPROVED order (Operations Admin / Super Admin, reason required) while production has NOT started.
+    Everything the approval took out of stock comes back: one RETURNED_FROM_ORDER row per component in the ledger
+    (tied to the order), so the Inventory History balance stays explained. Once any unit is started, cancel is refused.
+    approval_status = CANCELLED takes the order off every list that needs an APPROVED order (production, store issue,
+    purchase "what to buy"). Components Store already handed to the floor must be brought back: Store is told.
+*/
+async function cancel(orderId, body, userId) {
+    const remarks = parseRemarks(body && body.remarks, {
+        required: true,
+        missing: "Please write why this order is cancelled (at least 3 characters)",
+    });
+
+    return inventory.inTransaction(async (conn) => {
+        const [rows] = await conn.query(
+            `SELECT id, order_number, status, approval_status FROM orders WHERE id = ? FOR UPDATE`,
+            [orderId]
+        );
+        if (!rows.length) throw AppError.notFound("Order not found", "NOT_FOUND");
+        const order = rows[0];
+        if (order.approval_status !== "APPROVED") {
+            throw AppError.conflict("Only an approved order can be cancelled (a waiting order is rejected instead).", "NOT_APPROVED");
+        }
+        const [[started]] = await conn.query(
+            `SELECT COALESCE(SUM(po.quantity_to_produce), 0) AS units FROM production_orders po WHERE po.order_id = ?`,
+            [orderId]
+        );
+        if (Number(started.units) > 0) {
+            throw AppError.conflict("Production has already started on this order, so it cannot be cancelled.", "PRODUCTION_STARTED");
+        }
+
+        // what the approval took out of stock for this order, minus anything already given back
+        const [taken] = await conn.query(
+            `SELECT component_id,
+                    SUM(CASE WHEN transaction_type = 'CONSUMED' AND direction = 'OUT' THEN quantity
+                             WHEN transaction_type = 'RETURNED_FROM_ORDER' AND direction = 'IN' THEN -quantity
+                             ELSE 0 END) AS qty
+             FROM inventory_transactions
+             WHERE order_id = ? AND transaction_type IN ('CONSUMED', 'RETURNED_FROM_ORDER')
+             GROUP BY component_id
+             HAVING qty > 0
+             ORDER BY component_id`,
+            [orderId]
+        );
+        for (const t of taken) {
+            await conn.query(
+                `INSERT INTO inventory (component_id, quantity_on_hand, quantity_reserved) VALUES (?, 0, 0)
+                 ON DUPLICATE KEY UPDATE component_id = component_id`,
+                [t.component_id]
+            );
+            await conn.query(
+                `UPDATE inventory SET quantity_on_hand = quantity_on_hand + ?, is_active = 1, archived_at = NULL WHERE component_id = ?`,
+                [t.qty, t.component_id]
+            );
+            const [[stock]] = await conn.query(`SELECT quantity_on_hand FROM inventory WHERE component_id = ?`, [t.component_id]);
+            await conn.query(
+                `INSERT INTO inventory_transactions
+                    (component_id, transaction_type, direction, quantity, balance_after, reason, reason_code, reference_type, reference_id, created_by, order_id)
+                 VALUES (?, 'RETURNED_FROM_ORDER', 'IN', ?, ?, ?, 'ORDER_CANCELLED', 'ORDER_CANCEL', ?, ?, ?)`,
+                [t.component_id, t.qty, stock.quantity_on_hand, `Order ${order.order_number} cancelled: ${remarks}`.slice(0, 255), orderId, userId, orderId]
+            );
+        }
+
+        assertSaved((await conn.query(
+            `UPDATE orders
+             SET approval_status = 'CANCELLED', status = 'CANCELLED', approval_remarks = ?, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ? AND approval_status = 'APPROVED'`,
+            [remarks, orderId]
+        ))[0]);
+
+        // components Store already handed over to the floor are physically there: they must come back to the shelf
+        const [[issued]] = await conn.query(
+            `SELECT COUNT(*) AS n FROM production_material_issues i
+             JOIN production_material_request_items ri ON ri.id = i.request_item_id
+             JOIN production_material_requests r ON r.id = ri.request_id
+             WHERE r.order_id = ?`,
+            [orderId]
+        );
+        const handedOver = Number(issued.n) > 0;
+        const [[toBuy]] = await conn.query(`SELECT COUNT(*) AS n FROM order_purchase_items WHERE order_id = ?`, [orderId]);
+
+        const common = { orderId, userId, payload: { order_number: order.order_number } };
+        const reason = `Reason: ${remarks}`;
+        await notifications.notify(conn, { ...common, role: "MARKETING_MANAGER", type: "ORDER_CANCELLED", severity: "warning",
+            link: `/marketing-orders?order=${orderId}`, title: `Order ${order.order_number} cancelled`, body: reason });
+        await notifications.notify(conn, { ...common, role: "PRODUCTION_MANAGER", type: "ORDER_CANCELLED", severity: "warning",
+            link: "/production", title: `Order ${order.order_number} cancelled, do not build it`,
+            body: handedOver ? `${reason}. Give the materials Store handed over back to Store.` : reason });
+        await notifications.notify(conn, { ...common, role: "STORE_MANAGER", type: "ORDER_CANCELLED", severity: handedOver ? "action" : "info",
+            link: "/inventory", title: `Order ${order.order_number} cancelled: its components are back in stock`,
+            body: handedOver ? "You already handed some of them to Production: collect them back to the shelf." : reason });
+        if (Number(toBuy.n)) {
+            await notifications.notify(conn, { ...common, role: "PURCHASE_MANAGER", type: "ORDER_CANCELLED", severity: "warning",
+                link: "/purchase", title: `Order ${order.order_number} cancelled`,
+                body: "Its components no longer need to be bought for this order. Check open purchases." });
+        }
+
+        return { id: orderId, approval_status: "CANCELLED", returned_components: taken.length };
+    });
+}
+
 module.exports = {
-    updateDeliveryDate, APPROVAL_STATUSES, listOrders, getOrder, getOrdersByIds, approve, reject, getPlan, dispatch, revise };
+    updateDeliveryDate, APPROVAL_STATUSES, listOrders, getOrder, getOrdersByIds, approve, reject, cancel, getPlan, dispatch, revise };
