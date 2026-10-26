@@ -8,6 +8,10 @@ export const customersApi = baseApi.injectEndpoints({
       transformResponse: (res) => (Array.isArray(res) ? res : []),
       providesTags: ["Customers"],
     }),
+    updateCustomer: build.mutation({
+      query: ({ id, ...body }) => ({ url: `/customers/${id}`, method: "put", data: body }),
+      invalidatesTags: ["Customers"],
+    }),
     saveCustomer: build.mutation({
       query: (body) => ({ url: "/customers", method: "post", data: body }),
       invalidatesTags: ["Customers"],
@@ -15,4 +19,4 @@ export const customersApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useGetCustomersQuery, useSaveCustomerMutation } = customersApi;
+export const { useGetCustomersQuery, useSaveCustomerMutation, useUpdateCustomerMutation } = customersApi;

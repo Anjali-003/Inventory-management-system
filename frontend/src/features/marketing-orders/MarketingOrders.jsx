@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useUrlState } from "@/lib/useUrlState"
 import { MotionConfig, motion } from "motion/react"
 import { ClipboardList, Loader2, Plus, RefreshCw, Send, Trash2, X } from "lucide-react"
 import UserCell from "@/components/UserCell"
@@ -126,23 +126,12 @@ export default function MarketingOrders() {
   const { canEdit } = usePermissions()
   const editable = canEdit("marketingOrders")
 
-  const [params, setParams] = useSearchParams()
+  const { params, patch, openPopup, closePopup } = useUrlState()
   const status = isStatus(params.get("status")) ? params.get("status") : null
   const query = params.get("q") ?? ""
   const orderId = params.get("order")
   const tab = isDrawerTab(params.get("tab")) ? params.get("tab") : "overview"
   const adding = editable && params.get("new") === "1"
-
-  // `replace` keeps typing in the search box from filling the browser history.
-  const patch = (changes, replace = false) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev)
-      for (const [k, v] of Object.entries(changes)) {
-        if (v) next.set(k, v)
-        else next.delete(k)
-      }
-      return next
-    }, { replace })
 
   const { data = EMPTY, isLoading, isFetching, error, refetch } = useGetMarketingOrdersQuery()
   const [send] = useSendMarketingOrderMutation()
@@ -167,9 +156,9 @@ export default function MarketingOrders() {
 
   const filtered = !!(status || query.trim())
   const clearFilters = () => patch({ status: null, q: null })
-  const openNew = () => patch({ new: "1" })
-  const openOrder = (o, drawerTab) => patch({ order: o.id, tab: drawerTab && drawerTab !== "overview" ? drawerTab : null })
-  const closeOrder = () => patch({ order: null, tab: null }, true)
+  const openNew = () => openPopup({ new: "1" })
+  const openOrder = (o, drawerTab) => openPopup({ order: o.id, tab: drawerTab && drawerTab !== "overview" ? drawerTab : null })
+  const closeOrder = () => closePopup({ order: null, tab: null })
 
   const sendOrder = async (o) => {
     setBusyId(o.id)
@@ -328,7 +317,7 @@ export default function MarketingOrders() {
 
       {editable && <NewOrderFab onClick={openNew} />}
 
-      {adding && <NewOrderModal onClose={() => patch({ new: null }, true)} />}
+      {adding && <NewOrderModal onClose={() => closePopup({ new: null })} />}
       <OrderDrawer
         order={selected && !confirmDelete ? selected : null}
         tab={tab}

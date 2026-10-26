@@ -32,6 +32,8 @@ const StoreMaterialRequests = lazy(() => import("@/features/material-requests/St
 const ProductStock = lazy(() => import("@/features/product-stock/ProductStock"));
 const OrderTracker = lazy(() => import("@/features/order-tracker/OrderTracker"));
 const Reports = lazy(() => import("@/features/order-tracker/Reports"));
+const Bills = lazy(() => import("@/features/sales/Bills"));
+const Customers = lazy(() => import("@/features/sales/Customers"));
 
 /** { path, module (see MODULE_PATHS in lib/permissions.js), Page, title } */
 //Page batata hai kya render karna hai, module batata hai kis permission ko check karna hai, aur path batata hai kis URL par route match karna hai.
@@ -41,6 +43,8 @@ export const PAGES = [
   { path: "/activity", module: "activity", Page: Activity, title: "Activity" },
   { path: "/order-tracker", module: "orderTracker", Page: OrderTracker, title: "Order tracker" },
   { path: "/reports", module: "reports", Page: Reports, title: "Reports" },
+  { path: "/bills", module: "sales", Page: Bills, title: "Bills" },
+  { path: "/customers", module: "customers", Page: Customers, title: "Customers" },
   { path: "/orders", module: "orders", Page: Orders, title: "Orders" },
   { path: "/products", module: "products", Page: Products, title: "Products" },
   { path: "/inventory", module: "inventory", Page: Inventory, title: "Component stock" },

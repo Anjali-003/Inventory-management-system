@@ -170,9 +170,45 @@ export const setActiveRole = (role) => {
 export const clearActiveRole = () => {
   try {
     sessionStorage.removeItem(ROLE_KEY);
+    sessionStorage.removeItem(VIEW_AS_KEY);
   } catch {
     // Ignore sessionStorage errors.
   }
+};
+
+/*
+  VIEW AS (Super Admin only)
+
+  The CEO can see the app exactly as another role sees it (sidebar, dashboard, buttons) without logging in as that
+  role: pick it in the header. It is kept per tab (sessionStorage), so two tabs can show two roles side by side.
+  Only the screens change: the server still knows the user as the Super Admin, so whatever is done is done (and
+  recorded) as the Super Admin, who may do every role's work anyway.
+*/
+const VIEW_AS_KEY = "ims_view_as";
+const viewAsListeners = new Set();
+
+export const getViewAs = () => {
+  try {
+    const role = norm(sessionStorage.getItem(VIEW_AS_KEY));
+    return role && role !== "SUPER_ADMIN" && ROLES[role] ? role : null;
+  } catch {
+    return null;
+  }
+};
+
+export const setViewAs = (role) => {
+  try {
+    if (role && role !== "SUPER_ADMIN") sessionStorage.setItem(VIEW_AS_KEY, norm(role));
+    else sessionStorage.removeItem(VIEW_AS_KEY);
+  } catch {
+    // Ignore sessionStorage errors.
+  }
+  viewAsListeners.forEach((fn) => fn());
+};
+
+export const subscribeViewAs = (fn) => {
+  viewAsListeners.add(fn);
+  return () => viewAsListeners.delete(fn);
 };
 
 // Called after a successful login on a portal page.
@@ -211,6 +247,8 @@ export const MODULE_PATHS = {
   productStock: "/product-stock",
   orderTracker: "/order-tracker",
   reports: "/reports",
+  sales: "/bills",
+  customers: "/customers",
   employees: "/employees",
   attendance: "/attendance",
 
@@ -256,9 +294,9 @@ const ACCESS = {
   },
 
   // IQC Manager owns IQC and can view related departments.
+  // IQC only checks what Purchase sent: no customer orders (no Order Tracker, no order numbers on purchases)
   IQC_MANAGER: {
     dashboard: "view",
-    orderTracker: "view", // "waiting for you" on the dashboard
     iqc: "edit",
     purchase: "view",
     inventory: "view",
@@ -296,7 +334,7 @@ const ACCESS = {
     dashboard: "view",
     orderTracker: "view", // "waiting for you" on the dashboard
     qualityControl: "edit",
-    finishedGoods: "edit",
+    finishedGoods: "view",
     qcFailed: "edit",
     production: "view",
     productStock: "view",
@@ -310,6 +348,7 @@ const ACCESS = {
     finishedGoods: "edit",
     productStock: "view",
     customers: "edit",
+    sales: "view",
     orderTracker: "view",
   },
 
@@ -331,10 +370,12 @@ const ACCESS = {
     inventoryHistory: "view",
     incomingStock: "view",
     // hands packed goods over to the Store
-    finishedGoods: "edit",
+    finishedGoods: "view",
     productStock: "view",
     orderTracker: "view",
     reports: "view",
+    sales: "view",
+    customers: "view",
 
     // Read-only access to IQC and Purchase.
     iqc: "view",

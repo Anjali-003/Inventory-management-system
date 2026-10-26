@@ -18,6 +18,9 @@ const server = app.listen(env.port, "0.0.0.0", () => {
 // forget idempotency keys that are too old for any client to retry (keeps the table small)
 startPurgeJob(db);
 
+// every hour: tell the Super Admin about orders stuck 3+ days at one step (once a day per order)
+require("./src/modules/reports/order-tracker.service").startStuckOrderJob();
+
 async function shutdown(signal) {
     console.log(`${signal} received, shutting down...`);
 

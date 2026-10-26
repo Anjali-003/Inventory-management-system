@@ -9,6 +9,7 @@ import { timeAgo } from "@/features/activity/time"
 import { fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { purchaseFor } from "./purchasingUtils"
+import { PurchaseForLinks } from "./PurchaseParts"
 
 /*
   Building blocks for the Purchase Manager screens (dashboard, Purchase, Approved Orders and their popups).
@@ -311,7 +312,7 @@ export function PurchaseCard({ purchase: p, editable, busy, onOpen, onReceive, o
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="break-all text-[15px] font-semibold leading-snug tabular-nums">{p.po_number}</p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{p.supplier}{purchaseFor(p) ? ` · for ${purchaseFor(p)}` : ""}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{p.supplier}{purchaseFor(p) && <> · <PurchaseForLinks purchase={p} /></>}</p>
           </div>
           <PurchaseStatusPill value={p.status} short className="shrink-0" />
         </div>

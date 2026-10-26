@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS `components` (
   `minimum_stock_level` decimal(12,2) NOT NULL DEFAULT '0.00',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `standard_cost` decimal(12,2) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `sku` (`sku`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

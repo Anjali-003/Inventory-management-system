@@ -43,6 +43,7 @@ const extraMaterialRoutes = require("../modules/extra-materials/extra-material.r
 const productStockRoutes = require("../modules/product-stock/product-stock.routes");
 const customerRoutes = require("../modules/customers/customer.routes");
 const reportRoutes = require("../modules/reports/report.routes");
+const salesRoutes = require("../modules/sales/sales.routes");
 const orderTrackerRoutes = require("../modules/reports/order-tracker.routes");
 const eventsRoutes = require("../realtime/events.routes");
 
@@ -74,6 +75,8 @@ const MODULES = [
     // read only: where every order is and its whole journey; the month report
     { path: "/order-tracker", router: orderTrackerRoutes, guards: [permit("orderTracker")] },
     { path: "/reports", router: reportRoutes, guards: [permit("reports")] },
+    // Marketing's Sales & Billing: every bill with paid / due, and the month's money (read only)
+    { path: "/sales", router: salesRoutes, guards: [permit("sales")] },
 
     // Incoming goods:  Purchase manager buys -> IQC inspects -> Store manager accepts into stock
     { path: "/purchase", router: purchaseRoutes, resource: "purchase", guards: [permit("purchase")] },

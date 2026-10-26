@@ -21,13 +21,10 @@ const STATUSES = [
   ["READY_FOR_PRODUCTION", "Ready for production", "bg-success"],
   ["IN_PRODUCTION", "In production", "bg-primary"],
   ["TESTING", "In QC", "bg-primary"],
-  ["PACKAGING", "Packing", "bg-warning"],
-  ["PACKED", "Packed", "bg-warning"],
-  ["HANDED_OVER", "With Store", "bg-warning"],
+  ["HANDED_OVER", "Passed QC, to Store", "bg-warning"],
   ["IN_STORE", "In stock", "bg-primary"],
   ["BILLED", "Billed", "bg-primary"],
-  ["DISPATCHED", "On the way", "bg-primary"],
-  ["COMPLETED", "Delivered", "bg-success"],
+  ["COMPLETED", "Complete", "bg-success"],
 ]
 
 const EMPTY = []

@@ -33,7 +33,8 @@ const days = (v) => (v === null || v === undefined ? null : Number(Number(v).toF
       spent       purchase orders placed in the month: ordered quantity x rate per piece
       profit      on this month's bills: amount before GST - what the sold products cost, where a product costs its
                   BOM at the latest purchase rate of each component (an estimate: products with a component never
-                  bought with a rate are counted in `unpricedProducts` and left out)
+                  bought with a rate use the component's standard cost (counted in `estimatedProducts`); one with
+                  neither is counted in `unpricedProducts` and left out)
 */
 async function sales({ start, end }) {
     const [[billed]] = await db.query(
@@ -51,7 +52,7 @@ async function sales({ start, end }) {
     );
     // what is still owed, bill by bill (oldest first)
     const [owed] = await db.query(
-        `SELECT b.bill_number, b.customer_name, b.created_at,
+        `SELECT b.bill_number, b.finished_goods_id, b.customer_name, b.created_at,
                 b.total - COALESCE((SELECT SUM(amount) FROM bill_credit_notes WHERE bill_id = b.id), 0)
                         - COALESCE((SELECT SUM(amount) FROM bill_payments WHERE bill_id = b.id), 0) AS due
          FROM bills b WHERE b.status = 'ACTIVE'
@@ -75,7 +76,7 @@ async function sales({ start, end }) {
         payments: n(collected.payments),
         toCollect: Number(owed.reduce((sum, r) => sum + n(r.due), 0).toFixed(2)),
         owed: owed.slice(0, 10).map((r) => ({
-            billNumber: r.bill_number, customer: r.customer_name, due: Number(n(r.due).toFixed(2)),
+            billNumber: r.bill_number, finishedGoodsId: r.finished_goods_id, customer: r.customer_name, due: Number(n(r.due).toFixed(2)),
             days: Math.floor((now - new Date(r.created_at).getTime()) / 86400000),
         })),
         byCustomer: byCustomer.map((r) => ({ name: r.name, bills: n(r.bills), total: n(r.total) })),
@@ -98,12 +99,17 @@ async function costs({ start, end }, salesFigures) {
            ON last.id = poi.id`
     );
     const rateOf = new Map(rates.map((r) => [r.component_id, n(r.rate)]));
+    const [standard] = await db.query(`SELECT id, standard_cost FROM components WHERE standard_cost IS NOT NULL`);
+    const standardOf = new Map(standard.map((r) => [r.id, n(r.standard_cost)]));
     const [bom] = await db.query(`SELECT product_id, component_id, quantity_required FROM product_bom`);
     const costOf = new Map();
     const unpriced = new Set();
+    const estimated = new Set(); // products whose cost uses a standard cost (no purchase rate yet)
     for (const b of bom) {
-        if (!rateOf.has(b.component_id)) { unpriced.add(b.product_id); continue; }
-        costOf.set(b.product_id, (costOf.get(b.product_id) || 0) + n(b.quantity_required) * rateOf.get(b.component_id));
+        const rate = rateOf.has(b.component_id) ? rateOf.get(b.component_id) : standardOf.get(b.component_id);
+        if (rate === undefined) { unpriced.add(b.product_id); continue; }
+        if (!rateOf.has(b.component_id)) estimated.add(b.product_id);
+        costOf.set(b.product_id, (costOf.get(b.product_id) || 0) + n(b.quantity_required) * rate);
     }
     const [sold] = await db.query(
         `SELECT bi.product_id, SUM(bi.quantity) AS quantity, SUM(bi.amount) AS amount
@@ -114,8 +120,10 @@ async function costs({ start, end }, salesFigures) {
     );
     let revenue = 0, cost = 0;
     const skipped = new Set();
+    let estimatedSold = 0;
     for (const r of sold) {
         if (unpriced.has(r.product_id) || !costOf.has(r.product_id)) { skipped.add(r.product_id); continue; }
+        if (estimated.has(r.product_id)) estimatedSold++;
         revenue += n(r.amount);
         cost += n(r.quantity) * costOf.get(r.product_id);
     }
@@ -128,6 +136,8 @@ async function costs({ start, end }, salesFigures) {
         profit: sold.length && skipped.size < sold.length ? Number(profit.toFixed(2)) : null,
         marginPct: revenue > 0 ? Number(((profit / revenue) * 100).toFixed(1)) : null,
         unpricedProducts: skipped.size,
+        // how many sold products were costed (partly) at standard cost instead of a real purchase rate
+        estimatedProducts: estimatedSold,
     };
 }
 
@@ -210,7 +220,7 @@ async function qualityCheck({ start, end }) {
 
 async function orderTime({ start, end }) {
     const [rows] = await db.query(
-        `SELECT o.order_number,
+        `SELECT o.id AS order_id, o.order_number,
                 TIMESTAMPDIFF(HOUR, COALESCE(o.sent_to_admin_at, o.created_at), fg.delivered_at) / 24 AS total_days,
                 TIMESTAMPDIFF(HOUR, COALESCE(o.sent_to_admin_at, o.created_at), o.approved_at) / 24 AS approval_days,
                 TIMESTAMPDIFF(HOUR, o.approved_at, fg.created_at) / 24 AS build_days,
@@ -229,7 +239,7 @@ async function orderTime({ start, end }) {
         avgApprovalDays: avg("approval_days"),
         avgBuildDays: avg("build_days"),
         avgDispatchDays: avg("dispatch_days"),
-        slowest: rows.slice(0, 5).map((r) => ({ orderNumber: r.order_number, days: days(r.total_days) })),
+        slowest: rows.slice(0, 5).map((r) => ({ orderId: r.order_id, orderNumber: r.order_number, days: days(r.total_days) })),
     };
 }
 
@@ -240,4 +250,4 @@ async function monthly(rawMonth) {
     return { month: range.month, sales: s, money, suppliers: sup, qualityCheck: qc, orderTime: time };
 }
 
-module.exports = { monthly };
+module.exports = { monthly, monthRange };

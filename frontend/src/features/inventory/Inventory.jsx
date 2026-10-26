@@ -27,13 +27,13 @@ const TOAST = {
 }
 
 /* One component as a card (used by the Cards view on tablet / desktop). */
-function ItemCard({ item: i, actions }) {
+function ItemCard({ item: i, actions, onOpen }) {
   const hasDetails = !!(i.category || i.size || i.location)
   return (
     <div className={cn("flex flex-col gap-3 rounded-xl border bg-card p-4", i.is_active === 0 && "opacity-70")}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium leading-snug">{i.component_name}</p>
+          <button type="button" onClick={onOpen} className="text-left font-medium leading-snug hover:text-primary hover:underline">{i.component_name}</button>
           <p className="text-xs text-muted-foreground">{i.sku} · {i.unit}</p>
         </div>
         <StockBadge item={i} />
@@ -209,7 +209,7 @@ export default function Inventory() {
                       {rows.map((i) => (
                         <TableRow key={i.id} className={i.is_active === 0 ? "opacity-70" : undefined}>
                           <TableCell className="min-w-[11rem] whitespace-normal">
-                            <span className="block font-medium leading-snug">{i.component_name}</span>
+                            <button type="button" onClick={() => open("view", i)} className="block text-left font-medium leading-snug hover:text-primary hover:underline">{i.component_name}</button>
                             <span className="block text-xs text-muted-foreground">{i.sku} · {i.unit}</span>
                             {(i.category || i.size || i.location) && (
                               <span className="block text-xs text-muted-foreground lg:hidden">{[i.category, i.size, i.location].filter(Boolean).join(" · ")}</span>
@@ -233,7 +233,7 @@ export default function Inventory() {
                 </div>
 
                 <div className="grid gap-3 p-3 md:hidden">
-                  {rows.map((i) => <ItemCard key={i.id} item={i} actions={<Actions item={i} />} />)}
+                  {rows.map((i) => <ItemCard key={i.id} item={i} actions={<Actions item={i} />} onOpen={() => open("view", i)} />)}
                 </div>
               </>
             )}

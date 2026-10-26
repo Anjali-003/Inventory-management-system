@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
+import { useUrlState } from "@/lib/useUrlState"
 import { MotionConfig, motion } from "motion/react"
 import { RefreshCw, ShoppingCart, X } from "lucide-react"
 import UserCell from "@/components/UserCell"
@@ -18,7 +19,7 @@ import {
 } from "@/features/purchasing/purchaseKit"
 import { ordersToOrder, purchaseFor } from "@/features/purchasing/purchasingUtils"
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
-import { DueLine } from "@/features/purchasing/PurchaseParts"
+import { DueLine, PurchaseForLinks } from "@/features/purchasing/PurchaseParts"
 import { cn } from "@/lib/utils"
 import PurchaseDrawer, { isPurchaseTab } from "./PurchaseDrawer"
 import ReceiveModal from "./ReceiveModal"
@@ -60,20 +61,9 @@ export default function Purchase() {
   const { canEdit } = usePermissions()
   const editable = canEdit("purchase")
 
-  const [params, setParams] = useSearchParams()
+  const { params, patch, openPopup, closePopup } = useUrlState()
   const status = isPurchaseStatus(params.get("status")) ? params.get("status") : null
   const query = params.get("q") ?? ""
-
-  // `replace` keeps typing in the search box from filling the browser history.
-  const patch = (changes, replace = false) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev)
-      for (const [k, v] of Object.entries(changes)) {
-        if (v) next.set(k, v)
-        else next.delete(k)
-      }
-      return next
-    }, { replace })
 
   const { data = EMPTY, isLoading, isFetching, error, refetch } = useGetPurchasesQuery()
   const approved = useGetApprovedOrdersQuery(undefined, { skip: !editable })
@@ -117,8 +107,8 @@ export default function Purchase() {
   const tab = isPurchaseTab(params.get("tab")) ? params.get("tab") : "overview"
   const selected = data.find((p) => String(p.id) === params.get("purchase")) || null
   const linkedOrder = selected?.order_number ? (approved.data ?? EMPTY).find((o) => o.order_number === selected.order_number) || null : null
-  const open = (p) => patch({ purchase: String(p.id), tab: null })
-  const closeDrawer = () => patch({ purchase: null, tab: null })
+  const open = (p) => openPopup({ purchase: String(p.id), tab: null })
+  const closeDrawer = () => closePopup({ purchase: null, tab: null })
 
   // Same list feeds the tiles (md and up) and the chips (phones).
   const filters = [
@@ -263,7 +253,7 @@ export default function Purchase() {
                   >
                     <TableCell className="min-w-40">
                       <button type="button" className="block text-left font-semibold tabular-nums outline-none transition-colors hover:text-primary focus-visible:text-primary focus-visible:underline">{p.po_number}</button>
-                      {purchaseFor(p) && <span className="block text-xs text-muted-foreground">for {purchaseFor(p)}</span>}
+                      {purchaseFor(p) && <span className="block text-xs text-muted-foreground"><PurchaseForLinks purchase={p} /></span>}
                     </TableCell>
                     <TableCell>
                       {p.supplier}

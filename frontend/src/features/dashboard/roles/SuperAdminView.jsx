@@ -133,9 +133,9 @@ export default function SuperAdminView() {
         { label: "Sales this month", value: r ? rupees(r.sales.net) : null, icon: IndianRupee, tone: "green", loading: report.isLoading,
           detail: r ? `Received ${rupees(r.sales.collected)}${salesChange !== null ? ` · ${salesChange >= 0 ? "+" : ""}${salesChange}% vs last month` : ""}` : undefined, to: "/reports" },
         { label: `Orders stuck ${STUCK_DAYS}+ days`, value: tracker.data ? d.stuck.length : null, icon: Route, tone: d.stuck.length ? "red" : "green", loading: tracker.isLoading,
-          detail: `${d.open.length} order${d.open.length === 1 ? "" : "s"} open`, to: "/order-tracker" },
+          detail: `${d.open.length} order${d.open.length === 1 ? "" : "s"} open`, to: "/order-tracker?show=stuck" },
         { label: "Late for the customer", value: tracker.data ? d.late.length : null, icon: CalendarClock, tone: d.late.length ? "red" : "green", loading: tracker.isLoading,
-          detail: "Past the promised delivery date", to: "/order-tracker" },
+          detail: "Past the promised delivery date", to: "/order-tracker?show=late" },
         { label: "Stock missing (no reason)", value: unexplained === null ? null : fmtQty(Math.max(unexplained, 0)), icon: PackageX, tone: unexplained > 0 ? "red" : "green", loading: balance.isLoading,
           detail: unexplained > 0 ? "Pieces short with no explanation" : "Every piece is accounted for", to: "/inventory-history" },
       ]} />
@@ -145,7 +145,7 @@ export default function SuperAdminView() {
           {d.byRole.length === 0 ? <p className="py-4 text-sm text-muted-foreground">No open order.</p> : (
             <div className="space-y-3">
               {d.byRole.map((x) => (
-                <div key={x.role}>
+                <Link key={x.role} to={`/order-tracker?role=${x.role}`} className="-mx-2 block rounded-md px-2 py-1 hover:bg-muted/60">
                   <div className="mb-1 flex justify-between text-sm">
                     <span>{ROLE_LABELS[x.role] || x.role}</span>
                     <span className="tabular-nums"><b>{x.count}</b><span className={cn("ml-2 text-xs", x.oldest >= STUCK_DAYS ? "font-semibold text-destructive" : "text-muted-foreground")}>oldest {x.oldest} d</span></span>
@@ -153,15 +153,15 @@ export default function SuperAdminView() {
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
                     <div className={cn("h-full rounded-full", x.oldest >= STUCK_DAYS ? "bg-destructive" : "bg-primary")} style={{ width: `${(x.count / maxRole) * 100}%` }} />
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
         </Panel>
-        <Panel title="Stuck orders" description={`Waiting ${STUCK_DAYS}+ days at one step, longest first.`} to="/order-tracker" toLabel="All orders">
+        <Panel title="Stuck orders" description={`Waiting ${STUCK_DAYS}+ days at one step, longest first.`} to="/order-tracker?show=stuck" toLabel="All stuck">
           <OrderList rows={d.stuck} empty="Nothing is stuck." />
         </Panel>
-        <Panel title="Late for the customer" description="Promised date has passed, not delivered yet." to="/order-tracker" toLabel="All orders">
+        <Panel title="Late for the customer" description="Promised date has passed, not delivered yet." to="/order-tracker?show=late" toLabel="All late">
           <OrderList rows={d.late} empty="No order is late." late />
         </Panel>
       </div>
@@ -170,17 +170,17 @@ export default function SuperAdminView() {
         <Panel title="This month" description="Money, quality and speed." to="/reports" toLabel="Reports">
           {!r ? <p className="py-4 text-sm text-muted-foreground">Loading…</p> : (
             <>
-              <Line label="Net sales" value={rupees(r.sales.net)} sub={p ? `Last month ${rupees(p.sales.net)}` : undefined} />
-              <Line label="Money received" value={rupees(r.sales.collected)} />
-              <Line label="Still to collect" value={rupees(r.sales.toCollect)} bad={r.sales.toCollect > 0}
+              <Line label="Net sales" value={rupees(r.sales.net)} sub={p ? `Last month ${rupees(p.sales.net)}` : undefined} to="/reports" />
+              <Line label="Money received" value={rupees(r.sales.collected)} to="/reports" />
+              <Line label="Still to collect" value={rupees(r.sales.toCollect)} bad={r.sales.toCollect > 0} to="/finished-goods?pay=due"
                 sub={r.sales.owed[0] ? `Oldest: ${r.sales.owed[0].billNumber}, ${r.sales.owed[0].days} days` : undefined} />
-              <Line label="Spent on purchases" value={rupees(r.money.spent)} />
-              <Line label="Estimated profit" value={r.money.profit === null ? "—" : rupees(r.money.profit)} bad={r.money.profit !== null && r.money.profit < 0}
+              <Line label="Spent on purchases" value={rupees(r.money.spent)} to="/purchase" />
+              <Line label="Estimated profit" value={r.money.profit === null ? "—" : rupees(r.money.profit)} bad={r.money.profit !== null && r.money.profit < 0} to="/reports"
                 sub={r.money.marginPct !== null ? `${r.money.marginPct}% of sales` : "Needs purchase rates of the components"} />
-              <Line label="Orders delivered" value={r.orderTime.delivered} sub={r.orderTime.avgDays !== null ? `${r.orderTime.avgDays} days on average` : undefined} />
-              <Line label="QC passed first try" value={pctText(r.qualityCheck.firstTryPassPct)} bad={r.qualityCheck.firstTryPassPct !== null && r.qualityCheck.firstTryPassPct < 90} sub={`${r.qualityCheck.failed} batch fail${r.qualityCheck.failed === 1 ? "" : "s"}`} />
-              <Line label="IQC rejected" value={pctText(r.suppliers.rejectedPct)} bad={r.suppliers.rejectedPct > 2} sub={`${fmtQty(r.suppliers.rejected)} pieces`} />
-              <Line label="Supplier deliveries late" value={`${r.suppliers.late} / ${r.suppliers.due}`} bad={r.suppliers.late > 0}
+              <Line label="Orders delivered" value={r.orderTime.delivered} sub={r.orderTime.avgDays !== null ? `${r.orderTime.avgDays} days on average` : undefined} to="/order-tracker?show=done" />
+              <Line label="QC passed first try" value={pctText(r.qualityCheck.firstTryPassPct)} bad={r.qualityCheck.firstTryPassPct !== null && r.qualityCheck.firstTryPassPct < 90} sub={`${r.qualityCheck.failed} batch fail${r.qualityCheck.failed === 1 ? "" : "s"}`} to="/quality-control" />
+              <Line label="IQC rejected" value={pctText(r.suppliers.rejectedPct)} bad={r.suppliers.rejectedPct > 2} sub={`${fmtQty(r.suppliers.rejected)} pieces`} to="/iqc" />
+              <Line label="Supplier deliveries late" value={`${r.suppliers.late} / ${r.suppliers.due}`} bad={r.suppliers.late > 0} to="/reports"
                 sub={r.suppliers.bySupplier[0]?.late ? `Worst: ${r.suppliers.bySupplier.find((s) => s.late)?.name || ""}` : undefined} />
             </>
           )}
@@ -200,17 +200,21 @@ export default function SuperAdminView() {
           {!att ? <p className="py-4 text-sm text-muted-foreground">No attendance sheet for today.</p> : (
             <div className="grid grid-cols-2 gap-3">
               {ATT.map(([label, key, color]) => (
-                <div key={key} className="rounded-lg border px-3 py-2">
+                <button key={key} type="button" className="rounded-lg border px-3 py-2 text-left hover:bg-muted/60"
+                  onClick={() => drill.openList({
+                    title: `${label} today`, to: "/attendance", toLabel: "Open Attendance", empty: "Nobody",
+                    rows: att.filter((e) => e.status === key).map((e) => ({ id: `e${e.id ?? e.employee_id ?? e.name}`, title: e.name, sub: [e.employee_code, e.department].filter(Boolean).join(" · ") })),
+                  })}>
                   <p className="text-xs text-muted-foreground">{label}</p>
                   <p className={cn("text-xl font-semibold tabular-nums", color)}>{att.filter((e) => e.status === key).length}</p>
-                </div>
+                </button>
               ))}
             </div>
           )}
         </Panel>
       </div>
 
-      <Panel title="See any department's screen" description="Exactly what that team sees, without logging in as them." className="mt-4">
+      <Panel title="Quick look: any department's dashboard" description="Open a team's dashboard and stay the Super Admin. To use the whole app as that role (its menu and buttons), pick it in “View as” at the top." className="mt-4">
         <div className="flex flex-wrap gap-2">
           {DEPARTMENTS.map(([key, label]) => (
             <Link key={key} to={`/dashboard?dept=${key}`} className="rounded-full border px-3 py-1.5 text-xs font-semibold hover:bg-muted">{label}</Link>

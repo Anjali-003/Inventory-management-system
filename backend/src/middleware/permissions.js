@@ -42,6 +42,7 @@ const ACCESS = {
         finishedGoods: "edit",
         productStock: "view",
         customers: "edit",
+        sales: "view",
         orderTracker: "view"
     },
 
@@ -64,10 +65,12 @@ const ACCESS = {
         inventory: "view",
         inventoryHistory: "view",
         // hands packed goods over to the Store (finished-goods step)
-        finishedGoods: "edit",
+        finishedGoods: "view",
         productStock: "view",
         orderTracker: "view",
         reports: "view",
+        sales: "view",
+        customers: "view",
         incomingStock: "view",
         // IQC manager + purchase manager pages
         iqc: "view",
@@ -76,7 +79,6 @@ const ACCESS = {
 
     // Incoming Quality Control manager: edits IQC, views purchase + the store pages
     IQC_MANAGER: {
-        orderTracker: "view", // "waiting for you" on the dashboard
         iqc: "edit",
         purchase: "view",
         inventory: "view",
@@ -117,7 +119,7 @@ const ACCESS = {
         orderTracker: "view", // "waiting for you" on the dashboard
         dashboard: "view",
         qualityControl: "edit",
-        finishedGoods: "edit",
+        finishedGoods: "view",
         qcFailed: "edit",
         production: "view",
         productStock: "view"

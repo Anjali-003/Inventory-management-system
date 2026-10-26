@@ -4,7 +4,9 @@ const { parseId } = require("../../shared/validators");
 
 // every call works on the inbox of the role this tab is logged in as (req.user.role)
 async function list(req, res) {
-    res.json(await service.list(req.user.role, req.user.userId));
+    // the Super Admin can narrow its all-departments bell: ?important=1, ?role=STORE_MANAGER
+    const filter = { important: req.query.important === "1", forRole: typeof req.query.role === "string" && /^[A-Z_]{3,40}$/.test(req.query.role) ? req.query.role : null };
+    res.json(await service.list(req.user.role, req.user.userId, filter));
 }
 
 async function markRead(req, res) {

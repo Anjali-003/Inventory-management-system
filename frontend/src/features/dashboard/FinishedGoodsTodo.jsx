@@ -5,7 +5,7 @@ import { myFgStep } from "@/features/finished-goods/fgFlow"
 import { ListPanel, useDrill } from "./DashboardKit"
 import { finishedRow } from "./rows"
 
-/* Dashboard panel: the finished-goods orders where the NEXT step belongs to this role (pack, hand over, bill ...) */
+/* Dashboard panel: the finished-goods orders where the NEXT step belongs to this role (receive, bill, give out) */
 export default function FinishedGoodsTodo({ className, title = "Finished goods waiting for you" }) {
   const drill = useDrill()
   const { role } = usePermissions()

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react"
+import { Link } from "react-router-dom"
 import { ArrowDownToLine, ArrowUpFromLine, Package } from "lucide-react"
 import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
@@ -104,7 +105,10 @@ export default function ProductStock() {
                         <span className="inline-flex items-center gap-1">{m.direction === "IN" ? <ArrowDownToLine className="size-3.5" /> : <ArrowUpFromLine className="size-3.5" />}{m.direction === "IN" ? "+" : "−"}{m.quantity}</span>
                       </TableCell>
                       <TableCell className="hidden text-right tabular-nums sm:table-cell">{m.balanceAfter}</TableCell>
-                      <TableCell className="hidden whitespace-normal text-muted-foreground md:table-cell">{m.reason}</TableCell>
+                      <TableCell className="hidden whitespace-normal text-muted-foreground md:table-cell">
+                        {m.reason}
+                        {m.orderId && <Link to={`/order-tracker?order=${m.orderId}`} className="block text-xs font-semibold text-primary hover:underline">{m.orderNumber}</Link>}
+                      </TableCell>
                       <TableCell className="hidden lg:table-cell">{m.createdByName || "—"}</TableCell>
                     </TableRow>
                   ))}

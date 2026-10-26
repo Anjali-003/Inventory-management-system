@@ -12,8 +12,6 @@ router.get("/", controller.list)
 router.get("/:id", controller.getOne)
 router.get("/:id/bill", controller.getBill)
 
-router.post("/:id/pack", ...by("QUALITY_FG_MANAGER"), controller.step("pack"))
-router.post("/:id/hand-over", ...by("OPERATIONS_ADMIN"), controller.step("handOver"))
 router.post("/:id/receive", ...by("STORE_MANAGER"), controller.step("receive"))
 router.post("/:id/bill", ...by("MARKETING_MANAGER"), controller.createBill)
 router.post("/:id/payments", ...by("MARKETING_MANAGER"), controller.addPayment)
@@ -21,6 +19,5 @@ router.post("/:id/payments", ...by("MARKETING_MANAGER"), controller.addPayment)
 router.post("/:id/bill/cancel", resolveUser, requireRole("SUPER_ADMIN"), controller.cancelBill)
 router.post("/:id/credit-note", resolveUser, requireRole("SUPER_ADMIN"), controller.addCreditNote)
 router.post("/:id/dispatch", ...by("STORE_MANAGER"), controller.step("dispatch"))
-router.post("/:id/deliver", ...by("MARKETING_MANAGER"), controller.step("deliver"))
 
 module.exports = router

@@ -26,7 +26,7 @@ const EMPTY = []
 const when = (v) => (v ? new Date(v).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : null)
 
 // after QC: packed, handed over, in store, billed, on the way (see features/finished-goods/fgFlow.js)
-const AFTER_QC = new Set(["PACKAGING", "PACKED", "HANDED_OVER", "IN_STORE", "BILLED", "DISPATCHED"])
+const AFTER_QC = new Set(["HANDED_OVER", "IN_STORE", "BILLED"])
 
 export default function Orders() {
   const toast = useToast()
@@ -72,7 +72,7 @@ export default function Orders() {
     { key: "PENDING", label: "Pending", value: counts.PENDING, tone: "warning", active: filter === "PENDING", onClick: toggle("PENDING") },
     { key: "IN_PRODUCTION", label: "In production", value: counts.IN_PRODUCTION, tone: "info", active: filter === "IN_PRODUCTION", onClick: toggle("IN_PRODUCTION") },
     { key: "TESTING", label: "Testing", value: counts.TESTING, tone: "info", active: filter === "TESTING", onClick: toggle("TESTING") },
-    { key: "AFTER_QC", label: "Packing to delivery", value: counts.AFTER_QC, tone: "warning", active: filter === "AFTER_QC", onClick: toggle("AFTER_QC") },
+    { key: "AFTER_QC", label: "After QC", value: counts.AFTER_QC, tone: "warning", active: filter === "AFTER_QC", onClick: toggle("AFTER_QC") },
     { key: "COMPLETED", label: "Delivered", value: counts.COMPLETED, tone: "success", active: filter === "COMPLETED", onClick: toggle("COMPLETED") },
   ]
 
