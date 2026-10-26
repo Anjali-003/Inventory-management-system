@@ -301,7 +301,7 @@ function BillView({ item, role, onClose, onChanged }) {
     return () => { live = false; setBill(null); setError(""); setAction(null) }
   }, [item, version])
   const admin = role === "SUPER_ADMIN"
-  const canPay = (admin || role === "MARKETING_MANAGER") && bill?.due > 0
+  const canPay = (admin || role === "PRODUCTION_ADMIN" || role === "MARKETING_MANAGER") && bill?.due > 0
   const canCancel = admin && bill?.goodsStatus === "BILLED" && bill?.paid === 0
   const canCredit = admin && bill && bill.goodsStatus !== "BILLED" && bill.net > 0
   const done = () => { setAction(null); setVersion((v) => v + 1); onChanged() }

@@ -41,6 +41,7 @@ export const ROLES = {
   IQC_MANAGER: "IQC_MANAGER",
   PURCHASE_MANAGER: "PURCHASE_MANAGER",
   PRODUCTION_MANAGER: "PRODUCTION_MANAGER",
+  PRODUCTION_ADMIN: "PRODUCTION_ADMIN",
   QUALITY_FG_MANAGER: "QUALITY_FG_MANAGER",
   OPERATIONS_ADMIN: "OPERATIONS_ADMIN",
   MARKETING_MANAGER: "MARKETING_MANAGER",
@@ -54,6 +55,7 @@ export const ROLE_LABELS = {
   IQC_MANAGER: "IQC Manager",
   PURCHASE_MANAGER: "Purchase Manager",
   PRODUCTION_MANAGER: "Production Manager",
+  PRODUCTION_ADMIN: "Production Admin",
   QUALITY_FG_MANAGER: "Quality Control & Finished Goods",
   OPERATIONS_ADMIN: "Operations Admin",
   MARKETING_MANAGER: "Marketing Manager",
@@ -105,6 +107,13 @@ export const LOGIN_PORTALS = {
     path: "/production-manager/login",
     api: "/auth/production-manager/login",
     title: "Production Login",
+  },
+
+  PRODUCTION_ADMIN: {
+    role: "PRODUCTION_ADMIN",
+    path: "/production-admin/login",
+    api: "/auth/production-admin/login",
+    title: "Production Admin Login",
   },
 
   QUALITY_FG_MANAGER: {
@@ -289,6 +298,19 @@ const ACCESS = {
     qualityControl: "view",
     finishedGoods: "view",
     productStock: "view",
+  },
+
+  // Production Admin oversees the production-to-release workflow and component stock.
+  // Store handover itself remains a Store Manager action; this role can create requests from Production.
+  PRODUCTION_ADMIN: {
+    dashboard: "view",
+    production: "edit",
+    qualityControl: "edit",
+    qcFailed: "edit",
+    finishedGoods: "edit",
+    inventory: "edit",
+    materialRequests: "edit",
+    customers: "edit",
   },
 
   // Quality Control & Finished Goods workspace.

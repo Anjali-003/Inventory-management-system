@@ -99,6 +99,17 @@ const ACCESS = {
     },
 
     // Production updates production runs and asks Store for material; it can only LOOK at Store's stock.
+    PRODUCTION_ADMIN: {
+        dashboard: "view",
+        production: "edit",
+        qualityControl: "edit",
+        qcFailed: "edit",
+        finishedGoods: "edit",
+        inventory: "edit",
+        materialRequests: "edit",
+        customers: "edit"
+    },
+
     PRODUCTION_MANAGER: {
         orderTracker: "view", // "waiting for you" on the dashboard
         dashboard: "view",
@@ -138,6 +149,7 @@ const LOGIN_ROUTES = {
     IQC_MANAGER: "/iqc-manager/login",
     PURCHASE_MANAGER: "/purchase-manager/login",
     PRODUCTION_MANAGER: "/production-manager/login",
+    PRODUCTION_ADMIN: "/production-admin/login",
     QUALITY_FG_MANAGER: "/quality-fg-manager/login",
     OPERATIONS_ADMIN: "/operations-admin/login",
     MARKETING_MANAGER: "/marketing-manager/login",

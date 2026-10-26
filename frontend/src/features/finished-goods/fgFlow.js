@@ -1,6 +1,6 @@
 /*
-  After Quality Control an order moves through these steps. Each step has ONE owner role, so every screen can
-  say plainly "who acts next and what they do". Same order and names as backend finished-goods.service.js.
+  After Quality Control an order moves through these steps. Each step has one owner role; Super Admin and
+  Production Admin can act across the workflow. Same order and names as backend finished-goods.service.js.
 */
 export const FG_STEPS = [
   { status: "PACKAGING", label: "Packing", owner: "QUALITY_FG_MANAGER", ownerLabel: "QC & Finished Goods", action: "pack", button: "Packing done", tone: "warning",
@@ -26,7 +26,7 @@ export const fgIndexOf = (status) => FG_STEPS.findIndex((s) => s.status === stat
 export const myFgStep = (item, role) => {
   const step = fgStepOf(item?.status)
   if (!step?.action) return null
-  return role === "SUPER_ADMIN" || role === step.owner ? step : null
+  return role === "SUPER_ADMIN" || role === "PRODUCTION_ADMIN" || role === step.owner ? step : null
 }
 
 export const fgBadge = (status) => {
