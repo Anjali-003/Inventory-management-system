@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react"
-import { Activity, ClipboardCheck, Factory, PackageCheck, RefreshCw, RotateCcw, Truck } from "lucide-react"
+import { Activity, AlertTriangle, CalendarDays, ClipboardCheck, Factory, PackageCheck, RefreshCw, RotateCcw, Truck } from "lucide-react"
 import { Link } from "react-router-dom"
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { useGetProductionQuery, useGetQCFailedQuery } from "@/features/production/productionApi"
@@ -20,6 +20,34 @@ const EMPTY = []
 const WORK_ACTIVITY_RESOURCES = new Set(["production", "quality-control", "qc-failed", "finished-goods"])
 const arrayOf = (value) => Array.isArray(value) ? value : EMPTY
 const activityTime = (item) => new Date(item.billedAt || item.createdAt || 0).getTime() || 0
+const localDateKey = (value) => {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+}
+const isToday = (value, todayKey) => localDateKey(value) === todayKey
+
+function getTodayQcDecisions(items, todayKey) {
+  const decisions = []
+
+  for (const item of items) {
+    const history = arrayOf(item.decisionHistory)
+    if (history.length > 0) {
+      for (const entry of history) {
+        if (isToday(entry.decidedAt, todayKey)) decisions.push(entry)
+      }
+      continue
+    }
+
+    const decision = item.latestDecision || item.batchDecision
+    if (decision && isToday(item.decisionAt, todayKey)) {
+      decisions.push({ decision, decidedAt: item.decisionAt })
+    }
+  }
+
+  return decisions
+}
 
 /** Production Admin overview. Keeps the dashboard focused on the four workflow queues and dispatch readiness. */
 export default function ProductionAdminView() {
@@ -65,6 +93,53 @@ export default function ProductionAdminView() {
   const activityItems = useMemo(() => arrayOf(activity.data)
     .filter((item) => WORK_ACTIVITY_RESOURCES.has(item.resource))
     .slice(0, 5), [activity.data])
+
+  const todayKey = localDateKey(new Date())
+  const todayQcDecisions = getTodayQcDecisions(qcItems, todayKey)
+  const todayProgress = [
+    {
+      key: "production",
+      label: "Production lines completed",
+      value: production.isLoading || production.error ? null : productionItems.filter((item) =>
+        isProductionCompleted(item) && isToday(item.completed_at, todayKey),
+      ).length,
+      description: "Full product lines completed today",
+      icon: Factory,
+      tone: "blue",
+      to: "/production",
+    },
+    {
+      key: "qc",
+      label: "QC inspections",
+      value: qc.isLoading || qc.error ? null : todayQcDecisions.length,
+      description: "Pass/fail decisions recorded today",
+      icon: ClipboardCheck,
+      tone: "cyan",
+      to: "/quality-control",
+    },
+    {
+      key: "qc-failed",
+      label: "QC failures",
+      value: qc.isLoading || qc.error ? null : todayQcDecisions.filter((item) => String(item.decision || "").toUpperCase() === "FAIL").length,
+      description: "Failures recorded today",
+      icon: AlertTriangle,
+      tone: "red",
+      to: "/qc-failed",
+    },
+    {
+      key: "dispatch",
+      label: "Batches dispatched",
+      value: finishedGoods.isLoading || finishedGoods.error ? null : finishedItems.filter((item) => isToday(item.dispatchedAt, todayKey)).length,
+      description: "Finished Goods dispatched today",
+      icon: Truck,
+      tone: "green",
+      to: "/finished-goods",
+    },
+  ]
+
+  const dateLabel = new Intl.DateTimeFormat(undefined, {
+    weekday: "short", day: "numeric", month: "short", year: "numeric",
+  }).format(new Date())
 
   const refreshing = [production, qc, qcFailed, finishedGoods].some((source) => source.isFetching) || activity.isFetching
   const errors = [
@@ -130,6 +205,48 @@ export default function ProductionAdminView() {
           },
         ]}
       />
+
+      <section className="mt-5 space-y-3" aria-labelledby="production-admin-today-heading">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 id="production-admin-today-heading" className="text-lg font-bold tracking-tight">Today's progress</h2>
+            <p className="text-sm text-muted-foreground">A summary of completed work recorded today across your four workflow areas.</p>
+          </div>
+          <Badge variant="outline"><CalendarDays className="mr-1.5 size-3.5" />{dateLabel}</Badge>
+        </div>
+
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {todayProgress.map((item) => {
+            const Icon = item.icon
+            const palette = {
+              blue: { card: "border-blue-200 bg-blue-50/70 dark:border-blue-900 dark:bg-blue-950/30", icon: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200", value: "text-blue-800 dark:text-blue-200" },
+              cyan: { card: "border-cyan-200 bg-cyan-50/70 dark:border-cyan-900 dark:bg-cyan-950/30", icon: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-200", value: "text-cyan-800 dark:text-cyan-200" },
+              red: { card: "border-rose-200 bg-rose-50/70 dark:border-rose-900 dark:bg-rose-950/30", icon: "bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-200", value: "text-rose-800 dark:text-rose-200" },
+              green: { card: "border-emerald-200 bg-emerald-50/70 dark:border-emerald-900 dark:bg-emerald-950/30", icon: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200", value: "text-emerald-800 dark:text-emerald-200" },
+            }[item.tone]
+
+            return (
+              <Link
+                key={item.key}
+                to={item.to}
+                className={`group min-w-0 rounded-xl border p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${palette.card}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${palette.icon}`}>
+                    <Icon className="size-5" />
+                  </span>
+                  <span className="text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden>↗</span>
+                </div>
+                <div className={`mt-3 text-3xl font-extrabold tabular-nums ${palette.value}`}>
+                  {item.value === null ? "—" : item.value}
+                </div>
+                <div className="mt-1 text-sm font-bold">{item.label}</div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
+              </Link>
+            )
+          })}
+        </div>
+      </section>
 
       <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <Card className="min-w-0 overflow-hidden">

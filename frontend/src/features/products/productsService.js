@@ -6,5 +6,6 @@ export const productsService = {
   importMany: (rows, dryRun) => api.post("/products/import", { rows, dryRun }),
   getBom: (productId) => api.get(`/products/${productId}/bom`),
   saveBom: (productId, lines) => api.put(`/products/${productId}/bom`, { lines }),
+  createVersion: (productId, lines) => api.post(`/products/${productId}/versions`, { lines }),
   importBom: (productId, body) => api.post(`/products/${productId}/bom/import`, body),
 };

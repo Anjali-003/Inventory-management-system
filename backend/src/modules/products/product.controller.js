@@ -46,6 +46,11 @@ const saveBom = handle(async (req, res) => {
     res.json(await svc.saveBom(productId(req), req.body));
 });
 
+// Create a new product version from an existing product and save its independent BOM.
+const createVersion = handle(async (req, res) => {
+    res.status(201).json(await svc.createProductVersion(productId(req), req.body, req.user.id));
+}, "Failed to create product version");
+
 // Import a BOM from a spreadsheet: { rows, mode: "replace" | "merge", createMissing, dryRun }
 const importBom = handle(async (req, res) => {
     res.json(await svc.importBom(productId(req), req.body));
@@ -56,4 +61,4 @@ const setPrice = handle(async (req, res) => {
     res.json(await svc.setPrice(productId(req), req.body || {}));
 }, "Failed to save the price");
 
-module.exports = { list, nextSku, create, importMany, getOne, getBom, saveBom, importBom, setPrice };
+module.exports = { list, nextSku, create, importMany, getOne, getBom, saveBom, createVersion, importBom, setPrice };

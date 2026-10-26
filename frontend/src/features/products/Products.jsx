@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { useDispatch } from "react-redux"
-import { Boxes, ClipboardList, FileUp, Pencil, Plus, SearchX, Upload } from "lucide-react"
+import { Boxes, ClipboardList, FileUp, GitBranch, Pencil, Plus, SearchX, Upload } from "lucide-react"
 import { productsService } from "@/features/products/productsService"
 import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
@@ -17,6 +17,7 @@ import AddProductModal from "./components/AddProductModal"
 import ImportProductsModal from "./components/ImportProductsModal"
 import ImportBomModal from "./components/ImportBomModal"
 import BomEditorModal from "./components/BomEditorModal"
+import CreateProductVersionModal from "./components/CreateProductVersionModal"
 import { productsApi, useGetProductsQuery } from "./productsApi"
 import SetPriceDialog from "./SetPriceDialog"
 
@@ -35,8 +36,10 @@ export default function Products() {
   const [search, setSearch] = useState("")
   const [adding, setAdding] = useState(false)
   const [importingProducts, setImportingProducts] = useState(false)
-  const [editing, setEditing] = useState(null) // product whose BOM is being written by hand
-  const [importing, setImporting] = useState(null) // product whose BOM is being imported from a file
+  const [editing, setEditing] = useState(null) // used only to add an initial BOM to a new product
+  const [importing, setImporting] = useState(null) // used only to import an initial BOM to a product without one
+  const [versionPickerOpen, setVersionPickerOpen] = useState(false)
+  const [versionEditor, setVersionEditor] = useState(null) // { product, bom } for creating an immutable new version
   const toast = useToast()
 
   const filteredProducts = useMemo(() => {
@@ -104,6 +107,17 @@ export default function Products() {
     loadProducts()
   }
 
+  const versionSourceSelected = (product, sourceBom) => {
+    setVersionPickerOpen(false)
+    setVersionEditor({ product, bom: sourceBom })
+  }
+
+  const versionCreated = (product, nextBom, createdComponents) => {
+    setVersionEditor(null)
+    toast.success(`Created ${product.name} ${product.version_label || `v${product.version_major}.${product.version_minor}`} (${product.sku}) with ${nextBom.length} BOM component line${nextBom.length === 1 ? "" : "s"}${createdComponents ? `; ${createdComponents} new component${createdComponents === 1 ? "" : "s"} added to Inventory` : ""}.`)
+    loadProducts()
+  }
+
   const bomTotals = useMemo(() => {
     const short = bom.filter((i) => Number(i.quantity_on_hand) < Number(i.quantity_required)).length
     return { lines: bom.length, short }
@@ -121,6 +135,16 @@ export default function Products() {
           <Button size="lg" onClick={() => setAdding(true)}>
             <Plus />
             Add product
+          </Button>
+          <Button
+            variant="default"
+            size="lg"
+            className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white shadow-md shadow-teal-900/20 hover:from-emerald-700 hover:via-teal-700 hover:to-cyan-700 hover:shadow-lg focus-visible:ring-emerald-500 [&_svg]:text-white"
+            onClick={() => setVersionPickerOpen(true)}
+            disabled={products.length === 0}
+          >
+            <GitBranch />
+            Create product version
           </Button>
         </div>
       </PageHeader>
@@ -149,7 +173,12 @@ export default function Products() {
               {filteredProducts.map((p) => (
                 <TableRow key={p.id} data-active={selected?.id === p.id}>
                   <TableCell className="font-medium tabular-nums">{p.sku}</TableCell>
-                  <TableCell className="font-medium">{p.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>{p.name}</span>
+                      <Badge variant="success">{p.version_label || `v${p.version_major ?? 1}.${p.version_minor ?? 0}`}</Badge>
+                    </div>
+                  </TableCell>
                   <TableCell className="min-w-56 max-w-xs whitespace-normal text-muted-foreground">{p.description}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {p.selling_price === null || p.selling_price === undefined
@@ -180,14 +209,18 @@ export default function Products() {
         description={selected ? `${selected.sku} · every component needed to build one unit, with its place on the PCB` : undefined}
         footer={
           <>
-            <Button variant="outline" size="lg" onClick={startImport} disabled={bomLoading || !!bomError} className="sm:mr-auto">
-              <FileUp />
-              Import BOM from Excel
-            </Button>
-            <Button variant="secondary" size="lg" onClick={startEdit} disabled={bomLoading || !!bomError}>
-              <Pencil />
-              {bom.length === 0 ? "Add BOM manually" : "Edit BOM"}
-            </Button>
+            {bom.length === 0 && !bomLoading && !bomError && (
+              <>
+                <Button variant="outline" size="lg" onClick={startImport} className="sm:mr-auto">
+                  <FileUp />
+                  Import initial BOM
+                </Button>
+                <Button variant="secondary" size="lg" onClick={startEdit}>
+                  <Pencil />
+                  Add BOM manually
+                </Button>
+              </>
+            )}
             <Button variant="outline" size="lg" onClick={closeBom} data-autofocus>Close</Button>
           </>
         }
@@ -198,7 +231,7 @@ export default function Products() {
           <Notice title="Something went wrong">{bomError}</Notice>
         ) : bom.length === 0 ? (
           <EmptyState icon={ClipboardList} title="No BOM added yet">
-            This product has no components linked. Add them by hand or import the BOM from Excel.
+            This product has no components yet. Add its initial BOM here, or create a new product version to keep future BOM changes separate.
           </EmptyState>
         ) : (
           <div className="space-y-4">
@@ -248,12 +281,26 @@ export default function Products() {
 
       <AddProductModal open={adding} onClose={() => setAdding(false)} onCreated={productAdded} />
       <ImportProductsModal open={importingProducts} onClose={() => setImportingProducts(false)} onImported={productsImported} />
+      <CreateProductVersionModal
+        open={versionPickerOpen}
+        products={products}
+        onClose={() => setVersionPickerOpen(false)}
+        onContinue={versionSourceSelected}
+      />
       <BomEditorModal
         open={!!editing}
         product={editing}
         bom={bom}
         onClose={() => backToBom(editing)}
         onSaved={(next, created) => bomSaved(editing, next, created, "saved")}
+      />
+      <BomEditorModal
+        open={!!versionEditor}
+        product={versionEditor?.product}
+        bom={versionEditor?.bom ?? []}
+        mode="create-version"
+        onClose={() => setVersionEditor(null)}
+        onVersionCreated={versionCreated}
       />
       <ImportBomModal
         open={!!importing}
