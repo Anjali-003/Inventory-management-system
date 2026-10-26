@@ -3,19 +3,16 @@ const AppError = require("../../shared/AppError");
 
 /*
     Order Tracker: where every order is, who it waits for and for how long; and for one order its whole journey
-    (approval -> buying -> IQC -> Store -> production -> QC -> packing -> Store -> bill -> delivery), one line per
+    (approval -> buying -> IQC -> Store -> production -> QC -> Store -> bill -> given out), one line per
     event with who did it and when. Read only, worked out from the records each step already writes.
 */
 
 // after QC, the finished-goods step decides who acts next (same owners as frontend fgFlow.js)
 const FG_NEXT = {
-    PACKAGING: ["Packing", "QUALITY_FG_MANAGER"],
-    PACKED: ["Packed, to hand over to Store", "OPERATIONS_ADMIN"],
-    HANDED_OVER: ["Store to receive", "STORE_MANAGER"],
+    HANDED_OVER: ["Passed QC, Store to receive", "STORE_MANAGER"],
     IN_STORE: ["In stock, to bill", "MARKETING_MANAGER"],
     BILLED: ["Billed, Store to give out", "STORE_MANAGER"],
-    DISPATCHED: ["On the way to customer", "MARKETING_MANAGER"],
-    DELIVERED: ["Delivered", null],
+    DELIVERED: ["Given out, complete", null],
 };
 
 /* the stage of an order and the role it waits for, from its own row plus a few counts */
@@ -193,13 +190,10 @@ async function timeline(orderId) {
         [orderId]
     );
     if (fg) {
-        add(fg.created_at, "Dispatch", "Passed QC, sent for packing");
-        add(fg.packed_at, "Dispatch", "Packed", fg.packed_by_name);
-        add(fg.handed_over_at, "Dispatch", "Handed over to Store", fg.handed_over_by_name);
+        add(fg.created_at, "Dispatch", "Passed QC, packed and sent to the Store", fg.handed_over_by_name);
         add(fg.received_at, "Dispatch", "Received into product stock", fg.received_by_name);
         add(fg.billed_at, "Dispatch", `Bill ${fg.bill_number} made for ${fg.customer_name}`, fg.billed_by_name, `₹${n(fg.total).toLocaleString("en-IN")}`);
-        add(fg.dispatched_at, "Dispatch", "Given out for delivery", fg.dispatched_by_name, fg.dispatch_note);
-        add(fg.delivered_at, "Dispatch", "Delivered to customer", fg.delivered_by_name, fg.delivery_note);
+        add(fg.dispatched_at, "Dispatch", "Given out for delivery: order complete", fg.dispatched_by_name, fg.dispatch_note);
 
         // money: cancelled bills, payments received and credit notes
         const [cancelled] = await db.query(
@@ -232,4 +226,40 @@ async function timeline(orderId) {
     return { ...summary, toBuy: n(toBuy.n), events };
 }
 
-module.exports = { list, timeline };
+/*
+    Runs every hour (server.js): an order waiting 3+ days at one step is told to the Super Admin (bell + phone),
+    once a day per order, naming the role that holds it.
+*/
+const STUCK_DAYS = 3;
+async function notifyStuckOrders() {
+    const notifications = require("../notifications/notification.service");
+    const stuck = (await list()).filter((o) => o.waitingFor && o.daysWaiting >= STUCK_DAYS);
+    let sent = 0;
+    for (const o of stuck) {
+        const [already] = await db.query(
+            "SELECT id FROM notifications WHERE type = 'ORDER_STUCK' AND order_id = ? AND created_at >= CURDATE() LIMIT 1",
+            [o.id]
+        );
+        if (already.length) continue;
+        await notifications.notify(db, {
+            role: "SUPER_ADMIN",
+            type: "ORDER_STUCK",
+            title: `Order ${o.orderNumber} stuck for ${o.daysWaiting} days`,
+            body: `${o.stage}: waiting for ${o.waitingFor.replace(/_/g, " ").toLowerCase()}.`,
+            severity: "warning",
+            link: `/order-tracker?order=${o.id}`,
+            orderId: o.id,
+            payload: { order_number: o.orderNumber, waiting_for: o.waitingFor, days: o.daysWaiting },
+        });
+        sent++;
+    }
+    return sent;
+}
+
+function startStuckOrderJob() {
+    const run = () => notifyStuckOrders().catch((e) => console.error("stuck-order check failed:", e.message));
+    setTimeout(run, 60_000).unref(); // a minute after start, then every hour
+    setInterval(run, 60 * 60_000).unref();
+}
+
+module.exports = { list, timeline, notifyStuckOrders, startStuckOrderJob };

@@ -13,7 +13,6 @@ import { OrderPipeline, countByStatus, newestFirst, plural } from "@/features/ma
 import { useGetPurchasesQuery } from "@/features/purchasing/purchasingApi"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
 import DepartmentOverview from "../DepartmentOverview"
-import FinishedGoodsTodo from "../FinishedGoodsTodo"
 import { ListPanel, useDrill } from "../DashboardKit"
 import { isLowStock, onOrderByComponent, purchaseRow, stockRow } from "../rows"
 
@@ -111,8 +110,6 @@ export default function OperationsView() {
           <ListPanel table rightLabel="On hand / min" drill={drill} loading={loading} title="Components to reorder" description="Stock on hand is at or below the minimum." rows={d.low} to="/inventory?filter=low" toLabel="Open Inventory" emptyIcon={d.low.length ? AlertTriangle : CheckCircle2} empty="All components are above minimum" />
         </Reveal>
       </div>
-
-      <FinishedGoodsTodo className="mt-6" title="Packed goods to hand over to Store" />
 
       <DepartmentOverview className="mt-6" depts={["iqc", "store", "purchase"]} />
 

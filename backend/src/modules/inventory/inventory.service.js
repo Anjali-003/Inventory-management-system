@@ -218,6 +218,9 @@ const ITEM_SELECT = `
         i.location,
         i.quantity_on_hand AS available,
         c.minimum_stock_level,
+        c.standard_cost,
+        -- what one piece cost the last time it was bought with a rate (null = never)
+        (SELECT poi.rate FROM purchase_order_items poi WHERE poi.component_id = c.id AND poi.rate IS NOT NULL ORDER BY poi.id DESC LIMIT 1) AS last_purchase_rate,
         i.is_active,
         i.archived_at,
         DATE_FORMAT(lt.last_movement_at, '%Y-%m-%d %H:%i:%s') AS last_movement_at,
@@ -1072,6 +1075,22 @@ async function postReceiptLines(conn, lines, userId) {
     return results;
 }
 
+/* Super Admin: a component's standard cost per piece (used for product cost until it is bought with a rate). */
+async function setStandardCost(inventoryIdRaw, body) {
+    const inventoryId = parseId(inventoryIdRaw);
+    const raw = body.standard_cost;
+    const cost = raw === undefined || raw === null || raw === "" ? null : Number(raw);
+    if (cost !== null && (!Number.isFinite(cost) || cost < 0 || Math.round(cost * 100) !== cost * 100)) {
+        throw new AppError(422, "Cost must be zero or more, with at most 2 decimals", "VALIDATION");
+    }
+    const [res] = await db.query(
+        `UPDATE components c JOIN inventory i ON i.component_id = c.id SET c.standard_cost = ? WHERE i.id = ?`,
+        [cost, inventoryId]
+    );
+    if (!res.affectedRows) throw new AppError(404, "Inventory item not found", "NOT_FOUND");
+    return fetchItem(db, inventoryId);
+}
+
 /*
     Stock-out inside the caller's transaction (extra material for damaged pieces, see extra-materials).
     Same rules as stockOut(): enough stock, append-only ledger row with the reason.
@@ -1107,6 +1126,7 @@ async function postIssueLine(conn, { componentId, cents, reason, reasonCode, ord
 module.exports = {
     postReceiptLines,
     postIssueLine,
+    setStandardCost,
     inTransaction,
     parseQty,
     toCents,

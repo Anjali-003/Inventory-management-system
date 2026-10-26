@@ -10,6 +10,8 @@ export const inventoryService = {
   stockInBatch: (body) => api.post("/inventory/stock-in/batch", body),
   stockOut: (id, body) => api.post(`/inventory/${id}/stock-out`, body),
   update: (id, body) => api.put(`/inventory/${id}`, body),
+  // Super Admin: standard cost per piece (used until the component is bought with a rate)
+  setCost: (id, standardCost) => api.put(`/inventory/${id}/cost`, { standard_cost: standardCost }),
   archive: (id, reason) => api.delete(`/inventory/${id}`, { data: { reason } }),
 
   history: {

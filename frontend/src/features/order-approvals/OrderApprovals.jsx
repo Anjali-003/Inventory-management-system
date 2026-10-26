@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
 import { ArrowRight, ClipboardCheck, RefreshCw, X } from "lucide-react";
 import { MotionConfig, motion } from "motion/react";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useUrlState } from "@/lib/useUrlState";
 import { OPS_TABS } from "./FeasibilityTab";
 import OpsOrderDrawer from "./OpsOrderDrawer";
 import {
@@ -209,7 +209,7 @@ export default function OrderApprovals() {
   const { canEdit } = usePermissions();
   const editable = canEdit("orderApprovals");
 
-  const [params, setParams] = useSearchParams();
+  const { params, patch, openPopup, closePopup } = useUrlState();
   const rawStatus = params.get("status");
   const status =
     rawStatus === "ALL" ? null : isOpsStatus(rawStatus) ? rawStatus : QUEUE; // null = every order
@@ -217,20 +217,6 @@ export default function OrderApprovals() {
   const orderId = params.get("order");
   // no tab in the URL: the drawer opens where the work is (Stock check for a waiting order)
   const tab = OPS_TABS.some((t) => t.id === params.get("tab")) ? params.get("tab") : undefined;
-
-  // `replace` keeps typing in the search box from filling the browser history.
-  const patch = (changes, replace = false) =>
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        for (const [k, v] of Object.entries(changes)) {
-          if (v) next.set(k, v);
-          else next.delete(k);
-        }
-        return next;
-      },
-      { replace },
-    );
 
   const {
     data = EMPTY,
@@ -260,10 +246,10 @@ export default function OrderApprovals() {
 
   const filtered = !!(status || query.trim());
   const clearFilters = () => patch({ status: "ALL", q: null });
-  const openOrder = (o) => patch({ order: o.id });
+  const openOrder = (o) => openPopup({ order: o.id });
   // "Review order": the same drawer, straight on the stock check, where all three decisions are
-  const reviewOrder = (o) => patch({ order: o.id, tab: "feasibility" });
-  const closeOrder = () => patch({ order: null, tab: null }, true);
+  const reviewOrder = (o) => openPopup({ order: o.id, tab: "feasibility" });
+  const closeOrder = () => closePopup({ order: null, tab: null });
 
   // Same list feeds the tiles (md and up) and the chips (phones).
   const filters = [

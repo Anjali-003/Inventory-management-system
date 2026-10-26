@@ -74,7 +74,7 @@ const NOTIFY_TAGS = {
   FINISHED_GOODS_IN_STORE: ["FinishedGoods", "Orders", "ProductStock"],
   FINISHED_GOODS_BILLED: ["FinishedGoods", "Orders"],
   FINISHED_GOODS_DISPATCHED: ["FinishedGoods", "Orders", "ProductStock"],
-  FINISHED_GOODS_DELIVERED: ["FinishedGoods", "Orders", "MarketingOrders"],
+  FINISHED_GOODS_DELIVERED: ["FinishedGoods", "Orders", "MarketingOrders", "ProductStock"],
 };
 
 export default function LiveSync() {

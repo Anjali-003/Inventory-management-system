@@ -103,8 +103,8 @@ export default function QualityFinishedGoodsDashboard() {
   const qcPendingCount = useMemo(() => getQcPendingBatches(qcItems).length, [qcItems])
   const qcFailedCount = useMemo(() => getQcFailedBatches(qcItems).length, [qcItems])
   const qcRetestCount = useMemo(() => getQcReadyForRetest(qcItems).length, [qcItems])
-  const packagingCount = useMemo(() => countFinishedGoods(finishedItems, "PACKAGING"), [finishedItems])
-  const packedCount = useMemo(() => countFinishedGoods(finishedItems, "PACKED"), [finishedItems])
+  const toStoreCount = useMemo(() => countFinishedGoods(finishedItems, "HANDED_OVER"), [finishedItems])
+  const doneCount = useMemo(() => countFinishedGoods(finishedItems, "DELIVERED"), [finishedItems])
   const qcChartItems = useMemo(() => {
     const retestItems = getQcReadyForRetest(qcItems)
     const failedItems = getQcFailedBatches(qcItems)
@@ -171,8 +171,8 @@ export default function QualityFinishedGoodsDashboard() {
         <DashboardMetricCard index={0} to="/quality-control" icon={ClipboardCheck} tone={qcPendingCount ? "amber" : "green"} label="Pending QC decisions" value={qcPendingCount} loading={qcQuery.isLoading} detail="Fully completed batches awaiting Pass / Fail" />
         <DashboardMetricCard index={1} to="/qc-failed" icon={XCircle} tone={qcFailedCount ? "red" : "green"} label="Failed / needs correction" value={qcFailedCount} loading={qcQuery.isLoading} detail="Open QC Failed to record the repair" />
         <DashboardMetricCard index={2} to="/qc-failed" icon={RotateCcw} tone={qcRetestCount ? "blue" : "green"} label="Ready for QC retest" value={qcRetestCount} loading={qcQuery.isLoading} detail="Open QC Failed to review submitted repairs" />
-        <DashboardMetricCard index={3} to="/finished-goods" icon={PackageCheck} tone={packagingCount ? "amber" : "green"} label="To pack" value={packagingCount} loading={finishedQuery.isLoading} detail="Passed QC, waiting for packing" />
-        <DashboardMetricCard index={4} to="/finished-goods" icon={Truck} tone="blue" label="Packed" value={packedCount} loading={finishedQuery.isLoading} detail="Waiting for Ops Admin to hand over" />
+        <DashboardMetricCard index={3} to="/finished-goods?status=HANDED_OVER" icon={PackageCheck} tone="blue" label="Sent to Store" value={toStoreCount} loading={finishedQuery.isLoading} detail="Passed QC, Store to receive" />
+        <DashboardMetricCard index={4} to="/finished-goods?status=DELIVERED" icon={Truck} tone="green" label="Given out" value={doneCount} loading={finishedQuery.isLoading} detail="Orders complete" />
       </div>
 
       <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-3">

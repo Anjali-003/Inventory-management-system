@@ -7,6 +7,8 @@ import { setUnreadCount } from "@/lib/pageTitle"
 import { timeAgo } from "@/features/activity/time"
 import { severityOf } from "./notificationStyle"
 import NotificationIcon from "./NotificationIcon"
+import { usePermissions } from "@/features/auth/usePermissions"
+import { ROLE_LABELS } from "@/lib/permissions"
 import {
   useGetNotificationsQuery,
   useMarkAllNotificationsReadMutation,
@@ -19,6 +21,8 @@ import {
     - "Action needed" lists open tasks first, then everything else newest first
     - clicking a notification marks it read and opens its page (link)
   The list refreshes live (LiveSync invalidates "Notifications" on every "notify" event).
+  The Super Admin (CEO) gets EVERY department's notifications here, read only: each row says whose inbox it is and
+  who sent it, "Important" keeps the ones that also ring the phone, and a department can be picked.
 */
 const EMPTY = { items: [], unread: 0 }
 const TABS = [
@@ -28,6 +32,9 @@ const TABS = [
 
 export default function NotificationBell() {
   const navigate = useNavigate()
+  const { realRole } = usePermissions()
+  const ceo = realRole === "SUPER_ADMIN"
+  const [dept, setDept] = useState("")
   const { data = EMPTY } = useGetNotificationsQuery()
   const [markRead] = useMarkNotificationReadMutation()
   const [markAllRead] = useMarkAllNotificationsReadMutation()
@@ -36,9 +43,14 @@ export default function NotificationBell() {
   const rootRef = useRef(null)
 
   const { unread } = data
-  const visible = useMemo(() => (tab === "unread" ? data.items.filter((n) => !n.read) : data.items), [data.items, tab])
-  const tasks = visible.filter((n) => n.requires_action && !n.done)
-  const rest = visible.filter((n) => !(n.requires_action && !n.done))
+  const visible = useMemo(() => data.items.filter((n) =>
+    (tab !== "unread" || !n.read) && (tab !== "important" || n.important) && (!dept || n.for_role === dept)
+  ), [data.items, tab, dept])
+  // the CEO only reads other roles' tasks (that role closes them), so they are not "Action needed" for it
+  const tasks = ceo ? [] : visible.filter((n) => n.requires_action && !n.done)
+  const rest = ceo ? visible : visible.filter((n) => !(n.requires_action && !n.done))
+  const depts = useMemo(() => [...new Set(data.items.map((n) => n.for_role).filter(Boolean))].sort(), [data.items])
+  const tabs = ceo ? [...TABS, { id: "important", label: "Important" }] : TABS
 
   // "(3) Incoming orders · Sensation Systems": the count shows in the browser tab too (lib/pageTitle.js)
   useEffect(() => {
@@ -121,7 +133,7 @@ export default function NotificationBell() {
             </div>
 
             <div role="tablist" className="flex gap-1 border-b px-3 py-2">
-              {TABS.map((t) => (
+              {tabs.map((t) => (
                 <button
                   key={t.id}
                   role="tab"
@@ -136,6 +148,13 @@ export default function NotificationBell() {
                   {t.id === "unread" && unread > 0 && <span className="ml-1 tabular-nums opacity-70">{unread}</span>}
                 </button>
               ))}
+              {ceo && depts.length > 0 && (
+                <select aria-label="Department" value={dept} onChange={(e) => setDept(e.target.value)}
+                  className="ml-auto h-7 rounded-full border bg-card px-2 text-xs font-semibold text-muted-foreground">
+                  <option value="">All departments</option>
+                  {depts.map((d) => <option key={d} value={d}>{ROLE_LABELS[d] || d}</option>)}
+                </select>
+              )}
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -150,7 +169,7 @@ export default function NotificationBell() {
               ) : (
                 <>
                   {tasks.length > 0 && <Section label="Action needed" items={tasks} onOpen={openItem} />}
-                  {rest.length > 0 && <Section label={tasks.length ? "Earlier" : null} items={rest} onOpen={openItem} />}
+                  {rest.length > 0 && <Section label={tasks.length ? "Earlier" : null} items={rest} onOpen={openItem} ceo={ceo} />}
                 </>
               )}
             </div>
@@ -161,14 +180,14 @@ export default function NotificationBell() {
   )
 }
 
-function Section({ label, items, onOpen }) {
+function Section({ label, items, onOpen, ceo = false }) {
   return (
     <div>
       {label && <p className="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-[0.6px] text-cf-faint">{label}</p>}
       <ul className="py-1">
         {items.map((n) => (
           <li key={n.id}>
-            <NotificationRow n={n} onOpen={() => onOpen(n)} />
+            <NotificationRow n={n} onOpen={() => onOpen(n)} ceo={ceo} />
           </li>
         ))}
       </ul>
@@ -176,7 +195,7 @@ function Section({ label, items, onOpen }) {
   )
 }
 
-function NotificationRow({ n, onOpen }) {
+function NotificationRow({ n, onOpen, ceo }) {
   const s = severityOf(n)
   const meta = n.done
     ? `Completed${n.done_by_name ? ` by ${n.done_by_name}` : ""} · ${timeAgo(n.done_at)}`
@@ -197,8 +216,17 @@ function NotificationRow({ n, onOpen }) {
       <span className="min-w-0 flex-1">
         <span className={cn("block text-[13px] leading-snug", n.read ? "font-medium text-foreground/80" : "font-semibold text-foreground")}>{n.title}</span>
         {n.body && <span className="mt-0.5 line-clamp-2 block text-xs leading-snug text-muted-foreground">{n.body}</span>}
+        {ceo && n.for_role && n.for_role !== "SUPER_ADMIN" && (
+          <span className="mt-1 flex flex-wrap items-center gap-1 text-[10px] font-semibold">
+            {n.from_role && <span className="rounded-full bg-muted px-1.5 py-0.5 text-muted-foreground">{ROLE_LABELS[n.from_role] || n.from_role}</span>}
+            <span className="text-muted-foreground">→</span>
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-muted-foreground">{ROLE_LABELS[n.for_role] || n.for_role}</span>
+            {n.important && <span className="rounded-full bg-cf-red-soft px-1.5 py-0.5 text-destructive">Important</span>}
+            {n.requires_action && !n.done && <span className="text-warning">· task open</span>}
+          </span>
+        )}
         <span className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          {n.requires_action && !n.done && <span className={cn("font-semibold", s.tone)}>{s.label} ·</span>}
+          {!ceo && n.requires_action && !n.done && <span className={cn("font-semibold", s.tone)}>{s.label} ·</span>}
           {meta}
         </span>
       </span>

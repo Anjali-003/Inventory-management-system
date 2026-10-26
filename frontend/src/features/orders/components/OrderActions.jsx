@@ -44,7 +44,7 @@ export default function OrderActions({ order, onCheck, onStart, className }) {
     )
   }
 
-  if (["PACKAGING", "PACKED", "HANDED_OVER", "IN_STORE", "BILLED", "DISPATCHED"].includes(status)) {
+  if (["HANDED_OVER", "IN_STORE", "BILLED"].includes(status)) {
     return (
       <div className={baseClass}>
         <Button variant="outline" size="sm" onClick={() => navigate("/finished-goods")}>

@@ -1,129 +1,87 @@
 import { useCallback, useMemo } from "react"
-import {
-  AlertTriangle,
-  Boxes,
-  CheckCircle2,
-  ClipboardCheck,
-  Factory,
-  PackageCheck,
-  PackagePlus,
-  RefreshCw,
-  RotateCcw,
-  Warehouse,
-  XCircle,
-} from "lucide-react"
-import { useNavigate } from "react-router-dom"
-import { HeroButton, MktHero } from "@/features/marketing-orders/mktKit"
-import { Notice } from "@/components/feedback"
+import { Activity, ClipboardCheck, Factory, PackageCheck, RefreshCw, RotateCcw, Truck } from "lucide-react"
+import { Link } from "react-router-dom"
 import { useGetMeQuery } from "@/features/auth/authApi"
-import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
-import { stockState } from "@/features/inventory/components/StockBadge"
 import { useGetProductionQuery, useGetQCFailedQuery } from "@/features/production/productionApi"
 import { useGetQualityControlQuery } from "@/features/quality-control/qualityControlApi"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
-import { errorMessage } from "@/lib/stock"
-import DashboardMetricCard from "@/features/quality-fg-dashboard/components/DashboardMetricCard"
-import { InteractiveDonutChart } from "@/features/dashboard/components/InteractiveDashboardCharts"
-import {
-  getActiveProduction,
-  getAwaitingAllotmentCount,
-} from "@/features/production-dashboard/productionDashboardUtils"
-import {
-  getQcPendingBatches,
-  getQcReadyForRetest,
-  countFinishedGoods,
-} from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
-import {
-  isApprovedForProduction,
-  isProductionCompleted,
-  readyToStartQuantity,
-} from "@/features/production/productionWorkflow"
-import WaitingForYou from "@/features/dashboard/WaitingForYou"
+import { useGetActivityQuery } from "@/features/activity/activityApi"
+import ActivityFeed from "@/features/activity/ActivityFeed"
+import { getQcPendingBatches, getQcReadyForRetest } from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
+import { isProductionCompleted } from "@/features/production/productionWorkflow"
+import { errorMessage, fmtQty } from "@/lib/stock"
+import { Notice, EmptyState } from "@/components/feedback"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Greeting, StatRow, useDrill } from "@/features/dashboard/DashboardKit"
 
-const asArray = (value) => Array.isArray(value) ? value : []
+const EMPTY = []
+const WORK_ACTIVITY_RESOURCES = new Set(["production", "quality-control", "qc-failed", "finished-goods"])
+const arrayOf = (value) => Array.isArray(value) ? value : EMPTY
+const activityTime = (item) => new Date(item.billedAt || item.createdAt || 0).getTime() || 0
 
-/** Overview shared across Production, QC, Finished Goods, and component stock. */
+/** Production Admin overview. Keeps the dashboard focused on the four workflow queues and dispatch readiness. */
 export default function ProductionAdminView() {
-  const navigate = useNavigate()
   const { data: user } = useGetMeQuery()
   const production = useGetProductionQuery()
   const qc = useGetQualityControlQuery()
   const qcFailed = useGetQCFailedQuery()
   const finishedGoods = useGetFinishedGoodsQuery()
-  const inventory = useGetInventoryQuery()
+  const activity = useGetActivityQuery({ limit: 60 })
+  const drill = useDrill()
 
-  const productionItems = asArray(production.data)
-  const qcItems = asArray(qc.data)
-  const failedItems = asArray(qcFailed.data)
-  const finishedItems = asArray(finishedGoods.data)
-  const inventoryItems = asArray(inventory.data)
+  const productionItems = arrayOf(production.data)
+  const qcItems = arrayOf(qc.data)
+  const failedItems = arrayOf(qcFailed.data)
+  const finishedItems = arrayOf(finishedGoods.data)
 
-  const refresh = useCallback(() => {
-    return Promise.allSettled([
-      production.refetch(),
-      qc.refetch(),
-      qcFailed.refetch(),
-      finishedGoods.refetch(),
-      inventory.refetch(),
-    ])
-  }, [production.refetch, qc.refetch, qcFailed.refetch, finishedGoods.refetch, inventory.refetch])
+  const refresh = useCallback(() => Promise.allSettled([
+    production.refetch(),
+    qc.refetch(),
+    qcFailed.refetch(),
+    finishedGoods.refetch(),
+    activity.refetch(),
+  ]), [production.refetch, qc.refetch, qcFailed.refetch, finishedGoods.refetch, activity.refetch])
 
   const metrics = useMemo(() => {
-    const active = getActiveProduction(productionItems).length
-    const awaitingAllotment = getAwaitingAllotmentCount(productionItems)
-    const readyToStart = productionItems.filter((item) =>
-      !isProductionCompleted(item) && isApprovedForProduction(item) && readyToStartQuantity(item) > 0,
-    ).length
-    const pendingQc = getQcPendingBatches(qcItems).length
+    const openProduction = productionItems.filter((item) => !isProductionCompleted(item)).length
+    const awaitingQc = getQcPendingBatches(qcItems).length
     const readyForRetest = getQcReadyForRetest(qcItems).length
-    const lowStock = inventoryItems.filter((item) => ["low", "out"].includes(stockState(item))).length
+    const awaitingDispatch = finishedItems.filter((item) => item.status === "BILLED")
+    const activeFinishedGoods = finishedItems.filter((item) => item.status !== "DELIVERED")
     return {
-      active,
-      awaitingAllotment,
-      readyToStart,
-      pendingQc,
-      failed: failedItems.length,
+      openProduction,
+      awaitingQc,
+      qcFailed: failedItems.length + readyForRetest,
+      failedCount: failedItems.length,
       readyForRetest,
-      toPack: countFinishedGoods(finishedItems, "PACKAGING"),
-      packed: countFinishedGoods(finishedItems, "PACKED"),
-      lowStock,
+      activeFinishedGoods: activeFinishedGoods.length,
+      awaitingDispatch: awaitingDispatch.length,
+      awaitingDispatchItems: [...awaitingDispatch].sort((a, b) => activityTime(b) - activityTime(a)),
     }
-  }, [productionItems, qcItems, failedItems, finishedItems, inventoryItems])
+  }, [productionItems, qcItems, failedItems, finishedItems])
 
-  const chartItems = useMemo(() => [
-    { key: "awaiting", label: "Awaiting material allotment", value: metrics.awaitingAllotment, color: "#e87927", to: "/production" },
-    { key: "ready", label: "Ready to start", value: metrics.readyToStart, color: "#0d9488", to: "/production" },
-    { key: "active", label: "In production", value: metrics.active, color: "#3478d4", to: "/production" },
-    { key: "qc", label: "Awaiting QC", value: metrics.pendingQc, color: "#8358c9", to: "/quality-control" },
-    { key: "failed", label: "QC failed / rework", value: metrics.failed, color: "#dc4545", to: "/qc-failed" },
-    { key: "pack", label: "Ready for packing", value: metrics.toPack, color: "#15966b", to: "/finished-goods" },
-    { key: "stock", label: "Low / out of stock", value: metrics.lowStock, color: "#d1a025", to: "/inventory" },
-  ], [metrics])
+  const activityItems = useMemo(() => arrayOf(activity.data)
+    .filter((item) => WORK_ACTIVITY_RESOURCES.has(item.resource))
+    .slice(0, 5), [activity.data])
 
-  const loading = production.isLoading || qc.isLoading || qcFailed.isLoading || finishedGoods.isLoading || inventory.isLoading
+  const refreshing = [production, qc, qcFailed, finishedGoods].some((source) => source.isFetching) || activity.isFetching
   const errors = [
     production.error && ["Production", errorMessage(production.error, "Could not load production data.")],
     qc.error && ["Quality Control", errorMessage(qc.error, "Could not load QC data.")],
-    qcFailed.error && ["QC Failed", errorMessage(qcFailed.error, "Could not load rework data.")],
+    qcFailed.error && ["QC Failed", errorMessage(qcFailed.error, "Could not load QC Failed data.")],
     finishedGoods.error && ["Finished Goods", errorMessage(finishedGoods.error, "Could not load Finished Goods data.")],
-    inventory.error && ["Inventory", errorMessage(inventory.error, "Could not load inventory data.")],
   ].filter(Boolean)
-  const refreshing = production.isFetching || qc.isFetching || qcFailed.isFetching || finishedGoods.isFetching || inventory.isFetching
 
   return (
     <>
-      <MktHero
-        eyebrow="Production Admin dashboard"
-        title={user?.name ? `Hello, ${user.name}` : "Production Admin"}
-        description="One overview for production progress, quality decisions, finished goods and component stock."
-      >
-        <HeroButton onClick={() => navigate("/production")}><Factory /> Production</HeroButton>
-        <HeroButton variant="glass" onClick={() => navigate("/quality-control")}><ClipboardCheck /> Quality Control</HeroButton>
-        <HeroButton variant="glass" onClick={refresh} disabled={refreshing}>
-          <RefreshCw className={refreshing ? "animate-spin" : ""} /> Refresh
-        </HeroButton>
-      </MktHero>
-      <WaitingForYou className="mb-4" />
+      <Greeting description="Follow production, quality checks and finished goods through to dispatch. Click a card to open its work queue.">
+        <Button type="button" variant="outline" onClick={refresh} disabled={refreshing}>
+          <RefreshCw className={`mr-2 size-4 ${refreshing ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
+      </Greeting>
 
       {errors.length > 0 && (
         <div className="mb-4 space-y-2">
@@ -131,55 +89,101 @@ export default function ProductionAdminView() {
         </div>
       )}
 
-      <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <DashboardMetricCard index={0} to="/production" icon={Factory} tone="blue" label="Active production" value={metrics.active} loading={loading} detail="Runs currently being built" />
-        <DashboardMetricCard index={1} to="/production" icon={PackagePlus} tone={metrics.awaitingAllotment ? "amber" : "green"} label="Awaiting material allotment" value={metrics.awaitingAllotment} loading={loading} detail="Product lines still waiting for Store" />
-        <DashboardMetricCard index={2} to="/production" icon={CheckCircle2} tone="green" label="Ready to start" value={metrics.readyToStart} loading={loading} detail="Materials have been allotted" />
-        <DashboardMetricCard index={3} to="/quality-control" icon={ClipboardCheck} tone={metrics.pendingQc ? "blue" : "green"} label="Awaiting QC" value={metrics.pendingQc} loading={loading} detail="Completed batches needing a decision" />
-        <DashboardMetricCard index={4} to="/qc-failed" icon={RotateCcw} tone={metrics.failed || metrics.readyForRetest ? "red" : "green"} label="QC failed / retest" value={metrics.failed + metrics.readyForRetest} loading={loading} detail={`${metrics.failed} failed · ${metrics.readyForRetest} ready for retest`} />
-        <DashboardMetricCard index={5} to="/finished-goods" icon={PackageCheck} tone={metrics.toPack ? "amber" : "green"} label="Ready for packing" value={metrics.toPack} loading={loading} detail={`${metrics.packed} already packed`} />
-        <DashboardMetricCard index={6} to="/inventory" icon={Boxes} tone={metrics.lowStock ? "red" : "green"} label="Low / out of stock" value={metrics.lowStock} loading={loading} detail="Review component balances" />
-      </div>
+      <StatRow
+        drill={drill}
+        stats={[
+          {
+            label: "Production",
+            value: production.isLoading ? null : metrics.openProduction,
+            icon: Factory,
+            tone: "blue",
+            loading: production.isLoading,
+            detail: "Product lines not yet completed",
+            to: "/production",
+          },
+          {
+            label: "Awaiting QC",
+            value: qc.isLoading ? null : metrics.awaitingQc,
+            icon: ClipboardCheck,
+            tone: "violet",
+            loading: qc.isLoading,
+            detail: "Completed batches needing a check",
+            to: "/quality-control",
+          },
+          {
+            label: "QC Failed / Retest",
+            value: qcFailed.isLoading || qc.isLoading ? null : metrics.qcFailed,
+            icon: RotateCcw,
+            tone: metrics.qcFailed ? "red" : "green",
+            loading: qcFailed.isLoading || qc.isLoading,
+            detail: `${metrics.failedCount} failed · ${metrics.readyForRetest} ready for retest`,
+            to: "/qc-failed",
+          },
+          {
+            label: "Finished Goods",
+            value: finishedGoods.isLoading ? null : metrics.activeFinishedGoods,
+            icon: PackageCheck,
+            tone: metrics.awaitingDispatch ? "amber" : "green",
+            loading: finishedGoods.isLoading,
+            detail: `${metrics.awaitingDispatch} awaiting dispatch`,
+            to: "/finished-goods",
+          },
+        ]}
+      />
 
-      <div className="mt-5 grid min-w-0 gap-4 xl:grid-cols-2">
-        <InteractiveDonutChart
-          title="Work across departments"
-          description="Select a category to open its live queue. Counts are current work items, not unique orders."
-          items={chartItems}
-          loading={loading}
-          emptyLabel="There are no active work items in these queues right now."
-        />
+      <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        <Card className="min-w-0 overflow-hidden">
+          <CardHeader className="items-center">
+            <div>
+              <CardTitle className="flex items-center gap-2"><Truck className="size-5 text-amber-600" /> Awaiting dispatch</CardTitle>
+              <CardDescription>Finished goods that have been billed and are ready to be sent out.</CardDescription>
+            </div>
+            <Link to="/finished-goods" className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary hover:underline">
+              View more <span aria-hidden>→</span>
+            </Link>
+          </CardHeader>
+          {finishedGoods.isLoading ? (
+            <div className="space-y-3 p-5">{[1, 2, 3].map((i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-muted" />)}</div>
+          ) : metrics.awaitingDispatchItems.length === 0 ? (
+            <EmptyState icon={Truck} title="Nothing is waiting for dispatch" description="Billed finished goods will appear here when they are ready to go out." />
+          ) : (
+            <div className="divide-y">
+              {metrics.awaitingDispatchItems.slice(0, 5).map((item) => (
+                <Link key={item.id} to="/finished-goods" className="flex min-w-0 items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{item.orderNumber || `Order #${item.orderId}`}</span>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">{item.productName || item.lines?.map((line) => line.name).join(" · ") || "Finished goods"}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">{item.bill?.billNumber ? `Bill ${item.bill.billNumber} · ` : ""}{fmtQty(item.quantity)} units</span>
+                  </span>
+                  <Badge variant="warning" className="shrink-0">Awaiting dispatch</Badge>
+                </Link>
+              ))}
+            </div>
+          )}
+          {metrics.awaitingDispatchItems.length > 5 && (
+            <div className="border-t px-5 py-3 text-right">
+              <Link to="/finished-goods" className="text-sm font-semibold text-primary hover:underline">View all {metrics.awaitingDispatchItems.length} items →</Link>
+            </div>
+          )}
+        </Card>
 
-        <div className="min-w-0 overflow-hidden rounded-2xl border border-[#E3E6EB] bg-white shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
-          <div className="border-b bg-gradient-to-r from-emerald-50 via-white to-teal-50 px-5 py-4">
-            <h2 className="font-bold tracking-tight">Quick actions</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Jump directly to the work that needs attention.</p>
-          </div>
-          <div className="grid gap-2 p-4 sm:grid-cols-2">
-            <button type="button" onClick={() => navigate("/production")} className="flex min-h-16 items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-800"><Factory className="size-5" /></span>
-              <span><span className="block text-sm font-semibold">Manage production</span><span className="block text-xs text-muted-foreground">Material requests and production updates</span></span>
-            </button>
-            <button type="button" onClick={() => navigate("/quality-control")} className="flex min-h-16 items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-blue-100 text-blue-800"><ClipboardCheck className="size-5" /></span>
-              <span><span className="block text-sm font-semibold">Quality Control</span><span className="block text-xs text-muted-foreground">Record quality decisions</span></span>
-            </button>
-            <button type="button" onClick={() => navigate("/qc-failed")} className="flex min-h-16 items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:border-rose-300 hover:bg-rose-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-rose-100 text-rose-800"><XCircle className="size-5" /></span>
-              <span><span className="block text-sm font-semibold">QC failed / retest</span><span className="block text-xs text-muted-foreground">Track corrections and retesting</span></span>
-            </button>
-            <button type="button" onClick={() => navigate("/finished-goods")} className="flex min-h-16 items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:border-violet-300 hover:bg-violet-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-800"><PackageCheck className="size-5" /></span>
-              <span><span className="block text-sm font-semibold">Finished Goods</span><span className="block text-xs text-muted-foreground">Packing, handover and dispatch</span></span>
-            </button>
-            <button type="button" onClick={() => navigate("/inventory")} className="flex min-h-16 items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:border-amber-300 hover:bg-amber-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:col-span-2">
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-800"><Warehouse className="size-5" /></span>
-              <span><span className="block text-sm font-semibold">Component inventory</span><span className="block text-xs text-muted-foreground">Review and update component stock</span></span>
-              <AlertTriangle className="ml-auto size-4 text-amber-700" />
-            </button>
-          </div>
-        </div>
+        <Card className="min-w-0 overflow-hidden">
+          <CardHeader className="items-center">
+            <div>
+              <CardTitle className="flex items-center gap-2"><Activity className="size-5 text-emerald-700" /> Recent workflow activity</CardTitle>
+              <CardDescription>Only Production, QC, QC Failed and Finished Goods actions.</CardDescription>
+            </div>
+          </CardHeader>
+          {activity.isLoading ? (
+            <div className="space-y-3 p-5">{[1, 2, 3, 4].map((i) => <div key={i} className="h-10 animate-pulse rounded-lg bg-muted" />)}</div>
+          ) : activity.error ? (
+            <div className="p-4"><Notice title="Activity unavailable">{errorMessage(activity.error, "Could not load workflow activity.")}</Notice></div>
+          ) : (
+            <ActivityFeed items={activityItems} meId={user?.id} />
+          )}
+        </Card>
       </div>
+      {drill.host}
     </>
   )
 }

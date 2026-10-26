@@ -78,7 +78,10 @@ const archiveItem = handle(async (req, res) => {
     res.json(await svc.archiveItem(req.params.id, req.body || {}, req.user.id));
 });
 
+const setCost = handle(async (req, res) => res.json(await svc.setStandardCost(req.params.id, req.body || {})));
+
 module.exports = {
+    setCost,
     list, ledger, componentOptions, nextComponentSku,
     monthlyHistory, dailyHistory, productsUsage, balanceSheet,
     getItem, stockIn, stockInBatch, stockOut, updateItem, archiveItem,

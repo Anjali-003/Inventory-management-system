@@ -25,7 +25,7 @@ const withBody = (name, message) =>
         res.status(201).json(await service[name](idOf(req), req.body || {}, req.user.id));
     }, { message });
 
-/* pack / handOver / receive / dispatch / deliver */
+/* receive / dispatch */
 const step = (name) =>
     asyncHandler(async (req, res) => {
         res.json(await service.advance(name, idOf(req), req.body || {}, req.user.id));

@@ -119,6 +119,7 @@ async function inspect(purchaseId, body, userId) {
         await notifications.notify(conn, {
             role: "PURCHASE_MANAGER",
             type: "IQC_RESULT",
+            important: approvedTotal === 0 || rejected > 0 || defective,
             title: approvedTotal === 0
                 ? `Purchase ${poNumber} was rejected by IQC`
                 : rejected

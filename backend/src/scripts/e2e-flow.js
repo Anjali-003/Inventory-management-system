@@ -139,10 +139,9 @@ async function main() {
 
     /* ---- 5. After QC: one owner per step ---- */
     const fg = (await MKT("GET", "/finished-goods")).data.find((f) => f.orderId === orderId);
-    ok("Order reaches Finished Goods", fg?.status === "PACKAGING");
-    if (!ONE_ROLE) ok("Store cannot do QC & FG's packing", (await STORE("POST", `/finished-goods/${fg.id}/pack`)).status === 403);
-    ok("QC & FG packs", (await QC("POST", `/finished-goods/${fg.id}/pack`)).status === 200);
-    ok("Operations Admin hands over to Store", (await OPS("POST", `/finished-goods/${fg.id}/hand-over`)).status === 200);
+    ok("QC pass sends the packed order straight to the Store", fg?.status === "HANDED_OVER");
+    ok("Tracker: waiting for Store", (await stage(orderId))?.waitingFor === "STORE_MANAGER", (await stage(orderId))?.stage);
+    if (!ONE_ROLE) ok("Marketing cannot receive into Store", (await MKT("POST", `/finished-goods/${fg.id}/receive`)).status === 403);
     const before = (await STORE("GET", "/product-stock")).data.find((p) => p.productId === product.id)?.onHand ?? 0;
     ok("Store receives into product stock", (await STORE("POST", `/finished-goods/${fg.id}/receive`)).status === 200);
     const after = (await STORE("GET", "/product-stock")).data.find((p) => p.productId === product.id)?.onHand;
@@ -159,8 +158,11 @@ async function main() {
     const bill = await MKT("POST", `/finished-goods/${fg.id}/bill`, billBody(250));
     ok("Marketing makes the bill again at the list price", bill.status === 201, `${bill.data?.billNumber}: 4 x 250 + 18% = 1180`);
     ok("Store gives out for delivery", (await STORE("POST", `/finished-goods/${fg.id}/dispatch`, { note: "e2e truck" })).status === 200);
+    const moves = (await STORE("GET", "/product-stock/movements")).data;
+    ok("Product stock history links the order", moves.length > 0 && moves.every((m) => m.orderId === orderId), `${moves.length} moves`);
     ok("Product stock went back down", (await STORE("GET", "/product-stock")).data.find((p) => p.productId === product.id)?.onHand === before);
-    ok("Marketing confirms delivery", (await MKT("POST", `/finished-goods/${fg.id}/deliver`)).status === 200);
+    const done = (await MKT("GET", `/finished-goods/${fg.id}`)).data;
+    ok("Giving out completes the order", done.status === "DELIVERED" && (await stage(orderId))?.waitingFor === null, (await stage(orderId))?.stage);
     const today = new Date().toISOString().slice(0, 10);
     ok("Marketing records a part payment", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 500, paid_on: today, method: "UPI", reference: "UTR123" })).status === 201);
     ok("A payment above what is due is refused", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 5000, paid_on: today, method: "CASH" })).status === 409);
@@ -168,6 +170,22 @@ async function main() {
     const paidBill = (await MKT("GET", `/finished-goods/${fg.id}/bill`)).data;
     ok("Bill: 1180 - 295 credit - 500 paid = 385 to collect", paidBill.due === 385 && paidBill.paymentStatus === "PART_PAID", `due ${paidBill.due}`);
     ok("Marketing collects the rest", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 385, paid_on: today, method: "BANK" })).status === 201);
+
+    /* ---- Sales & Billing (Marketing) ---- */
+    const billsList = (await MKT("GET", "/sales/bills")).data;
+    const active = billsList.find((b) => b.finishedGoodsId === fg.id && b.status === "ACTIVE");
+    const cancelledBill = billsList.find((b) => b.finishedGoodsId === fg.id && b.status === "CANCELLED");
+    ok("Bills list: the bill, paid in full after the credit note", active?.paymentStatus === "PAID" && active.net === 885 && active.due === 0, `${active?.billNumber} net ${active?.net}`);
+    ok("Bills list keeps the cancelled bill with its reason", cancelledBill?.paymentStatus === "CANCELLED" && !!cancelledBill.cancelReason);
+    const sales = (await MKT("GET", "/sales/summary")).data;
+    ok("Marketing sees this month's sales and money in", sales.net === 885 && sales.collected === 885 && sales.toCollect === 0);
+    const paid = (await MKT("GET", "/sales/payments")).data;
+    ok("Received this month: the 2 payments behind it, adding up to the figure", paid.length === 2 && paid.reduce((s, p) => s + p.amount, 0) === sales.collected && paid.every((p) => p.billNumber), `${paid.length} payments`);
+    const customerRow = (await MKT("GET", "/customers")).data.find((c) => c.id === customer.data.id);
+    ok("Customer shows what it bought and owes", customerRow?.bought === 885 && customerRow.due === 0 && customerRow.bills === 1, `bought ${customerRow?.bought}`);
+    ok("Marketing edits the customer", (await MKT("PUT", `/customers/${customer.data.id}`, { name: customer.data.name, phone: "9876543210" })).status === 200);
+    if (!ONE_ROLE) ok("Store cannot open Sales & Billing", (await STORE("GET", "/sales/bills")).status === 403);
+    if (!ONE_ROLE) ok("Operations Admin can look at the bills", (await OPS("GET", "/sales/bills")).status === 200);
     ok("Tracker: delivered, waiting for nobody", (await stage(orderId))?.done === true);
     const journey = (await SA("GET", `/order-tracker/${orderId}`)).data;
     ok("Journey lists every step", journey?.events?.length >= 15, `${journey?.events?.length} events`);
@@ -223,6 +241,10 @@ async function main() {
     ok("IQC checks it (1 piece rejected)", checked.status < 300, `${checked.status} ${checked.data?.message || ""}`);
     ok("Tracker: waiting for Store", (await stage(o3))?.waitingFor === "STORE_MANAGER", (await stage(o3))?.stage);
     ok("Store accepts it into stock", (await STORE("POST", `/incoming-stock/${po.data.id}/accept`, {})).status === 200);
+    if (!ONE_ROLE) ok("IQC cannot see customer orders (Order Tracker)", (await IQC("GET", "/order-tracker")).status === 403);
+    if (!ONE_ROLE) ok("IQC still sees what Purchase sent", (await IQC("GET", "/purchase")).data.some((x) => x.id === po.data.id));
+    const listed = (await PUR("GET", "/purchase")).data.find((x) => x.id === po.data.id);
+    ok("Purchase list links each order it is for", listed?.order_refs?.some((r) => r.id === o3), JSON.stringify(listed?.order_refs));
     ok("Tracker: back with Production", (await stage(o3))?.waitingFor === "PRODUCTION_MANAGER", (await stage(o3))?.stage);
 
     /* ---- 7. The books still balance; the month report sees the sale ---- */
@@ -234,6 +256,10 @@ async function main() {
     ok("Report: net sales after the credit note, the cancelled bill not counted", report.sales.net === 885 && report.sales.bills === 1, `net ₹${report.sales.net}`);
     ok("Report: money received and nothing left to collect", report.sales.collected === 885 && report.sales.toCollect === 0, `received ₹${report.sales.collected}`);
     ok("Report: money spent on purchases", report.money.spent > 0, `₹${report.money.spent}`);
+    ok("Report: profit worked out (standard costs where nothing was bought with a rate)", report.money.profit !== null && report.money.estimatedProducts > 0, `₹${report.money.profit}`);
+    const [[anyItem]] = await db.query("SELECT id FROM inventory ORDER BY id LIMIT 1");
+    ok("Super Admin sets a component's standard cost", (await SA("PUT", `/inventory/${anyItem.id}/cost`, { standard_cost: 1.25 })).status === 200);
+    if (!ONE_ROLE) ok("Store cannot change a component's cost", (await STORE("PUT", `/inventory/${anyItem.id}/cost`, { standard_cost: 9 })).status === 403);
     ok("Report: QC passed first try", report.qualityCheck.firstTryPassPct === 100);
 
     /* ---- 8. The CEO's dashboard (Super Admin) gets every figure it shows ---- */
@@ -242,6 +268,33 @@ async function main() {
     ok("CEO dashboard: every figure loads", ceo.every((x) => x.status === 200), ceo.map((x) => x.status).join(","));
     const tracked = ceo[0].data.find((o) => o.id === orderId);
     ok("CEO dashboard: promised date comes as a plain day", /^\d{4}-\d{2}-\d{2}$/.test(tracked?.promisedDate || ""), tracked?.promisedDate);
+
+    /* ---- 9. The CEO hears about everything; the phone only rings for what matters ---- */
+    const inbox = (await SA("GET", "/notifications")).data;
+    const roles = new Set(inbox.items.map((x) => x.for_role));
+    ok("Super Admin's bell has every department's notifications", ["MARKETING_MANAGER", "OPERATIONS_ADMIN", "STORE_MANAGER", "PRODUCTION_MANAGER", "PURCHASE_MANAGER"].every((r) => roles.has(r)), [...roles].length + " roles");
+    ok("Each one says who sent it", inbox.items.some((x) => x.from_role && x.for_role !== x.from_role));
+    const important = (await SA("GET", "/notifications?important=1")).data.items.map((x) => x.type);
+    ok("Important: IQC rejection, extra material, discounted bill, cancels, credit note",
+      ["IQC_RESULT", "EXTRA_MATERIAL_REQUESTED", "FINISHED_GOODS_BILLED", "ORDER_CANCELLED", "BILL_CANCELLED", "CREDIT_NOTE"].every((t) => important.includes(t)), [...new Set(important)].join(","));
+    ok("Important leaves out the everyday hand-overs", !important.includes("MATERIAL_ISSUED") && !important.includes("FINISHED_GOODS_IN_STORE"));
+    if (!ONE_ROLE) {
+      const own = (await STORE("GET", "/notifications")).data.items;
+      ok("Store still sees only its own inbox", own.length > 0 && own.every((x) => x.for_role === "STORE_MANAGER"));
+      const storeNote = inbox.items.find((x) => x.for_role === "STORE_MANAGER");
+      ok("Super Admin can mark another role's notification read", (await SA("POST", `/notifications/${storeNote.id}/read`)).status === 200);
+      const [[task]] = await db.query("SELECT id FROM notifications WHERE role = 'STORE_MANAGER' ORDER BY id DESC LIMIT 1");
+      await db.query("UPDATE notifications SET requires_action = 1 WHERE id = ?", [task.id]);
+      ok("…but cannot close another role's task", (await SA("POST", `/notifications/${task.id}/done`)).status === 404);
+    }
+    // an order waiting 5 days: the hourly check tells the CEO once a day
+    await db.query("UPDATE orders SET updated_at = DATE_SUB(NOW(), INTERVAL 5 DAY) WHERE id = ?", [o3]);
+    const tracker = require("../modules/reports/order-tracker.service");
+    const firstRun = await tracker.notifyStuckOrders();
+    const secondRun = await tracker.notifyStuckOrders();
+    const stuckNote = (await SA("GET", "/notifications?important=1")).data.items.find((x) => x.type === "ORDER_STUCK" && x.order_id === o3);
+    ok("Stuck order (5 days) is told to the Super Admin", firstRun >= 1 && !!stuckNote, stuckNote?.title);
+    ok("…only once a day", secondRun === 0);
   } finally {
     server.close();
     await db.end().catch(() => {});

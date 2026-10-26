@@ -90,7 +90,7 @@ const MODULES = [
 
     // super admins only (requireRole is also applied inside super-admin.routes.js)
     { path: "/super-admins", router: superAdminRoutes, resource: "super-admins" },
-    { path: "/activity", router: activityRoutes, guards: [requireRole("SUPER_ADMIN")] },
+    { path: "/activity", router: activityRoutes, guards: [requireRole("SUPER_ADMIN", "PRODUCTION_ADMIN")] },
 
     // notification inbox of the logged-in role (header bell + dashboard panels). Every role has one, so no permit():
     // the service scopes every query to req.user.role. No broadcastChanges: the service pushes its own live event after commit.

@@ -16,22 +16,28 @@ const EMPTY = []
 /* only the components that are still to be ordered (lines already on a purchase order are done) */
 export const shortageOf = (o) => (o.purchase_request?.items || EMPTY).filter((c) => c.purchase_order_id == null)
 
-/* One read-only figure inside a department card (the card itself is the link, so this is not one). */
-function Stat({ label, value, loading, tone }) {
+/*
+  One figure inside a department card. It opens the list behind it, filtered the same way: e.g. "Awaiting supplier
+  delivery" opens the purchases the Purchase Manager placed that have not arrived yet.
+*/
+function Stat({ label, value, loading, tone, to }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-[#E3E6EB] bg-background px-3.5 py-2.5">
+    <Link to={to} className="flex items-center justify-between gap-3 rounded-xl border border-[#E3E6EB] bg-background px-3.5 py-2.5 outline-none transition-colors hover:border-[#CDD2DA] hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/60">
       <span className="min-w-0 truncate text-sm text-muted-foreground">{label}</span>
-      <span className={cn("shrink-0 text-lg font-bold tabular-nums", tone)}>
-        {loading ? <span className="inline-block h-5 w-8 animate-pulse rounded-md bg-slate-200/80 align-middle" aria-label="Loading" /> : value}
+      <span className="flex shrink-0 items-center gap-1">
+        <span className={cn("text-lg font-bold tabular-nums", tone)}>
+          {loading ? <span className="inline-block h-5 w-8 animate-pulse rounded-md bg-slate-200/80 align-middle" aria-label="Loading" /> : value}
+        </span>
+        <ChevronRight className="size-3.5 text-muted-foreground" aria-hidden />
       </span>
-    </div>
+    </Link>
   )
 }
 
-/* Read-only summary of a department. The whole card opens that department's MAIN dashboard (/dashboard?dept=...). */
+/* Read-only summary of a department: each figure opens its list, the link at the bottom the department's MAIN dashboard. */
 function Panel({ icon: Icon, title, description, dept, children }) {
   return (
-    <Link to={`/dashboard?dept=${dept}`} aria-label={`Open ${title} Dashboard`} className="group flex flex-col gap-3 rounded-2xl border border-[#E3E6EB] bg-card p-4 outline-none transition-[border-color,box-shadow] duration-200 hover:border-[#CDD2DA] hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring/60">
+    <div className="flex flex-col gap-3 rounded-2xl border border-[#E3E6EB] bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground"><Icon className="size-[18px]" aria-hidden /></span>
@@ -43,10 +49,10 @@ function Panel({ icon: Icon, title, description, dept, children }) {
         <Badge variant="neutral" className="shrink-0">View only</Badge>
       </div>
       <div className="grid gap-2">{children}</div>
-      <span className="mt-auto inline-flex items-center gap-0.5 self-start text-xs font-semibold text-primary group-hover:underline">
+      <Link to={`/dashboard?dept=${dept}`} className="mt-auto inline-flex items-center gap-0.5 self-start text-xs font-semibold text-primary hover:underline">
         Open {title} Dashboard <ChevronRight className="size-3.5" aria-hidden />
-      </span>
-    </Link>
+      </Link>
+    </div>
   )
 }
 
@@ -56,9 +62,9 @@ function IqcPanel() {
   const l = buys.isLoading
   return (
     <Panel icon={FlaskConical} title="IQC" description="Incoming inspection" dept="iqc">
-      <Stat label="Waiting for inspection" value={c.PENDING_IQC} loading={l} tone={c.PENDING_IQC ? "text-violet-700" : undefined} />
-      <Stat label="Inspected, all time" value={c.PENDING_STORE + c.STORED + c.REJECTED} loading={l} />
-      <Stat label="Rejected" value={c.REJECTED} loading={l} tone={c.REJECTED ? "text-rose-700" : undefined} />
+      <Stat label="Waiting for inspection" value={c.PENDING_IQC} loading={l} tone={c.PENDING_IQC ? "text-violet-700" : undefined} to="/iqc?status=PENDING_IQC" />
+      <Stat label="Inspected, all time" value={c.PENDING_STORE + c.STORED + c.REJECTED} loading={l} to="/iqc?status=INSPECTED" />
+      <Stat label="Rejected" value={c.REJECTED} loading={l} tone={c.REJECTED ? "text-rose-700" : undefined} to="/iqc?status=REJECTED" />
     </Panel>
   )
 }
@@ -72,9 +78,9 @@ function StorePanel() {
   const out = stock.filter((i) => stockState(i) === "out").length
   return (
     <Panel icon={Warehouse} title="Store" description="Incoming stock and inventory" dept="store">
-      <Stat label="To accept into stock" value={c.PENDING_STORE} loading={buys.isLoading} tone={c.PENDING_STORE ? "text-cyan-700" : undefined} />
-      <Stat label="Low stock" value={low} loading={inv.isLoading} tone={low ? "text-amber-700" : undefined} />
-      <Stat label="Out of stock" value={out} loading={inv.isLoading} tone={out ? "text-rose-700" : undefined} />
+      <Stat label="To accept into stock" value={c.PENDING_STORE} loading={buys.isLoading} tone={c.PENDING_STORE ? "text-cyan-700" : undefined} to="/incoming-stock?status=PENDING_STORE" />
+      <Stat label="Low stock" value={low} loading={inv.isLoading} tone={low ? "text-amber-700" : undefined} to="/inventory?filter=low" />
+      <Stat label="Out of stock" value={out} loading={inv.isLoading} tone={out ? "text-rose-700" : undefined} to="/inventory?filter=out" />
     </Panel>
   )
 }
@@ -88,9 +94,10 @@ function PurchasePanel() {
   const lines = (ord.data ?? EMPTY).reduce((sum, o) => sum + shortageOf(o).length, 0)
   return (
     <Panel icon={ShoppingCart} title="Purchase" description="Buying and supplier deliveries" dept="purchase">
-      {canOrders && <Stat label="Component lines to order" value={lines} loading={ord.isLoading} tone={lines ? "text-amber-700" : undefined} />}
-      <Stat label="Awaiting supplier delivery" value={c.ORDER_PLACED} loading={buys.isLoading} tone={c.ORDER_PLACED ? "text-blue-700" : undefined} />
-      <Stat label="Received, not sent to IQC" value={c.RECEIVED} loading={buys.isLoading} />
+      {canOrders && <Stat label="Component lines to order" value={lines} loading={ord.isLoading} tone={lines ? "text-amber-700" : undefined} to="/purchase-requests" />}
+      <Stat label="Awaiting supplier delivery" value={c.ORDER_PLACED} loading={buys.isLoading} tone={c.ORDER_PLACED ? "text-blue-700" : undefined} to="/purchase?status=ORDER_PLACED" />
+      <Stat label="Received, not sent to IQC" value={c.RECEIVED} loading={buys.isLoading} to="/purchase?status=RECEIVED" />
+      <Stat label="Sent to IQC" value={c.PENDING_IQC} loading={buys.isLoading} tone={c.PENDING_IQC ? "text-violet-700" : undefined} to="/purchase?status=PENDING_IQC" />
     </Panel>
   )
 }
@@ -101,7 +108,7 @@ const OWN = { [ROLES.IQC_MANAGER]: "iqc", [ROLES.STORE_MANAGER]: "store", [ROLES
 
 /*
   Read-only overview of the other departments. depts = which ones to offer; the viewer's own department is skipped.
-  Each card opens that department's main dashboard.
+  Each figure opens its list (filtered), each card's bottom link that department's main dashboard.
 */
 export default function DepartmentOverview({ depts, className }) {
   const { role } = usePermissions()

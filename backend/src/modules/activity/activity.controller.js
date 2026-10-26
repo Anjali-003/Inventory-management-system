@@ -2,7 +2,7 @@ const service = require("./activity.service");
 const asyncHandler = require("../../middleware/asyncHandler");
 
 async function list(req, res) {
-    res.json(await service.list({ limit: req.query.limit }));
+    res.json(await service.list({ limit: req.query.limit, role: req.user?.role }));
 }
 
 module.exports = {

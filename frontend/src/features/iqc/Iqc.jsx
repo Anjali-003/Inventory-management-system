@@ -23,6 +23,7 @@ const EMPTY = []
 
 /*
   /iqc?status=... is where the IQC dashboard figures lead. No status = the whole page (to inspect + inspected).
+  ?q=<PO number> searches (the dashboard lists link here).
     PENDING_IQC  only the "To inspect" list        APPROVED   inspected and passed (to store / in stock)
     REJECTED     inspected and rejected            INSPECTED  everything inspected
 */
@@ -45,8 +46,8 @@ export default function Iqc() {
   const editable = canEdit("iqc")
 
   const { data = EMPTY, isLoading, isFetching, error, refetch } = useGetIqcQueueQuery()
-  const [query, setQuery] = useState("")
   const [params, setParams] = useSearchParams()
+  const [query, setQuery] = useState(() => params.get("q") || "") // ?q=<PO number> from the dashboard
   const view = VIEWS[params.get("status")] ? params.get("status") : null // set when a dashboard figure sent us here
   const cfg = view ? VIEWS[view] : null
   const showWaiting = !view || view === "PENDING_IQC"

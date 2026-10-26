@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
+import { Link } from "react-router-dom"
+import { useUrlState } from "@/lib/useUrlState"
 import { Check, FileText, PackageCheck, RefreshCw } from "lucide-react"
 import { finishedGoodsService } from "@/features/finished-goods/finishedGoodsService"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
@@ -19,11 +21,11 @@ import { cn } from "@/lib/utils"
 const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const when = (at) => (at ? new Date(at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "")
 
-/* the 7 steps as a line of dots: done (green), current (amber), still to come (grey) */
+/* the 4 steps as a line of dots: done (green), current (amber), still to come (grey) */
 function StepLine({ item }) {
   const current = fgIndexOf(item.status)
   return (
-    <ol className="grid grid-cols-7 gap-1" aria-label="Steps after Quality Control">
+    <ol className="grid grid-cols-4 gap-1" aria-label="Steps after Quality Control">
       {FG_STEPS.map((step, i) => {
         const done = i < current || item.status === "DELIVERED"
         const now = i === current && item.status !== "DELIVERED"
@@ -46,7 +48,7 @@ function OrderCard({ item, role, onAct, onBill }) {
     <div className={cn("min-w-0 rounded-2xl border bg-white p-4 shadow-sm", mine && "border-amber-300 ring-1 ring-amber-200")}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-semibold tabular-nums">{item.orderNumber}</p>
+          <Link to={`/order-tracker?order=${item.orderId}`} className="font-semibold tabular-nums hover:text-primary hover:underline">{item.orderNumber}</Link>
           <ul className="mt-1 space-y-0.5 text-sm text-muted-foreground">
             {item.lines.map((l) => <li key={l.productId} className="break-words"><span className="font-medium text-foreground">{l.name}</span> × {l.quantity}</li>)}
           </ul>
@@ -64,8 +66,8 @@ function OrderCard({ item, role, onAct, onBill }) {
 
       {(item.bill || item.dispatchNote) && (
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          {item.bill && <span>Bill <span className="font-semibold text-foreground">{item.bill.billNumber}</span> · {item.bill.customerName} · {rupees(item.bill.net)}
-            {item.bill.due > 0 ? <span className="ml-1 font-semibold text-destructive">· {rupees(item.bill.due)} to collect</span> : <span className="ml-1 font-semibold text-success">· paid</span>}</span>}
+          {item.bill && <button type="button" onClick={() => onBill(item)} className="text-left hover:underline">Bill <span className="font-semibold text-foreground">{item.bill.billNumber}</span> · {item.bill.customerName} · {rupees(item.bill.net)}
+            {item.bill.due > 0 ? <span className="ml-1 font-semibold text-destructive">· {rupees(item.bill.due)} to collect</span> : <span className="ml-1 font-semibold text-success">· paid</span>}</button>}
           {item.dispatchNote && <span>Delivery: {item.dispatchNote}</span>}
         </div>
       )}
@@ -78,14 +80,14 @@ function OrderCard({ item, role, onAct, onBill }) {
   )
 }
 
-/* confirm one step; dispatch / deliver can carry a short note (vehicle number, who received it ...) */
+/* confirm one step; giving out can carry a short note (vehicle number, who takes it ...) */
 function StepDialog({ item, step, onClose, onDone }) {
   const toast = useToast()
   const [note, setNote] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const withNote = step?.action === "dispatch" || step?.action === "deliver"
-  const stockText = step?.action === "receive" ? "Product stock goes UP by these quantities." : step?.action === "dispatch" ? "Product stock goes DOWN by these quantities." : null
+  const withNote = step?.action === "dispatch"
+  const stockText = step?.action === "receive" ? "Product stock goes UP by these quantities." : step?.action === "dispatch" ? "Product stock goes DOWN by these quantities and the order is complete." : null
 
   const submit = async (e) => {
     e.preventDefault()
@@ -111,8 +113,8 @@ function StepDialog({ item, step, onClose, onDone }) {
         </ul>
         {stockText && <p className="text-muted-foreground">{stockText}</p>}
         {withNote && (
-          <Field label={step.action === "dispatch" ? "Vehicle / transport details (optional)" : "Received by / remarks (optional)"} htmlFor="fg-note">
-            <TextInput id="fg-note" value={note} maxLength={255} onChange={(e) => setNote(e.target.value)} placeholder={step.action === "dispatch" ? "e.g. Truck MH12 AB 1234, driver Ramesh" : "e.g. Received by Mr. Sharma"} />
+          <Field label="Vehicle / transport details (optional)" htmlFor="fg-note">
+            <TextInput id="fg-note" value={note} maxLength={255} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Truck MH12 AB 1234, driver Ramesh" />
           </Field>
         )}
         {error && <p role="alert" className="rounded-lg bg-cf-red-soft px-3 py-2 text-destructive">{error}</p>}
@@ -287,7 +289,7 @@ function BillAction({ kind, bill, finishedGoodsId, onDone, onClose }) {
   )
 }
 
-function BillView({ item, role, onClose, onChanged }) {
+export function BillView({ item, role, onClose, onChanged }) {
   const [bill, setBill] = useState(null)
   const [error, setError] = useState("")
   const [action, setAction] = useState(null) // "payment" | "credit" | "cancel"
@@ -364,14 +366,21 @@ function BillView({ item, role, onClose, onChanged }) {
   )
 }
 
+/*
+  Links into this page: ?bill=<finished goods id> opens that bill, ?pay=due shows the bills with money to collect,
+  ?q=<text> searches (order, product, bill, customer), ?status=<step> picks a step.
+*/
 export default function FinishedGoods() {
   const { role } = usePermissions()
+  const { params, openPopup, closePopup } = useUrlState()
   const { data: items = [], isLoading: loading, isFetching, error: loadError, refetch } = useGetFinishedGoodsQuery()
-  const [query, setQuery] = useState("")
-  const [filter, setFilter] = useState("mine") // "mine" | "all" | a step status
+  const [query, setQuery] = useState(() => params.get("q") || "")
+  const [filter, setFilter] = useState(() => (params.get("pay") === "due" ? "due" : params.get("status") || "mine")) // "mine" | "all" | "due" | a step status
   const [acting, setActing] = useState({ item: null, step: null })
   const [billFor, setBillFor] = useState(null)
-  const [viewBill, setViewBill] = useState(null)
+  // the bill open now: from a click, or from ?bill= in the link
+  const viewBill = items.find((i) => String(i.id) === params.get("bill")) || null
+  const setViewBill = (item) => (item ? openPopup({ bill: item.id }) : closePopup({ bill: null }))
   const error = loadError ? errorMessage(loadError, "Failed to load finished goods.") : ""
 
   const mine = useMemo(() => items.filter((i) => myFgStep(i, role)), [items, role])
@@ -380,7 +389,8 @@ export default function FinishedGoods() {
     const q = query.trim().toLowerCase()
     return items.filter((i) => {
       if (activeFilter === "mine" && !myFgStep(i, role)) return false
-      if (activeFilter !== "mine" && activeFilter !== "all" && i.status !== activeFilter) return false
+      if (activeFilter === "due" && !(i.bill?.due > 0)) return false
+      if (!["mine", "all", "due"].includes(activeFilter) && i.status !== activeFilter) return false
       return !q || `${i.orderNumber} ${i.lines.map((l) => `${l.name} ${l.sku}`).join(" ")} ${i.bill?.billNumber || ""} ${i.bill?.customerName || ""}`.toLowerCase().includes(q)
     })
   }, [items, query, activeFilter, role])
@@ -398,7 +408,7 @@ export default function FinishedGoods() {
 
   return (
     <>
-      <MktHero eyebrow="After Quality Control" title="Finished Goods" description="Packing → Ops Admin hands over → Store receives → Marketing bills → Store gives out → Marketing confirms delivery.">
+      <MktHero eyebrow="After Quality Control" title="Finished Goods" description="QC passes (packed, sent to Store) → Store receives → Marketing makes the bill → Store gives it out. Done.">
         <HeroButton variant="glass" onClick={refetch} disabled={isFetching} aria-label="Refresh finished goods">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
         </HeroButton>
@@ -410,6 +420,7 @@ export default function FinishedGoods() {
         <div className="flex flex-wrap items-center gap-2 border-b bg-slate-50/70 px-3 py-3 sm:px-5">
           {chip("mine", "Waiting for me", mine.length)}
           {chip("all", "All", items.length)}
+          {chip("due", "Money to collect", items.filter((i) => i.bill?.due > 0).length)}
           {FG_STEPS.map((s) => chip(s.status, s.label, items.filter((i) => i.status === s.status).length))}
           <SearchField className="w-full min-w-0 sm:ml-auto sm:w-64" value={query} onChange={setQuery} placeholder="Search order, product, bill..." />
         </div>

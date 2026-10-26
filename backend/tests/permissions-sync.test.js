@@ -5,7 +5,7 @@
  */
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
-import { canEdit, canView, ROLES } from "../../frontend/src/lib/permissions.js";
+import { canEdit, canView, getViewAs, ROLES, setViewAs, subscribeViewAs } from "../../frontend/src/lib/permissions.js";
 
 const require = createRequire(import.meta.url);
 const backend = require("../src/middleware/permissions.js");
@@ -42,5 +42,33 @@ describe("frontend and backend role tables agree", () => {
     for (const role of backend.ROLE_NAMES) {
       if (canView(role, "storeMaterialRequests")) expect(backend.levelOf(role, "materialRequests")).not.toBeNull();
     }
+  });
+});
+
+describe("Super Admin \"View as\" (per tab, no extra login)", () => {
+  const store = new Map();
+  globalThis.sessionStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
+
+  it("remembers the picked role and tells the screens", () => {
+    let calls = 0;
+    const stop = subscribeViewAs(() => calls++);
+    setViewAs("STORE_MANAGER");
+    expect(getViewAs()).toBe("STORE_MANAGER");
+    setViewAs(null);
+    expect(getViewAs()).toBe(null);
+    stop();
+    expect(calls).toBe(2);
+  });
+
+  it("never 'views as' the Super Admin itself or an unknown role", () => {
+    setViewAs("SUPER_ADMIN");
+    expect(getViewAs()).toBe(null);
+    store.set("ims_view_as", "NOT_A_ROLE");
+    expect(getViewAs()).toBe(null);
+  });
+
+  it("the picked role's own access applies (e.g. Store cannot edit production)", () => {
+    expect(canEdit("STORE_MANAGER", "production")).toBe(false);
+    expect(canView("STORE_MANAGER", "incomingStock")).toBe(true);
   });
 });

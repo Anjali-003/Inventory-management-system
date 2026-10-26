@@ -80,6 +80,7 @@ export default function ProductionOrderCard({ item, readiness, actions }) {
               itemCount={item.item_count}
               itemIndex={item.item_index}
               fallback={`Order #${item.order_id}`}
+              to={`/order-tracker?order=${item.order_id}`}
               className="break-words text-[15px] font-extrabold leading-snug tracking-[-0.01em] text-slate-950 tabular-nums"
             />
             <p className="mt-1 break-words text-sm font-semibold leading-snug text-slate-800">

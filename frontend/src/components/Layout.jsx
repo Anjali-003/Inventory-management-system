@@ -27,6 +27,9 @@ import {
   Wrench,
   Route,
   BarChart3,
+  FileText,
+  Receipt,
+  Contact,
 } from "lucide-react";
 
 import { cn } from "../lib/utils";
@@ -36,7 +39,7 @@ import { baseApi } from "../api/baseApi";
 import { usePermissions } from "@/features/auth/usePermissions";
 import NotificationBell from "@/features/notifications/NotificationBell";
 import ProfileMenu from "@/features/auth/ProfileMenu";
-import { clearActiveRole, loginPathFor } from "@/lib/permissions";
+import { ROLE_LABELS, clearActiveRole, loginPathFor, setViewAs } from "@/lib/permissions";
 
 /*
   The sidebar follows the work, in order: an order comes in -> components are bought and checked -> Store keeps
@@ -95,6 +98,14 @@ const GROUPS = [
     ],
   },
   {
+    label: "6 · Sales & Billing",
+    items: [
+      { to: "/finished-goods?status=IN_STORE", label: "To Bill", icon: FileText, module: "sales" },
+      { to: "/bills", label: "Bills & Payments", icon: Receipt, module: "sales" },
+      { to: "/customers", label: "Customers", icon: Contact, module: "customers" },
+    ],
+  },
+  {
     label: "Setup",
     items: [
       { to: "/products", label: "Products & BOM", icon: Boxes, module: "products" },
@@ -109,23 +120,37 @@ const GROUPS = [
   },
 ];
 
+/*
+  Two entries can open the same page with a different filter ("To Bill" = Finished Goods ?status=IN_STORE). The one
+  whose filter is in the address is the active one; the plain entry is active only when no such filter is.
+*/
+const FILTERED = GROUPS.flatMap((g) => g.items).filter((i) => i.to.includes("?")).map((i) => i.to.split("?"))
+function useOwnsPage(to) {
+  const { search } = useLocation()
+  const [, query] = to.split("?")
+  if (query) return search.includes(query)
+  return !FILTERED.some(([path, q]) => path === to && search.includes(q))
+}
+
 function NavItem({ to, label, icon: Icon, end, id }) {
+  const owns = useOwnsPage(to)
   return (
     <NavLink
       to={to}
       end={end}
-      className={({ isActive }) =>
-        cn(
+      className={({ isActive: matched }) => {
+        const isActive = matched && owns
+        return cn(
           "relative flex items-center gap-3 rounded-[9px] px-3 py-2 text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring",
           isActive
             ? "font-semibold text-sidebar-accent-foreground"
             : "text-sidebar-foreground hover:bg-muted hover:text-foreground",
         )
-      }
+      }}
     >
-      {({ isActive }) => (
+      {({ isActive: matched }) => (
         <>
-          {isActive && (
+          {matched && owns && (
             <motion.span
               layoutId={`nav-active-${id}`}
               className="absolute inset-0 rounded-[9px] bg-sidebar-accent ring-1 ring-inset ring-primary/15"
@@ -208,9 +233,24 @@ function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
 
 // pathname isi liye use ho raha hai, taaki page badalne par sidebar band ho aur naya page animation ke saath dikhe.
 //usePermissions() ek object return kar raha hai, jisme user, role, roleLabel, loading, canView, canEdit aur homePath properties hain.
+/* Super Admin: "View as" any role without logging in as it (see lib/permissions.js VIEW AS) */
+const VIEW_AS_ROLES = ["MARKETING_MANAGER", "OPERATIONS_ADMIN", "PURCHASE_MANAGER", "IQC_MANAGER", "STORE_MANAGER", "PRODUCTION_MANAGER", "QUALITY_FG_MANAGER", "HR_MANAGER"];
+function ViewAsSwitcher({ value, onChange }) {
+  return (
+    <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+      <span className="hidden sm:inline">View as</span>
+      <select aria-label="View the app as" value={value || ""} onChange={(e) => onChange(e.target.value || null)}
+        className={cn("h-8 rounded-full border px-2 text-xs font-semibold", value ? "border-amber-400 bg-amber-50 text-amber-950" : "bg-card text-foreground")}>
+        <option value="">Super Admin (me)</option>
+        {VIEW_AS_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+      </select>
+    </label>
+  );
+}
+
 export default function Layout() {
   const { pathname } = useLocation();
-  const { user, roleLabel } = usePermissions();
+  const { user, roleLabel, realRole, viewingAs } = usePermissions();
 
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -234,6 +274,12 @@ export default function Layout() {
   const togglePin = () => {
     setPinned((p) => !p);
     setFloatOpen(false);
+  };
+
+  // Super Admin: show the app as another role (or back), starting from that role's dashboard
+  const viewAs = (role) => {
+    setViewAs(role);
+    navigate("/dashboard");
   };
 
   const handleLogout = async () => {
@@ -304,6 +350,8 @@ export default function Layout() {
         <div className="flex items-center gap-2 sm:gap-4">
           <span className="hidden text-xs text-muted-foreground xl:block">{today}</span>
 
+          {realRole === "SUPER_ADMIN" && <ViewAsSwitcher value={viewingAs} onChange={viewAs} />}
+
           {user && <NotificationBell />}
 
           {user && (
@@ -316,6 +364,13 @@ export default function Layout() {
           <ProfileMenu user={user} roleLabel={roleLabel} onLogout={handleLogout} />
         </div>
       </header>
+
+      {viewingAs && (
+        <div className="sticky top-14 z-20 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-amber-300 bg-amber-50 px-3 py-1.5 text-center text-xs text-amber-950">
+          <span>You are viewing the app as <b>{ROLE_LABELS[viewingAs] || viewingAs}</b>. Whatever you do is done as you (Super Admin).</span>
+          <button type="button" onClick={() => viewAs(null)} className="rounded-full bg-amber-900 px-2.5 py-0.5 font-semibold text-white hover:bg-amber-800">Back to Super Admin</button>
+        </div>
+      )}
 
       <div className="md:flex">
         {/* Desktop, pinned: sits in the layout, so the page shrinks to fit */}

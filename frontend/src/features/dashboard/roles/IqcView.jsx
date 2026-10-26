@@ -4,7 +4,6 @@ import { useGetIqcQueueQuery } from "@/features/purchasing/purchasingApi"
 import DepartmentOverview from "../DepartmentOverview"
 import { Greeting, ListPanel, StatRow, useDrill } from "../DashboardKit"
 import { purchaseRow } from "../rows"
-import WaitingForYou from "@/features/dashboard/WaitingForYou"
 
 const EMPTY = []
 
@@ -14,18 +13,20 @@ export default function IqcView() {
 
   const { waiting, approved, rejected, inspected } = useMemo(() => {
     const rows = (list) => list.map(purchaseRow)
+    // the dashboard lists open the IQC Check page with that purchase found (the inspection opens from its own button)
+    const toCheck = (list) => list.map((p) => ({ ...purchaseRow(p), to: `/iqc?status=PENDING_IQC&q=${encodeURIComponent(p.po_number)}` }))
+    const toResult = (list) => list.map((p) => ({ ...purchaseRow(p), to: `/iqc?status=INSPECTED&q=${encodeURIComponent(p.po_number)}` }))
     return {
-      waiting: rows(data.filter((p) => p.status === "PENDING_IQC")),
+      waiting: toCheck(data.filter((p) => p.status === "PENDING_IQC")),
       approved: rows(data.filter((p) => p.status === "PENDING_STORE" || p.status === "STORED")),
       rejected: rows(data.filter((p) => p.status === "REJECTED")),
-      inspected: rows(data.filter((p) => ["PENDING_STORE", "STORED", "REJECTED"].includes(p.status))),
+      inspected: toResult(data.filter((p) => ["PENDING_STORE", "STORED", "REJECTED"].includes(p.status))),
     }
   }, [data])
 
   return (
     <>
       <Greeting description="Purchases that need inspection, and what has already been inspected." />
-      <WaitingForYou className="mb-4" />
       <StatRow
         drill={drill}
         stats={[

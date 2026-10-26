@@ -97,27 +97,31 @@ async function withItems(conn, orders) {
 
     // the requirement lines each purchase covers: which orders it serves and how much of each component is for them
     const [covered] = await conn.query(
-        `SELECT r.purchase_order_id, r.component_id, r.quantity, o.order_number
+        `SELECT r.purchase_order_id, r.component_id, r.quantity, o.id AS order_id, o.order_number
          FROM order_purchase_items r JOIN orders o ON o.id = r.order_id
          WHERE r.purchase_order_id IN (?) ORDER BY r.id`,
         [orders.map((o) => o.id)]
     );
     const coveredBy = new Map();
     for (const r of covered) {
-        if (!coveredBy.has(r.purchase_order_id)) coveredBy.set(r.purchase_order_id, { orders: [], need: new Map() });
+        if (!coveredBy.has(r.purchase_order_id)) coveredBy.set(r.purchase_order_id, { orders: [], refs: [], need: new Map() });
         const c = coveredBy.get(r.purchase_order_id);
-        if (!c.orders.includes(r.order_number)) c.orders.push(r.order_number);
+        if (!c.orders.includes(r.order_number)) {
+            c.orders.push(r.order_number);
+            c.refs.push({ id: r.order_id, order_number: r.order_number }); // so a screen can link to each order
+        }
         c.need.set(r.component_id, (c.need.get(r.component_id) || 0) + Number(r.quantity));
     }
 
     return orders.map((o) => {
-        const c = coveredBy.get(o.id) || { orders: [], need: new Map() };
+        const c = coveredBy.get(o.id) || { orders: [], refs: [], need: new Map() };
         const lines = (byOrder.get(o.id) || []).map((l) => ({ ...l, for_orders: c.need.get(l.component_id) || 0 }));
         return {
             ...o,
             // ORDER = one order's list, COMBINED = several orders, STOCK = bought for stock only
             kind: c.orders.length === 0 ? "STOCK" : c.orders.length === 1 ? "ORDER" : "COMBINED",
             orders: c.orders,
+            order_refs: c.refs,
             items: lines,
             totals: {
                 lines: lines.length,

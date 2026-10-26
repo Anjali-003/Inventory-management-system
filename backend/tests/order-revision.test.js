@@ -93,11 +93,14 @@ const approvals = require("../src/modules/order-approvals/order-approval.service
 const marketing = require("../src/modules/marketing-orders/marketing-order.service.js");
 const hub = require("../src/realtime/hub.js");
 let pushes = [];
-hub.notifyRole = (role, data) => pushes.push({ role, ...data });
+// the Super Admin's bell is refreshed for every notification: counted on its own below, kept out of `pushes`
+let ceoRefreshes = 0;
+hub.notifyRole = (role, data) => (role === "SUPER_ADMIN" && data.type === "NOTIFICATIONS_CHANGED" ? ceoRefreshes++ : pushes.push({ role, ...data }));
 
 beforeEach(() => {
   s = fresh();
   pushes = [];
+  ceoRefreshes = 0;
 });
 
 const qtyOf = (orderId) => Object.fromEntries(s.items.filter((i) => i.order_id === orderId).map((i) => [i.product_id, Number(i.quantity)]));
@@ -118,6 +121,7 @@ describe("Operations Admin revises the quantity", () => {
       { product_id: 1, sku: "PRD-001", name: "Smart Controller", requested: 100, approved: 60, held: 40 },
       { product_id: 2, sku: "PRD-002", name: "Sensor", requested: 40, approved: 40, held: 0 },
     ]);
+    expect(ceoRefreshes).toBeGreaterThan(0); // the Super Admin's bell hears about it too
     expect(pushes).toEqual([expect.objectContaining({ role: "MARKETING_MANAGER", type: "QUANTITY_REVISED", severity: "action", link: "/marketing-orders?order=7" })]);
     // saved too, so it is still in the bell if the Marketing Manager was offline
     expect(s.notifications).toEqual([expect.objectContaining({ role: "MARKETING_MANAGER", type: "QUANTITY_REVISED", order_id: 7 })]);

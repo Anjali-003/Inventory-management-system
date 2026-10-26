@@ -752,7 +752,7 @@ async function decideBatch(productionId, decision, remarks, userId, sample = {})
           role: "PRODUCTION_MANAGER", type: "QC_PASSED", severity: "success", link: "/production",
           title: `${what} passed QC`,
           body: finishedGoods?.readyForFinishedGoods
-            ? "The full order is now with Finished Goods for packaging."
+            ? "The full order is packed and sent to the Store."
             : "It moves to Finished Goods once every product of the order has passed.",
           orderId: production.order_id, userId,
           payload: { order_number: production.order_number, production_id: productionId, attempt: attemptNumber },
@@ -764,6 +764,16 @@ async function decideBatch(productionId, decision, remarks, userId, sample = {})
           orderId: production.order_id, userId,
           payload: { order_number: production.order_number, production_id: productionId, attempt: attemptNumber },
         });
+
+    if (finishedGoods?.created) {
+      await notifications.notifyCommitted({
+        role: "STORE_MANAGER", type: "FINISHED_GOODS_HANDED_OVER", severity: "action", link: "/finished-goods",
+        title: `Order ${production.order_number} passed QC`,
+        body: "Receive the packed goods into product stock.",
+        orderId: production.order_id, userId,
+        payload: { order_number: production.order_number, finished_goods_id: finishedGoods.finishedGoodsId, status: "HANDED_OVER" },
+      });
+    }
 
     return {
       success: true,

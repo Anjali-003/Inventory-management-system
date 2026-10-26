@@ -8,7 +8,8 @@ import { plural } from "@/features/marketing-orders/orderParts"
 import { PurchaseStatusPill, PurchaseSteps, StepButton, buyState, buyStageOf, purchaseStageOf } from "@/features/purchasing/purchaseKit"
 import { WAS_INSPECTED, downloadRejected, purchaseFor, qtyWithUnit, rejectedLines } from "@/features/purchasing/purchasingUtils"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
-import { DueLine } from "@/features/purchasing/PurchaseParts"
+import { DueLine, PurchaseForLinks } from "@/features/purchasing/PurchaseParts"
+import { usePermissions } from "@/features/auth/usePermissions"
 import { fmtDueDate } from "@/features/purchasing/purchasingUtils"
 import { cn } from "@/lib/utils"
 import { Lines, PurchaseTimeline } from "./PurchaseDetail"
@@ -41,6 +42,7 @@ const when = (name, at) => [name, at ? fmtDateTime(at) : ""].filter(Boolean).joi
 /* ---------------------------------------------------------------- Overview */
 
 function OverviewTab({ purchase: p }) {
+  const { canView } = usePermissions()
   const stage = purchaseStageOf(p.status)
   const Icon = stage?.icon
   return (
@@ -75,7 +77,7 @@ function OverviewTab({ purchase: p }) {
       <dl className="grid grid-cols-2 gap-2.5">
         <Fact label="Supplier">{p.supplier || "-"}</Fact>
         <Fact label="Supplier will deliver by">{p.expected_delivery_date ? <>{fmtDueDate(p.expected_delivery_date)}<DueLine purchase={p} /></> : <span className="font-normal text-muted-foreground">Not recorded</span>}</Fact>
-        <Fact label="For">{purchaseFor(p) || <span className="text-muted-foreground">-</span>}</Fact>
+        {canView("orderTracker") && <Fact label="For">{purchaseFor(p) ? <PurchaseForLinks purchase={p} prefix="" /> : <span className="text-muted-foreground">-</span>}</Fact>}
         <Fact label="Placed by">{p.created_by_name || "-"}</Fact>
         <Fact label="Placed on">{fmtDateTime(p.created_at)}</Fact>
         <Fact label="Components">{plural(p.totals?.lines ?? p.items?.length ?? 0, "line")}</Fact>
@@ -219,7 +221,9 @@ function OrderTab({ order }) {
 
 /** `purchase={null}` keeps it closed. `order` (optional) is the approved customer order this purchase belongs to. */
 export default function PurchaseDrawer({ purchase, order, tab, onTab, onClose, editable, busy, onReceive, onSendIqc }) {
-  const tabs = order ? [...PURCHASE_TABS, ORDER_TAB] : PURCHASE_TABS
+  // a role without the Order Tracker (IQC) sees the purchase only: no customer order, no order tab
+  const showOrders = usePermissions().canView("orderTracker")
+  const tabs = order && showOrders ? [...PURCHASE_TABS, ORDER_TAB] : PURCHASE_TABS
   const active = tabs.some((t) => t.id === tab) ? tab : "overview"
   const p = purchase
   const rejected = p ? rejectedLines(p).length : 0
@@ -234,7 +238,7 @@ export default function PurchaseDrawer({ purchase, order, tab, onTab, onClose, e
       subtitle={p && (
         <>
           <PurchaseStatusPill value={p.status} short />
-          <span>{p.supplier}{purchaseFor(p) ? ` · for ${purchaseFor(p)}` : ""}</span>
+          <span>{p.supplier}{showOrders && purchaseFor(p) ? ` · for ${purchaseFor(p)}` : ""}</span>
         </>
       )}
       tabs={withBadge}
@@ -246,7 +250,7 @@ export default function PurchaseDrawer({ purchase, order, tab, onTab, onClose, e
         components: <ComponentsTab purchase={p} />,
         timeline: <PurchaseTimeline purchase={p} />,
         iqc: <IqcTab purchase={p} />,
-        order: order ? <OrderTab order={order} /> : null,
+        order: order && showOrders ? <OrderTab order={order} /> : null,
       } : undefined}
       actions={canStep ? <StepButton purchase={p} editable={editable} busy={busy} onReceive={onReceive} onSendIqc={onSendIqc} /> : null}
     />

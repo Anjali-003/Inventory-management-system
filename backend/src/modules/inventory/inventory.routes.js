@@ -29,6 +29,8 @@ router.post("/stock-in", stock, resolveUser, controller.stockIn);
 router.post("/stock-in/batch", stock, resolveUser, controller.stockInBatch);
 router.post("/:id/stock-out", stock, resolveUser, controller.stockOut);
 router.put("/:id", stock, resolveUser, controller.updateItem);
+// standard cost per piece (edit on "inventory" = Super Admin only)
+router.put("/:id/cost", stock, resolveUser, controller.setCost);
 router.delete("/:id", stock, resolveUser, controller.archiveItem);
 
 module.exports = router;

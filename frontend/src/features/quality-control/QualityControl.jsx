@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { CheckCircle2, ClipboardCheck, PackageCheck, RefreshCw, XCircle } from "lucide-react"
 import { useDispatch } from "react-redux"
 import { useToast } from "@/components/toast"
@@ -24,7 +24,8 @@ export default function QualityControl() {
   const { canEdit } = usePermissions()
   const editable = canEdit("qualityControl")
   const { data: items = [], isLoading: loading, isFetching, error: loadError, refetch } = useGetQualityControlQuery()
-  const [query, setQuery] = useState("")
+  const [params] = useSearchParams()
+  const [query, setQuery] = useState(() => params.get("q") || "") // ?q=<product> from Reports
   const [activeView, setActiveView] = useState("pending")
   const [productFilter, setProductFilter] = useState("all")
   const [fromDate, setFromDate] = useState("")

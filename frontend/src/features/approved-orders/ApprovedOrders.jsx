@@ -1,5 +1,5 @@
 import { useMemo } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useUrlState } from "@/lib/useUrlState"
 import { MotionConfig, motion } from "motion/react"
 import { ChevronRight, ClipboardCheck, RefreshCw, X } from "lucide-react"
 import UserCell from "@/components/UserCell"
@@ -88,20 +88,9 @@ export default function ApprovedOrders() {
   const buys = useGetPurchasesQuery(undefined, { skip: !canView("purchase") })
   const purchases = buys.data ?? EMPTY
 
-  const [params, setParams] = useSearchParams()
+  const { params, patch, openPopup, closePopup } = useUrlState()
   const state = isBuyState(params.get("state")) ? params.get("state") : null
   const query = params.get("q") ?? ""
-
-  // `replace` keeps typing in the search box from filling the browser history.
-  const patch = (changes, replace = false) =>
-    setParams((prev) => {
-      const next = new URLSearchParams(prev)
-      for (const [k, v] of Object.entries(changes)) {
-        if (v) next.set(k, v)
-        else next.delete(k)
-      }
-      return next
-    }, { replace })
 
   const counts = useMemo(() => {
     const c = { total: data.length, TO_ORDER: 0, ORDERED: 0, NONE: 0 }
@@ -139,7 +128,7 @@ export default function ApprovedOrders() {
   // the open order and its tab live in the URL (?order=12&tab=components): the drawer survives a refresh
   const tab = isApprovedTab(params.get("tab")) ? params.get("tab") : "overview"
   const opened = data.find((o) => String(o.id) === params.get("order")) || null
-  const setViewing = (o) => patch({ order: String(o.id), tab: null })
+  const setViewing = (o) => openPopup({ order: String(o.id), tab: null })
 
   return (
     <MotionConfig reducedMotion="user">
@@ -273,7 +262,7 @@ export default function ApprovedOrders() {
         canRaise={canRaise}
         tab={tab}
         onTab={(t) => patch({ tab: t === "overview" ? null : t }, true)}
-        onClose={() => patch({ order: null, tab: null })}
+        onClose={() => closePopup({ order: null, tab: null })}
       />
     </MotionConfig>
   )

@@ -10,8 +10,8 @@ const require = createRequire(import.meta.url);
 let s;
 
 const fresh = () => ({
-  fg: { id: 5, order_id: 12, status: "PACKAGING" },
-  order: { id: 12, order_number: "ORD-012", status: "PACKAGING" },
+  fg: { id: 5, order_id: 12, status: "HANDED_OVER" }, // QC passed: packed and sent to the Store
+  order: { id: 12, order_number: "ORD-012", status: "HANDED_OVER" },
   lines: [{ product_id: 1, quantity: 5 }, { product_id: 2, quantity: 3 }],
   stock: new Map([[1, 0], [2, 1]]),
   ledger: [],
@@ -71,27 +71,21 @@ beforeEach(() => { s = fresh(); });
 const BILL = { customer_name: "ABC Traders", items: [{ product_id: 1, rate: 100 }, { product_id: 2, rate: 250.5 }] };
 
 describe("finished goods after QC", () => {
-  it("runs every step in order, each telling the next owner", async () => {
-    await fg.advance("pack", 5, {}, 1);
-    expect([s.fg.status, s.order.status]).toEqual(["PACKED", "PACKED"]);
-    await fg.advance("handOver", 5, {}, 1);
+  it("runs the 3 steps after QC in order, each telling the next owner; giving out completes the order", async () => {
     await fg.advance("receive", 5, {}, 1);
-    expect(s.fg.status).toBe("IN_STORE");
+    expect([s.fg.status, s.order.status]).toEqual(["IN_STORE", "IN_STORE"]);
     await fg.createBill(5, BILL, 1);
     expect(s.fg.status).toBe("BILLED");
     await fg.advance("dispatch", 5, { note: "Truck 1" }, 1);
-    await fg.advance("deliver", 5, {}, 1);
     expect([s.fg.status, s.order.status]).toEqual(["DELIVERED", "COMPLETED"]);
-    expect(s.notifications.map((n) => n.role)).toEqual([
-      "OPERATIONS_ADMIN", "STORE_MANAGER", "MARKETING_MANAGER", "STORE_MANAGER", "MARKETING_MANAGER", "OPERATIONS_ADMIN",
-    ]);
+    expect(s.notifications.map((n) => n.role)).toEqual(["MARKETING_MANAGER", "STORE_MANAGER", "MARKETING_MANAGER"]);
   });
 
   it("refuses a step whose turn has not come (or is already done)", async () => {
-    await expect(fg.advance("handOver", 5, {}, 1)).rejects.toMatchObject({ status: 409, code: "WRONG_STATUS" });
-    await fg.advance("pack", 5, {}, 1);
-    await expect(fg.advance("pack", 5, {}, 1)).rejects.toMatchObject({ status: 409 });
-    expect(s.fg.status).toBe("PACKED");
+    await expect(fg.advance("dispatch", 5, {}, 1)).rejects.toMatchObject({ status: 409, code: "WRONG_STATUS" });
+    await fg.advance("receive", 5, {}, 1);
+    await expect(fg.advance("receive", 5, {}, 1)).rejects.toMatchObject({ status: 409 });
+    expect(s.fg.status).toBe("IN_STORE");
   });
 
   it("puts every product into stock on receive and takes it out on dispatch", async () => {

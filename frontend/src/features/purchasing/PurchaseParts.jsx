@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom"
+import { usePermissions } from "@/features/auth/usePermissions"
 import { fmtDueDate } from "./purchasingUtils"
 import { Badge } from "@/components/ui/badge"
 import { Modal } from "@/components/Modal"
@@ -64,6 +66,7 @@ export function PurchaseLines({ items, inspected }) {
 
 /* Read-only view of one purchase: who did what and when, plus its lines. */
 export function PurchaseDetailModal({ purchase, onClose }) {
+  const showOrders = usePermissions().canView("orderTracker") // IQC: no customer orders
   if (!purchase) return null
   const inspected = WAS_INSPECTED(purchase.status)
   return (
@@ -72,7 +75,7 @@ export function PurchaseDetailModal({ purchase, onClose }) {
       onClose={onClose}
       size="lg"
       title={`${purchase.po_number} · ${purchase.supplier}`}
-      description={[purchaseFor(purchase) && `For ${purchaseFor(purchase)}`, purchase.notes].filter(Boolean).join(" · ") || undefined}
+      description={[showOrders && purchaseFor(purchase) && `For ${purchaseFor(purchase)}`, purchase.notes].filter(Boolean).join(" · ") || undefined}
       footer={
         <>
           {badLines(purchase).length > 0 && (
@@ -133,6 +136,28 @@ export function DueLine({ purchase: p }) {
       {late > 0
         ? arrived ? `Arrived ${late} day${late === 1 ? "" : "s"} late` : `Late by ${late} day${late === 1 ? "" : "s"}`
         : arrived ? "Arrived on time" : `Due ${fmtDueDate(p.expected_delivery_date)}`}
+    </span>
+  )
+}
+
+/* "for ORD-005, ORD-006 +1 more": every order is a link to its journey (rows around it open the purchase, so the click stops here) */
+export function PurchaseForLinks({ purchase: p, prefix = "for " }) {
+  const { canView } = usePermissions()
+  // a role without the Order Tracker (IQC) has nothing to do with customer orders: no order numbers at all
+  if (!canView("orderTracker")) return null
+  const refs = p?.order_refs?.length ? p.order_refs : p?.order_id ? [{ id: p.order_id, order_number: p.order_number }] : []
+  if (!refs.length) return p?.kind === "STOCK" ? <span>{prefix}stock</span> : null
+  const shown = refs.slice(0, 2)
+  return (
+    <span>
+      {prefix}
+      {shown.map((r, i) => (
+        <span key={r.id}>
+          {i > 0 && ", "}
+          <Link to={`/order-tracker?order=${r.id}`} onClick={(e) => e.stopPropagation()} className="pointer-events-auto relative font-medium hover:text-primary hover:underline">{r.order_number}</Link>
+        </span>
+      ))}
+      {refs.length > 2 && ` +${refs.length - 2} more`}
     </span>
   )
 }

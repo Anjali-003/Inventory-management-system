@@ -81,7 +81,7 @@ async function listStock() {
 async function listMovements({ productId = null, limit = 200 } = {}) {
     const [rows] = await db.query(
         `SELECT t.id, t.product_id, p.sku, p.name, t.direction, t.quantity, t.balance_after, t.reason,
-                t.created_at, o.order_number, u.name AS created_by_name
+                t.created_at, t.order_id, o.order_number, u.name AS created_by_name
          FROM product_stock_transactions t
          JOIN products p ON p.id = t.product_id
          LEFT JOIN orders o ON o.id = t.order_id
@@ -99,6 +99,7 @@ async function listMovements({ productId = null, limit = 200 } = {}) {
         quantity: Number(r.quantity),
         balanceAfter: Number(r.balance_after),
         reason: r.reason,
+        orderId: r.order_id,
         orderNumber: r.order_number,
         createdAt: r.created_at,
         createdByName: r.created_by_name,

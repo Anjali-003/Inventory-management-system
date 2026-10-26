@@ -392,14 +392,20 @@ async function createFinishedGood(
           order_id,
           quantity,
           status,
-          created_by
+          created_by,
+          packed_at,
+          packed_by,
+          handed_over_at,
+          handed_over_by
         )
-        VALUES (?, ?, ?, 'PACKAGING', ?)
+        VALUES (?, ?, ?, 'HANDED_OVER', ?, CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP, ?)
       `,
       [
         productionId,
         orderId,
         totalQuantity,
+        userId,
+        userId,
         userId,
       ]
     );
@@ -408,7 +414,7 @@ async function createFinishedGood(
       `
         UPDATE orders
         SET
-          status = 'PACKAGING',
+          status = 'HANDED_OVER',
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
           AND status NOT IN ('COMPLETED')
@@ -423,9 +429,10 @@ async function createFinishedGood(
       productionId,
       orderId,
       quantity: totalQuantity,
-      status: "PACKAGING",
+      status: "HANDED_OVER",
+      created: true,
       message:
-        "All products passed Quality Control. The order is ready for packaging.",
+        "All products passed Quality Control. The packed order goes to the Store.",
     };
   } finally {
     if (own) {
@@ -436,25 +443,23 @@ async function createFinishedGood(
 
 
 /*
-  After Quality Control every record moves through these steps. Each step has ONE owner role
-  (the route checks it, see finished-goods.routes.js) and tells the next owner through a notification.
-  The order's status follows the record, and DELIVERED completes the order.
+  After Quality Control: 4 steps.
+    1. QC passes the order      -> HANDED_OVER  (packed, on its way to the Store; createFinishedGood above)
+    2. Store receives it        -> IN_STORE     product stock +qty          (receive)
+    3. Marketing makes the bill -> BILLED                                   (createBill)
+    4. Store gives it out       -> DELIVERED    product stock -qty, order COMPLETED (dispatch)
+  Each step has ONE owner role (the route checks it, see finished-goods.routes.js) and tells the next owner.
 */
 const STEPS = {
-  pack:     { from: "PACKAGING",   to: "PACKED",      at: "packed_at",      by: "packed_by",
-              next: "OPERATIONS_ADMIN",  title: (n) => `Order ${n} is packed`,               body: "Hand it over to the Store." },
-  handOver: { from: "PACKED",      to: "HANDED_OVER", at: "handed_over_at", by: "handed_over_by",
-              next: "STORE_MANAGER",     title: (n) => `Order ${n} is handed over to Store`, body: "Receive it into product stock." },
-  receive:  { from: "HANDED_OVER", to: "IN_STORE",    at: "received_at",    by: "received_by",
-              next: "MARKETING_MANAGER", title: (n) => `Order ${n} is in the Store`,         body: "It is ready for billing." },
-  dispatch: { from: "BILLED",      to: "DISPATCHED",  at: "dispatched_at",  by: "dispatched_by", note: "dispatch_note",
-              next: "MARKETING_MANAGER", title: (n) => `Order ${n} has left the Store`,      body: "Confirm when the customer receives it." },
-  deliver:  { from: "DISPATCHED",  to: "DELIVERED",   at: "delivered_at",   by: "delivered_by",  note: "delivery_note",
-              next: "OPERATIONS_ADMIN",  title: (n) => `Order ${n} is delivered`,            body: "The order is complete." },
+  receive:  { from: "HANDED_OVER", to: "IN_STORE",  stamps: ["received"],
+              next: "MARKETING_MANAGER", title: (n) => `Order ${n} is in the Store`, body: "It is ready for billing." },
+  // giving it out is also the delivery: one click completes the order
+  dispatch: { from: "BILLED",      to: "DELIVERED", stamps: ["dispatched", "delivered"], note: "dispatch_note",
+              next: "MARKETING_MANAGER", title: (n) => `Order ${n} is given out for delivery`, body: "The order is complete." },
 };
 
 // what each finished-goods status means for the whole order (DELIVERED completes it)
-const ORDER_STATUS_OF = { PACKED: "PACKED", HANDED_OVER: "HANDED_OVER", IN_STORE: "IN_STORE", BILLED: "BILLED", DISPATCHED: "DISPATCHED", DELIVERED: "COMPLETED" };
+const ORDER_STATUS_OF = { HANDED_OVER: "HANDED_OVER", IN_STORE: "IN_STORE", BILLED: "BILLED", DELIVERED: "COMPLETED" };
 
 function cleanText(raw, max = 255) {
   const text = typeof raw === "string" ? raw.trim().replace(/\s+/g, " ") : "";
@@ -493,7 +498,7 @@ async function moveTo(conn, record, to, set = "", params = []) {
   );
 }
 
-async function tell(conn, { to, next, title, body }, record, userId) {
+async function tell(conn, { to, next, title, body, important = false }, record, userId) {
   const orderNumber = record.order_number || `#${record.order_id}`;
   await notifications.notify(conn, {
     role: next,
@@ -505,10 +510,11 @@ async function tell(conn, { to, next, title, body }, record, userId) {
     orderId: record.order_id,
     payload: { order_number: orderNumber, finished_goods_id: record.id, status: to },
     userId,
+    important,
   });
 }
 
-/* pack, handOver, receive, dispatch, deliver: one call per step. body.note is saved by dispatch / deliver. */
+/* receive, dispatch: one call per step. body.note is saved by dispatch. */
 async function advance(stepName, id, body = {}, userId = null) {
   const step = STEPS[stepName];
   const note = step.note ? cleanText(body.note) : null;
@@ -521,7 +527,7 @@ async function advance(stepName, id, body = {}, userId = null) {
       await productStock.post(conn, await orderLines(conn, record.order_id), {
         direction: receiving ? "IN" : "OUT",
         reason: receiving
-          ? `Received from Operations Admin, order ${record.order_number}`
+          ? `Received after QC pass, order ${record.order_number}`
           : `Given out for delivery, order ${record.order_number}${note ? ` (${note})` : ""}`,
         finishedGoodsId: record.id,
         orderId: record.order_id,
@@ -529,8 +535,10 @@ async function advance(stepName, id, body = {}, userId = null) {
       });
     }
 
-    const set = `, ${step.at} = CURRENT_TIMESTAMP, ${step.by} = ?${step.note ? `, ${step.note} = ?` : ""}`;
-    await moveTo(conn, record, step.to, set, step.note ? [userId, note] : [userId]);
+    // each stamp X sets X_at / X_by
+    const set = step.stamps.map((x) => `, ${x}_at = CURRENT_TIMESTAMP, ${x}_by = ?`).join("") + (step.note ? `, ${step.note} = ?` : "");
+    const who = step.stamps.map(() => userId);
+    await moveTo(conn, record, step.to, set, step.note ? [...who, note] : who);
     await tell(conn, step, record, userId);
 
     return { success: true, finishedGoodsId: id, status: step.to };
@@ -642,7 +650,9 @@ async function createBill(id, body = {}, userId = null) {
       to: "BILLED",
       next: "STORE_MANAGER",
       title: (n) => `Order ${n} is billed`,
-      body: `Bill ${billNumber}. Give the goods out for delivery.`,
+      body: `Bill ${billNumber}. Give the goods out for delivery.${items.some((i) => i.note) ? " (Billed below the price list.)" : ""}`,
+      // a bill below the price list is the CEO's business
+      important: items.some((i) => i.listPrice !== null && i.rate < i.listPrice),
     }, record, userId);
 
     return { success: true, finishedGoodsId: id, status: "BILLED", billId: result.insertId, billNumber };

@@ -22,6 +22,7 @@ import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtQty } from "@/lib/stock"
 import OrderDrawer from "@/features/marketing-orders/OrderDrawer"
 import FinishedGoodsTodo from "../FinishedGoodsTodo"
+import SalesSnapshot from "@/features/sales/SalesSnapshot"
 
 const EMPTY = []
 
@@ -318,7 +319,8 @@ export default function MarketingView() {
         </div>
       )}
 
-      <FinishedGoodsTodo className="mt-6" title="Ready to bill / confirm delivery" />
+      <SalesSnapshot className="mt-6" />
+      <FinishedGoodsTodo className="mt-4" title="In stock, ready to bill" />
 
       <OrderDrawer
         order={opened && !confirmDelete ? opened : null}

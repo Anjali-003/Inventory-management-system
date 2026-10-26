@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useUrlState } from "@/lib/useUrlState"
 import { Route } from "lucide-react"
 import PageHeader from "@/components/PageHeader"
 import SearchBar from "@/components/SearchBar"
@@ -56,25 +56,32 @@ function Journey({ orderId, onClose }) {
   see its whole journey with who did each step and how long each step took.
 */
 export default function OrderTracker() {
-  const [params, setParams] = useSearchParams()
+  const { params, setParams, openPopup, closePopup } = useUrlState()
   const { data = EMPTY, isLoading, error } = useGetTrackedOrdersQuery()
-  const [query, setQuery] = useState("")
-  const [show, setShow] = useState("open") // open | stuck | done | all
+  const [query, setQuery] = useState(() => params.get("q") || "")
+  const SHOWS = ["open", "stuck", "late", "done", "all"]
+  const [show, setShow] = useState(() => (SHOWS.includes(params.get("show")) ? params.get("show") : "open"))
+  const roleFilter = params.get("role") || ""
   const opened = params.get("order") ? Number(params.get("order")) : null
+  const setParam = (key, value) => setParams((p) => { const next = new URLSearchParams(p); if (value) next.set(key, value); else next.delete(key); return next })
+  const today = new Date().toISOString().slice(0, 10)
+  const isLate = (o) => !o.done && o.promisedDate && o.promisedDate < today
 
   const counts = useMemo(() => ({
     open: data.filter((o) => !o.done).length,
     stuck: data.filter((o) => !o.done && o.daysWaiting >= STUCK_DAYS).length,
+    late: data.filter(isLate).length,
     done: data.filter((o) => o.done).length,
     all: data.length,
-  }), [data])
+  }), [data]) // eslint-disable-line react-hooks/exhaustive-deps
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
     return data
-      .filter((o) => (show === "open" ? !o.done : show === "stuck" ? !o.done && o.daysWaiting >= STUCK_DAYS : show === "done" ? o.done : true))
+      .filter((o) => (show === "open" ? !o.done : show === "stuck" ? !o.done && o.daysWaiting >= STUCK_DAYS : show === "late" ? isLate(o) : show === "done" ? o.done : true))
+      .filter((o) => !roleFilter || o.waitingFor === roleFilter)
       .filter((o) => !q || `${o.orderNumber} ${o.products || ""} ${o.stage}`.toLowerCase().includes(q))
       .sort((a, b) => (b.daysWaiting ?? -1) - (a.daysWaiting ?? -1))
-  }, [data, query, show])
+  }, [data, query, show, roleFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -82,12 +89,17 @@ export default function OrderTracker() {
       {error && <div className="mb-4"><Notice title="Something went wrong">{errorMessage(error, "Could not load the orders.")}</Notice></div>}
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 sm:px-5">
-          {[["open", "Open"], ["stuck", `Stuck ${STUCK_DAYS}+ days`], ["done", "Done / closed"], ["all", "All"]].map(([k, l]) => (
+          {[["open", "Open"], ["stuck", `Stuck ${STUCK_DAYS}+ days`], ["late", "Late for customer"], ["done", "Done / closed"], ["all", "All"]].map(([k, l]) => (
             <button key={k} type="button" aria-pressed={show === k} onClick={() => setShow(k)}
-              className={cn("rounded-full border px-3 py-1.5 text-xs font-semibold", show === k ? "border-primary bg-primary text-primary-foreground" : k === "stuck" && counts.stuck ? "border-rose-200 bg-rose-50 text-rose-800" : "bg-white text-slate-700")}>
+              className={cn("rounded-full border px-3 py-1.5 text-xs font-semibold", show === k ? "border-primary bg-primary text-primary-foreground" : (k === "stuck" || k === "late") && counts[k] ? "border-rose-200 bg-rose-50 text-rose-800" : "bg-white text-slate-700")}>
               {l} <span className="tabular-nums opacity-80">{counts[k]}</span>
             </button>
           ))}
+          {roleFilter && (
+            <button type="button" onClick={() => setParam("role", "")} className="rounded-full border border-primary bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+              Waiting for {ROLE_LABELS[roleFilter] || roleFilter} ×
+            </button>
+          )}
           <div className="w-full sm:ml-auto sm:w-64"><SearchBar value={query} onChange={setQuery} placeholder="Search order or product..." /></div>
         </div>
         {isLoading ? <TableSkeleton rows={6} /> : rows.length === 0 ? (
@@ -101,7 +113,7 @@ export default function OrderTracker() {
               {rows.map((o) => {
                 const stuck = !o.done && o.daysWaiting >= STUCK_DAYS
                 return (
-                  <TableRow key={o.id} className="cursor-pointer" onClick={() => setParams({ order: o.id })}>
+                  <TableRow key={o.id} className="cursor-pointer" onClick={() => openPopup({ order: o.id })}>
                     <TableCell className="whitespace-normal">
                       <span className="block font-semibold tabular-nums">{o.orderNumber}</span>
                       <span className="block text-xs text-muted-foreground">{o.products}</span>
@@ -116,7 +128,7 @@ export default function OrderTracker() {
           </Table>
         )}
       </Card>
-      <Journey orderId={opened} onClose={() => setParams({})} />
+      <Journey orderId={opened} onClose={() => closePopup({ order: null })} />
     </>
   )
 }
