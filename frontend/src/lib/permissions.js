@@ -267,6 +267,9 @@ export const MODULE_PATHS = {
 
   // Marketing and Operations Admin order workflow
   marketingOrders: "/marketing-orders",
+  repairRequests: "/repair-requests",
+  repairApprovals: "/repair-approvals",
+  repairRegister: "/repair-register",
   orderApprovals: "/order-approvals",
   approvedOrders: "/approved-orders",
 };
@@ -328,6 +331,7 @@ const ACCESS = {
   // Production Manager handles production.
   PRODUCTION_MANAGER: {
     dashboard: "view",
+    repairRegister: "edit",
     orderTracker: "view", // "waiting for you" on the dashboard
     production: "edit",
     qcFailed: "edit",
@@ -342,6 +346,8 @@ const ACCESS = {
   // Store handover itself remains a Store Manager action; this role can create requests from Production.
   PRODUCTION_ADMIN: {
     dashboard: "view",
+    repairApprovals: "edit",
+    repairRegister: "edit",
     production: "edit",
     qualityControl: "edit",
     qcFailed: "edit",
@@ -354,6 +360,7 @@ const ACCESS = {
   // Quality Control & Finished Goods workspace.
   QUALITY_FG_MANAGER: {
     dashboard: "view",
+    repairRegister: "edit",
     orderTracker: "view", // "waiting for you" on the dashboard
     qualityControl: "edit",
     finishedGoods: "view",
@@ -365,6 +372,7 @@ const ACCESS = {
   // Marketing Manager prepares orders for Operations Admin.
   MARKETING_MANAGER: {
     dashboard: "view",
+    repairRequests: "edit",
     marketingOrders: "edit",
     // makes the bill and confirms delivery
     finishedGoods: "edit",

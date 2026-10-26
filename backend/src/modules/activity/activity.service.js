@@ -39,7 +39,7 @@ async function log(entry) {
 
 const ROLE_ACTIVITY_RESOURCES = {
     // Production Admin must not see HR, purchasing, marketing or other department activity.
-    PRODUCTION_ADMIN: ["production", "quality-control", "qc-failed", "finished-goods"],
+    PRODUCTION_ADMIN: ["production", "quality-control", "qc-failed", "finished-goods", "repairs"],
 };
 
 async function list({ limit = 30, role } = {}) {

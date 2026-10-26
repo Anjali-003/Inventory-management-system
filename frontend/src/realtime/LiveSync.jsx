@@ -41,6 +41,7 @@ const TAGS = {
   "material-requests": ["MaterialRequests", "Production"],
   "extra-materials": ["ExtraMaterials", "Inventory"],
   customers: ["Customers"],
+  repairs: ["Repairs", "Notifications"],
 };
 
 // notification type -> extra tags to refetch with the bell (the screens that notification is about)
@@ -75,6 +76,13 @@ const NOTIFY_TAGS = {
   FINISHED_GOODS_BILLED: ["FinishedGoods", "Orders"],
   FINISHED_GOODS_DISPATCHED: ["FinishedGoods", "Orders", "ProductStock"],
   FINISHED_GOODS_DELIVERED: ["FinishedGoods", "Orders", "MarketingOrders", "ProductStock"],
+  REPAIR_REQUESTED: ["Repairs"],
+  REPAIR_APPROVED: ["Repairs"],
+  REPAIR_REJECTED: ["Repairs"],
+  REPAIR_READY_FOR_QC: ["Repairs"],
+  REPAIR_QC_FAILED: ["Repairs"],
+  REPAIR_QC_PASSED: ["Repairs"],
+  REPAIR_DISPATCHED: ["Repairs"],
 };
 
 export default function LiveSync() {

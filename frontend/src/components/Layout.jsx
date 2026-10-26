@@ -60,6 +60,8 @@ const GROUPS = [
     label: "1 · Orders",
     items: [
       { to: "/marketing-orders", label: "Customer Orders", icon: ClipboardList, module: "marketingOrders" },
+      { to: "/repair-requests", label: "Repair Requests", icon: Wrench, module: "repairRequests" },
+      { to: "/repair-approvals", label: "Repair Approvals", icon: ClipboardCheck, module: "repairApprovals" },
       { to: "/order-approvals", label: "Orders to Approve", icon: ClipboardCheck, module: "orderApprovals" },
       { to: "/approved-orders", label: "Approved Orders", icon: ClipboardList, module: "approvedOrders" },
       { to: "/orders", label: "All Orders", icon: ClipboardList, module: "orders" },
@@ -87,6 +89,7 @@ const GROUPS = [
     label: "4 · Production",
     items: [
       { to: "/production", label: "Production", icon: Factory, module: "production" },
+      { to: "/repair-register", label: "Repair Register", icon: Wrench, module: "repairRegister" },
       { to: "/quality-control", label: "Quality Check (QC)", icon: ClipboardCheck, module: "qualityControl" },
       { to: "/qc-failed", label: "QC Failed / Rework", icon: Wrench, module: "qcFailed" },
     ],
