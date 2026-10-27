@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { MktBtn, StatusPill } from "@/features/marketing-orders/mktKit"
 import { PRESS_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
-import { ALL_STAGE, OrderSteps, OrderValue, STAGES, declinedOf, plural, stageOf } from "@/features/marketing-orders/orderParts"
+import { ALL_STAGE, CustomerName, OrderSteps, OrderValue, STAGES, declinedOf, plural, stageOf } from "@/features/marketing-orders/orderParts"
 import { timeAgo } from "@/features/activity/time"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -119,6 +119,7 @@ export function ApprovalCard({ order, showPlan, onOpen }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="break-all text-[15px] font-semibold leading-snug tabular-nums">{order.order_number}</p>
+            <CustomerName order={order} />
             <p className="mt-0.5 truncate text-xs text-muted-foreground" title={fmtDateTime(order.created_at)}>
               {order.created_by_name ? `${order.created_by_name} · ` : ""}{timeAgo(order.created_at)}
             </p>
@@ -262,6 +263,7 @@ export function ApprovalList({ orders, onOpen }) {
                 <TableRow key={o.id} onClick={() => onOpen(o)} className="cursor-pointer">
                   <TableCell>
                     <button type="button" onClick={() => onOpen(o)} className="font-semibold tabular-nums text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/60">{o.order_number}</button>
+                    <CustomerName order={o} />
                     <p className="text-xs text-muted-foreground">{timeAgo(o.created_at)}</p>
                   </TableCell>
                   <TableCell className="min-w-40 whitespace-normal">

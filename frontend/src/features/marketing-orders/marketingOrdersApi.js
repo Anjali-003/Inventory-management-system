@@ -18,6 +18,11 @@ export const marketingOrdersApi = baseApi.injectEndpoints({
       query: () => ({ url: "/marketing-orders/products" }),
       transformResponse: asList,
     }),
+    // the saved customers, for the New order picker
+    getMarketingCustomers: build.query({
+      query: () => ({ url: "/marketing-orders/customers" }),
+      providesTags: ["MarketingOrders"],
+    }),
     createMarketingOrder: build.mutation({
       query: (data) => ({ url: "/marketing-orders", method: "post", data }),
       invalidatesTags: ["MarketingOrders"],
@@ -46,6 +51,7 @@ export const marketingOrdersApi = baseApi.injectEndpoints({
 export const {
   useGetMarketingOrdersQuery,
   useGetMarketingProductsQuery,
+  useGetMarketingCustomersQuery,
   useCreateMarketingOrderMutation,
   useSendMarketingOrderMutation,
   useDeleteMarketingOrderMutation,

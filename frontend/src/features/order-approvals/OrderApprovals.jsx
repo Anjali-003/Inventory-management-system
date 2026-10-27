@@ -25,6 +25,7 @@ import {
 } from "@/features/marketing-orders/mktKit";
 import { stagger } from "@/features/marketing-orders/mktMotion";
 import {
+  CustomerName,
   OrderValue,
   countByStatus,
   declinedOf,
@@ -278,6 +279,7 @@ export default function OrderApprovals() {
           (!status || (status === QUEUE ? canApprove(o) : o.approval_status === status)) &&
           (!q ||
             o.order_number.toLowerCase().includes(q) ||
+            (o.customer_name || "").toLowerCase().includes(q) ||
             (o.created_by_name || "").toLowerCase().includes(q) ||
             o.items.some(
               (i) =>
@@ -517,6 +519,7 @@ export default function OrderApprovals() {
                         >
                           {o.order_number}
                         </button>
+                        <CustomerName order={o} />
                         <span
                           className="block text-xs text-muted-foreground"
                           title={fmtDateTime(o.created_at)}

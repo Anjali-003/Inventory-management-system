@@ -41,8 +41,8 @@ function run(sql, p = []) {
   if (has(sql, "DELETE FROM order_items WHERE id = ?")) { s.items = s.items.filter((i) => i.id !== p[0]); return [{ affectedRows: 1 }]; }
   if (has(sql, "UPDATE order_items SET quantity = ?")) { s.items.find((i) => i.id === p[1]).quantity = String(p[0]); return [{ affectedRows: 1 }]; }
   if (has(sql, "INSERT INTO orders")) {
-    const [order_number, parent_order_id, estimated_delivery_date, created_by] = p;
-    s.orders.push({ id: s.nextOrderId, order_number, parent_order_id, approval_status: "DRAFT", revision: null, created_by, creator_role: "MARKETING_MANAGER", estimated_delivery_date });
+    const [order_number, parent_order_id, customer_id, estimated_delivery_date, created_by] = p;
+    s.orders.push({ id: s.nextOrderId, order_number, parent_order_id, customer_id, approval_status: "DRAFT", revision: null, created_by, creator_role: "MARKETING_MANAGER", estimated_delivery_date });
     return [{ insertId: s.nextOrderId++ }];
   }
   if (has(sql, "INSERT INTO order_items (order_id, product_id, quantity) VALUES ?")) {

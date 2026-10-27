@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { MktBtn, QtyStepper } from "./mktKit"
 import { SPRING } from "./mktMotion"
 import { rupees } from "./orderParts"
-import { useCreateMarketingOrderMutation, useGetMarketingProductsQuery } from "./marketingOrdersApi"
+import { useCreateMarketingOrderMutation, useGetMarketingCustomersQuery, useGetMarketingProductsQuery } from "./marketingOrdersApi"
 
 const EMPTY = []
 const blank = () => ({ key: Math.random().toString(36).slice(2), product: "", qty: "1" })
@@ -32,6 +32,10 @@ export default function NewOrderModal({ onClose }) {
 
   const [rows, setRows] = useState(() => [blank()])
   const [deliveryDate, setDeliveryDate] = useState("")
+  // the customer: picked from the saved ones (the list suggests them) or typed once and saved by the server
+  const [customer, setCustomer] = useState("")
+  const { data: customers = EMPTY } = useGetMarketingCustomersQuery()
+  const customerError = showErrors && !customer.trim() ? "Enter the customer this order is for" : ""
   const [showErrors, setShowErrors] = useState(false)
   const [serverError, setServerError] = useState("")
   const endRef = useRef(null)
@@ -64,9 +68,12 @@ export default function NewOrderModal({ onClose }) {
   const submit = async (e) => {
     e.preventDefault()
     setServerError("")
-    if (rows.some(rowError)) { setShowErrors(true); return }
+    if (rows.some(rowError) || !customer.trim()) { setShowErrors(true); return }
+    // a saved customer by its exact name is sent by id; anything else is a new one the server saves
+    const saved = customers.find((c) => c.name.toLowerCase() === customer.trim().toLowerCase())
     try {
       const order = await create({
+        ...(saved ? { customer_id: saved.id } : { customer_name: customer.trim() }),
         items: rows.map((r) => ({ productId: Number(r.product), quantity: Number(r.qty) })),
         estimated_delivery_date: deliveryDate || null,
       }).unwrap()
@@ -104,7 +111,27 @@ export default function NewOrderModal({ onClose }) {
           </div>
         )}
 
-                <div className="rounded-2xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 sm:p-4">
+        <div className="rounded-2xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 sm:p-4">
+          <label className={LABEL} htmlFor="order-customer">Customer</label>
+          <input
+            id="order-customer"
+            list="order-customer-list"
+            value={customer}
+            maxLength={150}
+            onChange={(e) => setCustomer(e.target.value)}
+            placeholder="Type to pick a saved customer, or a new name"
+            aria-invalid={customerError ? true : undefined}
+            className={cn("h-10 w-full rounded-[10px] border bg-card px-3 text-sm outline-none transition-shadow focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15", customerError ? "border-destructive" : "border-input")}
+          />
+          <datalist id="order-customer-list">
+            {customers.map((c) => <option key={c.id} value={c.name} />)}
+          </datalist>
+          {customerError
+            ? <p className={ERR}>{customerError}</p>
+            : <p className="mt-1 text-xs text-muted-foreground">A new name is saved, so it can be picked next time.</p>}
+        </div>
+
+        <div className="rounded-2xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 sm:p-4">
           <label className={LABEL} htmlFor="order-edd">
             Estimated Delivery Date
           </label>

@@ -334,6 +334,13 @@ export function OrderTimeline({ order }) {
 
 export const DECIDED_STATUSES = ["APPROVED", "REJECTED"]
 
+/* The customer an order is for, the first thing the reader looks for. Older orders may have none. */
+export function CustomerName({ order, className }) {
+  return order?.customer_name
+    ? <p className={cn("truncate text-sm font-semibold text-foreground", className)}>{order.customer_name}</p>
+    : <p className={cn("truncate text-xs text-muted-foreground", className)}>No customer</p>
+}
+
 /* ₹12,40,000 (Indian grouping, whole rupees) */
 export const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
 

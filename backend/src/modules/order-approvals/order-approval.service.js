@@ -59,6 +59,8 @@ const ORDER_SELECT = `
     SELECT
         o.id,
         o.order_number,
+        o.customer_id,
+        cust.name AS customer_name,
         o.status,
         o.approval_status,
         o.approval_round,
@@ -83,6 +85,7 @@ const ORDER_SELECT = `
     LEFT JOIN users ru ON ru.id = o.revised_by
     LEFT JOIN users mu ON mu.id = o.revision_accepted_by
     LEFT JOIN orders pa ON pa.id = o.parent_order_id
+    LEFT JOIN customers cust ON cust.id = o.customer_id
 `;
 
 const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : value ?? null);
@@ -671,7 +674,7 @@ async function revise(orderId, body, userId) {
 
     return inventory.inTransaction(async (conn) => {
         const [rows] = await conn.query(
-            `SELECT o.id, o.order_number, o.approval_status, o.revision, o.created_by, o.estimated_delivery_date, u.role AS creator_role
+            `SELECT o.id, o.order_number, o.approval_status, o.revision, o.created_by, o.estimated_delivery_date, o.customer_id, u.role AS creator_role
              FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ? FOR UPDATE`,
             [orderId]
         );
@@ -720,9 +723,9 @@ async function revise(orderId, body, userId) {
         // 2) the held-back part: a new marketing draft owned by the same Marketing Manager
         const heldNumber = `${order.order_number}-H`;
         const [created] = await conn.query(
-            `INSERT INTO orders (order_number, parent_order_id, status, approval_status, estimated_delivery_date, created_by)
-             VALUES (?, ?, 'PENDING', 'DRAFT', ?, ?)`,
-            [heldNumber, orderId, order.estimated_delivery_date || null, order.created_by]
+            `INSERT INTO orders (order_number, parent_order_id, customer_id, status, approval_status, estimated_delivery_date, created_by)
+             VALUES (?, ?, ?, 'PENDING', 'DRAFT', ?, ?)`,
+            [heldNumber, orderId, order.customer_id || null, order.estimated_delivery_date || null, order.created_by]
         );
         const heldId = created.insertId;
         const heldLines = items.filter((i) => i.held > 0);

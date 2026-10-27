@@ -8,7 +8,7 @@ import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { MktBtn, StatusPill } from "./mktKit"
 import { SPRING_SOFT } from "./mktMotion"
-import { DECIDED_STATUSES, OrderValue, declinedOf, plural, reviewOf, stageOf } from "./orderParts"
+import { CustomerName, DECIDED_STATUSES, OrderValue, declinedOf, plural, reviewOf, stageOf } from "./orderParts"
 
 const SHOW_LINES = 2
 const DECIDED = DECIDED_STATUSES
@@ -104,6 +104,7 @@ export default function OrdersTable({ orders, filterKey, editable, busyId, onOpe
                   <button type="button" className="block text-start font-semibold tabular-nums outline-none transition-colors group-hover:text-primary focus-visible:text-primary focus-visible:underline">
                     {o.order_number}
                   </button>
+                  <CustomerName order={o} />
                   <span className="mt-0.5 block text-xs text-muted-foreground" title={fmtDateTime(o.created_at)}>
                     {o.created_by_name ? `${o.created_by_name} · ` : ""}{timeAgo(o.created_at)}
                   </span>

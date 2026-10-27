@@ -116,7 +116,9 @@ export default function OrderStory({ order }) {
               <span className={cn("me-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ring-1 ring-inset", ROLE.MARKETING_MANAGER.chip)}>Marketing</span>
               {order.created_by_name} · {fmtDateTime(order.created_at)}
             </p>
-            <p className="mt-1 text-sm">Wrote the order: {order.items.map((i) => `${i.name} × ${fmtQty(i.quantity)}`).join(", ")}.</p>
+            <p className="mt-1 text-sm">
+              Wrote the order{order.customer_name ? <> for <b>{order.customer_name}</b></> : null}: {order.items.map((i) => `${i.name} × ${fmtQty(i.quantity)}`).join(", ")}.
+            </p>
           </div>
         </li>
 

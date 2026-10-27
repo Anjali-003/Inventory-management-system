@@ -7,6 +7,7 @@ const router = express.Router();
 
 router.get("/", controller.list);
 router.get("/products", controller.products); // above "/:id"
+router.get("/customers", controller.customers); // the saved customers, for the New order picker
 router.post("/", resolveUser, controller.create); // save as draft
 router.post("/:id/send", resolveUser, controller.send); // send to the Operations Admin
 router.post("/:id/accept-revision", resolveUser, controller.acceptRevision); // agree to the admin's reduced quantity

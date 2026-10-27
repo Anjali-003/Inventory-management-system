@@ -23,6 +23,31 @@ async function listOrders(conn = db) {
     return approvals.getOrdersByIds(rows.map((r) => r.id), conn);
 }
 
+/* The saved customers, for the New order picker. */
+async function customerOptions() {
+    const [rows] = await db.query(`SELECT id, name FROM customers ORDER BY name`);
+    return rows;
+}
+
+/*
+    The order's customer: { customer_id } a saved one, or { customer_name } typed by hand (saved the first time, found
+    again by its name after that). Required: the CEO reads every order by its customer.
+*/
+async function resolveCustomer(conn, body, userId) {
+    const id = Number(body && body.customer_id);
+    if (Number.isInteger(id) && id > 0) {
+        const [rows] = await conn.query(`SELECT id FROM customers WHERE id = ?`, [id]);
+        if (!rows.length) throw new AppError(422, "The selected customer no longer exists", "VALIDATION", { field: "customer" });
+        return id;
+    }
+    const name = typeof (body && body.customer_name) === "string" ? body.customer_name.trim().replace(/\s+/g, " ") : "";
+    if (!name) throw new AppError(422, "Enter the customer this order is for", "VALIDATION", { field: "customer" });
+    if (name.length > 150) throw new AppError(422, "Customer name can be at most 150 characters", "VALIDATION", { field: "customer" });
+    await conn.query(`INSERT IGNORE INTO customers (name, created_by) VALUES (?, ?)`, [name, userId || null]);
+    const [[row]] = await conn.query(`SELECT id FROM customers WHERE name = ?`, [name]);
+    return row.id;
+}
+
 async function productOptions() {
     const [rows] = await db.query(`SELECT id, sku, name, selling_price FROM products WHERE is_active = TRUE ORDER BY name`);
     return rows;
@@ -65,9 +90,10 @@ async function createDraft(body, userId) {
             if (!have.has(it.productId)) throw new AppError(404, "Product not found", "NOT_FOUND", { line, field: "product" });
         });
 
+        const customerId = await resolveCustomer(conn, body, userId);
         const [res] = await conn.query(
-            `INSERT INTO orders (order_number, status, approval_status, estimated_delivery_date, created_by) VALUES (?, 'PENDING', 'DRAFT', ?, ?)`,
-            [`TEMP-${Date.now()}-${userId}`, deliveryDate, userId]
+            `INSERT INTO orders (order_number, customer_id, status, approval_status, estimated_delivery_date, created_by) VALUES (?, ?, 'PENDING', 'DRAFT', ?, ?)`,
+            [`TEMP-${Date.now()}-${userId}`, customerId, deliveryDate, userId]
         );
         const id = res.insertId;
         const d = new Date();
@@ -198,4 +224,4 @@ async function declineRevision(orderId, userId) {
     });
 }
 
-module.exports = { listOrders, productOptions, createDraft, send, removeDraft, acceptRevision, declineRevision };
+module.exports = { listOrders, productOptions, customerOptions, createDraft, send, removeDraft, acceptRevision, declineRevision };

@@ -17,7 +17,7 @@ import OrderDrawer from "./OrderDrawer"
 import OrdersTable from "./OrdersTable"
 import { HeroButton, MktBtn, MktHero, NewOrderFab, SearchField, StageChips, StageTile, StatusSelect, StatusPill, TileGrid } from "./mktKit"
 import { PRESS_SOFT, rise, stagger } from "./mktMotion"
-import { ALL_STAGE, OrderSteps, OrderValue, STAGES, countByStatus, declinedOf, isDrawerTab, isStatus, newestFirst, plural, stageOf } from "./orderParts"
+import { ALL_STAGE, CustomerName, OrderSteps, OrderValue, STAGES, countByStatus, declinedOf, isDrawerTab, isStatus, newestFirst, plural, stageOf } from "./orderParts"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "./marketingOrdersApi"
 
 const EMPTY = []
@@ -67,6 +67,7 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-[15px] font-bold tabular-nums tracking-[-0.01em]">{o.order_number}</p>
+            <CustomerName order={o} />
             <p className="mt-0.5 truncate text-xs text-muted-foreground" title={fmtDateTime(o.created_at)}>
               {o.created_by_name ? `${o.created_by_name} · ` : ""}{timeAgo(o.created_at)}
             </p>
@@ -168,7 +169,7 @@ export default function MarketingOrders() {
       .filter(
         (o) =>
           (!status || o.approval_status === status) &&
-          (!q || o.order_number.toLowerCase().includes(q) || o.items.some((i) => i.name.toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q)))
+          (!q || o.order_number.toLowerCase().includes(q) || (o.customer_name || "").toLowerCase().includes(q) || o.items.some((i) => i.name.toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q)))
       )
   }, [data, query, status])
 
