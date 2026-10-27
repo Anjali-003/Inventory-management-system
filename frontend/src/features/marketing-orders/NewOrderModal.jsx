@@ -35,8 +35,8 @@ export default function NewOrderModal({ onClose }) {
   // the customer: picked from the saved ones (the list suggests them) or typed once and saved by the server
   const [customer, setCustomer] = useState("")
   const { data: customers = EMPTY } = useGetMarketingCustomersQuery()
-  const customerError = showErrors && !customer.trim() ? "Enter the customer this order is for" : ""
   const [showErrors, setShowErrors] = useState(false)
+  const customerError = showErrors && !customer.trim() ? "Enter the customer this order is for" : ""
   const [serverError, setServerError] = useState("")
   const endRef = useRef(null)
 
