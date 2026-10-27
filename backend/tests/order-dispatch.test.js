@@ -93,6 +93,10 @@ function run(sql, params = []) {
     return [s.purchaseRows.map(([order_id, component_id, quantity]) => ({ order_id, component_id, sku: `CMP-00${component_id}`, name: "Resistor", unit: "pcs", quantity, sent_by_name: "Ops", sent_at: "2026-10-14 11:00:00" }))];
   }
   if (has(sql, "FROM orders o LEFT JOIN users cu")) return [[{ ...s.order, created_by_name: "Marketing", approved_by_name: "Ops" }]];
+  // the order's story (order_events) and the units helper it uses
+  if (has(sql, "INSERT INTO order_events")) { (s.events ||= []).push({ order_id: params[0], kind: params[1], quantity: params[3] }); return [{ insertId: s.events.length }]; }
+  if (has(sql, "FROM order_events e")) return [s.events || []];
+  if (has(sql, "SELECT COALESCE(SUM(quantity), 0) AS n FROM order_items WHERE order_id = ?")) return [[{ n: s.items.reduce((t, i) => t + Number(i.quantity), 0) }]];
   throw new Error("fake db: unexpected query: " + sql.replace(/\s+/g, " ").slice(0, 120));
 }
 /* idempotency_keys: idem_key is UNIQUE (errno 1062 like MySQL). Rows inserted by a transaction vanish if it rolls back. */

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { usePermissions } from "@/features/auth/usePermissions"
 import OrderDrawer from "@/features/marketing-orders/OrderDrawer"
-import OpsTimelineTab from "./OpsTimelineTab"
+import OrderStory from "@/features/marketing-orders/OrderStory"
 import { FeasibilityTab, OPS_TABS } from "./FeasibilityTab"
 import { DecisionButtons } from "./DecisionButtons"
 import useOrderDecisions from "./useOrderDecisions"
@@ -60,7 +60,7 @@ export default function OpsOrderDrawer({ orderId, onClose, tab: tabProp, onTab }
           selected
             ? {
                 feasibility: <FeasibilityTab order={selected} onDecide={editable && !isFetching ? decide : undefined} />,
-                timeline: <OpsTimelineTab order={selected} />,
+                timeline: <OrderStory order={selected} />,
               }
             : undefined
         }

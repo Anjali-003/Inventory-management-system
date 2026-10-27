@@ -100,6 +100,7 @@ async function send(orderId, userId = null) {
     return inventory.inTransaction(async (conn) => {
         const order = await lockDraft(conn, orderId);
         await conn.query(`UPDATE orders SET approval_status = 'PENDING_APPROVAL', sent_to_admin_at = NOW() WHERE id = ?`, [orderId]);
+        await approvals.logEvent(conn, orderId, "SENT", userId, { quantity: await approvals.unitsOf(conn, orderId) });
         await notifications.notify(conn, {
             role: "OPERATIONS_ADMIN",
             type: "ORDER_SENT",
@@ -139,6 +140,7 @@ async function acceptRevision(orderId, userId) {
             `UPDATE orders SET approval_status = 'PENDING_APPROVAL', revision_accepted_by = ?, revision_accepted_at = NOW() WHERE id = ?`,
             [userId, orderId]
         );
+        await approvals.logEvent(conn, orderId, "REVISION_ACCEPTED", userId, { quantity: await approvals.unitsOf(conn, orderId) });
         await notifications.notify(conn, {
             role: "OPERATIONS_ADMIN",
             type: "REVISION_ACCEPTED",
@@ -180,6 +182,7 @@ async function declineRevision(orderId, userId) {
             ["Marketing did not accept the revised quantity", userId, orderId]
         );
         await conn.query(`DELETE FROM orders WHERE parent_order_id = ? AND approval_status = 'DRAFT'`, [orderId]); // order_items cascade
+        await approvals.logEvent(conn, orderId, "REVISION_DECLINED", userId, { quantity: await approvals.unitsOf(conn, orderId) });
         await notifications.notify(conn, {
             role: "OPERATIONS_ADMIN",
             type: "REVISION_DECLINED",

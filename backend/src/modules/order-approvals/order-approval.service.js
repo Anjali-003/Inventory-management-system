@@ -135,6 +135,20 @@ async function withItems(conn, orders) {
         ids
     );
 
+    // the order's story, oldest first (order_events)
+    const [eventRows] = await conn.query(
+        `SELECT e.order_id, e.kind, e.quantity, e.detail, DATE_FORMAT(e.created_at, '%Y-%m-%d %H:%i:%s') AS at,
+                u.name AS by_name, u.role AS by_role
+         FROM order_events e LEFT JOIN users u ON u.id = e.actor_id
+         WHERE e.order_id IN (?) ORDER BY e.id`,
+        [ids]
+    );
+    const eventsOf = new Map();
+    for (const { order_id, detail, quantity, ...e } of eventRows) {
+        if (!eventsOf.has(order_id)) eventsOf.set(order_id, []);
+        eventsOf.get(order_id).push({ ...e, quantity: quantity === null ? null : Number(quantity), detail: asObject(detail) });
+    }
+
     // an order approved in several passes has several rows per product: show each product once, quantities added up
     for (const request of production.values()) {
         const perProduct = new Map();
@@ -167,6 +181,8 @@ async function withItems(conn, orders) {
             // what the Operations Admin sent on approval; null when nothing was sent
             production_request: production.get(o.id) || null,
             purchase_request: purchase.get(o.id) || null,
+            // the story between Marketing and the Operations Admin, step by step (see logEvent)
+            events: eventsOf.get(o.id) || [],
         };
     });
 }
@@ -273,6 +289,23 @@ async function inGuardedTransaction(guard, work) {
 
 const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+/*
+    One step of the order's story (order_events): who did it, how many units it was about, and the details the
+    Timeline shows. Written inside the step's own transaction, so a step that fails leaves no line behind.
+*/
+async function logEvent(conn, orderId, kind, userId, { quantity = null, detail = null } = {}) {
+    await conn.query(
+        `INSERT INTO order_events (order_id, kind, actor_id, quantity, detail) VALUES (?, ?, ?, ?, ?)`,
+        [orderId, kind, userId || null, quantity === null ? null : Math.round(quantity), detail === null ? null : JSON.stringify(detail)]
+    );
+}
+
+/* Units of the order as it stands. */
+async function unitsOf(conn, orderId) {
+    const [[row]] = await conn.query(`SELECT COALESCE(SUM(quantity), 0) AS n FROM order_items WHERE order_id = ?`, [orderId]);
+    return Number(row.n);
+}
+
 /* The decision (approved / rejected): only Marketing hears it. Saved inside the decision's transaction. */
 async function notifyDecision(conn, orderId, { approved, remarks, userId }) {
     const [rows] = await conn.query(
@@ -314,6 +347,7 @@ async function decide(orderId, decision, body, userId, opts) {
             [outcome, remarks, userId, orderId]
         );
         assertSaved(saved);
+        await logEvent(conn, orderId, outcome, userId, { quantity: await unitsOf(conn, orderId), detail: remarks ? { remarks } : null });
         await notifyDecision(conn, orderId, { approved: outcome === "APPROVED", remarks, userId });
         return getOrder(orderId, conn);
     });
@@ -550,6 +584,10 @@ async function sendToProduction(orderId, body, userId, opts) {
         );
         assertSaved(saved);
 
+        await logEvent(conn, orderId, "SENT_TO_PRODUCTION", userId, {
+            quantity: lines.reduce((s, l) => s + Number(l.can_make), 0),
+            detail: { lines: lines.map((l) => ({ name: l.name, quantity: Number(l.can_make) })) },
+        });
         const number = await orderNumberOf(conn, orderId);
         const first = Number(before.n) === 0;
         await notifications.notify(conn, {
@@ -583,6 +621,11 @@ async function sendToPurchase(orderId, body, userId) {
             `INSERT INTO order_purchase_items (order_id, component_id, quantity, sent_by) VALUES ?`,
             [plan.shortages.map((x) => [orderId, x.component_id, x.shortage, userId])]
         );
+        // quantity = units the parts are for (the ones not in Production yet)
+        await logEvent(conn, orderId, "SENT_TO_PURCHASE", userId, {
+            quantity: plan.lines.reduce((s, l) => s + Number(l.ordered), 0),
+            detail: { components: plan.shortages.length },
+        });
         const number = await orderNumberOf(conn, orderId);
         await notifications.notify(conn, {
             orderId, userId, payload: { order_number: number },
@@ -700,6 +743,10 @@ async function revise(orderId, body, userId) {
             [JSON.stringify(revision), userId, orderId]
         );
         assertSaved(saved);
+        await logEvent(conn, orderId, "REVISED", userId, {
+            quantity: items.reduce((s, i) => s + i.approved, 0),
+            detail: { requested: items.reduce((s, i) => s + i.requested, 0), held_order_number: heldNumber, remarks },
+        });
 
         await notifications.notify(conn, {
             role: "MARKETING_MANAGER",
@@ -754,4 +801,4 @@ async function updateDeliveryDate(orderId, body, user) {
 }
 
 module.exports = {
-    updateDeliveryDate, APPROVAL_STATUSES, listOrders, getOrder, getOrdersByIds, approve, reject, getPlan, sendToProduction, sendToPurchase, revise };
+    logEvent, unitsOf, updateDeliveryDate, APPROVAL_STATUSES, listOrders, getOrder, getOrdersByIds, approve, reject, getPlan, sendToProduction, sendToPurchase, revise };

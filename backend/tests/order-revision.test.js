@@ -71,6 +71,12 @@ function run(sql, p = []) {
   if (has(sql, "FROM orders o LEFT JOIN users cu")) return [orderById(p[0]) ? [{ ...orderById(p[0]) }] : []];
   if (has(sql, "FROM order_items oi") && has(sql, "oi.order_id IN")) return [s.items.filter((i) => p[0].includes(i.order_id))];
   if (has(sql, "FROM order_production_items r") || has(sql, "FROM order_purchase_items r")) return [[]];
+  // the order's story (order_events): kept, so a test can read what was logged
+  if (has(sql, "INSERT INTO order_events")) { (s.events ||= []).push({ order_id: p[0], kind: p[1], actor_id: p[2], quantity: p[3] }); return [{ insertId: s.events.length }]; }
+  if (has(sql, "FROM order_events e")) return [(s.events || []).filter((e) => p[0].includes(e.order_id))];
+  if (has(sql, "SELECT COALESCE(SUM(quantity), 0) AS n FROM order_items WHERE order_id = ?")) {
+    return [[{ n: s.items.filter((i) => i.order_id === p[0]).reduce((t, i) => t + Number(i.quantity), 0) }]];
+  }
   throw new Error("fake db: unexpected query: " + sql.replace(/\s+/g, " ").slice(0, 120));
 }
 
