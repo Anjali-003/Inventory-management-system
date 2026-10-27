@@ -193,10 +193,10 @@ function ReviewCell({ order, actions }) {
           )}
         </p>
       )}
-      {approved && order.remaining_to_approve > 0 && (
+      {approved && order.left_to_send > 0 && (
         <div className="space-y-1.5 pt-1">
           <p className="text-xs font-semibold text-warning">
-            {fmtQty(order.remaining_to_approve)} units still to approve (waiting for parts)
+            {fmtQty(order.left_to_send)} units not sent to Production yet
           </p>
           {actions}
         </div>

@@ -11,7 +11,8 @@ router.get("/:id/plan", controller.plan);
 router.post("/:id/approve", resolveUser, controller.approve);
 router.post("/:id/reject", resolveUser, controller.reject);
 router.post("/:id/revise", resolveUser, controller.revise);
-router.post("/:id/dispatch", resolveUser, controller.dispatch);
+router.post("/:id/send-to-production", resolveUser, controller.sendToProduction); // what the stock can build now (deducts it)
+router.post("/:id/send-to-purchase", resolveUser, controller.sendToPurchase); // the components that are short (once)
 router.patch("/:id/delivery-date", resolveUser, controller.updateDeliveryDate);
 
 module.exports = router;

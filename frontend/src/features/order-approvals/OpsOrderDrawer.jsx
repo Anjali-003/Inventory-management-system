@@ -12,8 +12,9 @@ const EMPTY = []
 
 /*
   THE order drawer of the Operations Admin, used everywhere an order is opened (Incoming Orders page, dashboard,
-  links from notifications): Overview / Products / Stock check / Timeline tabs, and the three decisions in the footer
-  (Reject · Revise quantity · Check stock & send, see DecisionButtons.jsx).
+  links from notifications): Overview / Products / Stock check / Timeline tabs, and the admin's buttons in the footer
+  (Reject · Revise quantity · Approve while it waits; Send list to Purchase · Send to Production once approved,
+  see DecisionButtons.jsx).
 
   `orderId={null}` keeps it closed; the order is read from the live list by id.
   `tab` / `onTab` are optional: pass them to keep the tab in the URL (the Incoming Orders page does), otherwise the

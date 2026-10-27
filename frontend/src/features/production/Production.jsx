@@ -63,7 +63,8 @@ function MaterialReadiness({ item }) {
   const outstanding = num(item.material_request_outstanding_quantity)
 
   if (workflow.key === "awaiting_approval") {
-    return <div className="space-y-1"><Badge variant="warning">Awaiting approval</Badge><p className="text-xs text-muted-foreground">Operations approval is required</p></div>
+    const approved = item.approval_status === "APPROVED"
+    return <div className="space-y-1"><Badge variant="warning">{workflow.label}</Badge><p className="text-xs text-muted-foreground">{approved ? "The Operations Admin sends it to Production once the stock covers it" : "Operations approval is required"}</p></div>
   }
   if (workflow.key === "bom_review") {
     return <div className="space-y-1"><Badge variant="warning">BOM needs review</Badge><p className="text-xs text-muted-foreground">Component requirements need fixing</p></div>
