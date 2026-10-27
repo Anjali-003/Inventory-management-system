@@ -8,7 +8,7 @@ import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { MktBtn, StatusPill } from "./mktKit"
 import { SPRING_SOFT } from "./mktMotion"
-import { DECIDED_STATUSES, plural, reviewOf, stageOf } from "./orderParts"
+import { DECIDED_STATUSES, declinedOf, plural, reviewOf, stageOf } from "./orderParts"
 
 const SHOW_LINES = 2
 const DECIDED = DECIDED_STATUSES
@@ -16,6 +16,17 @@ const DECIDED = DECIDED_STATUSES
 /* Column 4: decision, approved of requested, the admin who decided and when. */
 function ReviewCell({ o }) {
   const stage = stageOf(o.approval_status)
+  const declined = declinedOf(o)
+
+  if (declined) {
+    return (
+      <div className="max-w-64 space-y-0.5 whitespace-normal">
+        <p className={cn("text-[13px] font-bold", stage.s.ink)}>Cancelled</p>
+        <p className="text-xs text-muted-foreground">You did not accept the reduced quantity</p>
+        {declined.at && <p className="text-xs text-muted-foreground">{declined.by} · {fmtDateTime(declined.at)}</p>}
+      </div>
+    )
+  }
 
   if (!DECIDED.includes(o.approval_status)) {
     const draft = o.approval_status === "DRAFT"

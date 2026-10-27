@@ -8,6 +8,7 @@ export const APPROVAL_META = {
   PENDING_APPROVAL: { variant: "warning", label: "Waiting for approval" },
   APPROVED: { variant: "success", label: "Approved" },
   REJECTED: { variant: "danger", label: "Rejected" },
+  CANCELLED: { variant: "neutral", label: "Cancelled" },
 }
 
 export function ApprovalStatus({ value }) {
@@ -44,10 +45,12 @@ export function OrderLines({ items }) {
 
 /* ---------- order planning (what can be built now / what is short) ---------- */
 
-/** Only an order that waits for a decision can be approved (as a whole) or rejected. */
+/** Only an order that waits for a decision can be rejected or revised. */
 export const isWaiting = (o) => o?.approval_status === "PENDING_APPROVAL"
-export const canApprove = (o) => isWaiting(o)
-export const approveLabel = () => "Check stock & send"
+/** An APPROVED order with units not approved yet (their parts were short): approved again once the parts are in. */
+export const isRest = (o) => o?.approval_status === "APPROVED" && Number(o.remaining_to_approve) > 0
+export const canApprove = (o) => isWaiting(o) || isRest(o)
+export const approveLabel = (o) => (isRest(o) ? "Approve the rest" : "Check stock & send")
 
 /** Totals of one plan: how many units can be made now, how many are left over. */
 export function planTotals(plan) {

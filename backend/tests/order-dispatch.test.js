@@ -180,7 +180,8 @@ describe("getPlan", () => {
   });
 
   it("refuses an order that is already decided", async () => {
-    s.order.approval_status = "APPROVED";
+    // (an APPROVED order stays plannable while units are left to approve: approving the rest)
+    s.order.approval_status = "REJECTED";
     await expect(service.getPlan(7)).rejects.toMatchObject({ status: 409, code: "ALREADY_DECIDED" });
   });
 });

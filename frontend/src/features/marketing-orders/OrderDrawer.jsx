@@ -6,7 +6,7 @@ import { useState } from "react"
 import { useToast } from "@/components/toast"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useUpdateDeliveryDateMutation } from "@/features/order-approvals/orderApprovalsApi"
-import { useAcceptOrderRevisionMutation } from "./marketingOrdersApi"
+import { useAcceptOrderRevisionMutation, useDeclineOrderRevisionMutation } from "./marketingOrdersApi"
 import UserCell from "@/components/UserCell"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
@@ -56,11 +56,13 @@ function Fact({ label, children }) {
 const COPY_TONE = {
   approved: { ring: "border-emerald-200 bg-emerald-50/60", ink: "text-emerald-800", label: "Will be made now" },
   held: { ring: "border-orange-200 bg-orange-50/60", ink: "text-orange-800", label: "Not now · saved as a draft" },
+  // the order was cancelled: the held-back draft was removed with it
+  dropped: { ring: "border-slate-200 bg-slate-50/60", ink: "text-slate-600", label: "Not made · draft removed" },
 }
 
 /* One of the two copies of a revised order: the products with units in `field` (approved | held). */
-function RevisionCopy({ number, field, items }) {
-  const t = COPY_TONE[field]
+function RevisionCopy({ number, field, items, tone = field }) {
+  const t = COPY_TONE[tone]
   const lines = items.filter((i) => Number(i[field]) > 0)
   return (
     <div className={cn("min-w-0 rounded-xl border p-3", t.ring)}>
@@ -99,11 +101,16 @@ function RevisionSection({ order }) {
         {r.remarks && <p className="rounded-xl bg-white/70 px-3 py-2 text-sm leading-snug">{r.remarks}</p>}
         <div className="grid gap-2.5 sm:grid-cols-2">
           <RevisionCopy number={order.order_number} field="approved" items={items} />
-          <RevisionCopy number={r.held_order_number} field="held" items={items} />
+          <RevisionCopy number={r.held_order_number} field="held" items={items} tone={order.approval_status === "CANCELLED" ? "dropped" : "held"} />
         </div>
         {waiting ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-orange-800">
             <Clock3 className="size-4 motion-safe:animate-pulse" aria-hidden /> Waiting for the Marketing Manager to accept
+          </p>
+        ) : r.declined_at ? (
+          <p className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium text-slate-700">
+            <X className="size-4" aria-hidden /> Not accepted by {r.declined_by_name || "Marketing"}: the order was cancelled
+            <span className="font-normal text-muted-foreground">· {fmtDateTime(r.declined_at)}</span>
           </p>
         ) : order.revision_accepted_at ? (
           <p className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium text-emerald-800">
@@ -239,7 +246,8 @@ function OverviewTab({ order }) {
 
       <RevisionSection order={order} />
 
-      <section className="space-y-2.5">
+      {/* a cancelled order needs no review: what happened is in the revision box above */}
+      {order.approval_status !== "CANCELLED" && <section className="space-y-2.5">
         <h3 className="text-sm font-semibold">Operations review</h3>
         {decided ? (
           <div className={cn("space-y-3 rounded-2xl px-4 py-3.5 ring-1 ring-inset", stage.s.soft)}>
@@ -266,7 +274,7 @@ function OverviewTab({ order }) {
                 : "Waiting for the Operations Admin to decide."}
           </p>
         )}
-      </section>
+      </section>}
     </div>
   )
 }
@@ -350,6 +358,7 @@ function timelineRows(order) {
   const status = order.approval_status
   const steps = orderSteps(status)
   const decided = DECIDED_STATUSES.includes(status)
+  const cancelled = status === "CANCELLED"
   const { requested, approved } = reviewOf(order)
 
   const rows = [
@@ -364,11 +373,17 @@ function timelineRows(order) {
       state: steps[2][1],
       sub: decided
         ? fmtWhen(order.approved_by_name || "-", order.approved_at)
-        : status === "QUANTITY_REVISED"
+        : cancelled
+          ? fmtWhen(order.revision?.declined_by_name || "-", order.revision?.declined_at)
+          : status === "QUANTITY_REVISED"
           ? fmtWhen(order.revised_by_name || "-", order.revised_at)
           : status === "PENDING_APPROVAL" ? "Waiting for the Operations Admin" : "Starts after you send the order",
-      extra: decided ? `${fmtQty(approved)} of ${fmtQty(requested)} units approved` : status === "QUANTITY_REVISED" ? "Waiting for Marketing to accept the reduced quantity" : "",
-      remarks: decided ? order.approval_remarks : status === "QUANTITY_REVISED" ? order.revision?.remarks : "",
+      extra: decided
+        ? `${fmtQty(approved)} of ${fmtQty(requested)} units approved`
+        : cancelled
+          ? `You did not accept the reduced quantity (revised by ${order.revised_by_name || "the Operations Admin"}), so the order was cancelled`
+          : status === "QUANTITY_REVISED" ? "Waiting for Marketing to accept the reduced quantity" : "",
+      remarks: decided ? order.approval_remarks : status === "QUANTITY_REVISED" || cancelled ? order.revision?.remarks : "",
     },
   ]
   return rows
@@ -424,6 +439,7 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
   const units = sumQty(order.items)
   const toast = useToast()
   const [acceptRevision, { isLoading: accepting }] = useAcceptOrderRevisionMutation()
+  const [declineRevision, { isLoading: declining }] = useDeclineOrderRevisionMutation()
 
   const accept = async () => {
     try {
@@ -431,6 +447,16 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
       toast.success(`${order.order_number}: revised quantity accepted, back with the Operations Admin`)
     } catch (err) {
       toast.error(errorMessage(err, "Could not accept the revised quantity."))
+    }
+  }
+
+  const decline = async () => {
+    if (!window.confirm(`Do not accept the reduced quantity? Order ${order.order_number} will be cancelled.`)) return
+    try {
+      await declineRevision(order.id).unwrap()
+      toast.success(`${order.order_number} cancelled. The Operations Admin has been told.`)
+    } catch (err) {
+      toast.error(errorMessage(err, "Could not cancel the order."))
     }
   }
 
@@ -575,7 +601,12 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
           <MktBtn onClick={onClose} className={actions ? "sm:me-auto" : undefined}>Close</MktBtn>
           {actions}
           {editable && revised && (
-            <MktBtn variant="primary" disabled={accepting} onClick={accept}>
+            <MktBtn variant="danger" disabled={accepting || declining} onClick={decline}>
+              {declining ? <Loader2 className="animate-spin" /> : <X />} Don&apos;t accept
+            </MktBtn>
+          )}
+          {editable && revised && (
+            <MktBtn variant="primary" disabled={accepting || declining} onClick={accept}>
               {accepting ? <Loader2 className="animate-spin" /> : <Check />} Accept revised quantity
             </MktBtn>
           )}

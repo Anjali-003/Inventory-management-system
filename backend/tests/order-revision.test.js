@@ -144,16 +144,12 @@ describe("Operations Admin revises the quantity", () => {
     expect(s).toEqual(fresh());
   });
 
-  it("only allows what the stock on the shelf can build now", async () => {
-    s.inventory[0].quantity_on_hand = "50.00"; // 50 boards -> at most 50 Smart Controllers
-    await expect(approvals.revise(7, { remarks: "60 now", items: [{ product_id: 1, quantity: 60 }] }, 5))
-      .rejects.toMatchObject({ code: "NOT_ENOUGH_STOCK", extra: { lines: [{ product_id: 1, can_make: 50 }] } });
-    expect(s.orders).toHaveLength(1); // nothing split, nothing changed
-    expect(qtyOf(7)).toEqual({ 1: 100, 2: 40 });
-
-    const order = await approvals.revise(7, { remarks: "50 now", items: [{ product_id: 1, quantity: 50 }] }, 5);
+  it("promises any quantity up to the order, whatever the stock on the shelf (the rest is bought after approval)", async () => {
+    s.inventory[0].quantity_on_hand = "0.00"; // nothing can be built now
+    const order = await approvals.revise(7, { remarks: "60 this month", items: [{ product_id: 1, quantity: 60 }] }, 5);
     expect(order.approval_status).toBe("QUANTITY_REVISED");
-    expect(qtyOf(8)).toEqual({ 1: 50 });
+    expect(qtyOf(7)).toEqual({ 1: 60, 2: 40 });
+    expect(qtyOf(8)).toEqual({ 1: 40 });
   });
 
   it("only revises a waiting marketing order, and only once", async () => {

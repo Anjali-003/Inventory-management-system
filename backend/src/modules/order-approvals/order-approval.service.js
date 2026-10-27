@@ -12,11 +12,15 @@ const { planOrder } = require("./order-planner");
     A decision is final: only PENDING_APPROVAL orders can be decided (row is locked, so a double click or two
     admins deciding at once can never decide the same order twice).
 
-    There is no partial approval: an order is approved as a whole or rejected. The admin sees the producible quantities
-    and component shortages. On approval, the required inventory for currently producible quantities is deducted immediately
-    and recorded in the stock ledger; those deducted materials are later physically handed over by Store when Production
-    submits material requests. Missing components for the rest of the order go to the Purchase Manager. Store allotment does
-    not deduct inventory again. Rejecting is only possible while the order is PENDING_APPROVAL.
+    The admin sees the producible quantities and component shortages. On approval, the required inventory for currently
+    producible quantities is deducted immediately and recorded in the stock ledger; those deducted materials are later
+    physically handed over by Store when Production submits material requests (never more than was approved, see
+    material-request.service.js). Missing components for the rest of the order go to the Purchase Manager. Store allotment
+    does not deduct inventory again. Rejecting is only possible while the order is PENDING_APPROVAL.
+
+    Approving the rest: an APPROVED order with units not approved yet (their parts were short) stays open. Once the
+    purchase is in the store, the admin approves the rest the same way (dispatch, next round): what the stock covers now
+    goes to Production and is deducted. The purchase list was sent with the first approval, so later rounds send none.
 
     Dispatch (the normal way to approve): while an order waits, the admin sees what can be built from the stock on the shelf
     (getPlan). dispatch() then approves it and records two lists in the same transaction: the producible quantities
@@ -47,9 +51,11 @@ const { planOrder } = require("./order-planner");
     requested / approved / held per product. An order can be revised once; it moves no stock.
 */
 
-const APPROVAL_STATUSES = ["PENDING_APPROVAL", "QUANTITY_REVISED", "APPROVED", "REJECTED"]; // DRAFT is marketing-only: never listed here
+const APPROVAL_STATUSES = ["PENDING_APPROVAL", "QUANTITY_REVISED", "APPROVED", "REJECTED", "CANCELLED"]; // DRAFT is marketing-only: never listed here
 const MAX_REMARKS = 500;
 const APPROVABLE = ["PENDING_APPROVAL"]; // statuses an order can be approved from
+// an APPROVED order can be approved again for the units not approved yet (approving the rest)
+const approvableNow = (status) => APPROVABLE.includes(status) || status === "APPROVED";
 
 const ORDER_SELECT = `
     SELECT
@@ -142,8 +148,12 @@ async function withItems(conn, orders) {
 
     return orders.map((o) => {
         const lines = byOrder.get(o.id) || [];
+        const approvedUnits = (production.get(o.id)?.items || []).reduce((s, i) => s + i.quantity, 0);
+        const orderedUnits = lines.reduce((s, l) => s + l.quantity, 0);
         return {
             ...o,
+            // units of an APPROVED order not approved yet (their parts were short): the admin approves them once the parts are in
+            remaining_to_approve: o.approval_status === "APPROVED" ? Math.max(0, orderedUnits - approvedUnits) : 0,
             // { remarks, held_order_id, held_order_number, items: [{ product_id, sku, name, requested, approved, held }] } or null
             revision: asObject(o.revision),
             items: lines,
@@ -261,7 +271,7 @@ const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
     One decision, every department it concerns: Marketing hears the outcome of its own order, Production gets the
     products it can build now and Purchase the components to buy. Saved inside the decision's transaction.
 */
-async function notifyDecision(conn, orderId, { approved, remarks, productionLines = [], shortages = [], userId }) {
+async function notifyDecision(conn, orderId, { approved, remarks, productionLines = [], shortages = [], userId, rest = false }) {
     const [rows] = await conn.query(
         `SELECT o.order_number, u.role AS creator_role FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ?`,
         [orderId]
@@ -269,7 +279,8 @@ async function notifyDecision(conn, orderId, { approved, remarks, productionLine
     const number = (rows[0] && rows[0].order_number) || `#${orderId}`;
     const common = { orderId, userId, payload: { order_number: number } };
 
-    if (rows[0] && rows[0].creator_role === "MARKETING_MANAGER") {
+    // approving the rest tells Production only: Marketing heard the decision with the first approval
+    if (!rest && rows[0] && rows[0].creator_role === "MARKETING_MANAGER") {
         await notifications.notify(conn, approved
             ? { ...common, role: "MARKETING_MANAGER", type: "ORDER_APPROVED", severity: "success", link: `/marketing-orders?order=${orderId}`,
                 title: `Order ${number} approved`, body: remarks || "The Operations Admin approved your order. It is moving to production." }
@@ -279,8 +290,10 @@ async function notifyDecision(conn, orderId, { approved, remarks, productionLine
     if (approved && productionLines.length) {
         await notifications.notify(conn, {
             ...common, role: "PRODUCTION_MANAGER", type: "PRODUCTION_ASSIGNED", severity: "action", link: "/production",
-            title: `Order ${number} is ready for production`,
-            body: `${count(productionLines.length, "product")} approved to build. Request the materials from the store to start.`,
+            title: rest ? `More of order ${number} can be built` : `Order ${number} is ready for production`,
+            body: rest
+                ? `The parts are in: ${productionLines.map((l) => `${l.can_make} ${l.name || "units"}`).join(", ")} more approved to build. Request the materials from the store.`.slice(0, 500)
+                : `${count(productionLines.length, "product")} approved to build. Request the materials from the store to start.`,
         });
     }
     if (approved && shortages.length) {
@@ -357,8 +370,20 @@ async function computePlan(conn, orderId, { lock = false } = {}) {
     );
     if (items.length === 0) throw AppError.conflict("This order has no products.", "NO_ITEMS");
 
-    // Only an order that still waits for a decision is planned, so every ordered unit is open.
-    const openItems = items.map((item) => ({ ...item, quantity: Number(item.quantity), ordered_total: Number(item.quantity), already_approved: 0 }));
+    // open units = ordered - already approved (0 for an order that still waits; the rest for an APPROVED order)
+    const [approvedRows] = await conn.query(
+        `SELECT product_id, SUM(quantity) AS quantity FROM order_production_items WHERE order_id = ? GROUP BY product_id`,
+        [orderId]
+    );
+    const approvedOf = new Map(approvedRows.map((r) => [r.product_id, Number(r.quantity)]));
+    const openItems = items
+        .map((item) => {
+            const ordered = Number(item.quantity);
+            const already = Math.min(ordered, approvedOf.get(item.product_id) || 0);
+            return { ...item, quantity: ordered - already, ordered_total: ordered, already_approved: already };
+        })
+        .filter((item) => item.quantity > 0);
+    if (openItems.length === 0) throw AppError.conflict("Every unit of this order is already approved.", "NOTHING_LEFT");
 
     const [bomRows] = await conn.query(
         `SELECT pb.product_id, pb.component_id, pb.quantity_required, c.sku, c.name, c.unit
@@ -403,7 +428,7 @@ async function computePlan(conn, orderId, { lock = false } = {}) {
         ...plan,
         // products that DO have BOM lines but at least one line has no quantity (planner treats them as missing_bom)
         incomplete_bom: plan.missing_bom.filter((id) => blankLines[id]).map((id) => ({ product_id: id, components: blankLines[id] })),
-        // `ordered` = units of the order; ordered_total / already_approved are kept for older clients (always the same / 0)
+        // `ordered` = units still to approve; ordered_total = units of the order; already_approved = sent to Production before
         lines: plan.lines.map((l, index) => ({
             ...l,
             sku: byProduct.get(l.product_id).sku,
@@ -420,7 +445,7 @@ async function getPlan(orderId, conn = db) {
     // already out of date and the dispatch that uses it is refused (STALE_ROUND) rather than applied to a newer plan.
     const [rows] = await conn.query(`SELECT approval_status, approval_round FROM orders WHERE id = ?`, [orderId]);
     if (rows.length === 0) throw AppError.notFound("Order not found", "NOT_FOUND");
-    if (!APPROVABLE.includes(rows[0].approval_status)) {
+    if (!approvableNow(rows[0].approval_status)) {
         throw AppError.conflict("This order has already been decided. Refresh the page.", "ALREADY_DECIDED");
     }
     const plan = await computePlan(conn, orderId);
@@ -479,8 +504,10 @@ async function issueApprovedMaterials(conn, orderId, productionLines, userId, ro
 
 async function saveApprovalRequests(conn, orderId, plan, userId, producible = plan.lines.filter((line) => line.can_make > 0)) {
     if (producible.length) {
+        // one row per order + product: approving the rest adds to it
         await conn.query(
-            `INSERT INTO order_production_items (order_id, product_id, quantity, sent_by) VALUES ?`,
+            `INSERT INTO order_production_items (order_id, product_id, quantity, sent_by) VALUES ?
+             ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity)`,
             [producible.map((line) => [orderId, line.product_id, line.can_make, userId])]
         );
     }
@@ -530,11 +557,17 @@ async function dispatch(orderId, body, userId, opts) {
     return inGuardedTransaction(guard, async (conn) => {
         const [rows] = await conn.query(`SELECT id, approval_status, approval_round FROM orders WHERE id = ? FOR UPDATE`, [orderId]);
         if (rows.length === 0) throw AppError.notFound("Order not found", "NOT_FOUND");
-        if (!APPROVABLE.includes(rows[0].approval_status)) {
+        if (!approvableNow(rows[0].approval_status)) {
             throw AppError.conflict("This order has already been decided. Refresh the page.", "ALREADY_DECIDED");
+        }
+        // approving the rest: Production only, the purchase list went out with the first approval
+        const rest = rows[0].approval_status === "APPROVED";
+        if (rest && sentProduction.size === 0) {
+            throw new AppError(422, "Nothing more can be made yet: wait until the parts are in the store.", "VALIDATION");
         }
         assertCurrentRound(rows[0], guard.expectedRound);
         const plan = await computePlan(conn, orderId, { lock: true });
+        if (rest) plan.shortages = [];
         const expectedPurchase = new Map(plan.shortages.map((s) => [s.component_id, toCents(s.shortage)]));
 
         const availableByProduct = new Map(plan.lines.map((line) => [line.product_id, line]));
@@ -565,15 +598,18 @@ async function dispatch(orderId, body, userId, opts) {
         const round = (Number(rows[0].approval_round) || 0) + 1;
         await saveApprovalRequests(conn, orderId, plan, userId, selectedProduction);
         await issueApprovedMaterials(conn, orderId, selectedProduction, userId, round);
-        const [saved] = await conn.query(
-            `UPDATE orders
-             SET approval_status = ?, approval_remarks = ?, approved_by = ?, approved_at = NOW(),
-                 inventory_issued_at = COALESCE(inventory_issued_at, NOW()), approval_round = ?
-             WHERE id = ?`,
-            ["APPROVED", remarks, userId, round, orderId]
-        );
+        // the first approval is the decision (who / when / remarks); a later round only moves the round on
+        const [saved] = rest
+            ? await conn.query(`UPDATE orders SET approval_round = ? WHERE id = ?`, [round, orderId])
+            : await conn.query(
+                `UPDATE orders
+                 SET approval_status = ?, approval_remarks = ?, approved_by = ?, approved_at = NOW(),
+                     inventory_issued_at = COALESCE(inventory_issued_at, NOW()), approval_round = ?
+                 WHERE id = ?`,
+                ["APPROVED", remarks, userId, round, orderId]
+            );
         assertSaved(saved);
-        await notifyDecision(conn, orderId, { approved: true, remarks, productionLines: selectedProduction, shortages: plan.shortages, userId });
+        await notifyDecision(conn, orderId, { approved: true, remarks, productionLines: selectedProduction, shortages: plan.shortages, userId, rest });
         return getOrder(orderId, conn);
     });
 }
@@ -600,9 +636,10 @@ function parseRevisedItems(raw) {
 
 /*
     POST /order-approvals/:id/revise  { items: [{ product_id, quantity }], remarks }
-    quantity = what the admin will make now (a product left out keeps its full quantity); it must be buildable from the
-    stock available right now (same planner as GET .../plan), else 409 NOT_ENOUGH_STOCK. Splits the order: the original
-    keeps those quantities and goes to QUANTITY_REVISED (waits for Marketing), the rest becomes a new marketing DRAFT.
+    quantity = what the admin promises to make (a product left out keeps its full quantity), anything up to what was
+    ordered: the admin's own call, not tied to the stock on the shelf. What the stock cannot cover is bought after
+    approval. Splits the order: the original keeps those quantities and goes to QUANTITY_REVISED (waits for Marketing),
+    the rest becomes a new marketing DRAFT.
 */
 async function revise(orderId, body, userId) {
     const remarks = parseRemarks(body && body.remarks, { required: true, missing: "Tell the Marketing Manager why the quantity is reduced (at least 3 characters)" });
@@ -654,18 +691,6 @@ async function revise(orderId, body, userId) {
         for (const i of items) {
             if (i.approved === 0) await conn.query(`DELETE FROM order_items WHERE id = ?`, [i.line_id]);
             else if (i.held > 0) await conn.query(`UPDATE order_items SET quantity = ? WHERE id = ?`, [i.approved, i.line_id]);
-        }
-
-        // what will be made must come from the stock on the shelf now: plan the reduced order (shared components
-        // counted once) and refuse if any line cannot be built in full. Nothing is reserved; the transaction rolls back.
-        const check = await computePlan(conn, orderId);
-        const short = check.lines.filter((l) => l.remaining > 0);
-        if (short.length) {
-            throw AppError.conflict(
-                `Not enough stock: ${short.map((l) => `${l.name} can make only ${l.can_make}`).join(", ")}. Check the quantities and try again.`,
-                "NOT_ENOUGH_STOCK",
-                { lines: short.map((l) => ({ product_id: l.product_id, can_make: l.can_make })) }
-            );
         }
 
         // 2) the held-back part: a new marketing draft owned by the same Marketing Manager

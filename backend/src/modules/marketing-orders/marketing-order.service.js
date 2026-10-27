@@ -154,4 +154,45 @@ async function acceptRevision(orderId, userId) {
     });
 }
 
-module.exports = { listOrders, productOptions, createDraft, send, removeDraft, acceptRevision };
+/*
+    The Marketing Manager does not agree to the reduced quantity: the order is cancelled, together with the held-back
+    draft the revision split off (if it was not sent yet), and the Operations Admin is told. Nothing was approved, so
+    no stock moves.
+*/
+async function declineRevision(orderId, userId) {
+    return inventory.inTransaction(async (conn) => {
+        const [rows] = await conn.query(
+            `SELECT o.id, o.order_number, o.approval_status, u.role AS creator_role
+             FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ? FOR UPDATE`,
+            [orderId]
+        );
+        if (rows.length === 0 || rows[0].creator_role !== "MARKETING_MANAGER") throw AppError.notFound("Order not found", "NOT_FOUND");
+        if (rows[0].approval_status !== "QUANTITY_REVISED") {
+            throw AppError.conflict("This order is not waiting for your answer on a revised quantity. Refresh the page.", "NOT_REVISED");
+        }
+        // who said no and when go into the revision, next to who revised it (shown on both timelines)
+        await conn.query(
+            `UPDATE orders
+             SET approval_status = 'CANCELLED', approval_remarks = ?,
+                 revision = JSON_SET(revision, '$.declined_at', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'),
+                                     '$.declined_by_name', (SELECT name FROM users WHERE id = ?))
+             WHERE id = ?`,
+            ["Marketing did not accept the revised quantity", userId, orderId]
+        );
+        await conn.query(`DELETE FROM orders WHERE parent_order_id = ? AND approval_status = 'DRAFT'`, [orderId]); // order_items cascade
+        await notifications.notify(conn, {
+            role: "OPERATIONS_ADMIN",
+            type: "REVISION_DECLINED",
+            title: `Order ${rows[0].order_number} cancelled`,
+            body: "Marketing did not accept the reduced quantity, so the order was cancelled.",
+            severity: "warning",
+            link: `/order-approvals?order=${orderId}`,
+            orderId,
+            payload: { order_number: rows[0].order_number },
+            userId,
+        });
+        return approvals.getOrder(orderId, conn);
+    });
+}
+
+module.exports = { listOrders, productOptions, createDraft, send, removeDraft, acceptRevision, declineRevision };

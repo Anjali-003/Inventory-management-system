@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { PackageCheck, Scale, X } from "lucide-react"
 import { MktBtn } from "@/features/marketing-orders/mktKit"
-import { approveLabel, canApprove, planTotals } from "./approvalParts"
+import { approveLabel, canApprove, isRest } from "./approvalParts"
 
 /*
   The Operations Admin's three decisions on a waiting order, the SAME everywhere (the order drawer on the Incoming
@@ -23,7 +23,6 @@ export function reviseBlockReason(o, plan) {
   if (o.created_by_role !== "MARKETING_MANAGER") return "Only orders raised by the Marketing Manager can be revised."
   if (o.revision) return "The quantity of this order was already revised once."
   if (plan?.missing_bom?.length) return "Complete the bill of materials first."
-  if (plan && planTotals(plan).canMake === 0) return "Nothing can be built from the current stock, so there is nothing to make now."
   return null
 }
 
@@ -50,16 +49,18 @@ export function DecisionButtons({ order, plan, onDecide, current = null, disable
   if (!order || !canApprove(order)) return null
   const rejectWhy = rejectBlockReason(order)
   const reviseWhy = reviseBlockReason(order, plan)
+  // approving the rest of an approved order: that is the only decision left
+  const rest = isRest(order)
   return (
     <>
-      {current !== "reject" && (
+      {!rest && current !== "reject" && (
         <Blockable reason={rejectWhy}>
           <MktBtn size={size} variant="danger" disabled={disabled || !!rejectWhy} aria-label={`Reject ${order.order_number}`} onClick={() => onDecide("reject")}>
             <X /> Reject
           </MktBtn>
         </Blockable>
       )}
-      {current !== "revise" && (
+      {!rest && current !== "revise" && (
         <Blockable reason={reviseWhy}>
           <MktBtn size={size} disabled={disabled || !!reviseWhy} aria-label={`Revise the quantity of ${order.order_number}`} onClick={() => onDecide("revise")}>
             <Scale /> Revise quantity

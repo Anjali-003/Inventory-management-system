@@ -15,7 +15,8 @@ import { SPRING, SPRING_SOFT } from "./mktMotion"
   dashboard can simply link to ordersHref("APPROVED") and the page opens already filtered.
 
   Every stage has ONE colour family, used everywhere (tiles, chips, pills, bars, timeline):
-    Draft = amber   Waiting = sky   Approved = emerald   Rejected = rose   All = violet
+    Draft = amber   Waiting = sky   Approved = emerald   Rejected = rose   Cancelled = slate   All = violet
+  Rejected = the Operations Admin said no. Cancelled = Marketing did not accept the reduced quantity.
   `s` holds the full Tailwind class strings (kept whole, so Tailwind can see them).
 */
 
@@ -51,6 +52,14 @@ export const STAGES = [
     s: {
       grad: "from-rose-600 to-red-800", glow: "shadow-red-500/30", soft: "bg-rose-50 ring-rose-200/70",
       pill: "bg-rose-50 text-rose-800 ring-rose-200", ink: "text-rose-700",
+    },
+  },
+  {
+    status: "CANCELLED", label: "Cancelled", short: "Cancelled", icon: XCircle, tone: "slate", dotTone: "neutral",
+    bar: "bg-gradient-to-r from-slate-500 to-slate-700", dot: "bg-slate-400", hint: "Marketing did not accept the reduced quantity",
+    s: {
+      grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/30", soft: "bg-slate-50 ring-slate-200/70",
+      pill: "bg-slate-100 text-slate-700 ring-slate-200", ink: "text-slate-600",
     },
   },
 ]
@@ -192,6 +201,8 @@ export function orderSteps(status) {
       return [["Created", "done"], ["Sent to admin", "done"], ["Approved", "done"]]
     case "REJECTED":
       return [["Created", "done"], ["Sent to admin", "done"], ["Rejected", "fail"]]
+    case "CANCELLED":
+      return [["Created", "done"], ["Sent to admin", "done"], ["Cancelled", "fail"]]
     default:
       return [["Created", "done"], ["Sent to admin", "current"], ["Decision", "todo"]]
   }
@@ -322,6 +333,10 @@ export function OrderTimeline({ order }) {
 /* ------------------------------------------------------------ review numbers (table + drawer) */
 
 export const DECIDED_STATUSES = ["APPROVED", "REJECTED"]
+
+/* Who closed a CANCELLED order and when: Marketing, saying no to the reduced quantity (kept in the revision). null otherwise. */
+export const declinedOf = (o) =>
+  o?.approval_status === "CANCELLED" ? { by: o.revision?.declined_by_name || "Marketing", at: o.revision?.declined_at || null } : null
 export const sumQty = (lines = []) => lines.reduce((s, l) => s + Number(l.quantity || 0), 0)
 
 /*

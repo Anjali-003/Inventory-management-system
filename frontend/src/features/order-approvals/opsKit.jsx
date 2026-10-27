@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { MktBtn, StatusPill } from "@/features/marketing-orders/mktKit"
 import { PRESS_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
-import { ALL_STAGE, OrderSteps, STAGES, plural, stageOf } from "@/features/marketing-orders/orderParts"
+import { ALL_STAGE, OrderSteps, STAGES, declinedOf, plural, stageOf } from "@/features/marketing-orders/orderParts"
 import { timeAgo } from "@/features/activity/time"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -30,6 +30,7 @@ const HINT = {
   PENDING_APPROVAL: "Needs your decision",
   APPROVED: "Lists sent to Production / Purchase",
   REJECTED: "With the reason you gave",
+  CANCELLED: "Marketing did not accept your reduced quantity",
 }
 
 export const OPS_STAGES = STAGES.filter((s) => s.status !== "DRAFT").map((s) => ({ ...s, hint: HINT[s.status] ?? s.hint }))
@@ -52,23 +53,24 @@ export const productsSummary = (items = []) => (items.length === 0 ? "No product
 export const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
 export const isDecided = (o) => ["APPROVED", "REJECTED"].includes(o.approval_status)
 
-/** Small line under a status: the quantity was revised (and maybe accepted by Marketing). */
+/** Small line under a status: the quantity was revised (and maybe accepted, or not, by Marketing). */
 export function RevisionTag({ order, className }) {
   if (!order?.revision) return null
   const accepted = Boolean(order.revision_accepted_at)
+  const declined = Boolean(order.revision.declined_at) || order.approval_status === "CANCELLED"
   return (
-    <span className={cn("mt-1 block text-[11px] font-medium leading-snug", accepted ? "text-emerald-700" : "text-orange-700", className)}>
-      {accepted ? "Marketing accepted revised qty" : "Qty revised, waiting for Marketing"}
+    <span className={cn("mt-1 block text-[11px] font-medium leading-snug", accepted ? "text-emerald-700" : declined ? "text-slate-600" : "text-orange-700", className)}>
+      {accepted ? "Marketing accepted revised qty" : declined ? "Marketing did not accept revised qty" : "Qty revised, waiting for Marketing"}
     </span>
   )
 }
 
 /* -------------------------------------------------------------------- tiles */
 
-/** The grid of figures. Children are <StageTile/>; they rise in one after another. Three stages + "All" = four tiles. */
+/** The grid of figures. Children are <StageTile/>; they rise in one after another. Four stages + "All" = five tiles. */
 export function OpsTileGrid({ children, className }) {
   return (
-    <motion.div variants={stagger(0.06, 0.05)} initial="hidden" animate="show" className={cn("grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4", className)}>
+    <motion.div variants={stagger(0.06, 0.05)} initial="hidden" animate="show" className={cn("grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-5", className)}>
       {children}
     </motion.div>
   )
@@ -210,6 +212,12 @@ export function ApprovalPageCard({ order: o, canAct, onOpen, onReview }) {
 
         <OrderSteps status={o.approval_status} className="mt-4" />
 
+        {declinedOf(o) && (
+          <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
+            <UserCell name={declinedOf(o).by} sub={declinedOf(o).at ? fmtDateTime(declinedOf(o).at) : "Marketing"} />
+            <p className="mt-1.5 text-xs leading-snug text-foreground/80">Did not accept the reduced quantity, so the order was cancelled.</p>
+          </div>
+        )}
         {isDecided(o) && (
           <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
             <UserCell name={o.approved_by_name} sub={fmtDateTime(o.approved_at)} />
@@ -278,6 +286,15 @@ export function ApprovalList({ orders, onOpen }) {
 
 /* "Who decided it, when, and why": the Decision column of the table. */
 export function DecisionCell({ order }) {
+  const declined = declinedOf(order)
+  if (declined) {
+    return (
+      <div className="space-y-0.5">
+        <UserCell name={declined.by} sub={declined.at ? fmtDateTime(declined.at) : "Marketing"} />
+        <p className="max-w-64 whitespace-normal text-xs text-muted-foreground">Did not accept the reduced quantity</p>
+      </div>
+    )
+  }
   if (!isDecided(order)) return <span className="text-muted-foreground">-</span>
   return (
     <div className="space-y-0.5">

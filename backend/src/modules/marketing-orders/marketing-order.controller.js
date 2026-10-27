@@ -10,5 +10,6 @@ module.exports = {
     create: asyncHandler(async (req, res) => res.status(201).json(await service.createDraft(req.body, req.user.id)), { message: "Failed to save the order" }),
     send: asyncHandler(async (req, res) => res.json(await service.send(idOf(req), req.user.id)), { message: "Failed to send the order" }),
     acceptRevision: asyncHandler(async (req, res) => res.json(await service.acceptRevision(idOf(req), req.user.id)), { message: "Failed to accept the revised quantity" }),
+    declineRevision: asyncHandler(async (req, res) => res.json(await service.declineRevision(idOf(req), req.user.id)), { message: "Failed to cancel the order" }),
     remove: asyncHandler(async (req, res) => res.json(await service.removeDraft(idOf(req))), { message: "Failed to delete the order" }),
 };

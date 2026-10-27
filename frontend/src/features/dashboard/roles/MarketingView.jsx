@@ -277,7 +277,7 @@ export default function MarketingView() {
         />
       )}
 
-      <TileGrid>
+      <TileGrid className="md:grid-cols-3 xl:grid-cols-6">
         {tiles.map((t) => (
           <StageTile key={t.key} solid stage={t.stage} value={t.value} loading={isLoading} to={t.to} className={t.className} />
         ))}

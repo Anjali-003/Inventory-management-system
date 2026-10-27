@@ -68,6 +68,17 @@ function buildEvents(order) {
       remarks: rev.remarks,
     });
   }
+  // a cancelled order was always a revision Marketing said no to (older ones may not have who / when saved)
+  if (rev?.declined_at || (rev && status === "CANCELLED")) {
+    events.push({
+      key: "revision-declined",
+      title: "Marketing did not accept the revised quantity",
+      state: "fail",
+      at: rev.declined_at,
+      sub: who(rev.declined_by_name || "Marketing", rev.declined_at),
+      detail: "The order was cancelled.",
+    });
+  }
   if (order.revision_accepted_at) {
     events.push({
       key: "revision-accepted",

@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { errorMessage, fmtQty } from "@/lib/stock"
 import { useIdempotentSubmit } from "@/lib/useIdempotentSubmit"
 import { cn } from "@/lib/utils"
-import { planTotals, planVerdict } from "./approvalParts"
+import { isRest, planTotals, planVerdict } from "./approvalParts"
 import { BomBlockModal } from "./BomWarning"
 import { DecisionButtons } from "./DecisionButtons"
 import { useDispatchOrderMutation, useGetOrderPlanQuery } from "./orderApprovalsApi"
@@ -66,7 +66,9 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
 
   const names = Object.fromEntries(order.items.map((i) => [i.product_id, i]))
   const lines = plan?.lines || []
-  const shortages = plan?.shortages || []
+  // approving the rest: Production only, the purchase list went out with the first approval
+  const rest = isRest(order)
+  const shortages = rest ? [] : plan?.shortages || []
 
   // No partial approval: the order is approved as a whole. What the stock covers now goes to production (not editable).
   const toProduction = lines
@@ -75,7 +77,7 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
   const { ordered, canMake } = planTotals(plan)
   const selectedTotal = toProduction.reduce((sum, line) => sum + line.approved_quantity, 0)
   const verdict = plan ? planVerdict(plan) : null
-  const nothingToSend = selectedTotal === 0 && shortages.length === 0
+  const nothingToSend = rest ? selectedTotal === 0 : selectedTotal === 0 && shortages.length === 0
 
   const submit = async (e) => {
     e.preventDefault()
@@ -94,9 +96,11 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
       if (toProduction.length) parts.push("Production Manager")
       if (shortages.length) parts.push("Purchase Manager")
       toast.success(
-        parts.length
-          ? `${order.order_number} approved. Sent to ${parts.join(" and ")}${selectedTotal ? `; BOM for ${selectedTotal} units issued to inventory` : ""}.`
-          : `${order.order_number} approved.`
+        rest
+          ? `${order.order_number}: ${selectedTotal} more units sent to Production.`
+          : parts.length
+            ? `${order.order_number} approved. Sent to ${parts.join(" and ")}${selectedTotal ? `; BOM for ${selectedTotal} units issued to inventory` : ""}.`
+            : `${order.order_number} approved.`
       )
       onClose()
     } catch (err) {
@@ -115,15 +119,17 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
       onSubmit={submit}
       busy={sending}
       size="xl"
-      title={`Send ${order.order_number} on`}
-      description="Approving sends what the stock can build to Production and the components to buy to Purchase, in one step. Open a list below to check it."
+      title={rest ? `Approve the rest of ${order.order_number}` : `Send ${order.order_number} on`}
+      description={rest
+        ? "Parts have come in. What the stock can build now of the units not approved yet goes to Production, and its stock is deducted."
+        : "Approving sends what the stock can build to Production and the components to buy to Purchase, in one step. Open a list below to check it."}
       footer={
         <>
           <MktBtn onClick={onClose} disabled={sending} className="sm:me-auto">Close</MktBtn>
           {onSwitch && <DecisionButtons order={order} plan={plan} current="plan" disabled={sending} onDecide={onSwitch} />}
           <MktBtn type="submit" variant="primary" disabled={sending || isLoading || isFetching || !plan || nothingToSend}>
             {sending && <Loader2 className="animate-spin" />}
-            Approve order & send lists
+            {rest ? (nothingToSend ? "Nothing can be made yet" : `Send ${fmtQty(selectedTotal)} more to Production`) : "Approve order & send lists"}
           </MktBtn>
         </>
       }
@@ -159,7 +165,7 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
                 </div>
                 <div className="shrink-0 text-end">
                   <p className="text-[26px] font-bold leading-none tracking-[-0.04em] tabular-nums">{fmtQty(ordered)}</p>
-                  <p className="mt-1 text-[11px] text-white/95">ordered · {fmtQty(canMake)} can be made now</p>
+                  <p className="mt-1 text-[11px] text-white/95">{rest ? "still to approve" : "ordered"} · {fmtQty(canMake)} can be made now</p>
                 </div>
               </div>
             </motion.div>
@@ -192,7 +198,7 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
               </div>
             </Section>
 
-            <Section
+            {!rest && <Section
               icon={ShoppingCart}
               title={shortages.length ? `To Purchase: ${shortages.length} component${shortages.length === 1 ? "" : "s"} to buy` : "To Purchase: nothing to buy"}
               hint="Required for the whole order, minus what is in stock."
@@ -228,9 +234,9 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
                   </Table>
                 </div>
               )}
-            </Section>
+            </Section>}
 
-            <Field label="Remarks (optional)" htmlFor="plan-remarks">
+            {!rest && <Field label="Remarks (optional)" htmlFor="plan-remarks">
               <textarea
                 id="plan-remarks"
                 rows={2}
@@ -240,7 +246,7 @@ export default function OrderPlanModal({ order, onClose, onSwitch }) {
                 placeholder="Anything the Production or Purchase Manager should know"
                 className="w-full rounded-[10px] border border-cf-line-strong bg-card px-3 py-2 text-base outline-none sm:text-[13px] transition-shadow placeholder:text-cf-faint focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15"
               />
-            </Field>
+            </Field>}
           </>
         )}
       </div>

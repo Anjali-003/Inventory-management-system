@@ -17,7 +17,7 @@ import OrderDrawer from "./OrderDrawer"
 import OrdersTable from "./OrdersTable"
 import { HeroButton, MktBtn, MktHero, NewOrderFab, SearchField, StageChips, StageTile, StatusSelect, StatusPill, TileGrid } from "./mktKit"
 import { PRESS_SOFT, rise, stagger } from "./mktMotion"
-import { ALL_STAGE, OrderSteps, STAGES, countByStatus, isDrawerTab, isStatus, newestFirst, plural, stageOf } from "./orderParts"
+import { ALL_STAGE, OrderSteps, STAGES, countByStatus, declinedOf, isDrawerTab, isStatus, newestFirst, plural, stageOf } from "./orderParts"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "./marketingOrdersApi"
 
 const EMPTY = []
@@ -86,6 +86,12 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
 
         <OrderSteps status={o.approval_status} className="mt-4" />
 
+        {declinedOf(o) && (
+          <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
+            <UserCell name={declinedOf(o).by} sub={declinedOf(o).at ? fmtDateTime(declinedOf(o).at) : ""} />
+            <p className="mt-1.5 text-xs leading-snug text-foreground/80">Did not accept the reduced quantity, so the order was cancelled.</p>
+          </div>
+        )}
         {isDecided(o) && (
           <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
             <UserCell name={o.approved_by_name} sub={fmtDateTime(o.approved_at)} />
@@ -225,7 +231,7 @@ export default function MarketingOrders() {
 
       {/* filter: chips on a phone, tiles on tablets, a dropdown (in the bar below) on desktop */}
       <div className="hidden md:block lg:hidden">
-        <TileGrid>
+        <TileGrid className="md:grid-cols-3 xl:grid-cols-6">
           {filters.map((f) => (
             <StageTile
               key={f.key}

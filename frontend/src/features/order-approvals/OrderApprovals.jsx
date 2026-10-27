@@ -26,6 +26,7 @@ import {
 import { stagger } from "@/features/marketing-orders/mktMotion";
 import {
   countByStatus,
+  declinedOf,
   reviewOf,
   newestFirst,
   plural,
@@ -135,6 +136,20 @@ function FeasibilityCell({ orderId }) {
 }
 
 function ReviewCell({ order, actions }) {
+  const declined = declinedOf(order);
+  if (declined) {
+    return (
+      <div className="space-y-0.5">
+        <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-600">
+          Cancelled by Marketing
+        </span>
+        <UserCell name={declined.by} sub={declined.at ? fmtDateTime(declined.at) : ""} />
+        <p className="max-w-64 whitespace-normal text-xs text-muted-foreground">
+          Did not accept the reduced quantity
+        </p>
+      </div>
+    );
+  }
   if (!isDecided(order)) {
     return (
       <div className="space-y-1.5">
@@ -177,6 +192,14 @@ function ReviewCell({ order, actions }) {
             </>
           )}
         </p>
+      )}
+      {approved && order.remaining_to_approve > 0 && (
+        <div className="space-y-1.5 pt-1">
+          <p className="text-xs font-semibold text-warning">
+            {fmtQty(order.remaining_to_approve)} units still to approve (waiting for parts)
+          </p>
+          {actions}
+        </div>
       )}
       {order.approval_remarks && (
         <p className="line-clamp-2 max-w-64 whitespace-normal text-xs text-muted-foreground">
@@ -239,14 +262,15 @@ export default function OrderApprovals() {
     error,
     refetch,
   } = useGetOrderApprovalsQuery();
-  const counts = useMemo(() => countByStatus(data), [data]);
+  // "Needs your decision" also holds approved orders whose rest can be approved now that parts came in
+  const counts = useMemo(() => ({ ...countByStatus(data), [QUEUE]: data.filter(canApprove).length }), [data]);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...data]
       .sort(newestFirst)
       .filter(
         (o) =>
-          (!status || o.approval_status === status) &&
+          (!status || (status === QUEUE ? canApprove(o) : o.approval_status === status)) &&
           (!q ||
             o.order_number.toLowerCase().includes(q) ||
             (o.created_by_name || "").toLowerCase().includes(q) ||
