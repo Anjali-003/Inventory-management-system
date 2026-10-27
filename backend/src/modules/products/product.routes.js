@@ -14,6 +14,7 @@ router.post("/import", resolveUser, controller.importMany);
 router.get("/:id", controller.getOne);
 
 router.get("/:id/bom", controller.getBom);
+router.put("/:id/price", controller.setPrice); // the selling price (without GST)
 router.put("/:id/bom", controller.saveBom);
 router.post("/:id/bom/import", controller.importBom);
 

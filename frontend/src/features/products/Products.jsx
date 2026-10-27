@@ -20,6 +20,51 @@ import BomEditorModal from "./components/BomEditorModal"
 import { productsApi, useGetProductsQuery } from "./productsApi"
 
 const EMPTY = []
+const rupees = (n) => `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+
+/* The product's selling price (without GST): shown, and changed in place. Order values are worked out from it. */
+function PriceCell({ product, onSaved }) {
+  const toast = useToast()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState("")
+  const [saving, setSaving] = useState(false)
+  const has = product.selling_price !== null && product.selling_price !== undefined
+
+  const start = () => { setValue(has ? String(Number(product.selling_price)) : ""); setEditing(true) }
+  const save = async (e) => {
+    e.preventDefault()
+    try {
+      setSaving(true)
+      const r = await productsService.setPrice(product.id, value.trim() === "" ? null : value.trim())
+      onSaved(r.data)
+      setEditing(false)
+      toast.success(`${product.sku}: price saved.`)
+    } catch (err) {
+      toast.error(errorMessage(err, "Could not save the price."))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (editing) {
+    return (
+      <form onSubmit={save} className="flex items-center justify-end gap-1.5">
+        <input
+          type="number" min="0" step="0.01" inputMode="decimal" autoFocus value={value}
+          onChange={(e) => setValue(e.target.value)} aria-label={`Price of ${product.name}`} placeholder="₹ per piece"
+          className="h-8 w-28 rounded-md border bg-card px-2 text-end text-sm tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        />
+        <Button type="submit" size="sm" disabled={saving}>Save</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={saving}>Cancel</Button>
+      </form>
+    )
+  }
+  return (
+    <button type="button" onClick={start} className="ms-auto block text-end outline-none hover:underline focus-visible:underline">
+      {has ? <span className="font-semibold tabular-nums">{rupees(product.selling_price)}</span> : <span className="text-xs font-semibold text-primary">Set price</span>}
+    </button>
+  )
+}
 
 export default function Products() {
   const dispatch = useDispatch()
@@ -96,6 +141,12 @@ export default function Products() {
       setEditing(product)
     }
   }
+  // keep the shared cache in step, so order screens see the new price without another request
+  const priceSaved = (product) =>
+    dispatch(productsApi.util.updateQueryData("getProducts", undefined, (draft) => {
+      const i = draft.findIndex((x) => x.id === product.id)
+      if (i >= 0) draft[i] = { ...draft[i], selling_price: product.selling_price }
+    }))
   const productsImported = (count) => {
     setImportingProducts(false)
     toast.success(`${count} product${count === 1 ? "" : "s"} added.`)
@@ -139,6 +190,7 @@ export default function Products() {
                 <TableHead>Product</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Added by</TableHead>
+                <TableHead className="text-right">Price / piece (no GST)</TableHead>
                 <TableHead className="text-right"><span className="sr-only">Actions</span></TableHead>
               </TableRow>
             </TableHeader>
@@ -149,6 +201,7 @@ export default function Products() {
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="min-w-56 max-w-xs whitespace-normal text-muted-foreground">{p.description}</TableCell>
                   <TableCell className="min-w-40"><UserCell name={p.created_by_name} /></TableCell>
+                  <TableCell className="min-w-36 text-right"><PriceCell product={p} onSaved={priceSaved} /></TableCell>
                   <TableCell className="text-right">
                     <Button variant="outline" size="sm" onClick={() => openBom(p)}>View BOM</Button>
                   </TableCell>

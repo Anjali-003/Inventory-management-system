@@ -17,7 +17,7 @@ import OrderDrawer from "./OrderDrawer"
 import OrdersTable from "./OrdersTable"
 import { HeroButton, MktBtn, MktHero, NewOrderFab, SearchField, StageChips, StageTile, StatusSelect, StatusPill, TileGrid } from "./mktKit"
 import { PRESS_SOFT, rise, stagger } from "./mktMotion"
-import { ALL_STAGE, OrderSteps, STAGES, countByStatus, declinedOf, isDrawerTab, isStatus, newestFirst, plural, stageOf } from "./orderParts"
+import { ALL_STAGE, OrderSteps, OrderValue, STAGES, countByStatus, declinedOf, isDrawerTab, isStatus, newestFirst, plural, stageOf } from "./orderParts"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "./marketingOrdersApi"
 
 const EMPTY = []
@@ -83,6 +83,7 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
           ))}
           {extra > 0 && <li className="text-xs font-semibold text-primary">+ {plural(extra, "more product")}</li>}
         </ul>
+        <OrderValue order={o} className="mt-2 block" />
 
         <OrderSteps status={o.approval_status} className="mt-4" />
 

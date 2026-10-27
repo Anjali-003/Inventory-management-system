@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { MktBtn, StatusPill } from "@/features/marketing-orders/mktKit"
 import { PRESS_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
-import { ALL_STAGE, OrderSteps, STAGES, declinedOf, plural, stageOf } from "@/features/marketing-orders/orderParts"
+import { ALL_STAGE, OrderSteps, OrderValue, STAGES, declinedOf, plural, stageOf } from "@/features/marketing-orders/orderParts"
 import { timeAgo } from "@/features/activity/time"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -130,6 +130,7 @@ export function ApprovalCard({ order, showPlan, onOpen }) {
           <div className="min-w-0">
             <p className="truncate text-[13px] font-medium">{productsSummary(items)}</p>
             <p className="text-xs text-muted-foreground">{plural(items.length, "product")} · {fmtQty(unitsOf(items))} units</p>
+            <OrderValue order={order} className="block" />
           </div>
           <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         </div>
@@ -266,6 +267,7 @@ export function ApprovalList({ orders, onOpen }) {
                   <TableCell className="min-w-40 whitespace-normal">
                     <p className="break-words leading-snug">{productsSummary(items)}</p>
                     <p className="text-xs text-muted-foreground">{fmtQty(unitsOf(items))} units</p>
+                    <OrderValue order={o} className="block" />
                   </TableCell>
                   <TableCell><StatusPill value={o.approval_status} short /><RevisionTag order={o} /></TableCell>
                   <TableCell className="text-end"><ChevronRight className="ms-auto size-4 text-muted-foreground rtl:-scale-x-100" aria-hidden /></TableCell>

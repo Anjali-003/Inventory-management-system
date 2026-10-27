@@ -25,6 +25,7 @@ import {
 } from "@/features/marketing-orders/mktKit";
 import { stagger } from "@/features/marketing-orders/mktMotion";
 import {
+  OrderValue,
   countByStatus,
   declinedOf,
   reviewOf,
@@ -78,7 +79,8 @@ const QUEUE = "PENDING_APPROVAL";
 */
 
 /* Table-only cells, worded so each one reads on its own (the card view keeps its own wording). */
-function ProductsCell({ items }) {
+function ProductsCell({ order }) {
+  const items = order.items;
   const [open, setOpen] = useState(false);
   const extra = items.length - SHOW_LINES;
   const lines = open ? items : items.slice(0, SHOW_LINES);
@@ -107,6 +109,9 @@ function ProductsCell({ items }) {
           </button>
         </li>
       )}
+      <li>
+        <OrderValue order={order} />
+      </li>
     </ul>
   );
 }
@@ -523,7 +528,7 @@ export default function OrderApprovals() {
                         </span>
                       </TableCell>
                       <TableCell className="px-3! py-1! align-top! min-w-56">
-                        <ProductsCell items={o.items} />
+                        <ProductsCell order={o} />
                       </TableCell>
                       <TableCell className="px-3! py-1! align-top!">
                         <StatusPill

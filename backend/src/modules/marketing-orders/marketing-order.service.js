@@ -24,7 +24,7 @@ async function listOrders(conn = db) {
 }
 
 async function productOptions() {
-    const [rows] = await db.query(`SELECT id, sku, name FROM products WHERE is_active = TRUE ORDER BY name`);
+    const [rows] = await db.query(`SELECT id, sku, name, selling_price FROM products WHERE is_active = TRUE ORDER BY name`);
     return rows;
 }
 

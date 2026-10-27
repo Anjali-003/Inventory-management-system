@@ -440,6 +440,24 @@ async function listProducts() {
     return rows;
 }
 
+/*
+    The product's selling price (without GST), the price list the order value is worked out from.
+    body: { price } a number of rupees with at most 2 decimals, or null / "" to clear it.
+*/
+async function setPrice(productId, body) {
+    const raw = body && body.price;
+    let price = null;
+    if (raw !== null && raw !== undefined && raw !== "") {
+        price = Number(raw);
+        if (!Number.isFinite(price) || price < 0 || price >= 1e10 || Math.round(price * 100) !== price * 100) {
+            throw new AppError(422, "Price must be 0 or more, with at most 2 decimals", "VALIDATION", { field: "price" });
+        }
+    }
+    const [result] = await db.query("UPDATE products SET selling_price = ? WHERE id = ?", [price, productId]);
+    if (result.affectedRows === 0) throw AppError.notFound("Product not found");
+    return getProductById(productId);
+}
+
 /* null when the product does not exist */
 async function getProductById(productId) {
     const [rows] = await db.query("SELECT * FROM products WHERE id = ?", [productId]);
@@ -455,5 +473,5 @@ module.exports = {
     // pure, for tests
     normKey, parseQty, checkLineText, planBomImport, checkProduct,
     // database
-    getBom, fetchBom, listProducts, getProductById, nextProductSku, createProduct, importProducts, saveBom, importBom,
+    getBom, fetchBom, listProducts, getProductById, nextProductSku, createProduct, importProducts, saveBom, importBom, setPrice,
 };

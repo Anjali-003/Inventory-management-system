@@ -7,4 +7,5 @@ export const productsService = {
   getBom: (productId) => api.get(`/products/${productId}/bom`),
   saveBom: (productId, lines) => api.put(`/products/${productId}/bom`, { lines }),
   importBom: (productId, body) => api.post(`/products/${productId}/bom/import`, body),
+  setPrice: (productId, price) => api.put(`/products/${productId}/price`, { price }),
 };

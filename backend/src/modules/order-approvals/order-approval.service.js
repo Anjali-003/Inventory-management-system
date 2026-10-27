@@ -94,7 +94,7 @@ async function withItems(conn, orders) {
     if (orders.length === 0) return [];
 
     const [items] = await conn.query(
-        `SELECT oi.order_id, oi.product_id, p.sku, p.name, oi.quantity
+        `SELECT oi.order_id, oi.product_id, p.sku, p.name, oi.quantity, p.selling_price
          FROM order_items oi
          JOIN products p ON p.id = oi.product_id
          WHERE oi.order_id IN (?)
@@ -105,7 +105,9 @@ async function withItems(conn, orders) {
     const byOrder = new Map();
     for (const it of items) {
         if (!byOrder.has(it.order_id)) byOrder.set(it.order_id, []);
-        byOrder.get(it.order_id).push({ ...it, quantity: Number(it.quantity) });
+        // price = the product's price list (without GST) today; null when it has none yet
+        const { selling_price, ...line } = it;
+        byOrder.get(it.order_id).push({ ...line, quantity: Number(it.quantity), price: selling_price === null ? null : Number(selling_price) });
     }
 
     const ids = orders.map((o) => o.id);
@@ -155,7 +157,13 @@ async function withItems(conn, orders) {
             // { remarks, held_order_id, held_order_number, items: [{ product_id, sku, name, requested, approved, held }] } or null
             revision: asObject(o.revision),
             items: lines,
-            totals: { lines: lines.length, quantity: lines.reduce((s, l) => s + l.quantity, 0) },
+            // value = units x price list, without GST (an estimate: the bill sets the real rate); unpriced = products with no price yet
+            totals: {
+                lines: lines.length,
+                quantity: lines.reduce((s, l) => s + l.quantity, 0),
+                value: Math.round(lines.reduce((s, l) => s + (l.price === null ? 0 : l.quantity * l.price), 0) * 100) / 100,
+                unpriced: lines.filter((l) => l.price === null).length,
+            },
             // what the Operations Admin sent on approval; null when nothing was sent
             production_request: production.get(o.id) || null,
             purchase_request: purchase.get(o.id) || null,

@@ -334,6 +334,28 @@ export function OrderTimeline({ order }) {
 
 export const DECIDED_STATUSES = ["APPROVED", "REJECTED"]
 
+/* ₹12,40,000 (Indian grouping, whole rupees) */
+export const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
+
+/**
+ * What the order is worth at the price list, without GST: units x each product's selling price (totals.value from
+ * the backend). An estimate: the bill sets the real rate. Says so when a product has no price yet.
+ */
+export function OrderValue({ order, className }) {
+  const t = order?.totals || {}
+  const lines = order?.items?.length || 0
+  // a product without a price is not worth ₹0: its value is unknown, so it is never shown as ₹0
+  if (t.unpriced && t.unpriced === lines) {
+    return <span className={cn("text-xs text-warning", className)}>Price not set yet</span>
+  }
+  return (
+    <span className={cn("text-xs text-muted-foreground", className)} title="At the price list, without GST">
+      <b className="font-semibold tabular-nums text-foreground">{rupees(t.value)}</b> + GST
+      {t.unpriced > 0 && <span className="text-warning"> · {t.unpriced === 1 ? "1 product has" : `${t.unpriced} products have`} no price yet, not counted</span>}
+    </span>
+  )
+}
+
 /* Who closed a CANCELLED order and when: Marketing, saying no to the reduced quantity (kept in the revision). null otherwise. */
 export const declinedOf = (o) =>
   o?.approval_status === "CANCELLED" ? { by: o.revision?.declined_by_name || "Marketing", at: o.revision?.declined_at || null } : null

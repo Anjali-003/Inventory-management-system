@@ -51,4 +51,9 @@ const importBom = handle(async (req, res) => {
     res.json(await svc.importBom(productId(req), req.body));
 });
 
-module.exports = { list, nextSku, create, importMany, getOne, getBom, saveBom, importBom };
+// The selling price (without GST): { price } in rupees, or null to clear it
+const setPrice = handle(async (req, res) => {
+    res.json(await svc.setPrice(productId(req), req.body));
+}, "Failed to save the price");
+
+module.exports = { list, nextSku, create, importMany, getOne, getBom, saveBom, importBom, setPrice };

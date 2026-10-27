@@ -13,7 +13,7 @@ import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { MktBtn, StatusPill } from "./mktKit"
 import { SPRING, SPRING_SOFT } from "./mktMotion"
-import { DECIDED_STATUSES, DRAWER_TABS, approvedFor, orderSteps, plural, reviewOf, sentToProduction, stageOf, sumQty } from "./orderParts"
+import { DECIDED_STATUSES, DRAWER_TABS, OrderValue, approvedFor, orderSteps, plural, reviewOf, sentToProduction, stageOf, sumQty } from "./orderParts"
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
 
@@ -539,6 +539,7 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
             <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground">
               <StatusPill value={order.approval_status} short />
               <span>{plural(order.items.length, "product")} · {fmtQty(units)} units</span>
+              <OrderValue order={order} className="text-sm" />
             </p>
           </div>
           <button

@@ -8,7 +8,7 @@ import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { MktBtn, StatusPill } from "./mktKit"
 import { SPRING_SOFT } from "./mktMotion"
-import { DECIDED_STATUSES, declinedOf, plural, reviewOf, stageOf } from "./orderParts"
+import { DECIDED_STATUSES, OrderValue, declinedOf, plural, reviewOf, stageOf } from "./orderParts"
 
 const SHOW_LINES = 2
 const DECIDED = DECIDED_STATUSES
@@ -119,6 +119,7 @@ export default function OrdersTable({ orders, filterKey, editable, busyId, onOpe
                     ))}
                     {extra > 0 && <li className="text-xs font-semibold text-primary">+ {plural(extra, "more product")}</li>}
                   </ul>
+                  <OrderValue order={o} className="mt-1 block" />
                   {onViewItems && (
                     <button
                       type="button"

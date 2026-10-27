@@ -7,6 +7,7 @@ import { errorMessage, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { MktBtn, QtyStepper } from "./mktKit"
 import { SPRING } from "./mktMotion"
+import { rupees } from "./orderParts"
 import { useCreateMarketingOrderMutation, useGetMarketingProductsQuery } from "./marketingOrdersApi"
 
 const EMPTY = []
@@ -46,6 +47,13 @@ export default function NewOrderModal({ onClose }) {
 
   const picked = rows.filter((r) => r.product).length
   const units = rows.reduce((sum, r) => sum + (r.product && /^\d+$/.test(r.qty) ? Number(r.qty) : 0), 0)
+  // the order's value at the price list, without GST (the bill sets the real rate)
+  const priceOf = (id) => {
+    const p = products.find((x) => String(x.id) === String(id))
+    return p && p.selling_price !== null && p.selling_price !== undefined ? Number(p.selling_price) : null
+  }
+  const value = rows.reduce((sum, r) => sum + (r.product && /^\d+$/.test(r.qty) && priceOf(r.product) !== null ? Number(r.qty) * priceOf(r.product) : 0), 0)
+  const unpriced = rows.filter((r) => r.product && priceOf(r.product) === null).length
 
   const addRow = () => {
     setRows((rs) => [...rs, blank()])
@@ -153,6 +161,11 @@ export default function NewOrderModal({ onClose }) {
                         ))}
                       </select>
                       {productBad && <p className={ERR}>{err}</p>}
+                      {r.product && (
+                        <p className="mt-1.5 text-xs text-muted-foreground">
+                          {priceOf(r.product) === null ? "No price set for this product yet" : `${rupees(priceOf(r.product))} per piece + GST`}
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -175,6 +188,13 @@ export default function NewOrderModal({ onClose }) {
           <p className="text-xs text-muted-foreground" aria-live="polite">
             <span className="font-bold tabular-nums text-foreground">{picked}</span> {picked === 1 ? "product" : "products"} ·{" "}
             <span className="font-bold tabular-nums text-foreground">{fmtQty(units)}</span> units
+            {/* a product without a price is not worth ₹0: its value is unknown, so it is never shown as ₹0 */}
+            {picked > 0 && (unpriced === picked
+              ? <span className="text-warning"> · price not set yet</span>
+              : <>
+                  {" · "}<span className="font-bold tabular-nums text-foreground">{rupees(value)}</span> + GST
+                  {unpriced > 0 && <span className="text-warning"> · {unpriced === 1 ? "1 product has" : `${unpriced} products have`} no price yet, not counted</span>}
+                </>)}
           </p>
         </div>
       </div>
