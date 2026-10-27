@@ -35,7 +35,7 @@ function Figure({ label, value, sub, to, bad }) {
 
 /*
   Sales & Billing: every bill, what it was for, what came in and what is still to collect. Click a bill to open it
-  (record a payment, print; the Super Admin can cancel it or make a credit note).
+  (record a payment, print; the Super Admin can cancel it).
   "Received this month" lists the payments themselves (by the date the money came), not bills.
   Links in: ?show=open|UNPAID|PART_PAID|PAID|all|CANCELLED|received, ?q=<customer / bill / order>, ?bill=<bill id>
 */
@@ -76,7 +76,7 @@ export default function Bills() {
 
       {summary && (
         <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Figure label="Sales this month" to="/bills?show=all" value={rupees(summary.net)} sub={`${summary.bills} bill${summary.bills === 1 ? "" : "s"}${summary.credited ? ` · credit notes − ${rupees(summary.credited)}` : ""}`} />
+          <Figure label="Sales this month" to="/bills?show=all" value={rupees(summary.net)} sub={`${summary.bills} bill${summary.bills === 1 ? "" : "s"}`} />
           <Figure label="Received this month" to="/bills?show=received" value={rupees(summary.collected)} sub={`${payments.length} payment${payments.length === 1 ? "" : "s"}`} />
           <Figure label="Still to collect" to="/bills?show=open" value={rupees(summary.toCollect)} bad={summary.toCollect > 0} sub={summary.owed[0] ? `Oldest: ${summary.owed[0].billNumber}, ${summary.owed[0].days} days` : "Every bill is paid"} />
           <Figure label="Orders to bill" to="/finished-goods?status=IN_STORE" value={summary.toBill} bad={summary.toBill > 0} sub="In the Store, no bill yet" />
@@ -162,7 +162,7 @@ export default function Bills() {
                       ? <Link to={`/customers?q=${encodeURIComponent(b.customerName)}`} onClick={(e) => e.stopPropagation()} className="hover:text-primary hover:underline">{b.customerName}</Link>
                       : b.customerName}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{rupees(b.net)}{b.credited > 0 && <span className="block text-xs text-warning">− {rupees(b.credited)} credit</span>}</TableCell>
+                  <TableCell className="text-right tabular-nums">{rupees(b.net)}</TableCell>
                   <TableCell className="hidden text-right tabular-nums sm:table-cell">{rupees(b.paid)}</TableCell>
                   <TableCell className={cn("text-right font-semibold tabular-nums", b.due > 0 && "text-destructive")}>
                     {rupees(b.due)}{b.due > 0 && <span className="block text-xs font-normal text-muted-foreground">{b.days} d old</span>}

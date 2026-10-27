@@ -6,7 +6,7 @@
 */
 import axios from "axios";
 import { isMock, resolveApiUrl } from "@/config/env";
-import { getActiveRole } from "@/lib/permissions";
+import { getActiveRole, getViewAs } from "@/lib/permissions";
 
 export { DATA_MODE, isMock } from "@/config/env";
 
@@ -21,9 +21,14 @@ const api = axios.create({
 
 // tell the server which role (= which login cookie) this tab is working as; a caller may set its own header
 export const ROLE_HEADER = "X-Login-Role";
+// the Super Admin's "View as" role: the server then also sends him what the next role is told (only a hint, the
+// server checks he is a Super Admin)
+const VIEW_AS_HEADER = "X-View-As";
 api.interceptors.request.use((config) => {
   const role = getActiveRole();
   if (role && !config.headers.get(ROLE_HEADER)) config.headers.set(ROLE_HEADER, role);
+  const viewAs = getViewAs();
+  if (viewAs) config.headers.set(VIEW_AS_HEADER, viewAs);
   return config;
 });
 

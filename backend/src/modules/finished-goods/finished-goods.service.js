@@ -447,7 +447,8 @@ async function createFinishedGood(
     1. QC passes the order      -> HANDED_OVER  (packed, on its way to the Store; createFinishedGood above)
     2. Store receives it        -> IN_STORE     product stock +qty          (receive)
     3. Marketing makes the bill -> BILLED                                   (createBill)
-    4. Store gives it out       -> DELIVERED    product stock -qty, order COMPLETED (dispatch)
+       and collects the money   (addPayment; when the bill is fully paid the Store hears it)
+    4. Store gives it out       -> DELIVERED    product stock -qty, order COMPLETED (dispatch, only once fully paid)
   Each step has ONE owner role (the route checks it, see finished-goods.routes.js) and tells the next owner.
 */
 const STEPS = {
@@ -498,14 +499,14 @@ async function moveTo(conn, record, to, set = "", params = []) {
   );
 }
 
-async function tell(conn, { to, next, title, body, important = false }, record, userId) {
+async function tell(conn, { to, next, title, body, important = false, severity = null }, record, userId) {
   const orderNumber = record.order_number || `#${record.order_id}`;
   await notifications.notify(conn, {
     role: next,
     type: `FINISHED_GOODS_${to}`,
     title: title(orderNumber),
     body,
-    severity: to === "DELIVERED" ? "success" : "action",
+    severity: severity || (to === "DELIVERED" ? "success" : "action"),
     link: "/finished-goods",
     orderId: record.order_id,
     payload: { order_number: orderNumber, finished_goods_id: record.id, status: to },
@@ -521,6 +522,14 @@ async function advance(stepName, id, body = {}, userId = null) {
 
   return inTransaction(async (conn) => {
     const record = await lockRecord(conn, id, step.from);
+
+    // nothing leaves the Store before the whole bill is paid
+    if (stepName === "dispatch") {
+      const bill = await lockActiveBill(conn, id);
+      if (bill.due > 0) {
+        throw new AppError(409, `₹${bill.due} is still due on bill ${bill.bill_number}. Give the goods out only after the full payment.`, "PAYMENT_DUE");
+      }
+    }
 
     if (stepName === "receive" || stepName === "dispatch") {
       const receiving = stepName === "receive";
@@ -646,11 +655,14 @@ async function createBill(id, body = {}, userId = null) {
     }
 
     await moveTo(conn, record, "BILLED");
+    // a bill of 0 is paid already; any other waits for the money (addPayment tells the Store when it is all in)
+    const paid = subtotal + gstAmount === 0;
     await tell(conn, {
       to: "BILLED",
       next: "STORE_MANAGER",
       title: (n) => `Order ${n} is billed`,
-      body: `Bill ${billNumber}. Give the goods out for delivery.${items.some((i) => i.note) ? " (Billed below the price list.)" : ""}`,
+      body: `Bill ${billNumber}. ${paid ? "Give the goods out for delivery." : "Keep the goods until the full payment is received."}${items.some((i) => i.note) ? " (Billed below the price list.)" : ""}`,
+      severity: paid ? null : "info",
       // a bill below the price list is the CEO's business
       important: items.some((i) => i.listPrice !== null && i.rate < i.listPrice),
     }, record, userId);
@@ -697,6 +709,15 @@ async function addPayment(id, body = {}, userId = null) {
       [bill.id, amount, paidOn, method, cleanText(body.reference, 100), userId]
     );
     const dueAfter = money(toCents(bill.due) - toCents(amount));
+    // the last of the money is in: now the Store may give the goods out
+    if (dueAfter === 0 && bill.fg_status === "BILLED") {
+      await tell(conn, {
+        to: "PAID",
+        next: "STORE_MANAGER",
+        title: (n) => `Order ${n} is fully paid`,
+        body: `Bill ${bill.bill_number} is paid. Give the goods out for delivery.`,
+      }, { id, order_id: bill.order_id, order_number: bill.order_number }, userId);
+    }
     return { success: true, billNumber: bill.bill_number, due: dueAfter };
   });
 }

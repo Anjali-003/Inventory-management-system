@@ -157,19 +157,22 @@ async function main() {
     ok("Super Admin cancels the bill (goods still in Store)", (await SA("POST", `/finished-goods/${fg.id}/bill/cancel`, { reason: "Wrong rate on the bill" })).status === 201);
     const bill = await MKT("POST", `/finished-goods/${fg.id}/bill`, billBody(250));
     ok("Marketing makes the bill again at the list price", bill.status === 201, `${bill.data?.billNumber}: 4 x 250 + 18% = 1180`);
-    ok("Store gives out for delivery", (await STORE("POST", `/finished-goods/${fg.id}/dispatch`, { note: "e2e truck" })).status === 200);
+    const today = new Date().toISOString().slice(0, 10);
+    const unpaid = await STORE("POST", `/finished-goods/${fg.id}/dispatch`, { note: "e2e truck" });
+    ok("Store cannot give out an unpaid order", unpaid.status === 409 && unpaid.data?.code === "PAYMENT_DUE", unpaid.data?.code);
+    ok("Marketing records a part payment", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 500, paid_on: today, method: "UPI", reference: "UTR123" })).status === 201);
+    ok("A payment above what is due is refused", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 5000, paid_on: today, method: "CASH" })).status === 409);
+    ok("Part paid is still not enough to give out", (await STORE("POST", `/finished-goods/${fg.id}/dispatch`, {})).data?.code === "PAYMENT_DUE");
+    ok("Marketing collects the rest", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 680, paid_on: today, method: "BANK" })).status === 201);
+    ok("Store gives out for delivery once fully paid", (await STORE("POST", `/finished-goods/${fg.id}/dispatch`, { note: "e2e truck" })).status === 200);
     const moves = (await STORE("GET", "/product-stock/movements")).data;
     ok("Product stock history links the order", moves.length > 0 && moves.every((m) => m.orderId === orderId), `${moves.length} moves`);
     ok("Product stock went back down", (await STORE("GET", "/product-stock")).data.find((p) => p.productId === product.id)?.onHand === before);
     const done = (await MKT("GET", `/finished-goods/${fg.id}`)).data;
     ok("Giving out completes the order", done.status === "DELIVERED" && (await stage(orderId))?.waitingFor === null, (await stage(orderId))?.stage);
-    const today = new Date().toISOString().slice(0, 10);
-    ok("Marketing records a part payment", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 500, paid_on: today, method: "UPI", reference: "UTR123" })).status === 201);
-    ok("A payment above what is due is refused", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 5000, paid_on: today, method: "CASH" })).status === 409);
     ok("Super Admin makes a credit note (1 piece returned)", (await SA("POST", `/finished-goods/${fg.id}/credit-note`, { amount: 295, reason: "1 piece returned damaged" })).status === 201);
     const paidBill = (await MKT("GET", `/finished-goods/${fg.id}/bill`)).data;
-    ok("Bill: 1180 - 295 credit - 500 paid = 385 to collect", paidBill.due === 385 && paidBill.paymentStatus === "PART_PAID", `due ${paidBill.due}`);
-    ok("Marketing collects the rest", (await MKT("POST", `/finished-goods/${fg.id}/payments`, { amount: 385, paid_on: today, method: "BANK" })).status === 201);
+    ok("Bill: 1180 paid, 295 credit = 295 to give back", paidBill.due === 0 && paidBill.refund === 295 && paidBill.paymentStatus === "PAID", `refund ${paidBill.refund}`);
 
     /* ---- Sales & Billing (Marketing) ---- */
     const billsList = (await MKT("GET", "/sales/bills")).data;
@@ -178,7 +181,7 @@ async function main() {
     ok("Bills list: the bill, paid in full after the credit note", active?.paymentStatus === "PAID" && active.net === 885 && active.due === 0, `${active?.billNumber} net ${active?.net}`);
     ok("Bills list keeps the cancelled bill with its reason", cancelledBill?.paymentStatus === "CANCELLED" && !!cancelledBill.cancelReason);
     const sales = (await MKT("GET", "/sales/summary")).data;
-    ok("Marketing sees this month's sales and money in", sales.net === 885 && sales.collected === 885 && sales.toCollect === 0);
+    ok("Marketing sees this month's sales and money in", sales.net === 885 && sales.collected === 1180 && sales.toCollect === 0);
     const paid = (await MKT("GET", "/sales/payments")).data;
     ok("Received this month: the 2 payments behind it, adding up to the figure", paid.length === 2 && paid.reduce((s, p) => s + p.amount, 0) === sales.collected && paid.every((p) => p.billNumber), `${paid.length} payments`);
     const customerRow = (await MKT("GET", "/customers")).data.find((c) => c.id === customer.data.id);

@@ -44,7 +44,7 @@ export function buildRows(approvedOrders = [], inventory = [], onOrder = new Map
   const rows = new Map()
   const row = (id, info) => {
     if (!rows.has(id)) {
-      rows.set(id, { component_id: id, sku: info.sku || "", name: info.name || `Component #${id}`, unit: info.unit || "pcs", lines: [], onHand: 0, minimum: 0, onOrder: onOrder.get(id) || 0, inStockList: false })
+      rows.set(id, { component_id: id, sku: info.sku || "", name: info.name || `Component #${id}`, unit: info.unit || "pcs", lines: [], onHand: 0, minimum: 0, onOrder: onOrder.get(id) || 0, inStockList: false, expectedRate: null, lastRate: null })
     }
     return rows.get(id)
   }
@@ -60,6 +60,9 @@ export function buildRows(approvedOrders = [], inventory = [], onOrder = new Map
     r.onHand = Number(i.quantity_on_hand) || 0
     r.minimum = Number(i.minimum_stock_level) || 0
     r.inStockList = true
+    // the rate form starts from the expected cost (standard cost, Super Admin); the last rate paid is shown beside it
+    r.expectedRate = i.standard_cost === null || i.standard_cost === undefined ? null : Number(i.standard_cost)
+    r.lastRate = i.last_purchase_rate === null || i.last_purchase_rate === undefined ? null : Number(i.last_purchase_rate)
   }
 
   return [...rows.values()]

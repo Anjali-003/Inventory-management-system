@@ -25,7 +25,17 @@ function keyBytes(base64url) {
   return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
 }
 
+// last known: does this browser get this role's phone / desktop notifications? (LiveSync then skips the same toast)
+let on = false
+export const pushOn = () => on && pushSupported() && Notification.permission === "granted"
+
 export async function pushState() {
+  const state = await readPushState()
+  on = state === "on"
+  return state
+}
+
+async function readPushState() {
   if (!pushSupported()) return "unsupported"
   const { data: cfg } = await api.get("/push/config")
   if (!cfg?.enabled) return "disabled"
@@ -47,10 +57,12 @@ export async function enablePush() {
   let sub = await reg.pushManager.getSubscription()
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(cfg.publicKey) })
   await api.post("/push/subscribe", { subscription: sub.toJSON() })
+  on = true
 }
 
 /* For this role only; the browser subscription stays for the other roles logged in here. Never throws. */
 export async function disablePush() {
+  on = false
   try {
     if (!pushSupported()) return
     const sub = await currentSubscription()

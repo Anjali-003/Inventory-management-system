@@ -269,7 +269,8 @@ async function notifyDecision(conn, orderId, { approved, remarks, productionLine
     const number = (rows[0] && rows[0].order_number) || `#${orderId}`;
     const common = { orderId, userId, payload: { order_number: number } };
 
-    if (rows[0] && rows[0].creator_role === "MARKETING_MANAGER") {
+    // a customer order (made by Marketing, or by the Super Admin doing Marketing's work): Marketing hears the decision
+    if (rows[0] && ["MARKETING_MANAGER", "SUPER_ADMIN"].includes(rows[0].creator_role)) {
         await notifications.notify(conn, approved
             ? { ...common, role: "MARKETING_MANAGER", type: "ORDER_APPROVED", severity: "success", link: `/marketing-orders?order=${orderId}`,
                 title: `Order ${number} approved`, body: remarks || "The Operations Admin approved your order. It is moving to production." }

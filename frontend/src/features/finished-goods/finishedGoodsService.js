@@ -7,7 +7,6 @@ export const finishedGoodsService = {
   createBill: (id, body) => api.post(`/finished-goods/${id}/bill`, body),
   getBill: (id) => api.get(`/finished-goods/${id}/bill`),
   addPayment: (id, body) => api.post(`/finished-goods/${id}/payments`, body),
-  // Super Admin: cancel while the goods are in the Store, a credit note after they left
+  // Super Admin: cancel while the goods are in the Store
   cancelBill: (id, body) => api.post(`/finished-goods/${id}/bill/cancel`, body),
-  creditNote: (id, body) => api.post(`/finished-goods/${id}/credit-note`, body),
 };

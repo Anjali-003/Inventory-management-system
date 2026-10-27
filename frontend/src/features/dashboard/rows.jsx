@@ -6,7 +6,7 @@ import UserCell from "@/components/UserCell"
 import { APPROVAL_META, OrderLines } from "@/features/order-approvals/approvalParts"
 import { PurchaseDetailModal } from "@/features/purchasing/PurchaseParts"
 import { STATUS_META } from "@/features/purchasing/purchasingUtils"
-import { fgBadge, fgStepOf } from "@/features/finished-goods/fgFlow"
+import { fgBadge, fgStepFor } from "@/features/finished-goods/fgFlow"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { InfoModal } from "./DashboardKit"
 
@@ -138,7 +138,7 @@ export const finishedRow = (f) => ({
       title={f.productName}
       description={f.orderNumber}
       badge={fgBadge(f.status)}
-      fields={[["Products", (f.lines || []).map((l) => `${l.name} × ${l.quantity}`).join(", ") || f.productSku], ["Quantity", fmtQty(f.quantity ?? 0)], ["Next", fgStepOf(f.status)?.owner ? `${fgStepOf(f.status).ownerLabel}: ${fgStepOf(f.status).todo}` : "Done"], ["Bill", f.bill ? `${f.bill.billNumber} · ${f.bill.customerName}` : null]]}
+      fields={[["Products", (f.lines || []).map((l) => `${l.name} × ${l.quantity}`).join(", ") || f.productSku], ["Quantity", fmtQty(f.quantity ?? 0)], ["Next", fgStepFor(f)?.owner ? `${fgStepFor(f).ownerLabel}: ${fgStepFor(f).todo}` : "Done"], ["Bill", f.bill ? `${f.bill.billNumber} · ${f.bill.customerName}` : null]]}
       onClose={close}
     />
   ),

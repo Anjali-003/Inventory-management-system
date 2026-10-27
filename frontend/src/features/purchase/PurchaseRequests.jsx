@@ -124,6 +124,24 @@ function PendingRequests({ pending, loading, components }) {
   )
 }
 
+/*
+  Under the rate box: the expected cost it started from and the last rate paid, so a typing slip (₹10,050 for a
+  ₹0.20 part) stands out. Rates do change, so nothing is blocked; a rate far off (10x either way) is only flagged.
+*/
+const rupee = (n) => `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+function RateHint({ row, typed }) {
+  const n = Number(typed)
+  const ref = row.expectedRate ?? row.lastRate
+  const farOff = ref > 0 && n > 0 && (n / ref >= 10 || ref / n >= 10)
+  const parts = [row.expectedRate !== null && `Expected ${rupee(row.expectedRate)}`, row.lastRate !== null && `last paid ${rupee(row.lastRate)}`].filter(Boolean)
+  if (!parts.length && !farOff) return null
+  return (
+    <span className={cn("mt-0.5 block text-end text-[11px] leading-tight", farOff ? "font-semibold text-destructive" : "text-muted-foreground")}>
+      {farOff ? `Check: ${Math.round(n / ref) >= 10 ? `${Math.round(n / ref).toLocaleString("en-IN")}x` : "far below"} ${row.expectedRate !== null ? "the expected cost" : "the last rate"} (${rupee(ref)})` : parts.join(", ")}
+    </span>
+  )
+}
+
 /* Part 2: one purchase order for all pending requests (plus any low / out of stock component added). */
 function CombinedOrder({ rows, loading }) {
   const toast = useToast()
@@ -134,7 +152,7 @@ function CombinedOrder({ rows, loading }) {
   // starts with every component a pending request asks for
   const [list, setList] = useState(() => rows.filter((r) => r.lines.length > 0).map((r) => r.component_id))
   const [qty, setQty] = useState({}) // component_id -> typed quantity (missing = the suggestion)
-  const [rate, setRate] = useState({}) // component_id -> rate per piece agreed with the supplier (₹)
+  const [rate, setRate] = useState({}) // component_id -> typed rate per piece (missing = the expected cost)
   const [adding, setAdding] = useState("")
   const [supplier, setSupplier] = useState("")
   const [expectedDate, setExpectedDate] = useState("")
@@ -144,6 +162,8 @@ function CombinedOrder({ rows, loading }) {
 
   const lines = list.map((id) => byId.get(id)).filter(Boolean)
   const qtyOf = (r) => qty[r.component_id] ?? String(suggestQty(r, NONE, STEP))
+  // filled in with the expected cost; the purchase manager changes it to what the supplier quoted
+  const rateOf = (r) => rate[r.component_id] ?? (r.expectedRate === null ? "" : String(r.expectedRate))
   const errorOf = (r) => {
     const text = qtyOf(r).trim()
     const n = Number(text)
@@ -151,11 +171,11 @@ function CombinedOrder({ rows, loading }) {
     if (!/^\d+(\.\d{1,2})?$/.test(text)) return "Up to 2 decimals"
     const need = needOf(r)
     if (n < need) return `Orders need at least ${fmtQty(need)}`
-    const price = String(rate[r.component_id] ?? "").trim()
+    const price = rateOf(r).trim()
     if (!price || !/^\d+(\.\d{1,2})?$/.test(price)) return "Enter the rate per piece"
     return ""
   }
-  const value = lines.reduce((sum, r) => sum + (Number(qtyOf(r)) || 0) * (Number(rate[r.component_id]) || 0), 0)
+  const value = lines.reduce((sum, r) => sum + (Number(qtyOf(r)) || 0) * (Number(rateOf(r)) || 0), 0)
   const remove = (id) => setList((l) => l.filter((x) => x !== id))
   const addable = rows.filter((r) => !list.includes(r.component_id))
   // low / out of stock and not on the order yet: out of stock first
@@ -191,7 +211,7 @@ function CombinedOrder({ rows, loading }) {
         items: lines.map((r) => ({
           component_id: r.component_id,
           quantity: qtyOf(r).trim(),
-          rate: String(rate[r.component_id] ?? "").trim(),
+          rate: rateOf(r).trim(),
           request_item_ids: r.lines.map((l) => l.request_item_id),
         })),
       }).unwrap()
@@ -299,14 +319,15 @@ function CombinedOrder({ rows, loading }) {
                           <input
                             inputMode="decimal"
                             aria-label={`Rate per piece of ${r.name}`}
-                            value={rate[r.component_id] ?? ""}
+                            value={rateOf(r)}
                             onChange={(e) => setRate((x) => ({ ...x, [r.component_id]: e.target.value }))}
                             placeholder="0.00"
-                            className={cn(INPUT, "text-end tabular-nums", showErrors && !String(rate[r.component_id] ?? "").trim() && "border-destructive")}
+                            className={cn(INPUT, "text-end tabular-nums", showErrors && !rateOf(r).trim() && "border-destructive")}
                           />
                           <span className="mt-1 block text-end text-xs text-muted-foreground tabular-nums">
-                            ₹{((Number(qtyOf(r)) || 0) * (Number(rate[r.component_id]) || 0)).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                            ₹{((Number(qtyOf(r)) || 0) * (Number(rateOf(r)) || 0)).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                           </span>
+                          <RateHint row={r} typed={rateOf(r)} />
                         </td>
                         <td className="px-2 py-2.5">
                           <button

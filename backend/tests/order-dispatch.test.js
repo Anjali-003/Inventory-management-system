@@ -684,8 +684,14 @@ describe("every department hears the decision that concerns it", () => {
     expect(s.notifications[0]).toMatchObject({ title: "Order ORD-007 rejected", body: "Customer cancelled", severity: "warning", link: "/marketing-orders?order=7" });
   });
 
-  it("an order not raised by Marketing does not notify Marketing", async () => {
+  it("an order the Super Admin raised (doing Marketing's work) still tells Marketing", async () => {
     s.order.creator_role = "SUPER_ADMIN";
+    await service.reject(7, { remarks: "Duplicate" }, 5);
+    expect(sent()).toEqual([["MARKETING_MANAGER", "ORDER_REJECTED"]]);
+  });
+
+  it("an order not raised by Marketing or the Super Admin does not notify Marketing", async () => {
+    s.order.creator_role = "OPERATIONS_ADMIN";
     await service.reject(7, { remarks: "Duplicate" }, 5);
     expect(s.notifications).toEqual([]);
   });

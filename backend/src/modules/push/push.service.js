@@ -77,25 +77,47 @@ async function sendToRole(role, message, { exceptUserId = null } = {}) {
               WHERE s.role = ? AND u.role = ? AND u.is_active = 1 AND (? IS NULL OR s.user_id <> ?)`,
             [role, role, exceptUserId, exceptUserId]
         );
-        if (subs.length === 0) return;
-
-        const payload = JSON.stringify({ ...message, role });
-        await Promise.allSettled(
-            subs.map((s) =>
-                webpush
-                    .sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: TTL_SECONDS })
-                    .catch(async (error) => {
-                        if (error.statusCode === 404 || error.statusCode === 410) {
-                            await db.query(`DELETE FROM push_subscriptions WHERE id = ?`, [s.id]);
-                        } else {
-                            console.error("push failed:", error.statusCode || "", error.message);
-                        }
-                    })
-            )
-        );
+        await sendTo(subs, { ...message, role });
     } catch (error) {
         console.error("push failed:", error.message);
     }
 }
 
-module.exports = { config, subscribe, unsubscribe, status, sendToRole };
+/* Push to ONE user's browsers that turned push on for `role` (the Super Admin following an order through "View as"). */
+async function sendToUser(userId, role, message) {
+    if (!enabled) return;
+    try {
+        const [subs] = await db.query(
+            `SELECT s.id, s.endpoint, s.p256dh, s.auth
+               FROM push_subscriptions s
+               JOIN users u ON u.id = s.user_id
+              WHERE s.user_id = ? AND s.role = ? AND u.is_active = 1`,
+            [userId, role]
+        );
+        await sendTo(subs, { ...message, role });
+    } catch (error) {
+        console.error("push failed:", error.message);
+    }
+}
+
+/* Send one payload to these subscriptions; the ones the push service no longer knows (404 / 410) are removed. */
+async function sendTo(subs, message) {
+    if (subs.length === 0) return;
+
+    const payload = JSON.stringify(message);
+    await Promise.allSettled(
+        subs.map((s) =>
+            webpush
+                .sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: TTL_SECONDS })
+                .catch(async (error) => {
+                    if (error.statusCode === 404 || error.statusCode === 410) {
+                        await db.query(`DELETE FROM push_subscriptions WHERE id = ?`, [s.id]);
+                    } else {
+                        console.error("push failed:", error.statusCode || "", error.message);
+                    }
+                })
+        )
+    );
+}
+
+module.exports = { config, subscribe, unsubscribe, status, sendToRole, sendToUser };

@@ -1,6 +1,7 @@
 const db = require("../../config/db");
 const AppError = require("../../shared/AppError");
 const hub = require("../../realtime/hub");
+const requestContext = require("../../shared/requestContext");
 
 /*
     Notifications: one inbox per ROLE (the bell in the header + the role's dashboard panels).
@@ -28,6 +29,23 @@ const SEVERITIES = new Set(["info", "success", "warning", "action"]);
 const SUPER_ADMIN = "SUPER_ADMIN";
 const IMPORTANT_TYPES = new Set(["QC_FAILED", "ORDER_CANCELLED", "BILL_CANCELLED", "CREDIT_NOTE", "EXTRA_MATERIAL_REQUESTED", "ORDER_STUCK"]);
 const isImportant = (type, important) => !!important || IMPORTANT_TYPES.has(type);
+
+/*
+    "View as": the Super Admin works through the roles one by one (Store receives, then Marketing bills ...). When his
+    action tells the next role something, he gets it too, in his open tabs and on his phone / desktop, whether or not
+    it is important, with `viewAs` = that role: opening it switches his view to the role whose turn it is.
+    Never throws (runs after the commit, like the role's own push).
+*/
+async function tellViewer(userId, role, message) {
+    try {
+        const [[user]] = await db.query(`SELECT role FROM users WHERE id = ? AND is_active = 1`, [userId]);
+        if (user?.role !== SUPER_ADMIN) return;
+        hub.notifyUser(userId, { ...message, notificationId: message.id, viewAs: role });
+        await require("../push/push.service").sendToUser(userId, SUPER_ADMIN, { ...message, viewAs: role });
+    } catch (error) {
+        console.error("view-as notification failed:", error.message);
+    }
+}
 const ISSUE_TYPE = "ISSUE_COMPONENTS";
 
 const asObject = (value) => (typeof value === "string" ? JSON.parse(value) : value || {});
@@ -45,7 +63,8 @@ async function notify(conn, { role, type, title, body = null, severity = "info",
     );
 
     const push = () => {
-        hub.notifyRole(role, { type, notificationId: result.insertId, title, body, severity, link });
+        // actorId: the tab of whoever did it shows a toast, as the phone / desktop push below skips him
+        hub.notifyRole(role, { type, notificationId: result.insertId, title, body, severity, link, actorId: userId });
         // phone / desktop (never throws; loaded here so the services that only save notifications never load web-push)
         require("../push/push.service").sendToRole(role, { id: result.insertId, type, title, body, severity, link }, { exceptUserId: userId });
         if (role !== SUPER_ADMIN) {
@@ -57,8 +76,11 @@ async function notify(conn, { role, type, title, body = null, severity = "info",
         }
     };
     // outside a transaction (plain db pool) the row is already committed
-    if (conn.afterCommit) conn.afterCommit(push);
-    else push();
+    // the Super Admin doing this role's work through "View as" also hears what the next role is told
+    const viewing = role !== SUPER_ADMIN && userId && requestContext.viewAs();
+    const send = viewing ? () => { push(); tellViewer(userId, role, { id: result.insertId, type, title, body, severity, link }); } : push;
+    if (conn.afterCommit) conn.afterCommit(send);
+    else send();
     return result.insertId;
 }
 

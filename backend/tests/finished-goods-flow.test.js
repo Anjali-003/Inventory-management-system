@@ -69,6 +69,13 @@ const fg = require("../src/modules/finished-goods/finished-goods.service.js");
 beforeEach(() => { s = fresh(); });
 
 const BILL = { customer_name: "ABC Traders", items: [{ product_id: 1, rate: 100 }, { product_id: 2, rate: 250.5 }] };
+const PAY = (amount) => ({ amount, paid_on: "2026-10-26", method: "UPI" });
+// the order in the Store, billed (total 1431.68) and paid in full: ready to give out
+const billedAndPaid = async () => {
+  s.fg.status = "IN_STORE";
+  await fg.createBill(5, BILL, 1);
+  await fg.addPayment(5, PAY(1431.68), 1);
+};
 
 describe("finished goods after QC", () => {
   it("runs the 3 steps after QC in order, each telling the next owner; giving out completes the order", async () => {
@@ -76,9 +83,30 @@ describe("finished goods after QC", () => {
     expect([s.fg.status, s.order.status]).toEqual(["IN_STORE", "IN_STORE"]);
     await fg.createBill(5, BILL, 1);
     expect(s.fg.status).toBe("BILLED");
+    await fg.addPayment(5, PAY(1431.68), 1);
     await fg.advance("dispatch", 5, { note: "Truck 1" }, 1);
     expect([s.fg.status, s.order.status]).toEqual(["DELIVERED", "COMPLETED"]);
-    expect(s.notifications.map((n) => n.role)).toEqual(["MARKETING_MANAGER", "STORE_MANAGER", "MARKETING_MANAGER"]);
+    expect(s.notifications.map((n) => `${n.role} ${n.type}`)).toEqual([
+      "MARKETING_MANAGER FINISHED_GOODS_IN_STORE",
+      "STORE_MANAGER FINISHED_GOODS_BILLED", // keep the goods: not paid yet
+      "STORE_MANAGER FINISHED_GOODS_PAID", // the full payment is in: give them out
+      "MARKETING_MANAGER FINISHED_GOODS_DELIVERED",
+    ]);
+  });
+
+  it("gives nothing out before the whole bill is paid", async () => {
+    s.fg.status = "IN_STORE";
+    await fg.createBill(5, BILL, 1);
+    await expect(fg.advance("dispatch", 5, {}, 1)).rejects.toMatchObject({ status: 409, code: "PAYMENT_DUE" });
+    await fg.addPayment(5, PAY(1000), 1);
+    await expect(fg.advance("dispatch", 5, {}, 1)).rejects.toMatchObject({ status: 409, code: "PAYMENT_DUE" });
+    expect([s.fg.status, s.ledger.length]).toEqual(["BILLED", 0]);
+    expect(s.notifications.filter((n) => n.type === "FINISHED_GOODS_PAID")).toHaveLength(0);
+    await fg.addPayment(5, PAY(431.68), 1);
+    expect(s.notifications.filter((n) => n.type === "FINISHED_GOODS_PAID")).toHaveLength(1);
+    s.stock = new Map([[1, 5], [2, 3]]);
+    await fg.advance("dispatch", 5, {}, 1);
+    expect(s.fg.status).toBe("DELIVERED");
   });
 
   it("refuses a step whose turn has not come (or is already done)", async () => {
@@ -92,14 +120,14 @@ describe("finished goods after QC", () => {
     s.fg.status = "HANDED_OVER";
     await fg.advance("receive", 5, {}, 1);
     expect([s.stock.get(1), s.stock.get(2)]).toEqual([5, 4]);
-    s.fg.status = "BILLED";
+    await billedAndPaid();
     await fg.advance("dispatch", 5, {}, 1);
     expect([s.stock.get(1), s.stock.get(2)]).toEqual([0, 1]);
     expect(s.ledger.map((l) => `${l.direction}${l.quantity}`)).toEqual(["IN5", "IN3", "OUT5", "OUT3"]);
   });
 
   it("never lets product stock go below zero", async () => {
-    s.fg.status = "BILLED";
+    await billedAndPaid();
     await expect(fg.advance("dispatch", 5, {}, 1)).rejects.toMatchObject({ status: 409, code: "INSUFFICIENT_STOCK" });
   });
 

@@ -7,7 +7,8 @@ import { baseApi } from "@/api/baseApi";
 import { notificationsApi } from "@/features/notifications/notificationsApi";
 import { useGetMeQuery } from "@/features/auth/authApi";
 import { useToast } from "@/components/toast";
-import { getActiveRole, loginPathFor } from "@/lib/permissions";
+import { getActiveRole, loginPathFor, setViewAs } from "@/lib/permissions";
+import { pushOn, pushState } from "@/lib/push";
 
 /*
   One SSE connection per logged-in browser tab (GET /api/v1/events).
@@ -73,6 +74,7 @@ const NOTIFY_TAGS = {
   FINISHED_GOODS_HANDED_OVER: ["FinishedGoods", "Orders"],
   FINISHED_GOODS_IN_STORE: ["FinishedGoods", "Orders", "ProductStock"],
   FINISHED_GOODS_BILLED: ["FinishedGoods", "Orders"],
+  FINISHED_GOODS_PAID: ["FinishedGoods"],
   FINISHED_GOODS_DISPATCHED: ["FinishedGoods", "Orders", "ProductStock"],
   FINISHED_GOODS_DELIVERED: ["FinishedGoods", "Orders", "MarketingOrders", "ProductStock"],
 };
@@ -95,6 +97,7 @@ export default function LiveSync() {
 
   useEffect(() => {
     if (isMock || typeof EventSource === "undefined") return;
+    pushState().catch(() => {}); // learn whether this role gets phone / desktop notifications here (see pushOn)
 
     const pending = new Set();
     let sawActivity = false;
@@ -134,10 +137,13 @@ export default function LiveSync() {
 
     // targeted notification (sent by the backend only after its DB transaction committed).
     // A new one carries a title -> toast (with "Open" when it has a page); NOTIFICATIONS_CHANGED only refreshes the bell.
+    // No toast when the same notification already came as a desktop notification: push is on for this role here and
+    // it was not this user's own action (the push skips whoever did it; a "View as" one is sent to him on purpose).
     es.addEventListener("notify", (e) => {
       try {
         const evt = JSON.parse(e.data);
-        if (evt.title) {
+        const pushed = pushOn() && (evt.viewAs || evt.actorId !== meRef.current?.id);
+        if (evt.title && !pushed) {
           toastRef.current.notify({
             type: evt.type,
             title: evt.title,
@@ -147,13 +153,15 @@ export default function LiveSync() {
               ? {
                   label: "Open",
                   onClick: () => {
+                    // the Super Admin following an order in "View as": switch to the role whose turn it is
+                    if (evt.viewAs) setViewAs(evt.viewAs);
                     navigateRef.current(evt.link);
                     if (evt.notificationId) dispatch(notificationsApi.endpoints.markNotificationRead.initiate(evt.notificationId));
                   },
                 }
               : undefined,
           });
-        } else if (evt.message) {
+        } else if (!evt.title && evt.message) {
           // live-only events without a saved notification (e.g. material requests)
           toastRef.current.notify({ type: evt.type, title: evt.message, severity: "info" });
         }

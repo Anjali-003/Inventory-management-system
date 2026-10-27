@@ -4,7 +4,7 @@ import { useUrlState } from "@/lib/useUrlState"
 import { Check, FileText, PackageCheck, RefreshCw } from "lucide-react"
 import { finishedGoodsService } from "@/features/finished-goods/finishedGoodsService"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
-import { FG_STEPS, fgBadge, fgIndexOf, fgStepDone, fgStepOf, myFgStep } from "@/features/finished-goods/fgFlow"
+import { FG_STEPS, fgBadge, fgIndexOf, fgStepDone, fgStepFor, myFgStep } from "@/features/finished-goods/fgFlow"
 import { errorMessage } from "@/lib/stock"
 import { HeroButton, MktHero, SearchField } from "@/features/marketing-orders/mktKit"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
@@ -42,7 +42,7 @@ function StepLine({ item }) {
 }
 
 function OrderCard({ item, role, onAct, onBill }) {
-  const step = fgStepOf(item.status)
+  const step = fgStepFor(item)
   const mine = myFgStep(item, role)
   return (
     <div className={cn("min-w-0 rounded-2xl border bg-white p-4 shadow-sm", mine && "border-amber-300 ring-1 ring-amber-200")}>
@@ -74,7 +74,7 @@ function OrderCard({ item, role, onAct, onBill }) {
 
       <div className="mt-3 flex flex-wrap justify-end gap-2 border-t pt-3">
         {item.bill && <Button size="sm" variant="outline" onClick={() => onBill(item)}><FileText /> View bill</Button>}
-        {mine && <Button size="sm" onClick={() => onAct(item, mine)}><Check /> {mine.button}</Button>}
+        {mine && <Button size="sm" onClick={() => (mine.action === "pay" ? onBill(item) : onAct(item, mine))}><Check /> {mine.button}</Button>}
       </div>
     </div>
   )
@@ -236,7 +236,7 @@ const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getT
 const METHODS = [["UPI", "UPI"], ["BANK", "Bank transfer"], ["CASH", "Cash"], ["CHEQUE", "Cheque"], ["OTHER", "Other"]]
 const PAY_BADGE = { PAID: ["success", "Paid"], PART_PAID: ["warning", "Part paid"], UNPAID: ["danger", "Not paid"] }
 
-/* One small form inside the bill: record a payment, or (Super Admin) cancel the bill / make a credit note */
+/* One small form inside the bill: record a payment, or (Super Admin) cancel the bill */
 function BillAction({ kind, bill, finishedGoodsId, onDone, onClose }) {
   const toast = useToast()
   const [form, setForm] = useState({ amount: kind === "payment" ? String(bill.due) : "", paid_on: today(), method: "UPI", reference: "", reason: "" })
@@ -248,9 +248,8 @@ function BillAction({ kind, bill, finishedGoodsId, onDone, onClose }) {
       setBusy(true)
       setError("")
       if (kind === "payment") await finishedGoodsService.addPayment(finishedGoodsId, form)
-      if (kind === "credit") await finishedGoodsService.creditNote(finishedGoodsId, { amount: form.amount, reason: form.reason })
       if (kind === "cancel") await finishedGoodsService.cancelBill(finishedGoodsId, { reason: form.reason })
-      toast.success(kind === "payment" ? "Payment recorded" : kind === "credit" ? "Credit note made" : "Bill cancelled. Marketing can bill the order again.")
+      toast.success(kind === "payment" ? "Payment recorded" : "Bill cancelled. Marketing can bill the order again.")
       onDone()
     } catch (err) {
       setError(errorMessage(err, "Could not save."))
@@ -260,7 +259,7 @@ function BillAction({ kind, bill, finishedGoodsId, onDone, onClose }) {
   }
   return (
     <div className="space-y-3 rounded-xl border bg-slate-50 p-3">
-      <p className="font-semibold">{kind === "payment" ? "Record a payment" : kind === "credit" ? "Credit note (bill reduced after the goods left)" : "Cancel this bill"}</p>
+      <p className="font-semibold">{kind === "payment" ? "Record a payment" : "Cancel this bill"}</p>
       {kind !== "cancel" && (
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Amount (₹)" htmlFor="ba-amount" required><TextInput id="ba-amount" type="number" min="0.01" step="0.01" value={form.amount} onChange={set("amount")} /></Field>
@@ -277,13 +276,13 @@ function BillAction({ kind, bill, finishedGoodsId, onDone, onClose }) {
       )}
       {kind !== "payment" && (
         <Field label="Reason" htmlFor="ba-reason" required>
-          <TextInput id="ba-reason" maxLength={255} value={form.reason} onChange={set("reason")} placeholder={kind === "cancel" ? "e.g. wrong customer on the bill" : "e.g. 2 pieces returned damaged"} />
+          <TextInput id="ba-reason" maxLength={255} value={form.reason} onChange={set("reason")} placeholder="e.g. wrong customer on the bill" />
         </Field>
       )}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Back</Button>
-        <Button type="button" variant={kind === "cancel" ? "destructive" : "default"} onClick={submit} disabled={busy}>{busy ? "Saving..." : kind === "payment" ? "Save payment" : kind === "credit" ? "Make credit note" : "Yes, cancel bill"}</Button>
+        <Button type="button" variant={kind === "cancel" ? "destructive" : "default"} onClick={submit} disabled={busy}>{busy ? "Saving..." : kind === "payment" ? "Save payment" : "Yes, cancel bill"}</Button>
       </div>
     </div>
   )
@@ -292,7 +291,7 @@ function BillAction({ kind, bill, finishedGoodsId, onDone, onClose }) {
 export function BillView({ item, role, onClose, onChanged }) {
   const [bill, setBill] = useState(null)
   const [error, setError] = useState("")
-  const [action, setAction] = useState(null) // "payment" | "credit" | "cancel"
+  const [action, setAction] = useState(null) // "payment" | "cancel"
   const [version, setVersion] = useState(0)
   useEffect(() => {
     if (!item) return undefined
@@ -305,7 +304,6 @@ export function BillView({ item, role, onClose, onChanged }) {
   const admin = role === "SUPER_ADMIN"
   const canPay = (admin || role === "MARKETING_MANAGER") && bill?.due > 0
   const canCancel = admin && bill?.goodsStatus === "BILLED" && bill?.paid === 0
-  const canCredit = admin && bill && bill.goodsStatus !== "BILLED" && bill.net > 0
   const done = () => { setAction(null); setVersion((v) => v + 1); onChanged() }
 
   return (
@@ -336,16 +334,13 @@ export function BillView({ item, role, onClose, onChanged }) {
             <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd>{rupees(bill.subtotal)}</dd></div>
             <div className="flex justify-between"><dt className="text-muted-foreground">GST</dt><dd>{rupees(bill.gstAmount)}</dd></div>
             <div className="flex justify-between font-bold"><dt>Total</dt><dd>{rupees(bill.total)}</dd></div>
-            {bill.credited > 0 && <div className="flex justify-between text-warning"><dt>Credit notes</dt><dd>− {rupees(bill.credited)}</dd></div>}
             <div className="flex justify-between text-success"><dt>Received</dt><dd>{rupees(bill.paid)}</dd></div>
             <div className={cn("flex justify-between text-base font-bold", bill.due > 0 && "text-destructive")}><dt>Still to collect</dt><dd>{rupees(bill.due)}</dd></div>
-            {bill.refund > 0 && <div className="flex justify-between font-semibold text-warning"><dt>To refund</dt><dd>{rupees(bill.refund)}</dd></div>}
           </dl>
 
-          {(bill.payments.length > 0 || bill.creditNotes.length > 0 || bill.cancelledBills.length > 0) && (
+          {(bill.payments.length > 0 || bill.cancelledBills.length > 0) && (
             <ul className="space-y-1 rounded-xl border p-3 text-xs">
               {bill.payments.map((x) => <li key={`p${x.id}`}><b className="text-success">+ {rupees(x.amount)}</b> {x.method}{x.reference ? ` (${x.reference})` : ""} on {x.paidOn} · {x.byName}</li>)}
-              {bill.creditNotes.map((x) => <li key={`c${x.id}`}><b className="text-warning">{x.number}: − {rupees(x.amount)}</b> {x.reason} · {x.byName}</li>)}
               {bill.cancelledBills.map((x) => <li key={x.number} className="text-muted-foreground">Earlier bill {x.number} ({rupees(x.total)}) cancelled: {x.reason} · {x.byName}</li>)}
             </ul>
           )}
@@ -353,10 +348,9 @@ export function BillView({ item, role, onClose, onChanged }) {
 
           {action ? (
             <BillAction kind={action} bill={bill} finishedGoodsId={item.id} onDone={done} onClose={() => setAction(null)} />
-          ) : (canPay || canCancel || canCredit) && (
+          ) : (canPay || canCancel) && (
             <div className="flex flex-wrap justify-end gap-2">
               {canCancel && <Button type="button" variant="outline" onClick={() => setAction("cancel")}>Cancel bill</Button>}
-              {canCredit && <Button type="button" variant="outline" onClick={() => setAction("credit")}>Credit note</Button>}
               {canPay && <Button type="button" onClick={() => setAction("payment")}>Record payment</Button>}
             </div>
           )}

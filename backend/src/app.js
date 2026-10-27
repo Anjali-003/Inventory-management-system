@@ -5,6 +5,7 @@ const express = require("express");
 const cookieParser = require("cookie-parser");
 
 const corsMiddleware = require("./config/cors");
+const requestContext = require("./shared/requestContext");
 const db = require("./config/db");
 const { buildApiRouter } = require("./routes");
 const notFound = require("./middleware/notFound");
@@ -23,6 +24,7 @@ function createApp() {
     app.use(corsMiddleware);
     app.use(express.json());
     app.use(cookieParser());
+    app.use(requestContext.middleware);
 
     app.get("/", (req, res) => res.send("Server is running"));
 

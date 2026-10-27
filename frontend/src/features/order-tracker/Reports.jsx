@@ -46,6 +46,42 @@ function Section({ title, children, to, toLabel }) {
   )
 }
 
+/*
+  The profit worked out on screen, product by product, so nobody has to do the sum in their head:
+  pieces × price = sold for (without GST), pieces × cost of its parts = cost to make, the difference is the profit.
+*/
+function ProfitSum({ money }) {
+  if (money.profit === null) return <p className="mt-4 text-muted-foreground">Profit: — (nothing sold this month that has a cost yet)</p>
+  return (
+    <div className="mt-5 space-y-3">
+      <p className="font-semibold">How the profit is worked out</p>
+      <div className="overflow-x-auto rounded-xl border">
+        <table className="w-full min-w-[520px] text-left tabular-nums">
+          <thead className="bg-muted/50 text-xs text-muted-foreground">
+            <tr><th className="px-3 py-2">Product</th><th className="px-3 py-2 text-right">Sold for (without GST)</th><th className="px-3 py-2 text-right">Cost to make</th><th className="px-3 py-2 text-right">Profit</th></tr>
+          </thead>
+          <tbody className="divide-y">
+            {money.products.map((p) => (
+              <tr key={p.name}>
+                <td className="px-3 py-2 font-medium">{p.name}</td>
+                <td className="px-3 py-2 text-right">{rupees(p.soldFor)}<span className="block text-xs text-muted-foreground">{fmtQty(p.quantity)} pcs × {rupees(p.pricePerPiece)}</span></td>
+                <td className="px-3 py-2 text-right">{rupees(p.cost)}<span className="block text-xs text-muted-foreground">{fmtQty(p.quantity)} pcs × {rupees(p.costPerPiece)}</span></td>
+                <td className={cn("px-3 py-2 text-right font-semibold", p.profit < 0 ? "text-destructive" : "text-success")}>{rupees(p.profit)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <dl className="ml-auto max-w-sm space-y-1 rounded-xl bg-muted/40 p-3 tabular-nums">
+        <div className="flex justify-between"><dt>Sold for (without GST)</dt><dd>{rupees(money.soldFor)}</dd></div>
+        <div className="flex justify-between"><dt>− Cost to make</dt><dd>{rupees(money.costOfSold)}</dd></div>
+        <div className={cn("flex justify-between border-t pt-1 text-base font-bold", money.profit < 0 ? "text-destructive" : "text-success")}><dt>= Profit</dt><dd>{rupees(money.profit)}</dd></div>
+      </dl>
+      <p className="text-xs text-muted-foreground">Cost to make = the parts in one piece (its BOM) at the price they were last bought for. GST is left out: it goes to the government.</p>
+    </div>
+  )
+}
+
 /* The month in four figures: sales, supplier quality, QC first-try pass, and how long an order takes. */
 export default function Reports() {
   const [month, setMonth] = useState(thisMonth)
@@ -60,7 +96,7 @@ export default function Reports() {
       {isLoading || !r ? <TableSkeleton rows={6} /> : (
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Figure label="Net sales" to="/finished-goods?status=all" value={rupees(r.sales.net)} sub={`${r.sales.bills} bill${r.sales.bills === 1 ? "" : "s"}${r.sales.credited ? ` · credit notes − ${rupees(r.sales.credited)}` : ""} · received ${rupees(r.sales.collected)}`} />
+            <Figure label="Sales" to="/finished-goods?status=all" value={rupees(r.sales.net)} sub={`${r.sales.bills} bill${r.sales.bills === 1 ? "" : "s"} · received ${rupees(r.sales.collected)}`} />
             <Figure label="IQC rejected" to="/iqc" value={show(r.suppliers.rejectedPct, "%")} bad={r.suppliers.rejectedPct > 2}
               sub={`${fmtQty(r.suppliers.rejected)} of ${fmtQty(r.suppliers.received)} pieces · ${r.suppliers.late} of ${r.suppliers.due} deliveries late`} />
             <Figure label="QC passed first try" to="/quality-control" value={show(r.qualityCheck.firstTryPassPct, "%")} bad={r.qualityCheck.firstTryPassPct !== null && r.qualityCheck.firstTryPassPct < 90}
@@ -71,23 +107,14 @@ export default function Reports() {
           <Section title="Money">
             <div className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
               {[
-                ["Billed (incl. GST)", rupees(r.sales.total), false, "/finished-goods?status=all"],
-                ["Credit notes", r.sales.credited ? `− ${rupees(r.sales.credited)}` : rupees(0), false, "/finished-goods?status=all"],
-                ["Net sales", rupees(r.sales.net), false, "/finished-goods?status=all"],
-                ["Money received this month", rupees(r.sales.collected), false, "/finished-goods?status=all"],
-                ["Still to collect (all bills)", rupees(r.sales.toCollect), r.sales.toCollect > 0, "/finished-goods?pay=due"],
-                ["Spent on purchases", rupees(r.money.spent), false, "/purchase"],
-                ["Cost of what was sold", rupees(r.money.costOfSold), false, "/products"],
-                ["Estimated profit", r.money.profit === null ? "—" : `${rupees(r.money.profit)}${r.money.marginPct !== null ? ` (${r.money.marginPct}%)` : ""}`, r.money.profit !== null && r.money.profit < 0, "/products"],
+                ["Sold (with GST)", rupees(r.sales.total), false, "/finished-goods?status=all"],
+                ["Money received", rupees(r.sales.collected), false, "/finished-goods?status=all"],
+                ["Money still to come", rupees(r.sales.toCollect), r.sales.toCollect > 0, "/finished-goods?pay=due"],
               ].map(([l, v, bad, to]) => (
                 <Row key={l} to={to} className="border-b border-dashed"><span>{l}</span><span className={cn("font-semibold tabular-nums", bad && "text-destructive")}>{v}</span></Row>
               ))}
             </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Profit = amount billed before GST − what the sold products cost (each product's BOM at the latest purchase rate of every component) − credit notes.
-              {r.money.estimatedProducts > 0 && ` Estimate: ${r.money.estimatedProducts} sold product${r.money.estimatedProducts === 1 ? " uses" : "s use"} standard costs for components not bought with a rate yet.`}
-              {r.money.unpricedProducts > 0 && ` ${r.money.unpricedProducts} sold product${r.money.unpricedProducts === 1 ? " is" : "s are"} left out: a component of it has no cost at all.`}
-            </p>
+            <ProfitSum money={r.money} />
           </Section>
 
           <div className="grid gap-4 lg:grid-cols-2">

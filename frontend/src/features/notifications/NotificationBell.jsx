@@ -8,7 +8,7 @@ import { timeAgo } from "@/features/activity/time"
 import { severityOf } from "./notificationStyle"
 import NotificationIcon from "./NotificationIcon"
 import { usePermissions } from "@/features/auth/usePermissions"
-import { ROLE_LABELS } from "@/lib/permissions"
+import { ROLE_LABELS, setViewAs } from "@/lib/permissions"
 import {
   useGetNotificationsQuery,
   useMarkAllNotificationsReadMutation,
@@ -32,7 +32,7 @@ const TABS = [
 
 export default function NotificationBell() {
   const navigate = useNavigate()
-  const { realRole } = usePermissions()
+  const { realRole, viewingAs } = usePermissions()
   const ceo = realRole === "SUPER_ADMIN"
   const [dept, setDept] = useState("")
   const { data = EMPTY } = useGetNotificationsQuery()
@@ -73,6 +73,8 @@ export default function NotificationBell() {
   const openItem = (n) => {
     if (!n.read) markRead(n.id)
     setOpen(false)
+    // the Super Admin in "View as": opening another role's notification switches the view to that role
+    if (viewingAs && n.for_role && n.for_role !== "SUPER_ADMIN") setViewAs(n.for_role)
     if (n.link) navigate(n.link)
   }
 

@@ -112,27 +112,39 @@ async function costs({ start, end }, salesFigures) {
         costOf.set(b.product_id, (costOf.get(b.product_id) || 0) + n(b.quantity_required) * rate);
     }
     const [sold] = await db.query(
-        `SELECT bi.product_id, SUM(bi.quantity) AS quantity, SUM(bi.amount) AS amount
-         FROM bill_items bi JOIN bills b ON b.id = bi.bill_id
+        `SELECT bi.product_id, p.name, SUM(bi.quantity) AS quantity, SUM(bi.amount) AS amount
+         FROM bill_items bi JOIN bills b ON b.id = bi.bill_id JOIN products p ON p.id = bi.product_id
          WHERE b.status = 'ACTIVE' AND b.created_at >= ? AND b.created_at < ?
-         GROUP BY bi.product_id`,
+         GROUP BY bi.product_id, p.name`,
         [start, end]
     );
     let revenue = 0, cost = 0;
     const skipped = new Set();
     let estimatedSold = 0;
+    const products = []; // the sum, product by product, so the screen can show how the profit adds up
     for (const r of sold) {
         if (unpriced.has(r.product_id) || !costOf.has(r.product_id)) { skipped.add(r.product_id); continue; }
         if (estimated.has(r.product_id)) estimatedSold++;
-        revenue += n(r.amount);
-        cost += n(r.quantity) * costOf.get(r.product_id);
+        const quantity = n(r.quantity);
+        const amount = n(r.amount);
+        const each = costOf.get(r.product_id);
+        revenue += amount;
+        cost += quantity * each;
+        products.push({
+            name: r.name, quantity,
+            soldFor: Number(amount.toFixed(2)), pricePerPiece: Number((amount / quantity).toFixed(2)),
+            cost: Number((quantity * each).toFixed(2)), costPerPiece: Number(each.toFixed(2)),
+            profit: Number((amount - quantity * each).toFixed(2)),
+        });
     }
     // a credit note lowers the month's income
     const profit = revenue - cost - salesFigures.credited;
     return {
         spent: Number(n(spent.amount).toFixed(2)),
         purchases: n(spent.purchases),
+        soldFor: Number(revenue.toFixed(2)), // before GST, the products that could be costed
         costOfSold: Number(cost.toFixed(2)),
+        products,
         profit: sold.length && skipped.size < sold.length ? Number(profit.toFixed(2)) : null,
         marginPct: revenue > 0 ? Number(((profit / revenue) * 100).toFixed(1)) : null,
         unpricedProducts: skipped.size,
