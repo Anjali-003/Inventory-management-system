@@ -4,7 +4,7 @@ import { Link } from "react-router-dom"
 import { motion } from "motion/react"
 import { Check, CheckCircle2, ClipboardList, FilePen, Hourglass, Scale, X, XCircle } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { fmtDateTime } from "@/lib/stock"
+import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { SPRING, SPRING_SOFT } from "./mktMotion"
 
@@ -15,7 +15,8 @@ import { SPRING, SPRING_SOFT } from "./mktMotion"
   dashboard can simply link to ordersHref("APPROVED") and the page opens already filtered.
 
   Every stage has ONE colour family, used everywhere (tiles, chips, pills, bars, timeline):
-    Draft = amber   Waiting = sky   Approved = emerald   Rejected = rose   All = violet
+    Draft = amber   Waiting = sky   Approved = emerald   Rejected = rose   Cancelled = slate   All = violet
+  Rejected = the Operations Admin said no. Cancelled = Marketing did not accept the reduced quantity.
   `s` holds the full Tailwind class strings (kept whole, so Tailwind can see them).
 */
 
@@ -51,6 +52,14 @@ export const STAGES = [
     s: {
       grad: "from-rose-600 to-red-800", glow: "shadow-red-500/30", soft: "bg-rose-50 ring-rose-200/70",
       pill: "bg-rose-50 text-rose-800 ring-rose-200", ink: "text-rose-700",
+    },
+  },
+  {
+    status: "CANCELLED", label: "Cancelled", short: "Cancelled", icon: XCircle, tone: "slate", dotTone: "neutral",
+    bar: "bg-gradient-to-r from-slate-500 to-slate-700", dot: "bg-slate-400", hint: "Not going ahead: Marketing said no to a reduced quantity, or Operations cancelled it",
+    s: {
+      grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/30", soft: "bg-slate-50 ring-slate-200/70",
+      pill: "bg-slate-100 text-slate-700 ring-slate-200", ink: "text-slate-600",
     },
   },
 ]
@@ -204,6 +213,8 @@ export function orderSteps(status) {
       return [["Created", "done"], ["Sent to admin", "done"], ["Approved", "done"]]
     case "REJECTED":
       return [["Created", "done"], ["Sent to admin", "done"], ["Rejected", "fail"]]
+    case "CANCELLED":
+      return [["Created", "done"], ["Sent to admin", "done"], ["Cancelled", "fail"]]
     default:
       return [["Created", "done"], ["Sent to admin", "current"], ["Decision", "todo"]]
   }
@@ -334,7 +345,67 @@ export function OrderTimeline({ order }) {
 /* ------------------------------------------------------------ review numbers (table + drawer) */
 
 export const DECIDED_STATUSES = ["APPROVED", "REJECTED"]
+
+/* The customer an order is for, the first thing the reader looks for. Older orders may have none. */
+export function CustomerName({ order, className }) {
+  return order?.customer_name
+    ? <p className={cn("truncate text-sm font-semibold text-foreground", className)}>{order.customer_name}</p>
+    : <p className={cn("truncate text-xs text-muted-foreground", className)}>No customer</p>
+}
+
+/* ₹12,40,000 (Indian grouping, whole rupees) */
+export const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
+
+/**
+ * What the order is worth at the price list, without GST: units x each product's selling price (totals.value from
+ * the backend). An estimate: the bill sets the real rate. Says so when a product has no price yet.
+ */
+export function OrderValue({ order, className }) {
+  const t = order?.totals || {}
+  const lines = order?.items?.length || 0
+  // a product without a price is not worth ₹0: its value is unknown, so it is never shown as ₹0
+  if (t.unpriced && t.unpriced === lines) {
+    return <span className={cn("text-xs text-warning", className)}>Price not set yet</span>
+  }
+  return (
+    <span className={cn("text-xs text-muted-foreground", className)} title="At the price list, without GST">
+      <b className="font-semibold tabular-nums text-foreground">{rupees(t.value)}</b> + GST
+      {t.unpriced > 0 && <span className="text-warning"> · {t.unpriced === 1 ? "1 product has" : `${t.unpriced} products have`} no price yet, not counted</span>}
+    </span>
+  )
+}
+
+/*
+  Who closed a CANCELLED order, when and why. Two ways an order is cancelled:
+    Marketing said no to a reduced quantity (who / when kept in the revision), or
+    Operations cancelled an approved order before production (the reason is in approval_remarks).
+  null for any other order.
+*/
+export const declinedOf = (o) => {
+  if (o?.approval_status !== "CANCELLED") return null
+  if (o.revision?.declined_at || o.revision?.declined_by_name) {
+    return { who: "Marketing", by: o.revision.declined_by_name || "Marketing", at: o.revision.declined_at || null, why: "Did not accept the reduced quantity" }
+  }
+  return { who: "Operations", by: "Operations", at: null, why: o.approval_remarks ? `Cancelled after approval: ${o.approval_remarks}` : "Cancelled after approval" }
+}
 export const sumQty = (lines = []) => lines.reduce((s, l) => s + Number(l.quantity || 0), 0)
+
+/**
+ * How far the making of an APPROVED order is, in one line: what Marketing (and anyone reading the order) sees of
+ * Operations' own work. null for an order that is not approved.
+ */
+export function MakingLine({ order, className }) {
+  if (order?.approval_status !== "APPROVED") return null
+  const total = sumQty(order.items)
+  const sent = sumQty(order.production_request?.items || [])
+  const left = Number(order.left_to_send || 0)
+  const text = left === 0
+    ? `All ${fmtQty(total)} units given to Production to build.`
+    : sent === 0
+      ? `Not given to Production yet: waiting for parts (${fmtQty(total)} units).`
+      : `${fmtQty(sent)} of ${fmtQty(total)} units given to Production to build · ${fmtQty(left)} waiting for parts.`
+  return <p className={cn("text-xs font-medium", left === 0 ? "text-success" : "text-warning", className)}>{text}</p>
+}
 
 /*
   What the Operations Admin decided, in numbers. There is no partial approval: an approved order is approved as a
@@ -363,8 +434,8 @@ export function sentToProduction(o, line) {
 /* ------------------------------------------------------------ order drawer tabs */
 
 export const DRAWER_TABS = [
-  { id: "overview", label: "Overview" },
-  { id: "items", label: "Items & Quantities" },
+  { id: "overview", label: "Order" },
+  { id: "items", label: "Products" },
   { id: "timeline", label: "Timeline" },
 ]
 export const isDrawerTab = (value) => DRAWER_TABS.some((t) => t.id === value)

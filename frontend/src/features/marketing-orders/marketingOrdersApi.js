@@ -18,6 +18,11 @@ export const marketingOrdersApi = baseApi.injectEndpoints({
       query: () => ({ url: "/marketing-orders/products" }),
       transformResponse: asList,
     }),
+    // the saved customers, for the New order picker
+    getMarketingCustomers: build.query({
+      query: () => ({ url: "/marketing-orders/customers" }),
+      providesTags: ["MarketingOrders"],
+    }),
     createMarketingOrder: build.mutation({
       query: (data) => ({ url: "/marketing-orders", method: "post", data }),
       invalidatesTags: ["MarketingOrders"],
@@ -31,6 +36,11 @@ export const marketingOrdersApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/marketing-orders/${id}/accept-revision`, method: "post" }),
       invalidatesTags: ["MarketingOrders", "OrderApprovals"],
     }),
+    // do not agree to the reduced quantity: the order is cancelled and the admin is told
+    declineOrderRevision: build.mutation({
+      query: (id) => ({ url: `/marketing-orders/${id}/decline-revision`, method: "post" }),
+      invalidatesTags: ["MarketingOrders", "OrderApprovals"],
+    }),
     deleteMarketingOrder: build.mutation({
       query: (id) => ({ url: `/marketing-orders/${id}`, method: "delete" }),
       invalidatesTags: ["MarketingOrders"],
@@ -41,8 +51,10 @@ export const marketingOrdersApi = baseApi.injectEndpoints({
 export const {
   useGetMarketingOrdersQuery,
   useGetMarketingProductsQuery,
+  useGetMarketingCustomersQuery,
   useCreateMarketingOrderMutation,
   useSendMarketingOrderMutation,
   useDeleteMarketingOrderMutation,
   useAcceptOrderRevisionMutation,
+  useDeclineOrderRevisionMutation,
 } = marketingOrdersApi;

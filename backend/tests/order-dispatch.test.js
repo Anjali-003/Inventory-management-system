@@ -1,8 +1,11 @@
 /**
- * Operations Admin plan + dispatch (modules/order-approvals/order-approval.service.js).
+ * Operations Admin, after an order is sent (modules/order-approvals/order-approval.service.js):
+ *   approve()          the decision only: Marketing is told, no stock moves, no list is sent
+ *   sendToPurchase()   the components that are short go to Purchase, once per order
+ *   sendToProduction() what the stock can build now goes to Production and its stock is deducted; again when parts come in
  *   npm test
  * MySQL is replaced by a tiny in-memory fake that understands only the queries this service sends, so this proves
- * the logic (plan, stale-plan check, what gets saved), not one real run against MySQL.
+ * the logic (plan, stale-plan check, what gets saved, all-or-nothing, no double deduction), not one real MySQL run.
  */
 import { createRequire } from "node:module";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -13,47 +16,62 @@ const require = createRequire(import.meta.url);
 let s;
 const fresh = () => ({
   order: { id: 7, order_number: "ORD-007", status: "PENDING", approval_status: "PENDING_APPROVAL", approval_remarks: null, approval_round: 0 },
-  items: [{ product_id: 1, sku: "PRD-001", name: "Smart Controller", quantity: "10.00" }],
+  // 10 Smart Controllers: 2 resistors + 1 capacitor each
+  items: [{ product_id: 1, sku: "PRD-001", name: "Smart Controller", quantity: "10.00", selling_price: null }],
   bom: [
     { product_id: 1, component_id: 1, quantity_required: "2.00", sku: "CMP-001", name: "Resistor", unit: "pcs" },
     { product_id: 1, component_id: 2, quantity_required: "1.00", sku: "CMP-002", name: "Capacitor", unit: "pcs" },
   ],
+  // 12 resistors -> 6 units can be built now; the other 4 units need 8 more resistors
   inventory: [
-    // nothing is reserved any more: on hand is what the plan can use (12 -> 6 units at 2 per unit)
-    { component_id: 1, quantity_on_hand: "12.00", quantity_reserved: "0.00" },
-    { component_id: 2, quantity_on_hand: "100.00", quantity_reserved: "0.00" },
+    { component_id: 1, quantity_on_hand: "12.00" },
+    { component_id: 2, quantity_on_hand: "100.00" },
   ],
   ledger: [],
-  notifications: [], // "issue these components" rows for the Store Manager
+  notifications: [],
   productionRows: [],
   purchaseRows: [],
+  events: [],
   idem: [], // idempotency_keys table
   ledgerError: null, // set a test to make the next ledger INSERT fail (e.g. the UNIQUE key firing)
-  failLedgerOnNth: 0, // n: the n-th ledger row of the transaction fails (after the earlier rows were already written)
+  failLedgerOnNth: 0, // n: the n-th ledger row fails (after the earlier rows were already written)
   orderUpdateErrors: [], // errors thrown by the next UPDATE orders calls, one per call (e.g. a deadlock)
-  orderUpdateRows: 1, // affectedRows answered by UPDATE orders (0 = the status row did not land)
+  orderUpdateRows: 1, // affectedRows answered by UPDATE orders (0 = the row did not land)
   locks: 0,
 });
 
 const has = (sql, text) => sql.replace(/\s+/g, " ").includes(text);
+function updateOrder(sql, params) {
+  if (s.orderUpdateErrors.length) throw s.orderUpdateErrors.shift();
+  if (s.orderUpdateRows !== 1) return [{ affectedRows: s.orderUpdateRows }];
+  if (has(sql, "SET approval_status = ?, approval_remarks = ?, approved_by = ?, approved_at = NOW()")) {
+    s.order = { ...s.order, approval_status: params[0], approval_remarks: params[1] };
+  } else if (has(sql, "SET approval_round = ?, inventory_issued_at")) {
+    s.order = { ...s.order, approval_round: params[0], inventory_issued_at: true };
+  } else {
+    throw new Error("fake db: unexpected UPDATE orders: " + sql.replace(/\s+/g, " ").slice(0, 120));
+  }
+  return [{ affectedRows: 1 }];
+}
 function run(sql, params = []) {
   if (has(sql, "SELECT id, approval_status, approval_round FROM orders WHERE id = ? FOR UPDATE")) { s.locks++; return [s.order.id === params[0] ? [{ ...s.order }] : []]; }
-  // units approved in earlier passes (summed per product), so a later pass only plans what is still open
-  if (has(sql, "FROM order_production_items WHERE order_id = ? GROUP BY product_id")) {
-    const sums = new Map();
-    for (const [order_id, product_id, quantity] of s.productionRows) {
-      if (order_id === params[0]) sums.set(product_id, (sums.get(product_id) || 0) + Number(quantity));
-    }
-    return [[...sums].map(([product_id, approved]) => ({ product_id, approved }))];
-  }
   if (has(sql, "SELECT approval_status, approval_round FROM orders WHERE id = ?")) return [s.order.id === params[0] ? [{ approval_status: s.order.approval_status, approval_round: s.order.approval_round }] : []];
-  if (has(sql, "FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ?")) return [s.items.filter((item) => (item.order_id || s.order.id) === params[0])];
-  if (has(sql, "FROM order_items oi") && has(sql, "oi.order_id IN")) return [s.items.map((i) => ({ ...i, order_id: i.order_id || s.order.id }))];
+  // units already sent to Production (summed per product), so a later send only plans what is still open
+  if (has(sql, "SUM(quantity) AS quantity FROM order_production_items WHERE order_id = ? GROUP BY product_id")) {
+    const sums = new Map();
+    for (const [order_id, product_id, quantity] of s.productionRows) if (order_id === params[0]) sums.set(product_id, (sums.get(product_id) || 0) + Number(quantity));
+    return [[...sums].map(([product_id, quantity]) => ({ product_id, quantity }))];
+  }
+  if (has(sql, "SELECT COUNT(*) AS n FROM order_production_items WHERE order_id = ?")) return [[{ n: s.productionRows.length }]];
+  if (has(sql, "SELECT COUNT(*) AS n FROM order_purchase_items WHERE order_id = ?")) return [[{ n: s.purchaseRows.length }]];
+  if (has(sql, "FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ?")) return [s.items];
+  if (has(sql, "FROM order_items oi") && has(sql, "oi.order_id IN")) return [s.items.map((i) => ({ ...i, order_id: s.order.id }))];
+  if (has(sql, "SELECT COALESCE(SUM(quantity), 0) AS n FROM order_items WHERE order_id = ?")) return [[{ n: s.items.reduce((t, i) => t + Number(i.quantity), 0) }]];
   if (has(sql, "FROM product_bom pb")) return [s.bom];
   if (has(sql, "FROM inventory WHERE component_id IN")) { if (has(sql, "FOR UPDATE")) s.locks++; return [s.inventory]; }
   if (has(sql, "UPDATE inventory SET quantity_on_hand = quantity_on_hand -")) {
     const row = s.inventory.find((item) => item.component_id === params[1]);
-    if (!row || Number(row.quantity_on_hand) - Number(row.quantity_reserved) < Number(params[2])) return [{ affectedRows: 0 }];
+    if (!row || Number(row.quantity_on_hand) < Number(params[2])) return [{ affectedRows: 0 }];
     row.quantity_on_hand = (Number(row.quantity_on_hand) - Number(params[0])).toFixed(2);
     return [{ affectedRows: 1 }];
   }
@@ -64,27 +82,18 @@ function run(sql, params = []) {
   if (has(sql, "INSERT INTO inventory_transactions")) {
     if (s.ledgerError) throw s.ledgerError;
     if (s.failLedgerOnNth && s.ledger.length + 1 === s.failLedgerOnNth) throw new Error("ledger write failed");
-    s.ledger.push({ params, sql });
+    s.ledger.push({ component_id: params[0], quantity: params[1], key: params[7] });
     return [{ insertId: s.ledger.length }];
-  }
-  if (has(sql, "SELECT id, sku, name, unit FROM components WHERE id IN")) {
-    const names = { 1: ["CMP-001", "Resistor"], 2: ["CMP-002", "Capacitor"] };
-    return [params[0].map((id) => ({ id, sku: names[id][0], name: names[id][1], unit: "pcs" }))];
   }
   if (has(sql, "SELECT order_number FROM orders WHERE id = ?")) return [[{ order_number: s.order.order_number }]];
   // notifyDecision(): who raised the order decides whether Marketing hears the outcome
   if (has(sql, "u.role AS creator_role FROM orders o LEFT JOIN users u")) return [[{ order_number: s.order.order_number, creator_role: s.order.creator_role ?? "MARKETING_MANAGER" }]];
   if (has(sql, "INSERT INTO notifications")) {
-    const [role, type, title, body, severity, link, requires_action, order_id, payload] = params;
-    s.notifications.push({ id: s.notifications.length + 1, role, type, title, body, severity, link, requires_action, order_id, payload: JSON.parse(payload) });
+    const [role, type, title, body, severity, link, requires_action, order_id] = params;
+    s.notifications.push({ role, type, title, body, severity, link, requires_action, order_id });
     return [{ insertId: s.notifications.length }];
   }
-  if (has(sql, "UPDATE orders")) {
-    if (s.orderUpdateErrors.length) throw s.orderUpdateErrors.shift();
-    if (s.orderUpdateRows !== 1) return [{ affectedRows: s.orderUpdateRows }];
-    s.order = { ...s.order, approval_status: params[0], approval_remarks: params[1], approval_round: params[3], inventory_issued_at: true };
-    return [{ affectedRows: 1 }];
-  }
+  if (has(sql, "UPDATE orders")) return updateOrder(sql, params);
   if (has(sql, "INSERT INTO order_production_items")) { s.productionRows.push(...params[0]); return [{}]; }
   if (has(sql, "INSERT INTO order_purchase_items")) { s.purchaseRows.push(...params[0]); return [{}]; }
   if (has(sql, "FROM order_production_items r")) {
@@ -93,6 +102,8 @@ function run(sql, params = []) {
   if (has(sql, "FROM order_purchase_items r")) {
     return [s.purchaseRows.map(([order_id, component_id, quantity]) => ({ order_id, component_id, sku: `CMP-00${component_id}`, name: "Resistor", unit: "pcs", quantity, sent_by_name: "Ops", sent_at: "2026-10-14 11:00:00" }))];
   }
+  if (has(sql, "INSERT INTO order_events")) { s.events.push({ order_id: params[0], kind: params[1], actor_id: params[2], quantity: params[3], detail: params[4] }); return [{ insertId: s.events.length }]; }
+  if (has(sql, "FROM order_events e")) return [s.events.map((e) => ({ ...e, at: "2026-10-14 11:00:00", by_name: "Ops", by_role: "OPERATIONS_ADMIN" }))];
   if (has(sql, "FROM orders o LEFT JOIN users cu")) return [[{ ...s.order, created_by_name: "Marketing", approved_by_name: "Ops" }]];
   throw new Error("fake db: unexpected query: " + sql.replace(/\s+/g, " ").slice(0, 120));
 }
@@ -116,6 +127,7 @@ function idemQuery(sql, params, claims) {
   return null;
 }
 let transactionQueue = Promise.resolve();
+const TABLES = ["order", "inventory", "ledger", "notifications", "productionRows", "purchaseRows", "events"];
 const fakeDb = {
   query: async (sql, p) => run(sql, p),
   getConnection: async () => {
@@ -128,8 +140,7 @@ const fakeDb = {
         const previous = transactionQueue;
         transactionQueue = new Promise((resolve) => { unlock = resolve; });
         await previous;
-        const { order, inventory, ledger, notifications, productionRows, purchaseRows } = s;
-        snapshot = structuredClone({ order, inventory, ledger, notifications, productionRows, purchaseRows });
+        snapshot = structuredClone(Object.fromEntries(TABLES.map((t) => [t, s[t]])));
       },
       commit: async () => unlock?.(),
       rollback: async () => {
@@ -143,556 +154,299 @@ const fakeDb = {
 };
 
 require.cache[require.resolve("../src/config/db.js")] = { id: "db", filename: "db", loaded: true, exports: fakeDb };
-const rawService = require("../src/modules/order-approvals/order-approval.service.js");
-// live pushes to the Store Managers: record them instead of writing to real browser connections
+const service = require("../src/modules/order-approvals/order-approval.service.js");
+// live pushes: record them instead of writing to real browser connections
 const hub = require("../src/realtime/hub.js");
 let pushes = [];
 hub.notifyRole = (role, data) => pushes.push({ role, ...data });
 
-// approve() and dispatch() REQUIRE an idempotency_key and the expected_round. The tests in this file are about planning
-// and stock, so they call the service through a client that sends a fresh key and the round it just saw. The tests in
-// "duplicate requests never deduct twice" (bottom of the file) call rawService to test the guard itself.
 let keyCounter = 0;
-const asClient = (fn) => (orderId, body = {}, userId, opts) =>
-  fn(orderId, { idempotency_key: `test-key-${++keyCounter}`, expected_round: s.order.approval_round, ...body }, userId, opts);
-const service = { ...rawService, approve: asClient(rawService.approve), dispatch: asClient(rawService.dispatch) };
-
-const rightLists = () => ({
-  production_items: [{ product_id: 1, quantity: 6 }],
-  purchase_items: [{ component_id: 1, quantity: 8 }],
-});
+const key = () => `test-key-${++keyCounter}`;
+const approve = (extra = {}) => service.approve(7, { idempotency_key: key(), expected_round: s.order.approval_round, ...extra }, 5);
+const toProduction = (quantity, extra = {}) =>
+  service.sendToProduction(7, { idempotency_key: key(), expected_round: s.order.approval_round, production_items: [{ product_id: 1, quantity }], ...extra }, 5);
+const toPurchase = (items = [{ component_id: 1, quantity: 8 }]) => service.sendToPurchase(7, { purchase_items: items }, 5);
+const stock = () => s.inventory.map((row) => row.quantity_on_hand);
 
 beforeEach(() => { s = fresh(); pushes = []; });
 
-describe("getPlan", () => {
+describe("stock check (getPlan)", () => {
   it("shows what can be built now and which component is short", async () => {
     const plan = await service.getPlan(7);
-    expect(plan.lines[0]).toMatchObject({ product_id: 1, name: "Smart Controller", ordered: 10, can_make: 6, remaining: 4 });
-    expect(plan.shortages).toHaveLength(1);
-    expect(plan.shortages[0]).toMatchObject({ component_id: 1, name: "Resistor", required: 8, available: 0, shortage: 8 });
-    expect(plan.fully_producible).toBe(false);
+    expect(plan.lines).toMatchObject([{ product_id: 1, ordered: 10, can_make: 6, remaining: 4 }]);
+    expect(plan.shortages).toMatchObject([{ component_id: 1, shortage: 8 }]);
+    expect(plan.purchase_sent).toBe(false);
+    expect(plan.approval_round).toBe(0);
   });
 
   it("reports a product with an unfinished BOM instead of guessing", async () => {
-    s.bom[1].quantity_required = null;
+    s.bom[0].quantity_required = null;
     const plan = await service.getPlan(7);
     expect(plan.missing_bom).toEqual([1]);
     expect(plan.lines[0].can_make).toBe(0);
   });
 
-  it("refuses an order that is already decided", async () => {
-    s.order.approval_status = "APPROVED";
+  it("is refused for an order that is closed", async () => {
+    s.order.approval_status = "REJECTED";
     await expect(service.getPlan(7)).rejects.toMatchObject({ status: 409, code: "ALREADY_DECIDED" });
+  });
+
+  it("on an approved order, only plans the units not in Production yet", async () => {
+    await approve();
+    await toProduction(6);
+    const plan = await service.getPlan(7);
+    expect(plan.lines).toMatchObject([{ ordered: 4, can_make: 0 }]);
+    expect(plan.approval_round).toBe(1);
   });
 });
 
-describe("dispatch", () => {
-  it("approves the order and saves both lists", async () => {
-    const order = await service.dispatch(7, { remarks: "go", ...rightLists() }, 5);
-    expect(s.order.approval_status).toBe("PARTIALLY_APPROVED");
-    expect(s.productionRows).toEqual([[7, 1, 6, 5]]);
+describe("approve: the decision only", () => {
+  it("approves, tells Marketing, and moves no stock and sends no list", async () => {
+    const order = await approve({ remarks: "go ahead" });
+    expect(order.approval_status).toBe("APPROVED");
+    expect(order.left_to_send).toBe(10);
+    expect(stock()).toEqual(["12.00", "100.00"]);
+    expect(s.ledger).toHaveLength(0);
+    expect(s.productionRows).toHaveLength(0);
+    expect(s.purchaseRows).toHaveLength(0);
+    expect(s.notifications).toMatchObject([{ role: "MARKETING_MANAGER", type: "ORDER_APPROVED", body: "go ahead" }]);
+    expect(s.events).toMatchObject([{ kind: "APPROVED", quantity: 10 }]);
+  });
+
+  it("an order not raised by Marketing does not notify Marketing", async () => {
+    s.order.creator_role = "OPERATIONS_ADMIN";
+    await approve();
+    expect(s.notifications).toHaveLength(0);
+  });
+
+  it("reject needs a reason, tells Marketing only, and needs no key", async () => {
+    await expect(service.reject(7, { remarks: "" }, 5)).rejects.toMatchObject({ status: 422 });
+    await expect(service.reject(7, { remarks: "Too many units" }, 5)).resolves.toMatchObject({ approval_status: "REJECTED" });
+    expect(s.notifications).toMatchObject([{ role: "MARKETING_MANAGER", type: "ORDER_REJECTED", body: "Too many units" }]);
+    expect(s.events).toMatchObject([{ kind: "REJECTED" }]);
+  });
+
+  it("an order cannot be approved twice, and an approved one cannot be rejected", async () => {
+    await approve();
+    await expect(approve()).rejects.toMatchObject({ status: 409, code: "ALREADY_DECIDED" });
+    await expect(service.reject(7, { remarks: "late change" }, 5)).rejects.toMatchObject({ code: "ALREADY_DECIDED" });
+  });
+});
+
+describe("send the list to Purchase", () => {
+  it("needs an approved order", async () => {
+    await expect(toPurchase()).rejects.toMatchObject({ status: 409, code: "NOT_APPROVED" });
+  });
+
+  it("saves the components that are short and tells Purchase, moving no stock", async () => {
+    await approve();
+    const order = await toPurchase();
     expect(s.purchaseRows).toEqual([[7, 1, 8, 5]]);
-    expect(s.inventory.map((row) => row.quantity_on_hand)).toEqual(["3.00", "94.00"]);
-    expect(s.ledger).toHaveLength(2);
-    expect(order.production_request.items[0]).toMatchObject({ product_id: 1, quantity: 6 });
-    expect(order.purchase_request.items[0]).toMatchObject({ component_id: 1, quantity: 8 });
+    expect(order.purchase_request.items).toMatchObject([{ component_id: 1, quantity: 8 }]);
+    expect(s.ledger).toHaveLength(0);
+    expect(s.notifications.at(-1)).toMatchObject({ role: "PURCHASE_MANAGER", type: "PURCHASE_REQUIRED" });
+    expect(s.events.at(-1)).toMatchObject({ kind: "SENT_TO_PURCHASE", quantity: 10 });
+    expect((await service.getPlan(7)).purchase_sent).toBe(true);
+  });
+
+  it("is sent once per order", async () => {
+    await approve();
+    await toPurchase();
+    await expect(toPurchase()).rejects.toMatchObject({ status: 409, code: "ALREADY_SENT" });
+    expect(s.purchaseRows).toHaveLength(1);
+  });
+
+  it("refuses a list that no longer matches the stock (STALE_PLAN) and saves nothing", async () => {
+    await approve();
+    await expect(toPurchase([{ component_id: 1, quantity: 5 }])).rejects.toMatchObject({ status: 409, code: "STALE_PLAN" });
+    expect(s.purchaseRows).toHaveLength(0);
+  });
+
+  it("says so when nothing is short", async () => {
+    s.inventory[0].quantity_on_hand = "50.00";
+    await approve();
+    await expect(toPurchase([])).rejects.toMatchObject({ status: 422, code: "NOTHING_TO_BUY" });
+  });
+});
+
+describe("send to Production", () => {
+  it("needs an approved order", async () => {
+    await expect(toProduction(6)).rejects.toMatchObject({ status: 409, code: "NOT_APPROVED" });
+    expect(s.ledger).toHaveLength(0);
+  });
+
+  it("sends what the stock can build now and deducts exactly its BOM", async () => {
+    await approve();
+    const order = await toProduction(6);
+    expect(stock()).toEqual(["0.00", "94.00"]); // 6 units x (2 resistors, 1 capacitor)
+    expect(s.ledger.map((l) => [l.component_id, l.quantity, l.key])).toEqual([[1, "12.00", "approval-7-1-1"], [2, "6.00", "approval-7-1-2"]]);
+    expect(s.productionRows).toEqual([[7, 1, 6, 5]]);
+    expect(order.left_to_send).toBe(4);
+    expect(s.order).toMatchObject({ approval_round: 1, inventory_issued_at: true });
+    expect(s.notifications.at(-1)).toMatchObject({ role: "PRODUCTION_MANAGER", type: "PRODUCTION_ASSIGNED", title: "Order ORD-007 is ready for production" });
+    expect(s.events.at(-1)).toMatchObject({ kind: "SENT_TO_PRODUCTION", quantity: 6 });
   });
 
   it("locks the stock rows while it re-checks the plan", async () => {
-    await service.dispatch(7, rightLists(), 5);
-    expect(s.locks).toBeGreaterThan(1); // the order row + the inventory rows
+    await approve();
+    s.locks = 0;
+    await toProduction(6);
+    expect(s.locks).toBeGreaterThanOrEqual(2); // the order row and the inventory rows
+  });
+
+  it("is refused while nothing can be built, and moves nothing", async () => {
+    s.inventory[0].quantity_on_hand = "0.00";
+    await approve();
+    await expect(service.sendToProduction(7, { idempotency_key: key(), expected_round: 0, production_items: [] }, 5)).rejects.toMatchObject({ status: 422, code: "NOTHING_TO_BUILD" });
+    await expect(toProduction(1)).rejects.toMatchObject({ code: "NOTHING_TO_BUILD" });
+    expect(s.ledger).toHaveLength(0);
   });
 
   it("refuses with STALE_PLAN when the stock changed after the admin looked, and saves nothing", async () => {
-    s.inventory[0].quantity_on_hand = "11.00"; // only 8 available now -> 4 units, not 6
-    await expect(service.dispatch(7, rightLists(), 5)).rejects.toMatchObject({ status: 409, code: "STALE_PLAN" });
-    expect(s.order.approval_status).toBe("PENDING_APPROVAL");
-    expect(s.productionRows).toEqual([]);
-    expect(s.purchaseRows).toEqual([]);
+    await approve();
+    s.inventory[0].quantity_on_hand = "8.00"; // only 4 units now, the screen said 6
+    await expect(toProduction(6)).rejects.toMatchObject({ status: 409, code: "STALE_PLAN" });
+    expect(stock()).toEqual(["8.00", "100.00"]);
+    expect(s.productionRows).toHaveLength(0);
+    expect(s.ledger).toHaveLength(0);
   });
 
-  it("refuses a list the admin edited by hand", async () => {
-    await expect(service.dispatch(7, { ...rightLists(), production_items: [{ product_id: 1, quantity: 10 }] }, 5))
-      .rejects.toMatchObject({ status: 409, code: "STALE_PLAN" });
+  it("refuses a quantity the admin edited by hand", async () => {
+    await approve();
+    await expect(toProduction(3)).rejects.toMatchObject({ code: "STALE_PLAN" });
   });
 
-  it("refuses an order that was decided meanwhile", async () => {
-    s.order.approval_status = "REJECTED";
-    await expect(service.dispatch(7, rightLists(), 5)).rejects.toMatchObject({ status: 409, code: "ALREADY_DECIDED" });
-  });
-
-  it("refuses to send when both lists are empty", async () => {
-    await expect(service.dispatch(7, { production_items: [], purchase_items: [] }, 5)).rejects.toMatchObject({ status: 422 });
-  });
-
-  it("only sends the production list when nothing is short", async () => {
-    s.inventory[0].quantity_on_hand = "100.00";
-    const order = await service.dispatch(7, { production_items: [{ product_id: 1, quantity: 10 }], purchase_items: [] }, 5);
-    expect(order.production_request.items[0].quantity).toBe(10);
-    expect(order.purchase_request).toBe(null);
-    expect(s.order.approval_status).toBe("APPROVED");
-  });
-
-  it("allocates and issues BOM materials for each approved product line", async () => {
-    s.items = [
-      { order_id: 7, product_id: 1, sku: "PRD-001", name: "Controller", quantity: "2.00" },
-      { order_id: 7, product_id: 2, sku: "PRD-002", name: "Sensor", quantity: "3.00" },
-    ];
-    s.bom = [
-      { product_id: 1, component_id: 1, quantity_required: "2.00" },
-      { product_id: 2, component_id: 1, quantity_required: "1.00" },
-      { product_id: 2, component_id: 2, quantity_required: "1.00" },
-    ];
-    s.inventory = [
-      { component_id: 1, quantity_on_hand: "20.00", quantity_reserved: "0.00" },
-      { component_id: 2, quantity_on_hand: "20.00", quantity_reserved: "0.00" },
-    ];
-    await service.dispatch(7, {
-      production_items: [{ product_id: 1, quantity: 2 }, { product_id: 2, quantity: 3 }],
-      purchase_items: [],
-    }, 5);
-    expect(s.inventory.map((row) => row.quantity_on_hand)).toEqual(["13.00", "17.00"]);
-    expect(s.productionRows).toEqual([[7, 1, 2, 5], [7, 2, 3, 5]]);
-  });
-
-  it("issues only the BOM for the quantity the admin selected", async () => {
-    await service.dispatch(7, {
-      production_items: [{ product_id: 1, quantity: 2 }],
-      purchase_items: [{ component_id: 1, quantity: 8 }],
-    }, 5);
-    expect(s.productionRows).toEqual([[7, 1, 2, 5]]);
-    expect(s.inventory.map((row) => row.quantity_on_hand)).toEqual(["11.00", "98.00"]);
-    expect(s.ledger).toHaveLength(2);
-    expect(s.ledger.every((entry) => entry.sql.includes("'ISSUED_TO_PRODUCTION'"))).toBe(true);
-    expect(s.order.approval_status).toBe("PARTIALLY_APPROVED");
-  });
-});
-
-describe("approve", () => {
-  it("consumes the planned BOM stock once and records approved production quantities", async () => {
-    const result = await service.approve(7, { remarks: "approved" }, 5);
-    expect(s.order.approval_status).toBe("PARTIALLY_APPROVED");
-    expect(s.order.inventory_issued_at).toBe(true);
-    expect(s.inventory.map((row) => row.quantity_on_hand)).toEqual(["3.00", "94.00"]);
-    expect(s.productionRows).toEqual([[7, 1, 6, 5]]);
-    expect(result.production_request.items[0]).toMatchObject({ product_id: 1, quantity: 6 });
-  });
-
-  it("does not oversell when admins approve separate orders concurrently", async () => {
-    const secondOrder = { id: 8, order_number: "ORD-008", status: "PENDING", approval_status: "PENDING_APPROVAL" };
-    s.items.push({ order_id: 8, product_id: 1, sku: "PRD-001", name: "Smart Controller", quantity: "10.00" });
-    // Keep the fake's second order isolated while both orders share the same inventory rows.
-    const originalConnQuery = fakeDb.getConnection;
-    fakeDb.getConnection = async () => {
-      const connection = await originalConnQuery();
-      const query = connection.query;
-      connection.query = async (sql, params = []) => {
-        if (has(sql, "SELECT id, approval_status, approval_round FROM orders WHERE id = ? FOR UPDATE") && params[0] === 8) return [[{ ...secondOrder }]];
-        if (has(sql, "FROM order_production_items WHERE order_id = ? GROUP BY product_id") && params[0] === 8) return [[]];
-        if (has(sql, "FROM order_items oi JOIN products p ON p.id = p.id")) return query(sql, params);
-        if (has(sql, "FROM order_items oi JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ?") && params[0] === 8) return [s.items.filter((item) => item.order_id === 8)];
-        if (has(sql, "UPDATE orders") && params[4] === 8) { Object.assign(secondOrder, { approval_status: params[0] }); return [{ affectedRows: 1 }]; }
-        if (has(sql, "FROM orders o LEFT JOIN users cu") && params[0] === 8) return [[{ ...secondOrder, created_by_name: "Marketing", approved_by_name: "Ops" }]];
-        return query(sql, params);
-      };
-      return connection;
-    };
-    try {
-      const results = await Promise.allSettled([
-        service.approve(7, {}, 5),
-        service.approve(8, {}, 6),
-      ]);
-      expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(2);
-      expect(s.order.approval_status).toBe("PARTIALLY_APPROVED");
-      expect(secondOrder.approval_status).toBe("PARTIALLY_APPROVED");
-      expect(s.productionRows.reduce((sum, row) => sum + Number(row[2]), 0)).toBe(6);
-      expect(s.inventory[0].quantity_on_hand).toBe("3.00");
-      expect(Number(s.inventory[0].quantity_on_hand)).toBeGreaterThanOrEqual(Number(s.inventory[0].quantity_reserved));
-    } finally {
-      fakeDb.getConnection = originalConnQuery;
-    }
-  });
-});
-
-/* ---- partial approval, then approving the rest ----------------------------------------------------------------- */
-describe("approving the rest of a partly approved order", () => {
-  // First pass: 10 ordered, stock allows 6 -> PARTIALLY_APPROVED, 8 x CMP-001 sent to the Purchase Manager.
-  const firstPass = () => service.dispatch(7, rightLists(), 5);
-  // The missing components arrive: 8 available -> 4 more units can be built.
-  const stockArrives = () => { s.inventory[0].quantity_on_hand = "11.00"; };
-
-  it("plans only the units that are not approved yet", async () => {
-    await firstPass();
-    stockArrives();
-    const plan = await service.getPlan(7);
-    expect(plan.reapproval).toBe(true);
-    expect(plan.lines[0]).toMatchObject({ product_id: 1, ordered: 4, ordered_total: 10, already_approved: 6, can_make: 4, remaining: 0 });
-    expect(plan.shortages).toEqual([]);
-    expect(plan.fully_producible).toBe(true);
-  });
-
-  it("approves the rest: issues only those materials, becomes APPROVED, adds no purchase lines", async () => {
-    await firstPass();
-    stockArrives();
-    const purchaseBefore = s.purchaseRows.length;
-    const order = await service.dispatch(7, { production_items: [{ product_id: 1, quantity: 4 }], purchase_items: [] }, 5);
-
-    expect(s.order.approval_status).toBe("APPROVED");
-    expect(s.order.approval_round).toBe(2);
+  it("sends again when the parts come in: only the open units, with their own ledger keys", async () => {
+    await approve();
+    await toProduction(6);
+    s.inventory[0].quantity_on_hand = "8.00"; // the purchased resistors are in: enough for the last 4 units
+    const order = await toProduction(4);
+    expect(order.left_to_send).toBe(0);
     expect(s.productionRows).toEqual([[7, 1, 6, 5], [7, 1, 4, 5]]);
-    expect(s.purchaseRows).toHaveLength(purchaseBefore);
-    // 4 more units = 8 x CMP-001 and 4 x CMP-002 on top of the first pass (6 units)
-    expect(s.inventory.map((row) => row.quantity_on_hand)).toEqual(["3.00", "90.00"]);
-    // the screen sees one line per product with both passes added up
-    expect(order.production_request.items).toHaveLength(1);
-    expect(order.production_request.items[0]).toMatchObject({ product_id: 1, quantity: 10 });
-  });
-
-  it("gives every approval pass its own ledger key, so passes never collide", async () => {
-    await firstPass();
-    stockArrives();
-    await service.dispatch(7, { production_items: [{ product_id: 1, quantity: 4 }], purchase_items: [] }, 5);
-    const keys = s.ledger.map((entry) => entry.params[entry.params.length - 1]);
-    expect(keys).toHaveLength(4);
-    expect(new Set(keys).size).toBe(4);
-    expect(keys.filter((key) => key.startsWith("approval-7-1-"))).toHaveLength(2);
-    expect(keys.filter((key) => key.startsWith("approval-7-2-"))).toHaveLength(2);
-  });
-
-  it("can approve the rest in several smaller passes and stays PARTIALLY_APPROVED until everything is approved", async () => {
-    await firstPass();
-    stockArrives();
-    await service.dispatch(7, { production_items: [{ product_id: 1, quantity: 3 }], purchase_items: [] }, 5);
-    expect(s.order.approval_status).toBe("PARTIALLY_APPROVED");
-    expect(s.order.approval_round).toBe(2);
-
-    s.inventory[0].quantity_on_hand = "11.00"; // more arrives
-    await service.dispatch(7, { production_items: [{ product_id: 1, quantity: 1 }], purchase_items: [] }, 5);
-    expect(s.order.approval_status).toBe("APPROVED");
-    expect(s.order.approval_round).toBe(3);
-  });
-
-  it("refuses to approve more than what stock allows (stale plan)", async () => {
-    await firstPass();
-    stockArrives();
-    await expect(service.dispatch(7, { production_items: [{ product_id: 1, quantity: 5 }], purchase_items: [] }, 5))
-      .rejects.toMatchObject({ status: 409, code: "STALE_PLAN" });
-    expect(s.productionRows).toHaveLength(1);
-  });
-
-  it("needs at least one product quantity when approving the rest", async () => {
-    await firstPass();
-    stockArrives();
-    await expect(service.dispatch(7, { production_items: [], purchase_items: [{ component_id: 1, quantity: 1 }] }, 5))
-      .rejects.toMatchObject({ status: 422 });
-  });
-
-  it("approve() with nothing buildable yet is refused and saves nothing", async () => {
-    await firstPass(); // stock is used up: 0 available
-    const ledgerBefore = s.ledger.length;
-    await expect(service.approve(7, {}, 5)).rejects.toMatchObject({ status: 409, code: "NOTHING_TO_APPROVE" });
-    expect(s.ledger).toHaveLength(ledgerBefore);
-    expect(s.order.approval_status).toBe("PARTIALLY_APPROVED");
-  });
-
-  it("approve() approves the rest once stock is there", async () => {
-    await firstPass();
-    stockArrives();
-    await service.approve(7, {}, 5);
-    expect(s.order.approval_status).toBe("APPROVED");
-    expect(s.productionRows).toEqual([[7, 1, 6, 5], [7, 1, 4, 5]]);
-  });
-
-  it("a partly approved order cannot be rejected", async () => {
-    await firstPass();
-    await expect(service.reject(7, { remarks: "no longer needed" }, 5)).rejects.toMatchObject({ status: 409, code: "ALREADY_DECIDED" });
-  });
-
-  it("multi-product order: the second pass finishes only the product that is still open", async () => {
-    s.items = [
-      { order_id: 7, product_id: 1, sku: "PRD-001", name: "Controller", quantity: "2.00" },
-      { order_id: 7, product_id: 2, sku: "PRD-002", name: "Sensor", quantity: "5.00" },
-    ];
-    s.bom = [
-      { product_id: 1, component_id: 1, quantity_required: "2.00" },
-      { product_id: 2, component_id: 1, quantity_required: "1.00" },
-      { product_id: 2, component_id: 2, quantity_required: "1.00" },
-    ];
-    s.inventory = [
-      { component_id: 1, quantity_on_hand: "6.00", quantity_reserved: "0.00" }, // controller 2 x 2 = 4, leaves 2 -> 2 sensors
-      { component_id: 2, quantity_on_hand: "20.00", quantity_reserved: "0.00" },
-    ];
-    // first pass: both controllers and 2 of the 5 sensors; 3 sensors need 3 more CMP-001
-    await service.dispatch(7, {
-      production_items: [{ product_id: 1, quantity: 2 }, { product_id: 2, quantity: 2 }],
-      purchase_items: [{ component_id: 1, quantity: 3 }],
-    }, 5);
-    expect(s.order.approval_status).toBe("PARTIALLY_APPROVED");
-
-    s.inventory[0].quantity_on_hand = "3.00";
-    const plan = await service.getPlan(7);
-    expect(plan.lines).toHaveLength(1); // the controller is fully approved: only the sensor is planned again
-    expect(plan.lines[0]).toMatchObject({ product_id: 2, ordered: 3, ordered_total: 5, already_approved: 2, can_make: 3 });
-
-    const order = await service.dispatch(7, { production_items: [{ product_id: 2, quantity: 3 }], purchase_items: [] }, 5);
-    expect(s.order.approval_status).toBe("APPROVED");
-    expect(order.production_request.items.map((i) => [i.product_id, i.quantity])).toEqual([[1, 2], [2, 5]]);
-    expect(s.inventory.map((row) => row.quantity_on_hand)).toEqual(["0.00", "15.00"]);
+    expect(s.ledger.map((l) => l.key)).toEqual(["approval-7-1-1", "approval-7-1-2", "approval-7-2-1", "approval-7-2-2"]);
+    expect(s.notifications.at(-1).title).toBe("More of order ORD-007 can be built");
+    await expect(service.getPlan(7)).rejects.toMatchObject({ code: "NOTHING_LEFT" });
   });
 });
 
-/* ---- duplicate requests never deduct twice ---------------------------------------------------------------------- */
 describe("duplicate requests never deduct twice", () => {
-  // Plenty of stock: 19 on hand - 3 reserved = 16 available = enough for 8 of the 10 ordered units.
-  // The admin approves only 3 now. This is the case where a repeated request used to be accepted as "the next pass".
-  const stock = () => s.inventory.map((row) => row.quantity_on_hand);
-  const partial = (key = "click-0001", extra = {}) => ({
-    idempotency_key: key,
-    expected_round: 0,
-    production_items: [{ product_id: 1, quantity: 3 }],
-    purchase_items: [{ component_id: 1, quantity: 4 }],
-    ...extra,
-  });
-  beforeEach(() => { s.inventory[0].quantity_on_hand = "19.00"; });
+  const body = (k, extra = {}) => ({ idempotency_key: k, expected_round: 0, production_items: [{ product_id: 1, quantity: 6 }], ...extra });
+  // the keys of the sends only (approve() in beforeEach keeps its own)
+  const sendKeys = () => s.idem.filter((k) => k.action === "order.send-to-production");
+  beforeEach(async () => { await approve(); });
 
   it("API retry: the same request is replayed, never applied a second time", async () => {
     let replays = 0;
-    const first = await rawService.dispatch(7, partial(), 5);
-    const again = await rawService.dispatch(7, partial(), 5, { onReplay: () => replays++ });
-
-    expect(again).toEqual(first); // the client gets the original answer back
+    const first = await service.sendToProduction(7, body("click-0001"), 5);
+    const again = await service.sendToProduction(7, body("click-0001"), 5, { onReplay: () => replays++ });
+    expect(again).toEqual(first);
     expect(replays).toBe(1);
-    expect(stock()).toEqual(["13.00", "97.00"]); // 3 units' materials, once
+    expect(stock()).toEqual(["0.00", "94.00"]);
     expect(s.ledger).toHaveLength(2);
-    expect(s.productionRows).toEqual([[7, 1, 3, 5]]);
-    expect(s.idem).toHaveLength(1);
+    expect(s.productionRows).toHaveLength(1);
   });
 
   it("double click: two identical requests in flight at once deduct once", async () => {
-    const [a, b] = await Promise.all([rawService.dispatch(7, partial(), 5), rawService.dispatch(7, partial(), 5)]);
+    const [a, b] = await Promise.all([service.sendToProduction(7, body("click-0002"), 5), service.sendToProduction(7, body("click-0002"), 5)]);
     expect(b).toEqual(a);
-    expect(stock()).toEqual(["13.00", "97.00"]);
     expect(s.ledger).toHaveLength(2);
     expect(s.productionRows).toHaveLength(1);
   });
 
-  it("double click on approve(): once", async () => {
-    const body = { idempotency_key: "click-0002", expected_round: 0 };
-    const results = await Promise.all([rawService.approve(7, body, 5), rawService.approve(7, body, 5), rawService.approve(7, body, 5)]);
-    expect(results[1]).toEqual(results[0]);
-    expect(results[2]).toEqual(results[0]);
-    expect(s.productionRows).toEqual([[7, 1, 8, 5]]); // everything the stock allows, approved once
-    expect(stock()).toEqual(["3.00", "92.00"]);
+  it("the same send with a NEW key (second admin, stale tab) is refused with STALE_ROUND", async () => {
+    await service.sendToProduction(7, body("click-0003"), 5);
+    await expect(service.sendToProduction(7, body("click-0004"), 6)).rejects.toMatchObject({ status: 409, code: "STALE_ROUND", extra: { current_round: 1 } });
     expect(s.ledger).toHaveLength(2);
   });
 
-  it("a retry after the response was lost gets the original success, not a misleading 'already decided'", async () => {
-    s.inventory[0].quantity_on_hand = "100.00";
-    const full = { idempotency_key: "click-0003", expected_round: 0, production_items: [{ product_id: 1, quantity: 10 }], purchase_items: [] };
-    await rawService.dispatch(7, full, 5);
-    expect(s.order.approval_status).toBe("APPROVED"); // decided: without the key this retry would be ALREADY_DECIDED
-    await expect(rawService.dispatch(7, full, 5)).resolves.toMatchObject({ approval_status: "APPROVED" });
+  it("the same key for a DIFFERENT request, or from another user, is refused and deducts nothing", async () => {
+    await service.sendToProduction(7, body("click-0005"), 5);
+    await expect(service.sendToProduction(7, body("click-0005", { production_items: [{ product_id: 1, quantity: 2 }] }), 5)).rejects.toMatchObject({ status: 422, code: "IDEMPOTENCY_CONFLICT" });
+    await expect(service.sendToProduction(7, body("click-0005"), 99)).rejects.toMatchObject({ status: 422, code: "IDEMPOTENCY_CONFLICT" });
     expect(s.ledger).toHaveLength(2);
-  });
-
-  it("repeated approval with a NEW key (second admin, stale tab) is refused with STALE_ROUND", async () => {
-    await rawService.dispatch(7, partial("click-0004"), 5);
-    const other = rawService.dispatch(7, partial("click-0005"), 6); // same screen, same numbers, different key
-    await expect(other).rejects.toMatchObject({ status: 409, code: "STALE_ROUND", extra: { current_round: 1 } });
-    expect(stock()).toEqual(["13.00", "97.00"]);
-    expect(s.productionRows).toHaveLength(1);
-    expect(s.order.approval_round).toBe(1);
-  });
-
-  it("the same key for a DIFFERENT request is refused and deducts nothing", async () => {
-    await rawService.dispatch(7, partial("click-0006"), 5);
-    const changed = partial("click-0006", { production_items: [{ product_id: 1, quantity: 2 }] });
-    await expect(rawService.dispatch(7, changed, 5)).rejects.toMatchObject({ status: 422, code: "IDEMPOTENCY_CONFLICT" });
-    expect(stock()).toEqual(["13.00", "97.00"]);
-  });
-
-  it("a key cannot be replayed by another user", async () => {
-    await rawService.dispatch(7, partial("click-0007"), 5);
-    await expect(rawService.dispatch(7, partial("click-0007"), 99)).rejects.toMatchObject({ status: 422, code: "IDEMPOTENCY_CONFLICT" });
   });
 
   it("a request that failed leaves no key behind, so it can be retried with the same key", async () => {
-    s.inventory[0].quantity_on_hand = "11.00"; // stock changed after the admin looked: 4 units possible, 6 asked
-    const wanted = { idempotency_key: "click-0008", expected_round: 0, production_items: [{ product_id: 1, quantity: 6 }], purchase_items: [{ component_id: 1, quantity: 8 }] };
-    await expect(rawService.dispatch(7, wanted, 5)).rejects.toMatchObject({ code: "STALE_PLAN" });
-    expect(s.idem).toHaveLength(0);
-
-    s.inventory[0].quantity_on_hand = "15.00"; // back to what the screen showed
-    await expect(rawService.dispatch(7, wanted, 5)).resolves.toMatchObject({ approval_status: "PARTIALLY_APPROVED" });
-    expect(s.productionRows).toEqual([[7, 1, 6, 5]]);
-  });
-
-  it("a stale round is refused before anything is deducted", async () => {
-    s.order.approval_status = "PARTIALLY_APPROVED";
-    s.order.approval_round = 2;
-    await expect(rawService.dispatch(7, partial("click-0009", { expected_round: 1 }), 5)).rejects.toMatchObject({ code: "STALE_ROUND", extra: { current_round: 2 } });
-    expect(s.ledger).toHaveLength(0);
+    s.inventory[0].quantity_on_hand = "8.00";
+    await expect(service.sendToProduction(7, body("click-0006"), 5)).rejects.toMatchObject({ code: "STALE_PLAN" });
+    expect(sendKeys()).toHaveLength(0);
+    s.inventory[0].quantity_on_hand = "12.00";
+    await expect(service.sendToProduction(7, body("click-0006"), 5)).resolves.toMatchObject({ left_to_send: 4 });
   });
 
   it("if the database's UNIQUE ledger key ever fires, the request fails cleanly as ALREADY_APPLIED", async () => {
     s.ledgerError = Object.assign(new Error("Duplicate entry 'approval-7-1-1' for key 'uq_inv_txn_idempotency'"), { errno: 1062 });
-    await expect(rawService.dispatch(7, partial("click-0010"), 5)).rejects.toMatchObject({ status: 409, code: "ALREADY_APPLIED" });
-    expect(s.idem).toHaveLength(0); // rolled back with the rest
+    await expect(service.sendToProduction(7, body("click-0007"), 5)).rejects.toMatchObject({ status: 409, code: "ALREADY_APPLIED" });
+    expect(sendKeys()).toHaveLength(0);
+    expect(s.productionRows).toHaveLength(0);
   });
 
-  it("requires an idempotency key and the expected round on every stock-moving call", async () => {
-    const { idempotency_key, ...noKey } = partial();
-    const { expected_round, ...noRound } = partial("click-0011");
-    await expect(rawService.dispatch(7, noKey, 5)).rejects.toMatchObject({ status: 400, code: "IDEMPOTENCY_KEY_REQUIRED" });
-    await expect(rawService.dispatch(7, partial("bad key!"), 5)).rejects.toMatchObject({ status: 400, code: "IDEMPOTENCY_KEY_REQUIRED" });
-    await expect(rawService.dispatch(7, noRound, 5)).rejects.toMatchObject({ status: 422, code: "EXPECTED_ROUND_REQUIRED" });
-    await expect(rawService.approve(7, { idempotency_key: "click-0012" }, 5)).rejects.toMatchObject({ status: 422, code: "EXPECTED_ROUND_REQUIRED" });
-    await expect(rawService.approve(7, { idempotency_key: "click-0013", expected_round: null }, 5)).rejects.toMatchObject({ code: "EXPECTED_ROUND_REQUIRED" });
+  it("requires an idempotency key and the expected round", async () => {
+    const { idempotency_key, ...noKey } = body("x");
+    const { expected_round, ...noRound } = body("click-0008");
+    await expect(service.sendToProduction(7, noKey, 5)).rejects.toMatchObject({ status: 400, code: "IDEMPOTENCY_KEY_REQUIRED" });
+    await expect(service.sendToProduction(7, body("bad key!"), 5)).rejects.toMatchObject({ code: "IDEMPOTENCY_KEY_REQUIRED" });
+    await expect(service.sendToProduction(7, noRound, 5)).rejects.toMatchObject({ status: 422, code: "EXPECTED_ROUND_REQUIRED" });
     expect(s.ledger).toHaveLength(0);
-  });
-
-  it("reject moves no stock, so it needs no key", async () => {
-    await expect(rawService.reject(7, { remarks: "not needed" }, 5)).resolves.toMatchObject({ approval_status: "REJECTED" });
-  });
-
-  it("the plan tells the screen which round its numbers belong to", async () => {
-    expect((await rawService.getPlan(7)).approval_round).toBe(0);
-    await rawService.dispatch(7, partial("click-0014"), 5);
-    expect((await rawService.getPlan(7)).approval_round).toBe(1);
-  });
-
-  it("approving the rest (round 2) is also applied once", async () => {
-    await rawService.dispatch(7, partial("click-0015"), 5); // round 1: 3 units
-    const rest = { idempotency_key: "click-0016", expected_round: 1, production_items: [{ product_id: 1, quantity: 3 }], purchase_items: [] };
-    await rawService.dispatch(7, rest, 5);
-    await rawService.dispatch(7, rest, 5); // retry
-    expect(s.order.approval_round).toBe(2);
-    expect(s.productionRows).toEqual([[7, 1, 3, 5], [7, 1, 3, 5]]); // two passes of 3, not three
-    expect(stock()).toEqual(["7.00", "94.00"]);
   });
 });
 
-/* One transaction: approval status + stock deduction + ledger rows + production/purchase lists are saved together or not at all. */
-describe("all or nothing: approval status, stock and ledger", () => {
-  const nothingChanged = () => {
-    expect(s.order.approval_status).toBe("PENDING_APPROVAL");
+/* One transaction: stock deduction + ledger rows + the production list + the round are saved together or not at all. */
+describe("all or nothing", () => {
+  const deadlock = () => Object.assign(new Error("Deadlock found when trying to get lock"), { errno: 1213 });
+  const nothingSent = () => {
     expect(s.order.approval_round).toBe(0);
     expect(s.order.inventory_issued_at).toBeUndefined();
-    expect(s.inventory.map((row) => row.quantity_on_hand)).toEqual(["15.00", "100.00"]);
+    expect(stock()).toEqual(["12.00", "100.00"]);
     expect(s.ledger).toHaveLength(0);
     expect(s.productionRows).toHaveLength(0);
-    expect(s.purchaseRows).toHaveLength(0);
-    expect(s.idem).toHaveLength(0);
+    expect(s.events.filter((e) => e.kind === "SENT_TO_PRODUCTION")).toHaveLength(0);
+    expect(s.idem.filter((k) => k.action === "order.send-to-production")).toHaveLength(0);
   };
-  const deadlock = () => Object.assign(new Error("Deadlock found when trying to get lock"), { errno: 1213 });
+  beforeEach(async () => { await approve(); });
 
-  it("a ledger write that fails half-way undoes the stock already deducted and the lists already saved", async () => {
+  it("a ledger write that fails half-way undoes the stock already deducted and the list already saved", async () => {
     s.failLedgerOnNth = 2; // component 1 is deducted and logged, then component 2's ledger row fails
-    await expect(service.approve(7, {}, 5)).rejects.toMatchObject({ message: "ledger write failed" });
-    nothingChanged();
+    await expect(toProduction(6)).rejects.toMatchObject({ message: "ledger write failed" });
+    nothingSent();
   });
 
-  it("dispatch: the same half-way failure leaves nothing behind, purchase list included", async () => {
-    s.failLedgerOnNth = 2;
-    await expect(service.dispatch(7, rightLists(), 5)).rejects.toMatchObject({ message: "ledger write failed" });
-    nothingChanged();
-  });
-
-  it("if the order's status row is not saved, the stock and ledger written before it are undone", async () => {
+  it("if the order row is not saved, everything written before it is undone", async () => {
     s.orderUpdateRows = 0;
-    await expect(service.approve(7, {}, 5)).rejects.toMatchObject({ status: 409, code: "ORDER_NOT_SAVED" });
-    nothingChanged();
-    s.orderUpdateRows = 0;
-    await expect(service.dispatch(7, rightLists(), 5)).rejects.toMatchObject({ code: "ORDER_NOT_SAVED" });
-    nothingChanged();
+    await expect(toProduction(6)).rejects.toMatchObject({ status: 409, code: "ORDER_NOT_SAVED" });
+    nothingSent();
   });
 
-  it("approve(): a deadlock retry still deducts the stock and writes the ledger exactly once", async () => {
-    s.orderUpdateErrors = [deadlock()]; // the first attempt dies on its LAST statement, after it already worked out the status
-    await service.approve(7, {}, 5);
-    expect(s.order.approval_status).toBe("PARTIALLY_APPROVED");
-    expect(s.order.approval_round).toBe(1);
-    expect(s.inventory.map((row) => row.quantity_on_hand)).toEqual(["3.00", "94.00"]); // not 15 / 100: the retry did the work
-    expect(s.ledger).toHaveLength(2); // not 0 and not 4
-    expect(s.productionRows).toEqual([[7, 1, 6, 5]]);
-    expect(s.idem).toHaveLength(1);
-  });
-
-  it("dispatch(): a deadlock retry also applies everything once", async () => {
+  it("a deadlock retry still deducts the stock and writes the ledger exactly once", async () => {
     s.orderUpdateErrors = [deadlock()];
-    await service.dispatch(7, rightLists(), 5);
+    await toProduction(6);
     expect(s.order.approval_round).toBe(1);
-    expect(s.inventory.map((row) => row.quantity_on_hand)).toEqual(["3.00", "94.00"]);
+    expect(stock()).toEqual(["0.00", "94.00"]);
     expect(s.ledger).toHaveLength(2);
     expect(s.productionRows).toEqual([[7, 1, 6, 5]]);
-    expect(s.purchaseRows).toEqual([[7, 1, 8, 5]]);
+    expect(s.notifications.filter((n) => n.role === "PRODUCTION_MANAGER")).toHaveLength(1);
   });
 
   it("when every retry fails, the request fails and nothing is saved", async () => {
     s.orderUpdateErrors = [deadlock(), deadlock(), deadlock()];
-    await expect(service.approve(7, {}, 5)).rejects.toMatchObject({ errno: 1213 });
-    nothingChanged();
+    await expect(toProduction(6)).rejects.toMatchObject({ errno: 1213 });
+    nothingSent();
   });
 });
 
-describe("Store Manager notification: which components to issue", () => {
-  it("dispatch saves ONE notification listing every component and its quantity", async () => {
-    await service.dispatch(7, rightLists(), 5);
-    expect(s.notifications).toHaveLength(1);
-    expect(s.notifications[0]).toMatchObject({ role: "STORE_MANAGER", type: "ISSUE_COMPONENTS", order_id: 7, title: "Issue components for order ORD-007" });
-    expect(s.notifications[0].payload.items).toEqual([
-      { component_id: 1, sku: "CMP-001", name: "Resistor", unit: "pcs", quantity: "12.00" },
-      { component_id: 2, sku: "CMP-002", name: "Capacitor", unit: "pcs", quantity: "6.00" },
-    ]);
+describe("the live push goes out once, after the commit", () => {
+  it("a send to Production pushes to Production once", async () => {
+    await approve();
+    pushes = [];
+    await toProduction(6);
+    expect(pushes.filter((p) => p.role === "PRODUCTION_MANAGER")).toHaveLength(1);
   });
 
-  it("approve() notifies too, and the live push goes out once, after the commit", async () => {
-    await service.approve(7, {}, 5);
-    expect(s.notifications).toHaveLength(1);
-    expect(pushes).toHaveLength(1);
-    expect(pushes[0]).toMatchObject({ role: "STORE_MANAGER", type: "ISSUE_COMPONENTS", notificationId: 1 });
-  });
-
-  it("a rolled-back approval leaves no notification and sends no push", async () => {
-    s.orderUpdateErrors = [new Error("disk full")];
-    await expect(service.dispatch(7, rightLists(), 5)).rejects.toThrow("disk full");
-    expect(s.notifications).toEqual([]);
-    expect(pushes).toEqual([]);
-  });
-
-  it("a deadlock retry still produces exactly one notification and one push", async () => {
-    s.orderUpdateErrors = [Object.assign(new Error("Deadlock found"), { errno: 1213, code: "ER_LOCK_DEADLOCK" })];
-    await service.dispatch(7, rightLists(), 5);
-    expect(s.notifications).toHaveLength(1);
-    expect(pushes).toHaveLength(1);
-  });
-});
-
-describe("every department hears the decision that concerns it", () => {
-  const sent = () => s.notifications.map((n) => [n.role, n.type]);
-
-  it("approval with nothing short: Marketing hears it, Production gets the build, Purchase gets nothing", async () => {
-    s.inventory[0].quantity_on_hand = "100.00";
-    await service.dispatch(7, { production_items: [{ product_id: 1, quantity: 10 }], purchase_items: [] }, 5);
-    expect(sent()).toEqual([["MARKETING_MANAGER", "ORDER_APPROVED"], ["PRODUCTION_MANAGER", "PRODUCTION_ASSIGNED"]]);
-    expect(s.notifications[1]).toMatchObject({ title: "Order ORD-007 is ready for production", link: "/production", severity: "action" });
-  });
-
-  it("a rejection goes to Marketing only, with the admin's reason", async () => {
-    await service.reject(7, { remarks: "Customer cancelled" }, 5);
-    expect(sent()).toEqual([["MARKETING_MANAGER", "ORDER_REJECTED"]]);
-    expect(s.notifications[0]).toMatchObject({ title: "Order ORD-007 rejected", body: "Customer cancelled", severity: "warning", link: "/marketing-orders?order=7" });
-  });
-
-  it("an order the Super Admin raised (doing Marketing's work) still tells Marketing", async () => {
-    s.order.creator_role = "SUPER_ADMIN";
-    await service.reject(7, { remarks: "Duplicate" }, 5);
-    expect(sent()).toEqual([["MARKETING_MANAGER", "ORDER_REJECTED"]]);
-  });
-
-  it("an order not raised by Marketing or the Super Admin does not notify Marketing", async () => {
-    s.order.creator_role = "OPERATIONS_ADMIN";
-    await service.reject(7, { remarks: "Duplicate" }, 5);
-    expect(s.notifications).toEqual([]);
+  it("a rolled-back send pushes nothing", async () => {
+    await approve();
+    pushes = [];
+    s.failLedgerOnNth = 1;
+    await expect(toProduction(6)).rejects.toThrow();
+    expect(pushes).toHaveLength(0);
   });
 });

@@ -29,15 +29,20 @@ export const orderApprovalsApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/order-approvals/${id}/plan` }),
       providesTags: ["OrderApprovals", "Inventory"],
     }),
-    // Operations Admin: approve + send the producible list to the Production Manager and the
-    // missing-components list to the Purchase Manager, in one step.
-    dispatchOrder: build.mutation({
-      query: ({ id, ...data }) => ({ url: `/order-approvals/${id}/dispatch`, method: "post", data }),
-      invalidatesTags: ["OrderApprovals", "Orders", "Production", "Purchases", "Inventory"],
-    }),
+    // Operations Admin: the decision only (Marketing is told). No stock moves and no list is sent.
     approveOrder: build.mutation({
-      query: ({ id, remarks }) => ({ url: `/order-approvals/${id}/approve`, method: "post", data: { remarks } }),
-      invalidatesTags: ["OrderApprovals", "Orders", "Production", "Purchases", "Inventory"],
+      query: ({ id, ...data }) => ({ url: `/order-approvals/${id}/approve`, method: "post", data }),
+      invalidatesTags: ["OrderApprovals", "Orders", "MarketingOrders"],
+    }),
+    // Operations Admin, on an approved order: what the stock can build now goes to Production (its stock is deducted)
+    sendToProduction: build.mutation({
+      query: ({ id, ...data }) => ({ url: `/order-approvals/${id}/send-to-production`, method: "post", data }),
+      invalidatesTags: ["OrderApprovals", "Orders", "Production", "Inventory"],
+    }),
+    // Operations Admin, on an approved order: the components that are short go to Purchase (once per order)
+    sendToPurchase: build.mutation({
+      query: ({ id, ...data }) => ({ url: `/order-approvals/${id}/send-to-purchase`, method: "post", data }),
+      invalidatesTags: ["OrderApprovals", "Purchases"],
     }),
     updateDeliveryDate: build.mutation({
       query: ({ id, ...data }) => ({ url: `/order-approvals/${id}/delivery-date`, method: "patch", data }),
@@ -65,8 +70,9 @@ export const {
   useGetOrderApprovalsQuery,
   useGetApprovedOrdersQuery,
   useGetOrderPlanQuery,
-  useDispatchOrderMutation,
   useApproveOrderMutation,
+  useSendToProductionMutation,
+  useSendToPurchaseMutation,
   useRejectOrderMutation,
   useCancelOrderMutation,
   useReviseOrderMutation,

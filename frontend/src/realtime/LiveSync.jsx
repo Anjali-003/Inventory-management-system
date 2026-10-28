@@ -51,6 +51,7 @@ const NOTIFY_TAGS = {
   ORDER_REJECTED: ["MarketingOrders", "Orders"],
   QUANTITY_REVISED: ["MarketingOrders"],
   REVISION_ACCEPTED: ["OrderApprovals"],
+  REVISION_DECLINED: ["OrderApprovals"],
   DELIVERY_DATE_CHANGED: ["MarketingOrders"],
   PRODUCTION_ASSIGNED: ["Production", "MaterialRequests"],
   PURCHASE_REQUIRED: ["OrderApprovals", "Purchases"],

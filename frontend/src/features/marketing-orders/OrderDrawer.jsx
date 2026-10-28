@@ -6,14 +6,15 @@ import { useState } from "react"
 import { useToast } from "@/components/toast"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useUpdateDeliveryDateMutation } from "@/features/order-approvals/orderApprovalsApi"
-import { useAcceptOrderRevisionMutation } from "./marketingOrdersApi"
+import { useAcceptOrderRevisionMutation, useDeclineOrderRevisionMutation } from "./marketingOrdersApi"
 import UserCell from "@/components/UserCell"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { errorMessage, fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { MktBtn, StatusPill } from "./mktKit"
 import { SPRING, SPRING_SOFT } from "./mktMotion"
-import { DECIDED_STATUSES, DRAWER_TABS, approvedFor, orderSteps, plural, reviewOf, sentToProduction, stageOf, sumQty } from "./orderParts"
+import OrderStory from "./OrderStory"
+import { CustomerName, DECIDED_STATUSES, DRAWER_TABS, MakingLine, OrderValue, approvedFor, plural, reviewOf, sentToProduction, stageOf, sumQty } from "./orderParts"
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
 
@@ -27,7 +28,6 @@ const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:n
   and "View items" is simply the same drawer opened on the Items & Quantities tab.
 */
 
-const fmtWhen = (name, at) => [name, at ? fmtDateTime(at) : ""].filter(Boolean).join(" · ")
 
 function QtyBar({ ratio, grad }) {
   return (
@@ -54,13 +54,15 @@ function Fact({ label, children }) {
 /* ------------------------------------------------------------------ quantity revision */
 
 const COPY_TONE = {
-  approved: { ring: "border-emerald-200 bg-emerald-50/60", ink: "text-emerald-800", label: "Will be made now" },
-  held: { ring: "border-orange-200 bg-orange-50/60", ink: "text-orange-800", label: "Not now · saved as a draft" },
+  approved: { ring: "border-emerald-200 bg-emerald-50/60", ink: "text-emerald-800", label: "Promised in this order" },
+  held: { ring: "border-orange-200 bg-orange-50/60", ink: "text-orange-800", label: "Not promised · back to Marketing as a draft" },
+  // the order was cancelled: the held-back draft was removed with it
+  dropped: { ring: "border-slate-200 bg-slate-50/60", ink: "text-slate-600", label: "Not made · draft removed" },
 }
 
 /* One of the two copies of a revised order: the products with units in `field` (approved | held). */
-function RevisionCopy({ number, field, items }) {
-  const t = COPY_TONE[field]
+function RevisionCopy({ number, field, items, tone = field }) {
+  const t = COPY_TONE[tone]
   const lines = items.filter((i) => Number(i[field]) > 0)
   return (
     <div className={cn("min-w-0 rounded-xl border p-3", t.ring)}>
@@ -85,25 +87,31 @@ function RevisionCopy({ number, field, items }) {
   The Operations Admin makes only part of this order. Both copies are shown side by side: this order (what will be
   made) and the held-back draft (the rest), with the admin's reason and whether Marketing has accepted yet.
 */
-function RevisionSection({ order }) {
+function RevisionSection({ order, audience }) {
   const r = order.revision
   if (!r) return null
   const waiting = order.approval_status === "QUANTITY_REVISED"
   const items = r.items || []
+  const ops = audience === "operations"
 
   return (
     <section className="space-y-2.5">
-      <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Scale className="size-4 text-orange-600" aria-hidden /> Quantity revised by Operations Admin</h3>
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Scale className="size-4 text-orange-600" aria-hidden /> {ops ? "You promised less than was ordered" : "Operations promised less than was ordered"}</h3>
       <div className="space-y-3 rounded-2xl bg-orange-50/40 px-4 py-3.5 ring-1 ring-inset ring-orange-200/70">
         <UserCell name={order.revised_by_name} sub={fmtDateTime(order.revised_at)} />
         {r.remarks && <p className="rounded-xl bg-white/70 px-3 py-2 text-sm leading-snug">{r.remarks}</p>}
         <div className="grid gap-2.5 sm:grid-cols-2">
           <RevisionCopy number={order.order_number} field="approved" items={items} />
-          <RevisionCopy number={r.held_order_number} field="held" items={items} />
+          <RevisionCopy number={r.held_order_number} field="held" items={items} tone={order.approval_status === "CANCELLED" ? "dropped" : "held"} />
         </div>
         {waiting ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-orange-800">
-            <Clock3 className="size-4 motion-safe:animate-pulse" aria-hidden /> Waiting for the Marketing Manager to accept
+            <Clock3 className="size-4 motion-safe:animate-pulse" aria-hidden /> {ops ? "Waiting for Marketing to agree, or not" : "Waiting for your answer: agree, or don't"}
+          </p>
+        ) : r.declined_at ? (
+          <p className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium text-slate-700">
+            <X className="size-4" aria-hidden /> Not accepted by {r.declined_by_name || "Marketing"}: the order was cancelled
+            <span className="font-normal text-muted-foreground">· {fmtDateTime(r.declined_at)}</span>
           </p>
         ) : order.revision_accepted_at ? (
           <p className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium text-emerald-800">
@@ -118,7 +126,8 @@ function RevisionSection({ order }) {
 
 /* ------------------------------------------------------------------ Overview */
 
-function OverviewTab({ order }) {
+function OverviewTab({ order, audience }) {
+  const ops = audience === "operations"
   const toast = useToast()
   const { canEdit } = usePermissions()
   const canModifyDate = canEdit("orderApprovals")
@@ -237,10 +246,11 @@ function OverviewTab({ order }) {
         <Fact label="Products">{plural(order.items.length, "product")}</Fact>
       </dl>
 
-      <RevisionSection order={order} />
+      <RevisionSection order={order} audience={audience} />
 
-      <section className="space-y-2.5">
-        <h3 className="text-sm font-semibold">Operations review</h3>
+      {/* a cancelled order needs no review: what happened is in the revision box above */}
+      {order.approval_status !== "CANCELLED" && <section className="space-y-2.5">
+        <h3 className="text-sm font-semibold">{ops ? "Your decision" : "Operations' decision"}</h3>
         {decided ? (
           <div className={cn("space-y-3 rounded-2xl px-4 py-3.5 ring-1 ring-inset", stage.s.soft)}>
             <div>
@@ -255,6 +265,7 @@ function OverviewTab({ order }) {
             </div>
             <UserCell name={order.approved_by_name} sub={fmtDateTime(order.approved_at)} />
             {order.approval_remarks && <p className="rounded-xl bg-white/70 px-3 py-2 text-sm leading-snug">{order.approval_remarks}</p>}
+            <MakingLine order={order} className="text-sm" />
           </div>
         ) : (
           <p className="inline-flex items-center gap-1.5 rounded-xl border border-dashed px-3.5 py-3 text-sm text-muted-foreground">
@@ -262,20 +273,21 @@ function OverviewTab({ order }) {
             {order.approval_status === "DRAFT"
               ? "This order has not been sent for review yet."
               : order.approval_status === "QUANTITY_REVISED"
-                ? "The Operations Admin decides once Marketing accepts the revised quantity."
-                : "Waiting for the Operations Admin to decide."}
+                ? ops ? "You decide once Marketing agrees to the promised quantity." : "Operations decides once you agree to the promised quantity."
+                : ops ? "Waiting for your decision." : "Waiting for Operations to decide."}
           </p>
         )}
-      </section>
+      </section>}
     </div>
   )
 }
 
 /* ------------------------------------------------------------ Items & Quantities */
 
-function ItemsTab({ order }) {
+function ItemsTab({ order, audience }) {
   const decided = DECIDED_STATUSES.includes(order.approval_status)
-  const hasProduction = Boolean(order.production_request)
+  // what went to Production is Operations' own work: only the Operations Admin sees it per product
+  const hasProduction = audience === "operations" && Boolean(order.production_request)
   const rows = order.items.map((it) => ({ ...it, approved: approvedFor(order, it), toProduction: sentToProduction(order, it) }))
   const requested = sumQty(order.items)
   const approved = decided ? rows.reduce((s, r) => s + (r.approved ?? 0), 0) : null
@@ -330,7 +342,7 @@ function ItemsTab({ order }) {
         </Table>
       </div>
 
-      {hasProduction && <p className="text-xs text-muted-foreground">"To production" is what the stock could cover when the Operations Admin approved the order.</p>}
+      {hasProduction && <p className="text-xs text-muted-foreground">"To production" is what you have sent to Production so far.</p>}
       {!decided && <p className="text-xs text-muted-foreground">Approved quantities appear here once the Operations Admin has decided.</p>}
     </div>
   )
@@ -338,80 +350,14 @@ function ItemsTab({ order }) {
 
 /* ------------------------------------------------------------------ Timeline */
 
-const MARK = {
-  done: "bg-gradient-to-br from-emerald-700 to-emerald-800 text-white shadow-sm",
-  current: "border-2 border-primary bg-card text-primary",
-  todo: "border-2 border-border bg-card text-transparent",
-  fail: "bg-gradient-to-br from-rose-600 to-red-800 text-white shadow-sm",
-}
-
-/* Only the three steps Marketing cares about (created, sent to admin, decision). What happens after approval is not shown. */
-function timelineRows(order) {
-  const status = order.approval_status
-  const steps = orderSteps(status)
-  const decided = DECIDED_STATUSES.includes(status)
-  const { requested, approved } = reviewOf(order)
-
-  const rows = [
-    { title: "Order created", state: steps[0][1], sub: fmtWhen(order.created_by_name || "-", order.created_at) },
-    {
-      title: "Sent to Operations Admin",
-      state: steps[1][1],
-      sub: status === "DRAFT" ? "Not sent yet. Send it when it is ready." : order.sent_to_admin_at ? fmtDateTime(order.sent_to_admin_at) : "Handed over for approval",
-    },
-    {
-      title: steps[2][0],
-      state: steps[2][1],
-      sub: decided
-        ? fmtWhen(order.approved_by_name || "-", order.approved_at)
-        : status === "QUANTITY_REVISED"
-          ? fmtWhen(order.revised_by_name || "-", order.revised_at)
-          : status === "PENDING_APPROVAL" ? "Waiting for the Operations Admin" : "Starts after you send the order",
-      extra: decided ? `${fmtQty(approved)} of ${fmtQty(requested)} units approved` : status === "QUANTITY_REVISED" ? "Waiting for Marketing to accept the reduced quantity" : "",
-      remarks: decided ? order.approval_remarks : status === "QUANTITY_REVISED" ? order.revision?.remarks : "",
-    },
-  ]
-  return rows
-}
-
-function TimelineTab({ order }) {
-  const rows = timelineRows(order)
-  return (
-    <ol>
-      {rows.map((r, i) => {
-        const last = i === rows.length - 1
-        return (
-          <motion.li
-            key={r.title}
-            className="relative flex gap-3.5 pb-6 last:pb-0"
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ ...SPRING, delay: 0.06 * i }}
-          >
-            {!last && <span aria-hidden className={cn("absolute start-[13px] top-7 h-[calc(100%-1.75rem)] w-0.5 rounded-full", r.state === "done" ? "bg-emerald-300" : "bg-border")} />}
-            <span className={cn("relative z-10 grid size-7 shrink-0 place-items-center rounded-full", MARK[r.state])}>
-              {r.state === "done" && <Check className="size-4" strokeWidth={3} aria-hidden />}
-              {r.state === "fail" && <X className="size-4" strokeWidth={3} aria-hidden />}
-              {r.state === "current" && <span className="size-2 rounded-full bg-primary motion-safe:animate-pulse" aria-hidden />}
-            </span>
-            <div className="min-w-0 pt-0.5">
-              <p className={cn("text-sm font-semibold", r.state === "todo" && "text-muted-foreground", r.state === "fail" && "text-destructive")}>{r.title}</p>
-              {r.sub && <p className="text-xs text-muted-foreground">{r.sub}</p>}
-              {r.extra && <p className="mt-0.5 text-xs font-medium tabular-nums">{r.extra}</p>}
-              {r.remarks && (
-                <p className={cn("mt-2 rounded-xl border px-3 py-2 text-sm leading-snug", r.state === "fail" ? "border-destructive/20 bg-cf-red-soft text-destructive" : "bg-muted/60 text-foreground")}>{r.remarks}</p>
-              )}
-            </div>
-          </motion.li>
-        )
-      })}
-    </ol>
-  )
+/* The order's story (OrderStory.jsx): the agreement in full, the making as much as this reader needs. */
+function TimelineTab({ order, audience }) {
+  return <OrderStory order={order} audience={audience} />
 }
 
 /* ------------------------------------------------------------------ the drawer */
 
-function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, actions, tabs = DRAWER_TABS, tabContent, wide = false }) {
+function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, actions, tabs = DRAWER_TABS, tabContent, wide = false, audience = "marketing" }) {
   const ref = useRef(null)
   const bodyRef = useRef(null)
   const uid = useId()
@@ -424,6 +370,7 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
   const units = sumQty(order.items)
   const toast = useToast()
   const [acceptRevision, { isLoading: accepting }] = useAcceptOrderRevisionMutation()
+  const [declineRevision, { isLoading: declining }] = useDeclineOrderRevisionMutation()
 
   const accept = async () => {
     try {
@@ -431,6 +378,16 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
       toast.success(`${order.order_number}: revised quantity accepted, back with the Operations Admin`)
     } catch (err) {
       toast.error(errorMessage(err, "Could not accept the revised quantity."))
+    }
+  }
+
+  const decline = async () => {
+    if (!window.confirm(`Do not accept the reduced quantity? Order ${order.order_number} will be cancelled.`)) return
+    try {
+      await declineRevision(order.id).unwrap()
+      toast.success(`${order.order_number} cancelled. The Operations Admin has been told.`)
+    } catch (err) {
+      toast.error(errorMessage(err, "Could not cancel the order."))
     }
   }
 
@@ -510,9 +467,11 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
           <div className="min-w-0 pb-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">Order details</p>
             <h2 id={`${uid}-title`} className="mt-0.5 truncate text-[17px] font-bold leading-snug tracking-[-0.2px] tabular-nums">{order.order_number}</h2>
+            <CustomerName order={order} className="text-[15px]" />
             <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground">
               <StatusPill value={order.approval_status} short />
               <span>{plural(order.items.length, "product")} · {fmtQty(units)} units</span>
+              <OrderValue order={order} className="text-sm" />
             </p>
           </div>
           <button
@@ -562,7 +521,7 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0, transition: SPRING }}
           >
-            {tabContent?.[tab] ?? (tab === "items" ? <ItemsTab order={order} /> : tab === "timeline" ? <TimelineTab order={order} /> : <OverviewTab order={order} />)}
+            {tabContent?.[tab] ?? (tab === "items" ? <ItemsTab order={order} audience={audience} /> : tab === "timeline" ? <TimelineTab order={order} audience={audience} /> : <OverviewTab order={order} audience={audience} />)}
           </motion.div>
         </div>
 
@@ -575,7 +534,12 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
           <MktBtn onClick={onClose} className={actions ? "sm:me-auto" : undefined}>Close</MktBtn>
           {actions}
           {editable && revised && (
-            <MktBtn variant="primary" disabled={accepting} onClick={accept}>
+            <MktBtn variant="danger" disabled={accepting || declining} onClick={decline}>
+              {declining ? <Loader2 className="animate-spin" /> : <X />} Don&apos;t accept
+            </MktBtn>
+          )}
+          {editable && revised && (
+            <MktBtn variant="primary" disabled={accepting || declining} onClick={accept}>
               {accepting ? <Loader2 className="animate-spin" /> : <Check />} Accept revised quantity
             </MktBtn>
           )}

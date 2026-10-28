@@ -67,6 +67,14 @@ async function getMaterialStatesForItems(conn, lines) {
     WHERE pb.product_id IN (?)
     ORDER BY pb.product_id, c.id
   `, [productIds]);
+  // what the Operations Admin approved per product (all rounds): its stock was deducted, so only that much can be handed
+  // over. The rest of the order waits until the admin approves it once the purchased parts are in.
+  const orderIds = [...new Set(lines.map((line) => Number(line.order_id)))];
+  const [approvedRows] = await conn.query(
+    `SELECT order_id, product_id, SUM(quantity) AS quantity FROM order_production_items WHERE order_id IN (?) GROUP BY order_id, product_id`,
+    [orderIds]
+  );
+  const approvedOf = new Map(approvedRows.map((r) => [`${r.order_id}:${r.product_id}`, Number(r.quantity)]));
   const [usageRows] = await conn.query(`
     SELECT r.order_item_id, ri.component_id,
            COALESCE(SUM(ri.requested_quantity), 0) AS requested_quantity,
@@ -177,6 +185,8 @@ async function getMaterialStatesForItems(conn, lines) {
   for (const line of lines) {
     const itemId = Number(line.order_item_id);
     const targetQuantity = Math.max(0, Number(line.target_quantity || 0));
+    // material can be asked for the approved units only (never more than the order line)
+    const approvedQuantity = Math.min(targetQuantity, approvedOf.get(`${Number(line.order_id)}:${Number(line.product_id)}`) || 0);
     const started = Math.max(0, Number(line.quantity_started || 0));
     const productUsage = productUsageByLine.get(itemId) || { requested: 0, issued: 0, outstanding: 0 };
     const bom = bomByProduct.get(Number(line.product_id)) || [];
@@ -184,7 +194,7 @@ async function getMaterialStatesForItems(conn, lines) {
 
     const components = bom.map((row) => {
       const perUnitCents = toCents(row.quantity_required);
-      const budgetCents = toCents(Number(row.quantity_required || 0) * targetQuantity);
+      const budgetCents = toCents(Number(row.quantity_required || 0) * approvedQuantity);
       const usage = usageByLine.get(`${itemId}:${row.component_id}`) || { requestedCents: 0, issuedCents: 0 };
       const outstandingCents = Math.max(0, usage.requestedCents - usage.issuedCents);
       return {
@@ -235,13 +245,14 @@ async function getMaterialStatesForItems(conn, lines) {
         : 0,
       requestableProductQuantity: authorized && bomComplete && components.length
         ? Math.max(0, Math.min(
-            Math.floor(targetQuantity - productUsage.requested),
+            Math.floor(approvedQuantity - productUsage.requested),
             ...components.map((component) => component.perUnitCents > 0
               ? Math.floor(toCents(component.requestable_quantity) / component.perUnitCents)
               : 0)
           ))
         : 0,
       materialRequestOutstandingQuantity: fromCents(components.reduce((sum, component) => sum + toCents(component.outstanding_quantity), 0)),
+      approvedQuantity,
       requestedProductQuantity: productUsage.requested,
       issuedProductQuantity: productUsage.issued,
       materialRequestOutstandingProductQuantity: productUsage.outstanding,
@@ -266,7 +277,7 @@ async function getOptions(orderItemId) {
     return {
       order_id: Number(item.order_id), order_item_id: Number(item.order_item_id), order_number: item.order_number,
       product_id: Number(item.product_id), product_name: item.product_name, product_sku: item.product_sku,
-      approved_quantity: Number(item.target_quantity), quantity_started: Number(item.quantity_started),
+      approved_quantity: state.approvedQuantity, quantity_started: Number(item.quantity_started),
       requested_product_quantity: state.requestedProductQuantity,
       issued_product_quantity: state.issuedProductQuantity,
       outstanding_product_quantity: state.materialRequestOutstandingProductQuantity,
@@ -492,8 +503,7 @@ async function issueRequest(requestId, body, userId) {
     if (productMode) {
       if (!Number.isInteger(productQuantity) || productQuantity <= 0) throw new AppError(422, "Select a whole number of product units to allot", "VALIDATION");
       const remainingProducts = Number(requests[0].requested_product_quantity) - Number(requests[0].issued_product_quantity || 0);
-      // Store must hand over the whole request: Operations Admin approved that quantity (no partial handover)
-      if (productQuantity !== remainingProducts) throw AppError.conflict(`Hand over the full request: components for all ${remainingProducts} product units.`, "FULL_HANDOVER_REQUIRED");
+      if (productQuantity > remainingProducts) throw AppError.conflict(`You can allot at most ${remainingProducts} more product units.`, "ISSUE_EXCEEDS_REMAINING_PRODUCTS");
       const [requestItemRows] = await conn.query(`
         SELECT id, component_id, quantity_per_product, requested_quantity, issued_quantity
         FROM production_material_request_items WHERE request_id = ? ORDER BY id FOR UPDATE
@@ -510,18 +520,6 @@ async function issueRequest(requestId, body, userId) {
       }
       if (quantities.size !== expectedQuantities.size || [...expectedQuantities].some(([id, qty]) => quantities.get(id) !== qty)) {
         throw new AppError(422, "Component allotment quantities must match the selected number of product units", "BOM_QUANTITY_MISMATCH");
-      }
-    }
-
-    // every component with something left must be handed over in full (no partial handover)
-    const [openRows] = await conn.query(
-      `SELECT id, requested_quantity, issued_quantity FROM production_material_request_items WHERE request_id = ? FOR UPDATE`,
-      [requestId]
-    );
-    for (const row of openRows) {
-      const left = toCents(row.requested_quantity) - toCents(row.issued_quantity);
-      if (left > 0 && expectedQuantities.get(Number(row.id)) !== left) {
-        throw AppError.conflict("Hand over the full request: every component, in full.", "FULL_HANDOVER_REQUIRED");
       }
     }
 

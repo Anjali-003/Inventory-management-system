@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { MktBtn, StatusPill } from "@/features/marketing-orders/mktKit"
 import { PRESS_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
-import { ALL_STAGE, OrderSteps, STAGES, plural, stageOf } from "@/features/marketing-orders/orderParts"
+import { ALL_STAGE, CustomerName, OrderSteps, OrderValue, STAGES, declinedOf, plural, stageOf } from "@/features/marketing-orders/orderParts"
 import { timeAgo } from "@/features/activity/time"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -30,6 +30,7 @@ const HINT = {
   PENDING_APPROVAL: "Needs your decision",
   APPROVED: "Lists sent to Production / Purchase",
   REJECTED: "With the reason you gave",
+  CANCELLED: "Marketing said no to your reduced quantity, or you cancelled it",
 }
 
 export const OPS_STAGES = STAGES.filter((s) => s.status !== "DRAFT").map((s) => ({ ...s, hint: HINT[s.status] ?? s.hint }))
@@ -52,23 +53,24 @@ export const productsSummary = (items = []) => (items.length === 0 ? "No product
 export const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
 export const isDecided = (o) => ["APPROVED", "REJECTED"].includes(o.approval_status)
 
-/** Small line under a status: the quantity was revised (and maybe accepted by Marketing). */
+/** Small line under a status: the quantity was revised (and maybe accepted, or not, by Marketing). */
 export function RevisionTag({ order, className }) {
   if (!order?.revision) return null
   const accepted = Boolean(order.revision_accepted_at)
+  const declined = Boolean(order.revision.declined_at) || declinedOf(order)?.who === "Marketing"
   return (
-    <span className={cn("mt-1 block text-[11px] font-medium leading-snug", accepted ? "text-emerald-700" : "text-orange-700", className)}>
-      {accepted ? "Marketing accepted revised qty" : "Qty revised, waiting for Marketing"}
+    <span className={cn("mt-1 block text-[11px] font-medium leading-snug", accepted ? "text-emerald-700" : declined ? "text-slate-600" : "text-orange-700", className)}>
+      {accepted ? "Marketing accepted revised qty" : declined ? "Marketing did not accept revised qty" : "Qty revised, waiting for Marketing"}
     </span>
   )
 }
 
 /* -------------------------------------------------------------------- tiles */
 
-/** The grid of figures. Children are <StageTile/>; they rise in one after another. Three stages + "All" = four tiles. */
+/** The grid of figures. Children are <StageTile/>; they rise in one after another. Four stages + "All" = five tiles. */
 export function OpsTileGrid({ children, className }) {
   return (
-    <motion.div variants={stagger(0.06, 0.05)} initial="hidden" animate="show" className={cn("grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4", className)}>
+    <motion.div variants={stagger(0.06, 0.05)} initial="hidden" animate="show" className={cn("grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-5", className)}>
       {children}
     </motion.div>
   )
@@ -117,6 +119,7 @@ export function ApprovalCard({ order, showPlan, onOpen }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="break-all text-[15px] font-semibold leading-snug tabular-nums">{order.order_number}</p>
+            <CustomerName order={order} />
             <p className="mt-0.5 truncate text-xs text-muted-foreground" title={fmtDateTime(order.created_at)}>
               {order.created_by_name ? `${order.created_by_name} · ` : ""}{timeAgo(order.created_at)}
             </p>
@@ -128,6 +131,7 @@ export function ApprovalCard({ order, showPlan, onOpen }) {
           <div className="min-w-0">
             <p className="truncate text-[13px] font-medium">{productsSummary(items)}</p>
             <p className="text-xs text-muted-foreground">{plural(items.length, "product")} · {fmtQty(unitsOf(items))} units</p>
+            <OrderValue order={order} className="block" />
           </div>
           <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         </div>
@@ -210,6 +214,12 @@ export function ApprovalPageCard({ order: o, canAct, onOpen, onReview }) {
 
         <OrderSteps status={o.approval_status} className="mt-4" />
 
+        {declinedOf(o) && (
+          <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
+            <UserCell name={declinedOf(o).by} sub={declinedOf(o).at ? fmtDateTime(declinedOf(o).at) : "Marketing"} />
+            <p className="mt-1.5 text-xs leading-snug text-foreground/80">{declinedOf(o).why}</p>
+          </div>
+        )}
         {isDecided(o) && (
           <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
             <UserCell name={o.approved_by_name} sub={fmtDateTime(o.approved_at)} />
@@ -253,11 +263,13 @@ export function ApprovalList({ orders, onOpen }) {
                 <TableRow key={o.id} onClick={() => onOpen(o)} className="cursor-pointer">
                   <TableCell>
                     <button type="button" onClick={() => onOpen(o)} className="font-semibold tabular-nums text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/60">{o.order_number}</button>
+                    <CustomerName order={o} />
                     <p className="text-xs text-muted-foreground">{timeAgo(o.created_at)}</p>
                   </TableCell>
                   <TableCell className="min-w-40 whitespace-normal">
                     <p className="break-words leading-snug">{productsSummary(items)}</p>
                     <p className="text-xs text-muted-foreground">{fmtQty(unitsOf(items))} units</p>
+                    <OrderValue order={o} className="block" />
                   </TableCell>
                   <TableCell><StatusPill value={o.approval_status} short /><RevisionTag order={o} /></TableCell>
                   <TableCell className="text-end"><ChevronRight className="ms-auto size-4 text-muted-foreground rtl:-scale-x-100" aria-hidden /></TableCell>
@@ -278,6 +290,15 @@ export function ApprovalList({ orders, onOpen }) {
 
 /* "Who decided it, when, and why": the Decision column of the table. */
 export function DecisionCell({ order }) {
+  const declined = declinedOf(order)
+  if (declined) {
+    return (
+      <div className="space-y-0.5">
+        <UserCell name={declined.by} sub={declined.at ? fmtDateTime(declined.at) : declined.who} />
+        <p className="max-w-64 whitespace-normal text-xs text-muted-foreground">{declined.why}</p>
+      </div>
+    )
+  }
   if (!isDecided(order)) return <span className="text-muted-foreground">-</span>
   return (
     <div className="space-y-0.5">

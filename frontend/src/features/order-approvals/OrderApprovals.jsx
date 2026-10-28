@@ -25,7 +25,10 @@ import {
 } from "@/features/marketing-orders/mktKit";
 import { stagger } from "@/features/marketing-orders/mktMotion";
 import {
+  CustomerName,
+  OrderValue,
   countByStatus,
+  declinedOf,
   reviewOf,
   newestFirst,
   plural,
@@ -77,7 +80,8 @@ const QUEUE = "PENDING_APPROVAL";
 */
 
 /* Table-only cells, worded so each one reads on its own (the card view keeps its own wording). */
-function ProductsCell({ items }) {
+function ProductsCell({ order }) {
+  const items = order.items;
   const [open, setOpen] = useState(false);
   const extra = items.length - SHOW_LINES;
   const lines = open ? items : items.slice(0, SHOW_LINES);
@@ -106,6 +110,9 @@ function ProductsCell({ items }) {
           </button>
         </li>
       )}
+      <li>
+        <OrderValue order={order} />
+      </li>
     </ul>
   );
 }
@@ -135,6 +142,20 @@ function FeasibilityCell({ orderId }) {
 }
 
 function ReviewCell({ order, actions }) {
+  const declined = declinedOf(order);
+  if (declined) {
+    return (
+      <div className="space-y-0.5">
+        <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-600">
+          Cancelled by {declined.who}
+        </span>
+        {declined.who === "Marketing" && <UserCell name={declined.by} sub={declined.at ? fmtDateTime(declined.at) : ""} />}
+        <p className="max-w-64 whitespace-normal text-xs text-muted-foreground">
+          {declined.why}
+        </p>
+      </div>
+    );
+  }
   if (!isDecided(order)) {
     return (
       <div className="space-y-1.5">
@@ -177,6 +198,14 @@ function ReviewCell({ order, actions }) {
             </>
           )}
         </p>
+      )}
+      {approved && order.left_to_send > 0 && (
+        <div className="space-y-1.5 pt-1">
+          <p className="text-xs font-semibold text-warning">
+            {fmtQty(order.left_to_send)} units not sent to Production yet
+          </p>
+          {actions}
+        </div>
       )}
       {order.approval_remarks && (
         <p className="line-clamp-2 max-w-64 whitespace-normal text-xs text-muted-foreground">
@@ -225,16 +254,18 @@ export default function OrderApprovals() {
     error,
     refetch,
   } = useGetOrderApprovalsQuery();
-  const counts = useMemo(() => countByStatus(data), [data]);
+  // "Needs your decision" also holds approved orders whose rest can be approved now that parts came in
+  const counts = useMemo(() => ({ ...countByStatus(data), [QUEUE]: data.filter(canApprove).length }), [data]);
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...data]
       .sort(newestFirst)
       .filter(
         (o) =>
-          (!status || o.approval_status === status) &&
+          (!status || (status === QUEUE ? canApprove(o) : o.approval_status === status)) &&
           (!q ||
             o.order_number.toLowerCase().includes(q) ||
+            (o.customer_name || "").toLowerCase().includes(q) ||
             (o.created_by_name || "").toLowerCase().includes(q) ||
             o.items.some(
               (i) =>
@@ -474,6 +505,7 @@ export default function OrderApprovals() {
                         >
                           {o.order_number}
                         </button>
+                        <CustomerName order={o} />
                         <span
                           className="block text-xs text-muted-foreground"
                           title={fmtDateTime(o.created_at)}
@@ -485,7 +517,7 @@ export default function OrderApprovals() {
                         </span>
                       </TableCell>
                       <TableCell className="px-3! py-1! align-top! min-w-56">
-                        <ProductsCell items={o.items} />
+                        <ProductsCell order={o} />
                       </TableCell>
                       <TableCell className="px-3! py-1! align-top!">
                         <StatusPill

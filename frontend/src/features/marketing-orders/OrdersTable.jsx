@@ -8,7 +8,7 @@ import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import { MktBtn, StatusPill } from "./mktKit"
 import { SPRING_SOFT } from "./mktMotion"
-import { DECIDED_STATUSES, plural, reviewOf, stageOf } from "./orderParts"
+import { CustomerName, DECIDED_STATUSES, MakingLine, OrderValue, declinedOf, plural, reviewOf, stageOf } from "./orderParts"
 
 const SHOW_LINES = 2
 const DECIDED = DECIDED_STATUSES
@@ -16,6 +16,17 @@ const DECIDED = DECIDED_STATUSES
 /* Column 4: decision, approved of requested, the admin who decided and when. */
 function ReviewCell({ o }) {
   const stage = stageOf(o.approval_status)
+  const declined = declinedOf(o)
+
+  if (declined) {
+    return (
+      <div className="max-w-64 space-y-0.5 whitespace-normal">
+        <p className={cn("text-[13px] font-bold", stage.s.ink)}>Cancelled</p>
+        <p className="text-xs text-muted-foreground">{declined.who === "Marketing" ? "You did not accept the reduced quantity" : declined.why}</p>
+        {declined.at && <p className="text-xs text-muted-foreground">{declined.by} · {fmtDateTime(declined.at)}</p>}
+      </div>
+    )
+  }
 
   if (!DECIDED.includes(o.approval_status)) {
     const draft = o.approval_status === "DRAFT"
@@ -52,6 +63,7 @@ function ReviewCell({ o }) {
         </span>
       </div>
       <UserCell name={o.approved_by_name} sub={fmtDateTime(o.approved_at)} />
+      <MakingLine order={o} />
       {o.approval_remarks && (
         <p className="line-clamp-2 text-xs leading-snug text-muted-foreground" title={o.approval_remarks}>{o.approval_remarks}</p>
       )}
@@ -93,6 +105,7 @@ export default function OrdersTable({ orders, filterKey, editable, busyId, onOpe
                   <button type="button" className="block text-start font-semibold tabular-nums outline-none transition-colors group-hover:text-primary focus-visible:text-primary focus-visible:underline">
                     {o.order_number}
                   </button>
+                  <CustomerName order={o} />
                   <span className="mt-0.5 block text-xs text-muted-foreground" title={fmtDateTime(o.created_at)}>
                     {o.created_by_name ? `${o.created_by_name} · ` : ""}{timeAgo(o.created_at)}
                   </span>
@@ -108,6 +121,7 @@ export default function OrdersTable({ orders, filterKey, editable, busyId, onOpe
                     ))}
                     {extra > 0 && <li className="text-xs font-semibold text-primary">+ {plural(extra, "more product")}</li>}
                   </ul>
+                  <OrderValue order={o} className="mt-1 block" />
                   {onViewItems && (
                     <button
                       type="button"

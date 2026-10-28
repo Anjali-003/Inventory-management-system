@@ -13,10 +13,10 @@ import { reviseBlockReason } from "./DecisionButtons"
 import { useGetOrderPlanQuery, useReviseOrderMutation } from "./orderApprovalsApi"
 
 /*
-  Operations Admin: "we will make only this much of the order for now".
+  Operations Admin: "we will make only this much of the order".
   For each product the screen shows how many units the stock on the shelf can build right now (GET .../plan, the same
-  check as "Check stock & send"); the admin picks what will be made within that (0 .. can make now, pre-filled with it).
-  The backend checks the stock again when saving (409 NOT_ENOUGH_STOCK). On save the order is split in two:
+  check as "Check stock & send"), as a guide only: the admin promises any quantity up to what was ordered (pre-filled
+  with what the stock can make). What the stock cannot cover is bought after approval. On save the order is split in two:
     * this order keeps those quantities and waits for the Marketing Manager to accept them,
     * the rest becomes a new draft on the Marketing Manager's side, to send again later.
   A reason is required: the Marketing Manager sees it next to both copies.
@@ -46,7 +46,7 @@ export default function ReviseQuantityModal({ order, onClose, onSwitch }) {
     const canMake = ready ? Math.min(canMakeBy.get(it.product_id) ?? 0, ordered) : null
     const raw = make[it.product_id] ?? (canMake === null ? "" : String(canMake))
     const value = raw === "" ? NaN : Number(raw)
-    const valid = canMake !== null && Number.isInteger(value) && value >= 0 && value <= canMake
+    const valid = canMake !== null && Number.isInteger(value) && value >= 0 && value <= ordered
     return { ...it, ordered, canMake, raw, value, valid, held: valid ? ordered - value : 0 }
   })
   const totalCanMake = rows.reduce((s, r) => s + (r.canMake ?? 0), 0)
@@ -57,7 +57,7 @@ export default function ReviseQuantityModal({ order, onClose, onSwitch }) {
   const problem = !ready
     ? "The stock check is not loaded yet."
     : !allValid
-    ? "Each quantity must be a whole number between 0 and what the stock can make now."
+    ? "Each quantity must be a whole number between 0 and what was ordered."
     : totalHeld === 0
       ? "Nothing is reduced. To make the full order, go back to the stock check and send it."
       : totalMake === 0
@@ -87,7 +87,7 @@ export default function ReviseQuantityModal({ order, onClose, onSwitch }) {
       busy={busy}
       size="lg"
       title={`Revise quantity · ${order.order_number}`}
-      description="See what the current stock can build, then choose how much you will make now. The rest is saved for the Marketing Manager as a separate draft order."
+      description="Choose how much of the order you will make. What the stock cannot cover now is bought after approval. The rest is saved for the Marketing Manager as a separate draft order."
       footer={
         <>
           <MktBtn onClick={onClose} disabled={busy} className="sm:me-auto">Cancel</MktBtn>
@@ -129,7 +129,7 @@ export default function ReviseQuantityModal({ order, onClose, onSwitch }) {
                 <TableHead>Product</TableHead>
                 <TableHead className="text-end">Ordered</TableHead>
                 <TableHead className="text-end">Can make now</TableHead>
-                <TableHead className="text-end">Make now</TableHead>
+                <TableHead className="text-end">Will make</TableHead>
                 <TableHead className="text-end">Held back</TableHead>
               </TableRow>
             </TableHeader>
@@ -156,7 +156,7 @@ export default function ReviseQuantityModal({ order, onClose, onSwitch }) {
                       type="number"
                       inputMode="numeric"
                       min={0}
-                      max={r.canMake ?? r.ordered}
+                      max={r.ordered}
                       disabled={!ready}
                       step={1}
                       aria-label={`Units of ${r.name} you will make`}

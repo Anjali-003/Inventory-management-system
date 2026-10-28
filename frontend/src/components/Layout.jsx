@@ -171,11 +171,56 @@ function NavItem({ to, label, icon: Icon, end, id }) {
   );
 }
 
+/*
+  Roles whose sidebar is their own work, not every page they are allowed to look at. The other pages keep their
+  permission (dashboard links still open them); they just do not crowd the sidebar.
+*/
+const DASHBOARD = GROUPS[0].items[0];
+const ROLE_GROUPS = {
+  MARKETING_MANAGER: [
+    {
+      label: "Sales",
+      items: [
+        DASHBOARD,
+        { to: "/marketing-orders", label: "Customer Orders", icon: ClipboardList, module: "marketingOrders" },
+        { to: "/order-tracker", label: "Order Tracker", icon: Route, module: "orderTracker" },
+      ],
+    },
+    {
+      label: "Billing",
+      items: [
+        { to: "/finished-goods?status=IN_STORE", label: "To Bill", icon: FileText, module: "sales" },
+        { to: "/bills", label: "Bills & Payments", icon: Receipt, module: "sales" },
+        { to: "/customers", label: "Customers", icon: Contact, module: "customers" },
+      ],
+    },
+  ],
+  OPERATIONS_ADMIN: [
+    {
+      label: "My work",
+      items: [
+        DASHBOARD,
+        { to: "/order-approvals", label: "Orders", icon: ClipboardCheck, module: "orderApprovals" },
+        { to: "/order-tracker", label: "Order Tracker", icon: Route, module: "orderTracker" },
+        { to: "/reports", label: "Reports", icon: BarChart3, module: "reports" },
+      ],
+    },
+    {
+      label: "Keep an eye on",
+      items: [
+        { to: "/inventory", label: "Component Stock", icon: Warehouse, module: "inventory" },
+        { to: "/purchase", label: "Parts being bought", icon: ShoppingCart, module: "purchase" },
+        { to: "/finished-goods", label: "Finished Goods", icon: PackageCheck, module: "finishedGoods" },
+      ],
+    },
+  ],
+};
+
 function NavList({ id }) {
-  const { canView } = usePermissions();
+  const { canView, role } = usePermissions();
 
   // only the pages this role may open; a group with no visible page is hidden completely
-  const groups = GROUPS.map((g) => ({
+  const groups = (ROLE_GROUPS[String(role || "").toUpperCase()] || GROUPS).map((g) => ({
     ...g,
     items: g.items.filter((i) => canView(i.module)),
   })).filter((g) => g.items.length > 0);

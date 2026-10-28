@@ -45,10 +45,13 @@ export function OrderLines({ items }) {
 
 /* ---------- order planning (what can be built now / what is short) ---------- */
 
-/** Only an order that waits for a decision can be approved (as a whole) or rejected. */
+/** Only an order that waits for a decision can be rejected or revised. */
 export const isWaiting = (o) => o?.approval_status === "PENDING_APPROVAL"
-export const canApprove = (o) => isWaiting(o)
-export const approveLabel = () => "Check stock & send"
+/** An APPROVED order with units not in Production yet: the admin still sends lists for it. */
+export const hasLeftToSend = (o) => o?.approval_status === "APPROVED" && Number(o.left_to_send) > 0
+/** The Operations Admin has something to do on this order: decide it, or send its lists. */
+export const canApprove = (o) => isWaiting(o) || hasLeftToSend(o)
+export const approveLabel = (o) => (hasLeftToSend(o) ? "Send lists" : "Approve")
 
 /** Totals of one plan: how many units can be made now, how many are left over. */
 export function planTotals(plan) {

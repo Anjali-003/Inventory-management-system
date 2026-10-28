@@ -4,9 +4,12 @@ import OrderPlanModal from "./OrderPlanModal"
 import ReviseQuantityModal from "./ReviseQuantityModal"
 
 /*
-  State + popups for the Operations Admin's decisions (see DecisionButtons.jsx).
-  Render `popup` once and call open("plan" | "revise" | "reject", order) from any button. Each popup gets onSwitch,
-  so it can move straight to another decision (stock check -> revise quantity ...) without going back to the drawer.
+  State + popups for the Operations Admin's actions on an order (see DecisionButtons.jsx).
+  Render `popup` once and call open(kind, order) from any button:
+    "approve" | "reject"         the decision (DecisionModal)
+    "revise"                     promise less than ordered (ReviseQuantityModal)
+    "production" | "purchase"    send one list of an approved order (OrderPlanModal)
+  Each popup gets onSwitch to move straight to another one; "plan" means back to the drawer's Stock check.
 */
 export default function useOrderDecisions() {
   const [active, setActive] = useState(null) // { kind, order }
@@ -16,10 +19,10 @@ export default function useOrderDecisions() {
   let popup = null
   if (active) {
     const { kind, order } = active
-    const props = { order, onClose: close, onSwitch: (next) => open(next, order) }
-    if (kind === "plan") popup = <OrderPlanModal {...props} />
+    const props = { order, onClose: close, onSwitch: (next) => (next === "plan" ? close() : open(next, order)) }
+    if (kind === "production" || kind === "purchase") popup = <OrderPlanModal {...props} mode={kind} />
     else if (kind === "revise") popup = <ReviseQuantityModal {...props} />
-    else popup = <DecisionModal {...props} mode="reject" />
+    else popup = <DecisionModal {...props} mode={kind === "approve" ? "approve" : "reject"} />
   }
   return { active, open, close, popup }
 }

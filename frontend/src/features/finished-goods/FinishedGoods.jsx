@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { useUrlState } from "@/lib/useUrlState"
-import { Check, FileText, PackageCheck, RefreshCw } from "lucide-react"
+import { Check, CircleCheck, FileText, PackageCheck, Receipt, RefreshCw, Truck, Warehouse } from "lucide-react"
 import { finishedGoodsService } from "@/features/finished-goods/finishedGoodsService"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
 import { FG_STEPS, fgBadge, fgIndexOf, fgStepDone, fgStepFor, myFgStep } from "@/features/finished-goods/fgFlow"
 import { errorMessage } from "@/lib/stock"
-import { HeroButton, MktHero, SearchField } from "@/features/marketing-orders/mktKit"
+import { HeroButton, MktHero, SearchField, StageTile, TileGrid } from "@/features/marketing-orders/mktKit"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { Modal } from "@/components/Modal"
 import { Field, TextInput } from "@/components/FormField"
@@ -19,63 +20,68 @@ import { useGetCustomersQuery, useSaveCustomerMutation } from "./customersApi"
 import { cn } from "@/lib/utils"
 
 const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+// the tiles of the four steps (Saturday's colours: amber to do, blue in progress, emerald done)
+const STEP_ICON = { HANDED_OVER: Truck, IN_STORE: Warehouse, BILLED: Receipt, DELIVERED: CircleCheck }
+const TILE_TONE = {
+  HANDED_OVER: { dot: "bg-amber-500", s: { grad: "from-amber-700 to-orange-800", glow: "shadow-amber-500/20" } },
+  IN_STORE: { dot: "bg-sky-500", s: { grad: "from-sky-600 to-blue-800", glow: "shadow-sky-500/20" } },
+  BILLED: { dot: "bg-indigo-500", s: { grad: "from-blue-600 to-indigo-800", glow: "shadow-blue-500/20" } },
+  DELIVERED: { dot: "bg-emerald-500", s: { grad: "from-emerald-700 to-teal-800", glow: "shadow-emerald-500/20" } },
+}
 const when = (at) => (at ? new Date(at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "")
 
-/* the 4 steps as a line of dots: done (green), current (amber), still to come (grey) */
-function StepLine({ item }) {
-  const current = fgIndexOf(item.status)
-  return (
-    <ol className="grid grid-cols-4 gap-1" aria-label="Steps after Quality Control">
-      {FG_STEPS.map((step, i) => {
-        const done = i < current || item.status === "DELIVERED"
-        const now = i === current && item.status !== "DELIVERED"
-        const info = fgStepDone(item, step.status)
-        return (
-          <li key={step.status} className="min-w-0" title={info.by ? `${step.label}: ${info.by}, ${when(info.at)}` : step.label}>
-            <div className={cn("h-1.5 rounded-full", done ? "bg-emerald-500" : now ? "bg-amber-500" : "bg-slate-200")} />
-            <p className={cn("mt-1 truncate text-[10px] sm:text-[11px]", now ? "font-bold text-amber-800" : done ? "text-emerald-800" : "text-muted-foreground")}>{step.label}</p>
-          </li>
-        )
-      })}
-    </ol>
-  )
+/* who did the latest step of this order, and when ("Last action by") */
+const lastAction = (item) => {
+  for (let i = fgIndexOf(item.status); i >= 0; i--) {
+    const done = fgStepDone(item, FG_STEPS[i].status)
+    if (done.by) return { name: done.by, sub: `${FG_STEPS[i].label} · ${when(done.at)}` }
+  }
+  return null
 }
 
-function OrderCard({ item, role, onAct, onBill }) {
+/* the status pill and, under it, what happens next and who does it */
+function NextStep({ item, role }) {
   const step = fgStepFor(item)
   const mine = myFgStep(item, role)
   return (
-    <div className={cn("min-w-0 rounded-2xl border bg-white p-4 shadow-sm", mine && "border-amber-300 ring-1 ring-amber-200")}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="min-w-0 space-y-1">
+      <Badge variant={fgBadge(item.status).variant}>{fgBadge(item.status).label}</Badge>
+      <p className={cn("text-xs leading-snug", mine ? "font-semibold text-amber-800" : "text-muted-foreground")}>
+        {step?.owner ? (mine ? `Your turn: ${step.todo}` : `Next: ${step.ownerLabel}`) : step?.todo}
+      </p>
+    </div>
+  )
+}
+
+/* the buttons of one order: view its bill, and the step that is this role's turn */
+function Actions({ item, role, onAct, onBill }) {
+  const mine = myFgStep(item, role)
+  if (!item.bill && !mine) return <span className="text-xs text-muted-foreground">No action</span>
+  return (
+    <div className="flex min-w-0 flex-wrap justify-end gap-1.5">
+      {item.bill && <Button size="sm" variant="outline" onClick={() => onBill(item)}><FileText /> Bill</Button>}
+      {mine && <Button size="sm" onClick={() => (mine.action === "pay" ? onBill(item) : onAct(item, mine))}><Check /> {mine.button}</Button>}
+    </div>
+  )
+}
+
+const unitsOf = (item) => item.lines.reduce((s, l) => s + Number(l.quantity || 0), 0)
+
+/* phones and tablets: one card per order */
+function ItemCard({ item, role, onAct, onBill }) {
+  const last = lastAction(item)
+  return (
+    <div className="min-w-0 rounded-xl border bg-card p-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Link to={`/order-tracker?order=${item.orderId}`} className="font-semibold tabular-nums hover:text-primary hover:underline">{item.orderNumber}</Link>
-          <ul className="mt-1 space-y-0.5 text-sm text-muted-foreground">
-            {item.lines.map((l) => <li key={l.productId} className="break-words"><span className="font-medium text-foreground">{l.name}</span> × {l.quantity}</li>)}
-          </ul>
+          <p className="mt-0.5 text-sm text-muted-foreground">{item.lines.map((l) => `${l.name} × ${l.quantity}`).join(", ")}</p>
         </div>
-        <Badge variant={fgBadge(item.status).variant}>{fgBadge(item.status).label}</Badge>
+        <span className="shrink-0 text-sm font-semibold tabular-nums">{unitsOf(item)} pcs</span>
       </div>
-
-      <div className="mt-4"><StepLine item={item} /></div>
-
-      <div className={cn("mt-4 rounded-xl px-3 py-2.5 text-sm", mine ? "bg-amber-50 text-amber-950" : "bg-slate-50 text-slate-700")}>
-        {step?.owner
-          ? <><span className="font-semibold">{mine ? "Your turn: " : `Waiting for ${step.ownerLabel}: `}</span>{step.todo}</>
-          : <span className="font-semibold text-emerald-800">{step?.todo}</span>}
-      </div>
-
-      {(item.bill || item.dispatchNote) && (
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          {item.bill && <button type="button" onClick={() => onBill(item)} className="text-left hover:underline">Bill <span className="font-semibold text-foreground">{item.bill.billNumber}</span> · {item.bill.customerName} · {rupees(item.bill.net)}
-            {item.bill.due > 0 ? <span className="ml-1 font-semibold text-destructive">· {rupees(item.bill.due)} to collect</span> : <span className="ml-1 font-semibold text-success">· paid</span>}</button>}
-          {item.dispatchNote && <span>Delivery: {item.dispatchNote}</span>}
-        </div>
-      )}
-
-      <div className="mt-3 flex flex-wrap justify-end gap-2 border-t pt-3">
-        {item.bill && <Button size="sm" variant="outline" onClick={() => onBill(item)}><FileText /> View bill</Button>}
-        {mine && <Button size="sm" onClick={() => (mine.action === "pay" ? onBill(item) : onAct(item, mine))}><Check /> {mine.button}</Button>}
-      </div>
+      <div className="mt-3"><NextStep item={item} role={role} /></div>
+      {last && <p className="mt-2 text-xs text-muted-foreground">Last action: {last.name} · {last.sub}</p>}
+      <div className="mt-3 border-t pt-3"><Actions item={item} role={role} onAct={onAct} onBill={onBill} /></div>
     </div>
   )
 }
@@ -392,17 +398,21 @@ export default function FinishedGoods() {
   const act = (item, step) => setActing({ item, step })
   const done = () => { setActing({ item: null, step: null }); refetch() }
 
-  const chip = (key, label, count) => (
-    <button key={key} type="button" onClick={() => setFilter(key)} aria-pressed={activeFilter === key}
-      className={cn("inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
-        activeFilter === key ? "border-primary bg-primary text-primary-foreground" : "bg-white text-slate-700 hover:bg-slate-50")}>
-      {label}<span className="tabular-nums opacity-80">{count}</span>
-    </button>
-  )
+  // one tile per step, like the Saturday page; "All" first
+  const tiles = [
+    { key: "all", label: "All", hint: "Every order after QC", icon: PackageCheck, dot: "bg-slate-400", s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/20" } },
+    ...FG_STEPS.map((step) => ({ key: step.status, label: step.label, hint: step.todo.split(".")[0], icon: STEP_ICON[step.status], dot: TILE_TONE[step.status].dot, s: TILE_TONE[step.status].s })),
+  ].map((t) => ({
+    ...t,
+    value: t.key === "all" ? items.length : items.filter((i) => i.status === t.key).length,
+    active: t.key === "all" ? activeFilter === "all" || activeFilter === "mine" : activeFilter === t.key,
+    onClick: () => setFilter(t.key === "all" || activeFilter === t.key ? "all" : t.key),
+  }))
+  const onAct = (i, s) => (s.action === "bill" ? setBillFor(i) : act(i, s))
 
   return (
     <>
-      <MktHero eyebrow="After Quality Control" title="Finished Goods" description="QC passes (packed, sent to Store) → Store receives → Marketing makes the bill → Store gives it out. Done.">
+      <MktHero eyebrow="Quality & release" title="Finished Goods" description="Orders that passed Quality Control: Store receives them, Marketing bills them, and Store gives them out once the bill is paid.">
         <HeroButton variant="glass" onClick={refetch} disabled={isFetching} aria-label="Refresh finished goods">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
         </HeroButton>
@@ -410,22 +420,73 @@ export default function FinishedGoods() {
 
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
 
+      <TileGrid className="mb-4 md:grid-cols-3 xl:grid-cols-5">
+        {tiles.map((t) => <StageTile key={t.key} stage={t} value={t.value} loading={loading} active={t.active} onClick={t.onClick} />)}
+      </TileGrid>
+
       <Card className="min-w-0 overflow-hidden rounded-2xl">
-        <div className="flex flex-wrap items-center gap-2 border-b bg-slate-50/70 px-3 py-3 sm:px-5">
-          {chip("mine", "Waiting for me", mine.length)}
-          {chip("all", "All", items.length)}
-          {chip("due", "Money to collect", items.filter((i) => i.bill?.due > 0).length)}
-          {FG_STEPS.map((s) => chip(s.status, s.label, items.filter((i) => i.status === s.status).length))}
-          <SearchField className="w-full min-w-0 sm:ml-auto sm:w-64" value={query} onChange={setQuery} placeholder="Search order, product, bill..." />
+        <div className="flex flex-wrap items-center gap-2 border-b px-3 py-3 sm:px-5">
+          <SearchField className="w-full min-w-0 sm:w-72" value={query} onChange={setQuery} placeholder="Search order, product, bill..." />
+          {activeFilter === "due" && (
+            <button type="button" onClick={() => setFilter("all")} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">Money to collect ×</button>
+          )}
+          <span className="ml-auto text-xs text-muted-foreground">Showing {rows.length} of {items.length}</span>
         </div>
         {loading ? <div className="p-3"><TableSkeleton rows={4} /></div> : rows.length === 0 ? (
-          <EmptyState icon={PackageCheck} title={items.length ? "Nothing here" : "No finished goods yet"}>
-            {items.length ? "Pick another step above or clear the search." : "An order appears here when every product of it passes Quality Control."}
+          <EmptyState icon={PackageCheck} title={items.length ? "No matching finished goods" : "No finished goods yet"}>
+            {items.length ? "Pick another tile above or clear the search." : "An order appears here when every product of it passes Quality Control."}
           </EmptyState>
         ) : (
-          <div className="grid min-w-0 gap-3 p-3 sm:p-4 lg:grid-cols-2">
-            {rows.map((item) => <OrderCard key={item.id} item={item} role={role} onAct={(i, s) => (s.action === "bill" ? setBillFor(i) : act(i, s))} onBill={setViewBill} />)}
-          </div>
+          <>
+            <div className="grid min-w-0 gap-3 p-3 md:hidden">
+              {rows.map((item) => <ItemCard key={item.id} item={item} role={role} onAct={onAct} onBill={setViewBill} />)}
+            </div>
+            <div className="hidden md:block">
+              <Table className="w-full table-fixed">
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="w-[16%] whitespace-normal">Order</TableHead>
+                    <TableHead className="w-[24%] whitespace-normal">Product / SKU</TableHead>
+                    <TableHead className="w-[9%] whitespace-normal">Quantity</TableHead>
+                    <TableHead className="w-[21%] whitespace-normal">Status / Next step</TableHead>
+                    <TableHead className="w-[15%] whitespace-normal">Last action by</TableHead>
+                    <TableHead className="w-[15%] whitespace-normal text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((item) => {
+                    const last = lastAction(item)
+                    return (
+                      <TableRow key={item.id} className={cn(myFgStep(item, role) && "bg-amber-50/50")}>
+                        <TableCell className="min-w-0 whitespace-normal align-top">
+                          <Link to={`/order-tracker?order=${item.orderId}`} className="font-semibold tabular-nums hover:text-primary hover:underline">{item.orderNumber}</Link>
+                          {item.bill && <p className="text-xs text-muted-foreground">{item.bill.customerName}</p>}
+                        </TableCell>
+                        <TableCell className="min-w-0 whitespace-normal align-top">
+                          {item.lines.map((l) => (
+                            <p key={l.productId} className="leading-snug"><span className="font-medium">{l.name}</span>{l.sku && <span className="block text-xs text-muted-foreground">{l.sku}</span>}</p>
+                          ))}
+                        </TableCell>
+                        <TableCell className="align-top font-semibold tabular-nums">{unitsOf(item)}</TableCell>
+                        <TableCell className="min-w-0 whitespace-normal align-top">
+                          <NextStep item={item} role={role} />
+                          {item.bill && (
+                            <p className="mt-1 text-xs">{item.bill.due > 0 ? <span className="font-semibold text-destructive">{rupees(item.bill.due)} to collect</span> : <span className="font-semibold text-success">Paid</span>}</p>
+                          )}
+                        </TableCell>
+                        <TableCell className="min-w-0 whitespace-normal align-top">
+                          {last ? <><p className="text-sm font-medium">{last.name}</p><p className="text-xs text-muted-foreground">{last.sub}</p></> : <span className="text-xs text-muted-foreground">-</span>}
+                        </TableCell>
+                        <TableCell className="min-w-0 whitespace-normal align-top text-right">
+                          <Actions item={item} role={role} onAct={onAct} onBill={setViewBill} />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </>
         )}
       </Card>
 

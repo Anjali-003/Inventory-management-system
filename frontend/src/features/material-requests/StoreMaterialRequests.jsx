@@ -24,9 +24,6 @@ import Pagination from "@/components/Pagination"
 import { useGetMaterialRequestsQuery } from "./materialRequestsApi"
 import IssueMaterialRequestModal from "./IssueMaterialRequestModal"
 import MaterialRequestDetailsModal from "./MaterialRequestDetailsModal"
-import ExtraMaterialList from "./ExtraMaterialList"
-import { useGetExtraMaterialsQuery } from "./extraMaterialsApi"
-import { usePermissions } from "@/features/auth/usePermissions"
 import { errorMessage, fmtDateTime } from "@/lib/stock"
 import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import { HeroButton, MktHero, SearchField, StageTile, TileGrid } from "@/features/marketing-orders/mktKit"
@@ -35,7 +32,7 @@ const PAGE_SIZE = 9
 
 const STATUS_META = {
   PENDING: {
-    label: "To hand over",
+    label: "Needs allotment",
     shortLabel: "Pending",
     variant: "warning",
     icon: Clock3,
@@ -44,7 +41,7 @@ const STATUS_META = {
     dot: "bg-amber-500",
   },
   PARTIALLY_ISSUED: {
-    label: "Part given (old)",
+    label: "Partially allotted",
     shortLabel: "Partial",
     variant: "info",
     icon: PackageOpen,
@@ -53,7 +50,7 @@ const STATUS_META = {
     dot: "bg-blue-500",
   },
   ISSUED: {
-    label: "Handed over",
+    label: "Fully allotted",
     shortLabel: "Complete",
     variant: "success",
     icon: BadgeCheck,
@@ -249,9 +246,6 @@ function RequestActions({ request, onView, onAllot }) {
 }
 
 export default function StoreMaterialRequests() {
-  const { canEdit } = usePermissions()
-  const { data: extraRows = [] } = useGetExtraMaterialsQuery()
-  const extraPending = extraRows.filter((r) => r.status === "PENDING").length
   const { data = [], isLoading, isFetching, error, refetch } = useGetMaterialRequestsQuery()
   const [detailsRequest, setDetailsRequest] = useState(null)
   const [issueRequest, setIssueRequest] = useState(null)
@@ -348,9 +342,9 @@ export default function StoreMaterialRequests() {
       value: activeFilter,
       options: [
         { value: "all", label: "All requests" },
-        { value: "open", label: "To hand over" },
+        { value: "open", label: "Needs allotment" },
         { value: "outstanding", label: "Any outstanding materials" },
-        { value: "partial", label: "Part given (old)" },
+        { value: "partial", label: "Partially allotted" },
         { value: "complete", label: "Completed" },
       ],
       onChange: updateFilter,
@@ -398,11 +392,11 @@ export default function StoreMaterialRequests() {
       active: activeFilter === "all", tone: "neutral", s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/20" }, onClick: () => updateFilter("all"),
     },
     {
-      key: "open", label: "To hand over", hint: "New requests waiting for Store", icon: Clock3, value: requestCounts.open,
+      key: "open", label: "Needs allotment", hint: "New requests waiting for Store", icon: Clock3, value: requestCounts.open,
       active: activeFilter === "open", tone: "warning", s: { grad: "from-amber-700 to-orange-800", glow: "shadow-amber-500/25" }, onClick: () => updateFilter("open"),
     },
     {
-      key: "partial", label: "Part given (old)", hint: "Older requests given in parts", icon: PackageOpen, value: requestCounts.partial,
+      key: "partial", label: "Partially allotted", hint: "Can receive more material", icon: PackageOpen, value: requestCounts.partial,
       active: activeFilter === "partial", tone: "info", s: { grad: "from-blue-600 to-indigo-800", glow: "shadow-blue-500/25" }, onClick: () => updateFilter("partial"),
     },
     {
@@ -421,8 +415,8 @@ export default function StoreMaterialRequests() {
     <>
       <MktHero
         eyebrow="Store operations"
-        title="Issue to Production"
-        description="Hand Production the components for the units Operations Admin approved, and extra material for damaged pieces."
+        title="Material Allotment"
+        description="Review requests from Production and record full or partial material handovers."
       >
         <HeroButton variant="glass" onClick={refetch} disabled={isFetching} aria-label="Refresh material requests">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
@@ -432,18 +426,6 @@ export default function StoreMaterialRequests() {
       {error && <div className="mb-4"><Notice title="Couldn't load material requests">{errorMessage(error, "Refresh to try again.")}</Notice></div>}
 
       <div className="min-w-0 space-y-4">
-        <Card className="min-w-0 overflow-hidden rounded-2xl">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 sm:px-5">
-            <div>
-              <p className="font-semibold">Extra material for damaged pieces</p>
-              <p className="text-xs text-muted-foreground">Production asked for more with a reason. Issuing it takes the quantity out of component stock.</p>
-            </div>
-            {extraPending > 0 && <Badge variant="warning">{extraPending} waiting</Badge>}
-          </div>
-          <ExtraMaterialList canDecide={canEdit("storeMaterialRequests")} />
-        </Card>
-
-        <p className="px-1 pt-2 text-sm font-semibold text-slate-700">Planned material for approved orders</p>
         <div className="hidden md:block">
           <TileGrid className="md:grid-cols-4 xl:grid-cols-4">
             {stats.map((item) => (

@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react"
 import { usePermissions } from "@/features/auth/usePermissions"
 import OrderDrawer from "@/features/marketing-orders/OrderDrawer"
-import OpsTimelineTab from "./OpsTimelineTab"
-import { FeasibilityTab, OPS_TABS } from "./FeasibilityTab"
+import OrderStory from "@/features/marketing-orders/OrderStory"
+import { FeasibilityTab, opsTabs } from "./FeasibilityTab"
 import { DecisionButtons } from "./DecisionButtons"
 import useOrderDecisions from "./useOrderDecisions"
 import { canApprove } from "./approvalParts"
@@ -15,8 +15,9 @@ const EMPTY = []
 
 /*
   THE order drawer of the Operations Admin, used everywhere an order is opened (Incoming Orders page, dashboard,
-  links from notifications): Overview / Products / Stock check / Timeline tabs, and the three decisions in the footer
-  (Reject · Revise quantity · Check stock & send, see DecisionButtons.jsx).
+  links from notifications): Overview / Products / Stock check / Timeline tabs, and the admin's buttons in the footer
+  (Reject · Revise quantity · Approve while it waits; Send list to Purchase · Send to Production once approved,
+  see DecisionButtons.jsx).
 
   `orderId={null}` keeps it closed; the order is read from the live list by id.
   `tab` / `onTab` are optional: pass them to keep the tab in the URL (the Incoming Orders page does), otherwise the
@@ -58,12 +59,13 @@ export default function OpsOrderDrawer({ orderId, onClose, tab: tabProp, onTab }
         onTab={setTab}
         onClose={close}
         wide
-        tabs={OPS_TABS}
+        tabs={opsTabs(selected)}
+        audience="operations"
         tabContent={
           selected
             ? {
                 feasibility: <FeasibilityTab order={selected} onDecide={editable && !isFetching ? decide : undefined} />,
-                timeline: <OpsTimelineTab order={selected} />,
+                timeline: <OrderStory order={selected} audience="operations" />,
               }
             : undefined
         }

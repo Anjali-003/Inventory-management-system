@@ -135,7 +135,7 @@ export default function ProductionStartModal({ order, onClose, onStarted }) {
           <>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <Metric label="Ordered" value={ordered} />
-              <Metric label="Material received" value={allotted} tone="success" />
+              <Metric label="Allotted" value={allotted} tone="success" />
               <Metric label="Completed" value={completed} tone="info" />
               <Metric label="Left to be allotted" value={leftToAllot} tone={leftToAllot ? "warning" : "neutral"} />
             </div>

@@ -17,7 +17,7 @@ import OrderDrawer from "./OrderDrawer"
 import OrdersTable from "./OrdersTable"
 import { HeroButton, MktBtn, MktHero, NewOrderFab, SearchField, StageChips, StageTile, StatusSelect, StatusPill, TileGrid } from "./mktKit"
 import { PRESS_SOFT, rise, stagger } from "./mktMotion"
-import { ALL_STAGE, OrderSteps, STAGES, countByStatus, isDrawerTab, isStatus, newestFirst, plural, stageOf } from "./orderParts"
+import { ALL_STAGE, CustomerName, OrderSteps, OrderValue, STAGES, countByStatus, declinedOf, isDrawerTab, isStatus, newestFirst, plural, stageOf } from "./orderParts"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "./marketingOrdersApi"
 
 const EMPTY = []
@@ -67,6 +67,7 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-[15px] font-bold tabular-nums tracking-[-0.01em]">{o.order_number}</p>
+            <CustomerName order={o} />
             <p className="mt-0.5 truncate text-xs text-muted-foreground" title={fmtDateTime(o.created_at)}>
               {o.created_by_name ? `${o.created_by_name} · ` : ""}{timeAgo(o.created_at)}
             </p>
@@ -83,9 +84,16 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
           ))}
           {extra > 0 && <li className="text-xs font-semibold text-primary">+ {plural(extra, "more product")}</li>}
         </ul>
+        <OrderValue order={o} className="mt-2 block" />
 
         <OrderSteps status={o.approval_status} className="mt-4" />
 
+        {declinedOf(o) && (
+          <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
+            <UserCell name={declinedOf(o).by} sub={declinedOf(o).at ? fmtDateTime(declinedOf(o).at) : ""} />
+            <p className="mt-1.5 text-xs leading-snug text-foreground/80">{declinedOf(o).why}</p>
+          </div>
+        )}
         {isDecided(o) && (
           <div className={cn("mt-3.5 rounded-xl px-3 py-2.5 ring-1 ring-inset", stage?.s.soft)}>
             <UserCell name={o.approved_by_name} sub={fmtDateTime(o.approved_at)} />
@@ -150,7 +158,7 @@ export default function MarketingOrders() {
       .filter(
         (o) =>
           (!status || o.approval_status === status) &&
-          (!q || o.order_number.toLowerCase().includes(q) || o.items.some((i) => i.name.toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q)))
+          (!q || o.order_number.toLowerCase().includes(q) || (o.customer_name || "").toLowerCase().includes(q) || o.items.some((i) => i.name.toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q)))
       )
   }, [data, query, status])
 
@@ -214,7 +222,7 @@ export default function MarketingOrders() {
 
       {/* filter: chips on a phone, tiles on tablets, a dropdown (in the bar below) on desktop */}
       <div className="hidden md:block lg:hidden">
-        <TileGrid>
+        <TileGrid className="md:grid-cols-3 xl:grid-cols-6">
           {filters.map((f) => (
             <StageTile
               key={f.key}

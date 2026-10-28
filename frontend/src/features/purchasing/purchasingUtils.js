@@ -63,6 +63,15 @@ export function downloadPurchaseList(order, lines) {
   downloadXlsx(`${order.order_number}-components-to-buy.xlsx`, `${order.order_number} to buy`.slice(0, 31), headers, rows)
 }
 
+/* Excel file of the components short for an order right now (the stock check's shortages). */
+export function downloadShortages(order, shortages) {
+  const headers = ["Order number", "SKU", "Component", "Required", "In stock", "Short", "Unit"]
+  const rows = (shortages || []).map((c) => [
+    order.order_number, c.sku || "", c.name, Number(c.required), Number(c.available), Number(c.shortage), c.unit || "",
+  ])
+  downloadXlsx(`${order.order_number}-components-short.xlsx`, `${order.order_number} short`.slice(0, 31), headers, rows)
+}
+
 /*
   The Operations Admin's list, as the Purchase Manager sees it. An approved order carries
   purchase_request.items = [{ request_item_id, component_id, sku, name, unit, quantity, purchase_order_id, po_number }].

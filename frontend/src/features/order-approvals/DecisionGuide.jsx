@@ -1,72 +1,84 @@
-import { ArrowRight, PackageCheck, Scale, X } from "lucide-react";
+import { ArrowRight, Check, Factory, Scale, ShoppingCart, X } from "lucide-react";
 import { fmtQty } from "@/lib/stock";
 import { cn } from "@/lib/utils";
-import { planTotals } from "./approvalParts";
-import { rejectBlockReason, reviseBlockReason } from "./DecisionButtons";
+import { hasLeftToSend, planTotals } from "./approvalParts";
+import { productionBlockReason, purchaseBlockReason, rejectBlockReason, reviseBlockReason } from "./DecisionButtons";
 
 /*
-  "Your decision" box at the top of the Stock check tab, for an order that waits for the Operations Admin.
-  One sentence on what the stock can do, then the three decisions as cards that say what each one will DO with
-  this particular order, with the one that fits best marked "Recommended". A card starts that decision directly.
-  Same decisions, names and rules as the drawer footer (DecisionButtons.jsx).
+  Box at the top of the Stock check tab. One sentence on what the stock can do, then what the admin can do now, as
+  cards that say what each one will DO with this order. Same names and rules as the drawer footer (DecisionButtons.jsx).
+    The order waits:       Approve (the decision; Marketing is told) · Revise quantity · Reject
+    The order is approved: Send list to Purchase · Send to Production
 */
 const units = (n) => `${fmtQty(n)} unit${Number(n) === 1 ? "" : "s"}`;
 const comps = (n) => `${n} component${n === 1 ? "" : "s"}`;
 
-function summaryOf(plan) {
+function summaryOf(order, plan) {
   const { ordered, canMake, remaining } = planTotals(plan);
   const toBuy = plan.shortages?.length || 0;
+  const of = hasLeftToSend(order) ? "not given to Production yet" : "ordered";
   if (plan.missing_bom?.length) {
     return { tone: "neutral", text: "The bill of materials is incomplete, so the stock cannot be checked yet. Complete the BOM first, or reject the order." };
   }
-  if (canMake >= ordered) {
-    return { tone: "good", text: `Everything can be built from stock now: all ${units(ordered)}.` };
-  }
-  if (canMake === 0) {
-    return { tone: "bad", text: `Nothing can be built from the current stock. ${comps(toBuy)} must be bought first.` };
-  }
-  return { tone: "part", text: `Stock can build ${fmtQty(canMake)} of ${units(ordered)} now. ${units(remaining)} need ${comps(toBuy)} that are short.` };
+  if (canMake >= ordered) return { tone: "good", text: `The stock can build all ${units(ordered)} ${of} now.` };
+  if (canMake === 0) return { tone: "bad", text: `Nothing can be built from the current stock (${units(ordered)} ${of}). ${comps(toBuy)} must be bought first.` };
+  return { tone: "part", text: `The stock can build ${fmtQty(canMake)} of the ${units(ordered)} ${of} now. The other ${fmtQty(remaining)} need ${comps(toBuy)} that are short.` };
 }
 
-function optionsOf(order, plan) {
-  const { ordered, canMake, remaining } = planTotals(plan);
-  const toBuy = plan.shortages?.length || 0;
+function waitingOptions(order, plan) {
   const bomMissing = plan.missing_bom?.length > 0;
+  return [
+    {
+      kind: "approve",
+      icon: Check,
+      title: "Approve",
+      text: "Accept the order and tell the Marketing Manager. Then send the lists to Purchase and Production from here.",
+      blocked: null,
+      recommended: !bomMissing,
+    },
+    {
+      kind: "revise",
+      icon: Scale,
+      title: "Revise quantity",
+      text: "Promise less than ordered. The rest goes back to Marketing as a separate draft. Marketing has to accept first.",
+      blocked: reviseBlockReason(order, plan),
+      recommended: false,
+    },
+    {
+      kind: "reject",
+      icon: X,
+      title: "Reject",
+      text: "Stop the order and tell Marketing why. Nothing is sent to Production or Purchase.",
+      blocked: rejectBlockReason(order),
+      recommended: bomMissing,
+      danger: true,
+    },
+  ];
+}
 
-  const send = {
-    kind: "plan",
-    icon: PackageCheck,
-    title: "Check stock & send",
-    text: bomMissing
-      ? "Not possible until the BOM is complete."
-      : canMake >= ordered
-        ? `Production builds all ${units(ordered)}. Nothing to buy.`
-        : canMake === 0
-          ? `Purchase buys ${comps(toBuy)}. Production starts once they are in stock.`
-          : `Production starts ${units(canMake)} now. Purchase buys ${comps(toBuy)} for the other ${fmtQty(remaining)}.`,
-    blocked: bomMissing ? "Complete the bill of materials first." : null,
-    recommended: !bomMissing, // the normal path: build what the stock covers, buy the rest
-  };
-  const revise = {
-    kind: "revise",
-    icon: Scale,
-    title: "Revise quantity",
-    text: canMake < ordered
-      ? `Make only ${units(canMake)} now. The other ${fmtQty(remaining)} go back to Marketing as a separate draft. Marketing has to accept first.`
-      : "Make less than ordered now (for example when the line is full). The rest goes back to Marketing as a separate draft.",
-    blocked: reviseBlockReason(order, plan),
-    recommended: false,
-  };
-  const reject = {
-    kind: "reject",
-    icon: X,
-    title: "Reject",
-    text: "Stop the order and tell Marketing why. Nothing is sent to Production or Purchase.",
-    blocked: rejectBlockReason(order),
-    recommended: bomMissing,
-    danger: true,
-  };
-  return [send, revise, reject];
+function approvedOptions(plan) {
+  const { canMake, remaining } = planTotals(plan);
+  const toBuy = plan.shortages?.length || 0;
+  const purchaseWhy = purchaseBlockReason(plan);
+  const productionWhy = productionBlockReason(plan);
+  return [
+    {
+      kind: "purchase",
+      icon: ShoppingCart,
+      title: "Send list to Purchase",
+      text: `The Purchase Manager buys ${comps(toBuy)} for the other ${units(remaining)}.`,
+      blocked: purchaseWhy,
+      recommended: !purchaseWhy && !!productionWhy,
+    },
+    {
+      kind: "production",
+      icon: Factory,
+      title: "Send to Production",
+      text: `The Production Manager builds ${units(canMake)} now. Their stock is deducted when you send.`,
+      blocked: productionWhy,
+      recommended: !productionWhy,
+    },
+  ];
 }
 
 const TONE = {
@@ -77,18 +89,21 @@ const TONE = {
 };
 
 export default function DecisionGuide({ order, plan, onDecide }) {
-  const summary = summaryOf(plan);
-  const options = optionsOf(order, plan);
+  const approved = hasLeftToSend(order);
+  const summary = summaryOf(order, plan);
+  const options = approved ? approvedOptions(plan) : waitingOptions(order, plan);
 
   return (
     <section aria-labelledby="decision-guide-title" className="space-y-3">
       <div className={cn("rounded-xl border px-4 py-3", TONE[summary.tone])}>
-        <h3 id="decision-guide-title" className="text-xs font-bold uppercase tracking-wide opacity-70">Your decision</h3>
+        <h3 id="decision-guide-title" className="text-xs font-bold uppercase tracking-wide opacity-70">
+          {approved ? "Approved · next: send the lists" : "Your decision"}
+        </h3>
         <p className="mt-1 text-sm font-semibold leading-snug">{summary.text}</p>
       </div>
 
       {onDecide && (
-        <ul className="grid gap-2 sm:grid-cols-3">
+        <ul className={cn("grid gap-2", approved ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
           {options.map((o) => {
             const Icon = o.icon;
             return (
@@ -101,7 +116,7 @@ export default function DecisionGuide({ order, plan, onDecide }) {
                   className={cn(
                     "group flex h-full w-full flex-col rounded-xl border bg-card p-3 text-start outline-none transition-[border-color,box-shadow,transform] duration-200",
                     "focus-visible:ring-2 focus-visible:ring-ring/60 enabled:hover:-translate-y-0.5 enabled:hover:shadow-[0_12px_24px_-16px_rgba(16,26,23,0.4)] enabled:active:translate-y-0",
-                    o.recommended ? "border-primary ring-1 ring-primary/30" : "border-[#E3E6EB]",
+                    o.recommended && !o.blocked ? "border-primary ring-1 ring-primary/30" : "border-[#E3E6EB]",
                     o.danger ? "enabled:hover:border-destructive" : "enabled:hover:border-primary",
                     "disabled:cursor-not-allowed disabled:opacity-55"
                   )}

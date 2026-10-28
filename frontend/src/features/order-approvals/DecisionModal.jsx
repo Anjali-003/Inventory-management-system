@@ -38,7 +38,7 @@ export default function DecisionModal({ order, mode, onClose, onSwitch }) {
           : approve({ id: order.id, remarks: remarks.trim(), idempotency_key: key, expected_round: Number(order.approval_round) || 0 }).unwrap()
       )
       if (done === undefined) return // a request is already in flight
-      toast.success(isReject ? `${order.order_number} rejected` : `${order.order_number} approved and sent to the Purchase Manager`)
+      toast.success(isReject ? `${order.order_number} rejected` : `${order.order_number} approved. The Marketing Manager has been told. Now send the lists from the Stock check.`)
       onClose()
     } catch (err) {
       setServerError(errorMessage(err, isReject ? "Could not reject this order." : "Could not approve this order."))
@@ -53,7 +53,9 @@ export default function DecisionModal({ order, mode, onClose, onSwitch }) {
       busy={busy}
       size="lg"
       title={`${isReject ? "Reject" : "Approve"} ${order.order_number}`}
-      description={isReject ? "Tell the team why this order cannot go ahead." : "Approved orders go to the Purchase Manager and production can start."}
+      description={isReject
+        ? "Tell the team why this order cannot go ahead."
+        : "The Marketing Manager is told the order is accepted. Nothing is sent to Purchase or Production yet: you send those lists next, from the Stock check."}
       footer={
         <>
           <MktBtn onClick={onClose} disabled={busy} className={onSwitch ? "sm:me-auto" : undefined}>Cancel</MktBtn>
@@ -86,7 +88,7 @@ export default function DecisionModal({ order, mode, onClose, onSwitch }) {
             maxLength={500}
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
-            placeholder={isReject ? "e.g. Quantity too high, confirm with the customer first" : "Anything the Purchase Manager should know"}
+            placeholder={isReject ? "e.g. Quantity too high, confirm with the customer first" : "Anything the Marketing Manager should know"}
             className="w-full rounded-[10px] border border-cf-line-strong bg-card px-3 py-2 text-base outline-none sm:text-[13px] transition-shadow placeholder:text-cf-faint focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15"
           />
         </Field>

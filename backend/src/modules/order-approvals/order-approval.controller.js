@@ -25,7 +25,7 @@ async function getOne(req, res) {
 }
 
 /*
-    approve and dispatch move stock, so they need an idempotency key (see shared/idempotency.js). It may arrive as the
+    approve and send-to-production need an idempotency key (see shared/idempotency.js). It may arrive as the
     standard `Idempotency-Key` header or as `idempotency_key` in the body, like the inventory API. When the request was
     already applied the original response is returned and `Idempotent-Replayed: true` is set.
 */
@@ -55,13 +55,17 @@ async function plan(req, res) {
     res.json(await service.getPlan(idOf(req)));
 }
 
-/* POST /order-approvals/:id/dispatch: approve + send the producible list (Production) and the shortage list (Purchase) */
+/* POST /order-approvals/:id/send-to-production (deducts stock) and /send-to-purchase (the components that are short) */
 async function updateDeliveryDate(req, res) {
     res.json(await service.updateDeliveryDate(idOf(req), req.body, req.user));
 }
 
-async function dispatch(req, res) {
-    res.json(await service.dispatch(idOf(req), guardedBody(req), req.user.id, replayFlag(res)));
+async function sendToProduction(req, res) {
+    res.json(await service.sendToProduction(idOf(req), guardedBody(req), req.user.id, replayFlag(res)));
+}
+
+async function sendToPurchase(req, res) {
+    res.json(await service.sendToPurchase(idOf(req), req.body, req.user.id));
 }
 
 module.exports = {
@@ -73,6 +77,7 @@ module.exports = {
     reject: asyncHandler(reject, { message: "Failed to reject the order" }),
     revise: asyncHandler(revise, { message: "Failed to revise the order quantity" }),
     plan: asyncHandler(plan, { message: "Failed to check the stock for this order" }),
-    dispatch: asyncHandler(dispatch, { message: "Failed to send the order" }),
+    sendToProduction: asyncHandler(sendToProduction, { message: "Failed to send to Production" }),
+    sendToPurchase: asyncHandler(sendToPurchase, { message: "Failed to send the list to Purchase" }),
     updateDeliveryDate: asyncHandler(updateDeliveryDate, { message: "Failed to update delivery date" }),
 };

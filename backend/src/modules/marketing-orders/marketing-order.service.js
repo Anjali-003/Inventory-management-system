@@ -26,8 +26,33 @@ async function listOrders(conn = db) {
     return approvals.getOrdersByIds(rows.map((r) => r.id), conn);
 }
 
+/* The saved customers, for the New order picker. */
+async function customerOptions() {
+    const [rows] = await db.query(`SELECT id, name FROM customers ORDER BY name`);
+    return rows;
+}
+
+/*
+    The order's customer: { customer_id } a saved one, or { customer_name } typed by hand (saved the first time, found
+    again by its name after that). Required: the CEO reads every order by its customer.
+*/
+async function resolveCustomer(conn, body, userId) {
+    const id = Number(body && body.customer_id);
+    if (Number.isInteger(id) && id > 0) {
+        const [rows] = await conn.query(`SELECT id FROM customers WHERE id = ?`, [id]);
+        if (!rows.length) throw new AppError(422, "The selected customer no longer exists", "VALIDATION", { field: "customer" });
+        return id;
+    }
+    const name = typeof (body && body.customer_name) === "string" ? body.customer_name.trim().replace(/\s+/g, " ") : "";
+    if (!name) throw new AppError(422, "Enter the customer this order is for", "VALIDATION", { field: "customer" });
+    if (name.length > 150) throw new AppError(422, "Customer name can be at most 150 characters", "VALIDATION", { field: "customer" });
+    await conn.query(`INSERT IGNORE INTO customers (name, created_by) VALUES (?, ?)`, [name, userId || null]);
+    const [[row]] = await conn.query(`SELECT id FROM customers WHERE name = ?`, [name]);
+    return row.id;
+}
+
 async function productOptions() {
-    const [rows] = await db.query(`SELECT id, sku, name FROM products WHERE is_active = TRUE ORDER BY name`);
+    const [rows] = await db.query(`SELECT id, sku, name, selling_price FROM products WHERE is_active = TRUE ORDER BY name`);
     return rows;
 }
 
@@ -68,9 +93,10 @@ async function createDraft(body, userId) {
             if (!have.has(it.productId)) throw new AppError(404, "Product not found", "NOT_FOUND", { line, field: "product" });
         });
 
+        const customerId = await resolveCustomer(conn, body, userId);
         const [res] = await conn.query(
-            `INSERT INTO orders (order_number, status, approval_status, estimated_delivery_date, created_by) VALUES (?, 'PENDING', 'DRAFT', ?, ?)`,
-            [`TEMP-${Date.now()}-${userId}`, deliveryDate, userId]
+            `INSERT INTO orders (order_number, customer_id, status, approval_status, estimated_delivery_date, created_by) VALUES (?, ?, 'PENDING', 'DRAFT', ?, ?)`,
+            [`TEMP-${Date.now()}-${userId}`, customerId, deliveryDate, userId]
         );
         const id = res.insertId;
         const d = new Date();
@@ -103,6 +129,7 @@ async function send(orderId, userId = null) {
     return inventory.inTransaction(async (conn) => {
         const order = await lockDraft(conn, orderId);
         await conn.query(`UPDATE orders SET approval_status = 'PENDING_APPROVAL', sent_to_admin_at = NOW() WHERE id = ?`, [orderId]);
+        await approvals.logEvent(conn, orderId, "SENT", userId, { quantity: await approvals.unitsOf(conn, orderId) });
         await notifications.notify(conn, {
             role: "OPERATIONS_ADMIN",
             type: "ORDER_SENT",
@@ -142,6 +169,7 @@ async function acceptRevision(orderId, userId) {
             `UPDATE orders SET approval_status = 'PENDING_APPROVAL', revision_accepted_by = ?, revision_accepted_at = NOW() WHERE id = ?`,
             [userId, orderId]
         );
+        await approvals.logEvent(conn, orderId, "REVISION_ACCEPTED", userId, { quantity: await approvals.unitsOf(conn, orderId) });
         await notifications.notify(conn, {
             role: "OPERATIONS_ADMIN",
             type: "REVISION_ACCEPTED",
@@ -157,4 +185,46 @@ async function acceptRevision(orderId, userId) {
     });
 }
 
-module.exports = { listOrders, productOptions, createDraft, send, removeDraft, acceptRevision };
+/*
+    The Marketing Manager does not agree to the reduced quantity: the order is cancelled, together with the held-back
+    draft the revision split off (if it was not sent yet), and the Operations Admin is told. Nothing was approved, so
+    no stock moves.
+*/
+async function declineRevision(orderId, userId) {
+    return inventory.inTransaction(async (conn) => {
+        const [rows] = await conn.query(
+            `SELECT o.id, o.order_number, o.approval_status, u.role AS creator_role
+             FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ? FOR UPDATE`,
+            [orderId]
+        );
+        if (rows.length === 0 || rows[0].creator_role !== "MARKETING_MANAGER") throw AppError.notFound("Order not found", "NOT_FOUND");
+        if (rows[0].approval_status !== "QUANTITY_REVISED") {
+            throw AppError.conflict("This order is not waiting for your answer on a revised quantity. Refresh the page.", "NOT_REVISED");
+        }
+        // who said no and when go into the revision, next to who revised it (shown on both timelines)
+        await conn.query(
+            `UPDATE orders
+             SET approval_status = 'CANCELLED', approval_remarks = ?,
+                 revision = JSON_SET(revision, '$.declined_at', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'),
+                                     '$.declined_by_name', (SELECT name FROM users WHERE id = ?))
+             WHERE id = ?`,
+            ["Marketing did not accept the revised quantity", userId, orderId]
+        );
+        await conn.query(`DELETE FROM orders WHERE parent_order_id = ? AND approval_status = 'DRAFT'`, [orderId]); // order_items cascade
+        await approvals.logEvent(conn, orderId, "REVISION_DECLINED", userId, { quantity: await approvals.unitsOf(conn, orderId) });
+        await notifications.notify(conn, {
+            role: "OPERATIONS_ADMIN",
+            type: "REVISION_DECLINED",
+            title: `Order ${rows[0].order_number} cancelled`,
+            body: "Marketing did not accept the reduced quantity, so the order was cancelled.",
+            severity: "warning",
+            link: `/order-approvals?order=${orderId}`,
+            orderId,
+            payload: { order_number: rows[0].order_number },
+            userId,
+        });
+        return approvals.getOrder(orderId, conn);
+    });
+}
+
+module.exports = { listOrders, productOptions, customerOptions, createDraft, send, removeDraft, acceptRevision, declineRevision };

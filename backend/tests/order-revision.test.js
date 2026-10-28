@@ -41,8 +41,8 @@ function run(sql, p = []) {
   if (has(sql, "DELETE FROM order_items WHERE id = ?")) { s.items = s.items.filter((i) => i.id !== p[0]); return [{ affectedRows: 1 }]; }
   if (has(sql, "UPDATE order_items SET quantity = ?")) { s.items.find((i) => i.id === p[1]).quantity = String(p[0]); return [{ affectedRows: 1 }]; }
   if (has(sql, "INSERT INTO orders")) {
-    const [order_number, parent_order_id, estimated_delivery_date, created_by] = p;
-    s.orders.push({ id: s.nextOrderId, order_number, parent_order_id, approval_status: "DRAFT", revision: null, created_by, creator_role: "MARKETING_MANAGER", estimated_delivery_date });
+    const [order_number, parent_order_id, customer_id, estimated_delivery_date, created_by] = p;
+    s.orders.push({ id: s.nextOrderId, order_number, parent_order_id, customer_id, approval_status: "DRAFT", revision: null, created_by, creator_role: "MARKETING_MANAGER", estimated_delivery_date });
     return [{ insertId: s.nextOrderId++ }];
   }
   if (has(sql, "INSERT INTO order_items (order_id, product_id, quantity) VALUES ?")) {
@@ -71,6 +71,12 @@ function run(sql, p = []) {
   if (has(sql, "FROM orders o LEFT JOIN users cu")) return [orderById(p[0]) ? [{ ...orderById(p[0]) }] : []];
   if (has(sql, "FROM order_items oi") && has(sql, "oi.order_id IN")) return [s.items.filter((i) => p[0].includes(i.order_id))];
   if (has(sql, "FROM order_production_items r") || has(sql, "FROM order_purchase_items r")) return [[]];
+  // the order's story (order_events): kept, so a test can read what was logged
+  if (has(sql, "INSERT INTO order_events")) { (s.events ||= []).push({ order_id: p[0], kind: p[1], actor_id: p[2], quantity: p[3] }); return [{ insertId: s.events.length }]; }
+  if (has(sql, "FROM order_events e")) return [(s.events || []).filter((e) => p[0].includes(e.order_id))];
+  if (has(sql, "SELECT COALESCE(SUM(quantity), 0) AS n FROM order_items WHERE order_id = ?")) {
+    return [[{ n: s.items.filter((i) => i.order_id === p[0]).reduce((t, i) => t + Number(i.quantity), 0) }]];
+  }
   throw new Error("fake db: unexpected query: " + sql.replace(/\s+/g, " ").slice(0, 120));
 }
 
@@ -148,16 +154,12 @@ describe("Operations Admin revises the quantity", () => {
     expect(s).toEqual(fresh());
   });
 
-  it("only allows what the stock on the shelf can build now", async () => {
-    s.inventory[0].quantity_on_hand = "50.00"; // 50 boards -> at most 50 Smart Controllers
-    await expect(approvals.revise(7, { remarks: "60 now", items: [{ product_id: 1, quantity: 60 }] }, 5))
-      .rejects.toMatchObject({ code: "NOT_ENOUGH_STOCK", extra: { lines: [{ product_id: 1, can_make: 50 }] } });
-    expect(s.orders).toHaveLength(1); // nothing split, nothing changed
-    expect(qtyOf(7)).toEqual({ 1: 100, 2: 40 });
-
-    const order = await approvals.revise(7, { remarks: "50 now", items: [{ product_id: 1, quantity: 50 }] }, 5);
+  it("promises any quantity up to the order, whatever the stock on the shelf (the rest is bought after approval)", async () => {
+    s.inventory[0].quantity_on_hand = "0.00"; // nothing can be built now
+    const order = await approvals.revise(7, { remarks: "60 this month", items: [{ product_id: 1, quantity: 60 }] }, 5);
     expect(order.approval_status).toBe("QUANTITY_REVISED");
-    expect(qtyOf(8)).toEqual({ 1: 50 });
+    expect(qtyOf(7)).toEqual({ 1: 60, 2: 40 });
+    expect(qtyOf(8)).toEqual({ 1: 40 });
   });
 
   it("only revises a waiting marketing order, and only once", async () => {

@@ -4,21 +4,25 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { MktBtn } from "@/features/marketing-orders/mktKit";
 import { plural } from "@/features/marketing-orders/orderParts";
-import { downloadPurchaseList } from "@/features/purchasing/purchasingUtils";
+import { downloadPurchaseList, downloadShortages } from "@/features/purchasing/purchasingUtils";
 import { fmtQty } from "@/lib/stock";
 import { cn } from "@/lib/utils";
 import { Download } from "lucide-react";
-import { canApprove, planTotals, planVerdict } from "./approvalParts";
+import { canApprove, hasLeftToSend, planTotals, planVerdict } from "./approvalParts";
 import DecisionGuide from "./DecisionGuide";
 import { useGetOrderPlanQuery } from "./orderApprovalsApi";
 
-/* Tabs of the Operations Admin's order drawer (OpsOrderDrawer.jsx). Stock check first: it is where the decision is made. */
-export const OPS_TABS = [
-  { id: "feasibility", label: "Stock check" },
-  { id: "overview", label: "Overview" },
+/*
+  Tabs of the Operations Admin's order drawer (OpsOrderDrawer.jsx). The agreement with Marketing ("Order & agreement")
+  and Operations' own work ("Decide" while the order waits, "Making it" once approved) are separate tabs.
+*/
+export const opsTabs = (order) => [
+  { id: "overview", label: "Order & agreement" },
+  { id: "feasibility", label: order?.approval_status === "APPROVED" ? "Making it" : "Decide" },
   { id: "items", label: "Products" },
   { id: "timeline", label: "Timeline" },
 ];
+export const OPS_TABS = opsTabs(null);
 
 const Heading = ({ children }) => <h3 className="mb-2 text-sm font-semibold">{children}</h3>;
 const Note = ({ children }) => (
@@ -107,10 +111,13 @@ export function FeasibilityTab({ order, onDecide }) {
   const verdict = planVerdict(plan);
   const { ordered, canMake, remaining } = planTotals(plan);
   const shortages = plan.shortages || [];
+  // an approved order: the plan covers only the units not given to Production yet, so every number says so
+  const approved = hasLeftToSend(order);
   return (
     <div className="space-y-5">
       <DecisionGuide order={order} plan={plan} onDecide={onDecide} />
 
+      {!approved && (
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <Badge variant={verdict.variant}>{verdict.label}</Badge>
         <span>
@@ -124,7 +131,9 @@ export function FeasibilityTab({ order, onDecide }) {
           <b className={cn("tabular-nums", remaining > 0 && "text-destructive")}>{fmtQty(remaining)}</b>
         </span>
       </div>
+      )}
 
+      {!approved && (
       <section>
         <Heading>By product</Heading>
         <div className="overflow-hidden rounded-xl border">
@@ -161,9 +170,20 @@ export function FeasibilityTab({ order, onDecide }) {
           </p>
         )}
       </section>
+      )}
 
       <section>
-        <Heading>Components to buy</Heading>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">
+            {approved ? `Components short for the ${fmtQty(ordered)} units not given yet` : "Components to buy"}
+            {approved && plan.purchase_sent && <span className="ms-2 text-xs font-normal text-muted-foreground">(list already sent to Purchase)</span>}
+          </h3>
+          {shortages.length > 0 && (
+            <MktBtn size="sm" aria-label="Download the short components (Excel)" onClick={() => downloadShortages(order, shortages)}>
+              <Download /> Excel
+            </MktBtn>
+          )}
+        </div>
         {shortages.length === 0 ? (
           <Note>
             {plan.missing_bom?.length
