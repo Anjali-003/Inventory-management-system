@@ -21,6 +21,7 @@ const selectSql = `
     fg.delivered_at,
     fg.delivery_note,
     o.order_number,
+    oc.name AS order_customer_name,
     b.id AS bill_id,
     b.bill_number,
     b.customer_name,
@@ -41,6 +42,7 @@ const selectSql = `
     lu.name AS delivered_by_name
   FROM finished_goods fg
   JOIN orders o ON o.id = fg.order_id
+  LEFT JOIN customers oc ON oc.id = o.customer_id
   JOIN (
     SELECT
       oi.order_id,
@@ -80,6 +82,8 @@ const mapRow = (r) => ({
   productionId: r.production_id,
   orderId: r.order_id,
   orderNumber: r.order_number,
+  // the customer the order is for: the bill is made out to them
+  customerName: r.order_customer_name || null,
   productId: r.product_id,
   productSku: r.product_sku,
   productName: r.product_name,
@@ -561,19 +565,19 @@ const toCents = (v) => Math.round(Number(v) * 100);
 const PAYMENT_METHODS = ["CASH", "BANK", "UPI", "CHEQUE", "OTHER"];
 
 /*
-  body: { customer_id?, customer_name, customer_address?, customer_gstin?, notes?,
-          items: [{ product_id, rate, note? }] }
-  Each line is billed at its own rate with its product's GST %. The rate starts from the price list; a rate BELOW the
-  list price is a discount and needs a reason (note). A product with no price yet can be billed at any rate.
+  body (everything optional): { items?: [{ product_id, rate, note? }], customer_id?, customer_name?, customer_address?,
+                                customer_gstin?, notes? }
+  The simple bill is just {}: the customer is the order's own (name and address from Customers) and every product is
+  billed at its price list. There is no GST: the total is rate x quantity. A rate sent for a product changes it; a rate BELOW the list price is a discount and needs
+  a reason (note). A product with no price in the list must be sent with a rate.
 */
 function parseBill(body) {
   const customerName = cleanText(body.customer_name, 150);
-  if (!customerName) throw new AppError(422, "Customer name is required", "VALIDATION");
   const customerId = body.customer_id === undefined || body.customer_id === null || body.customer_id === "" ? null : Number(body.customer_id);
   if (customerId !== null && (!Number.isInteger(customerId) || customerId <= 0)) throw new AppError(422, "The customer is invalid", "VALIDATION");
-  if (!Array.isArray(body.items) || !body.items.length) throw new AppError(422, "Enter a rate for every product", "VALIDATION");
+  if (body.items !== undefined && !Array.isArray(body.items)) throw new AppError(422, "Products are invalid", "VALIDATION");
   const rates = new Map();
-  for (const item of body.items) {
+  for (const item of body.items || []) {
     const productId = Number(item.product_id);
     const rate = Number(item.rate);
     if (!Number.isInteger(productId) || productId <= 0) throw new AppError(422, "A product is invalid", "VALIDATION");
@@ -611,9 +615,22 @@ async function createBill(id, body = {}, userId = null) {
       const [found] = await conn.query("SELECT id FROM customers WHERE id = ?", [bill.customerId]);
       if (!found.length) throw new AppError(422, "The selected customer no longer exists", "VALIDATION");
     }
+    // the customer of the bill: the order's own, unless one was sent (an order from before customers were required)
+    if (!bill.customerName && !bill.customerId) {
+      const [[c]] = await conn.query(
+        `SELECT c.id, c.name, c.address, c.gstin FROM orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE o.id = ?`,
+        [record.order_id]
+      );
+      if (!c || !c.id) throw new AppError(422, "This order has no customer: enter the customer name", "CUSTOMER_REQUIRED");
+      Object.assign(bill, { customerId: c.id, customerName: c.name, customerAddress: c.address || null, customerGstin: c.gstin || null });
+    } else if (!bill.customerName) {
+      const [[c]] = await conn.query("SELECT name, address, gstin FROM customers WHERE id = ?", [bill.customerId]);
+      if (!c) throw new AppError(422, "The selected customer no longer exists", "VALIDATION");
+      Object.assign(bill, { customerName: c.name, customerAddress: bill.customerAddress || c.address || null, customerGstin: bill.customerGstin || c.gstin || null });
+    }
     const lines = await orderLines(conn, record.order_id);
-    if (bill.rates.size !== lines.length || lines.some((l) => !bill.rates.has(l.productId))) {
-      throw new AppError(422, "Enter a rate for every product of this order", "VALIDATION");
+    if ([...bill.rates.keys()].some((productId) => !lines.some((l) => l.productId === productId))) {
+      throw new AppError(422, "A product is not part of this order", "VALIDATION");
     }
     const [prices] = await conn.query(
       `SELECT id, name, selling_price, gst_percent FROM products WHERE id IN (?)`,
@@ -622,14 +639,18 @@ async function createBill(id, body = {}, userId = null) {
     const priceOf = new Map(prices.map((p) => [Number(p.id), p]));
 
     const items = lines.map((l) => {
-      const { cents: rate, note } = bill.rates.get(l.productId);
       const product = priceOf.get(l.productId);
       const listPrice = product.selling_price === null ? null : toCents(product.selling_price);
+      // no rate sent: the price list
+      if (!bill.rates.has(l.productId) && listPrice === null) {
+        throw new AppError(422, `${product.name} has no price in the price list yet: enter its rate (or ask the Super Admin to set the price)`, "PRICE_REQUIRED");
+      }
+      const { cents: rate, note } = bill.rates.get(l.productId) || { cents: listPrice, note: null };
       if (listPrice !== null && rate < listPrice && (!note || note.length < 3)) {
         throw new AppError(422, `${product.name}: the rate is below the price list (₹${money(listPrice)}). Write the reason for the discount.`, "DISCOUNT_REASON_REQUIRED");
       }
       const amount = rate * l.quantity;
-      const gstBp = Math.round(Number(product.gst_percent) * 100);
+      const gstBp = 0; // no GST: the bill is rate x quantity
       return { ...l, rate, listPrice, note, amount, gstPercent: gstBp / 100, gst: Math.round((amount * gstBp) / 10000) };
     });
     const subtotal = items.reduce((sum, i) => sum + i.amount, 0);
@@ -688,21 +709,23 @@ async function lockActiveBill(conn, id) {
   return { ...rows[0], ...billMoney({ total: Number(rows[0].total), paid: Number(sums.paid), credited: Number(sums.credited) }) };
 }
 
-/* Marketing / Super Admin: money received against the bill. body: { amount, paid_on (YYYY-MM-DD), method, reference? } */
+/*
+  Marketing / Super Admin: the bill is paid, IN FULL, in one go (no part payments). body: { method, reference?,
+  amount?, paid_on? }. The amount is the whole amount due (an amount sent must be exactly that); the date is today
+  unless another is sent.
+*/
 async function addPayment(id, body = {}, userId = null) {
-  const amount = Number(body.amount);
-  if (!Number.isFinite(amount) || amount <= 0 || Math.round(amount * 100) !== amount * 100) {
-    throw new AppError(422, "Amount must be more than 0, with at most 2 decimals", "VALIDATION");
-  }
-  const paidOn = String(body.paid_on || "");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidOn)) throw new AppError(422, "Enter the date the money was received", "VALIDATION");
   const method = String(body.method || "").toUpperCase();
   if (!PAYMENT_METHODS.includes(method)) throw new AppError(422, "Choose how it was paid", "VALIDATION");
+  const paidOn = body.paid_on ? String(body.paid_on) : new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paidOn)) throw new AppError(422, "The payment date is invalid", "VALIDATION");
 
   return inTransaction(async (conn) => {
     const bill = await lockActiveBill(conn, id);
-    if (toCents(amount) > toCents(bill.due)) {
-      throw new AppError(409, `Only ₹${bill.due} is still due on this bill`, "MORE_THAN_DUE");
+    if (toCents(bill.due) <= 0) throw new AppError(409, "This bill is already paid", "ALREADY_PAID");
+    const amount = Number(bill.due);
+    if (body.amount !== undefined && body.amount !== null && body.amount !== "" && toCents(body.amount) !== toCents(amount)) {
+      throw new AppError(422, `The bill is paid in full in one go: ₹${bill.due}`, "PAY_IN_FULL");
     }
     await conn.query(
       `INSERT INTO bill_payments (bill_id, amount, paid_on, method, reference, created_by) VALUES (?, ?, ?, ?, ?, ?)`,

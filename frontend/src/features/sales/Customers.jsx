@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils"
 const EMPTY = []
 const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
 
-/* add a customer, or change one's details (name, address, GSTIN, phone) */
+/* add a customer, or change one's details (name, address, phone) */
 function CustomerDialog({ customer, onClose }) {
   const toast = useToast()
   const [save, { isLoading: saving }] = useSaveCustomerMutation()
@@ -44,7 +44,6 @@ function CustomerDialog({ customer, onClose }) {
       footer={<><Button type="button" variant="outline" size="lg" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" size="lg" disabled={busy || form.name.trim().length < 2}>{busy ? "Saving..." : "Save"}</Button></>}>
       <div className="space-y-3">
         <Field label="Name" htmlFor="cu-name" required><TextInput id="cu-name" maxLength={150} value={form.name} onChange={set("name")} /></Field>
-        <Field label="GSTIN" htmlFor="cu-gstin"><TextInput id="cu-gstin" maxLength={20} value={form.gstin} onChange={set("gstin")} /></Field>
         <Field label="Phone" htmlFor="cu-phone"><TextInput id="cu-phone" maxLength={20} value={form.phone} onChange={set("phone")} /></Field>
         <Field label="Address" htmlFor="cu-address"><TextInput id="cu-address" maxLength={500} value={form.address} onChange={set("address")} /></Field>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -64,7 +63,7 @@ export default function Customers() {
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return customers.filter((c) => !q || `${c.name} ${c.gstin || ""} ${c.phone || ""}`.toLowerCase().includes(q)).sort((a, b) => b.due - a.due || b.bought - a.bought)
+    return customers.filter((c) => !q || `${c.name} ${c.phone || ""}`.toLowerCase().includes(q)).sort((a, b) => b.due - a.due || b.bought - a.bought)
   }, [customers, query])
   const totalDue = customers.reduce((sum, c) => sum + c.due, 0)
 
@@ -75,7 +74,7 @@ export default function Customers() {
       </PageHeader>
       {error && <div className="mb-4"><Notice title="Something went wrong">{errorMessage(error, "Could not load customers.")}</Notice></div>}
       <Card className="overflow-hidden">
-        <div className="border-b px-4 py-3 sm:px-5"><SearchBar value={query} onChange={setQuery} placeholder="Search name, GSTIN or phone..." /></div>
+        <div className="border-b px-4 py-3 sm:px-5"><SearchBar value={query} onChange={setQuery} placeholder="Search name or phone..." /></div>
         {isLoading ? <TableSkeleton rows={6} /> : rows.length === 0 ? (
           <EmptyState icon={Users} title={customers.length ? "No matching customer" : "No customers yet"}>
             {customers.length ? "Try another search." : "A customer is saved when you make its first bill, or add one here."}
@@ -91,7 +90,7 @@ export default function Customers() {
                 <TableRow key={c.id}>
                   <TableCell className="whitespace-normal">
                     <Link to={`/bills?show=all&q=${encodeURIComponent(c.name)}`} className="font-semibold hover:text-primary hover:underline">{c.name}</Link>
-                    <span className="block text-xs text-muted-foreground">{[c.gstin && `GSTIN ${c.gstin}`, c.phone].filter(Boolean).join(" · ") || "—"}</span>
+                    <span className="block text-xs text-muted-foreground">{c.phone || "—"}</span>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{c.bills}</TableCell>
                   <TableCell className="text-right tabular-nums">{rupees(c.bought)}</TableCell>

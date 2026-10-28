@@ -40,12 +40,12 @@ async function reject(req, res) {
     res.json(await service.reject(idOf(req), req.body, req.user.id));
 }
 
-/* POST /order-approvals/:id/cancel: an approved order that has not started production; its stock comes back */
+/* POST /order-approvals/:id/cancel: an approved order not yet sent to Production or Purchase */
 async function cancel(req, res) {
     res.json(await service.cancel(idOf(req), req.body, req.user.id));
 }
 
-/* POST /order-approvals/:id/revise: make only part of the order now; the rest goes back to Marketing as a draft */
+/* POST /order-approvals/:id/revise: make only part of the order; the rest is dropped (Marketing accepts or declines) */
 async function revise(req, res) {
     res.json(await service.revise(idOf(req), req.body, req.user.id));
 }

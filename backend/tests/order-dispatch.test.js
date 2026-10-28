@@ -104,6 +104,7 @@ function run(sql, params = []) {
   }
   if (has(sql, "INSERT INTO order_events")) { s.events.push({ order_id: params[0], kind: params[1], actor_id: params[2], quantity: params[3], detail: params[4] }); return [{ insertId: s.events.length }]; }
   if (has(sql, "FROM order_events e")) return [s.events.map((e) => ({ ...e, at: "2026-10-14 11:00:00", by_name: "Ops", by_role: "OPERATIONS_ADMIN" }))];
+  if (has(sql, "FROM finished_goods")) return [[]]; // nothing given to the customer yet
   if (has(sql, "FROM orders o LEFT JOIN users cu")) return [[{ ...s.order, created_by_name: "Marketing", approved_by_name: "Ops" }]];
   throw new Error("fake db: unexpected query: " + sql.replace(/\s+/g, " ").slice(0, 120));
 }

@@ -71,7 +71,10 @@ export default function OpsOrderDrawer({ orderId, onClose, tab: tabProp, onTab }
         }
         actions={selected && editable ? (
           selected.approval_status === "APPROVED" ? (
-            <MktBtn variant="danger" disabled={isFetching} onClick={() => setCancelling(selected)}><Ban /> Cancel order</MktBtn>
+            // cancel only while nothing was sent on (to Production or Purchase): then no stock or parts have moved
+            !selected.production_request && !selected.purchase_request ? (
+              <MktBtn variant="danger" disabled={isFetching} onClick={() => setCancelling(selected)}><Ban /> Cancel order</MktBtn>
+            ) : null
           ) : (
             <DecisionButtons order={selected} plan={plan} disabled={isFetching} onDecide={decide} />
           )

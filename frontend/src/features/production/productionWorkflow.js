@@ -51,9 +51,7 @@ export function productionWorkflowStatus(item) {
     return { key: "completed", label: "Production completed", tone: "success" }
   }
   if (!isApprovedForProduction(item)) {
-    // approved, but the Operations Admin has not sent anything of it to Production yet
-    const label = item?.approval_status === "APPROVED" ? "Not sent to Production yet" : "Awaiting approval"
-    return { key: "awaiting_approval", label, tone: "warning" }
+    return { key: "awaiting_approval", label: "Awaiting approval", tone: "warning" }
   }
   if (item?.material_status === "UNKNOWN") {
     return { key: "bom_review", label: "BOM needs review", tone: "warning" }

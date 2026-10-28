@@ -111,7 +111,7 @@ export function FeasibilityTab({ order, onDecide }) {
   const verdict = planVerdict(plan);
   const { ordered, canMake, remaining } = planTotals(plan);
   const shortages = plan.shortages || [];
-  // an approved order: the plan covers only the units not given to Production yet, so every number says so
+  // an approved order: the plan covers only the units not sent to Production yet, so every number says so
   const approved = hasLeftToSend(order);
   return (
     <div className="space-y-5">

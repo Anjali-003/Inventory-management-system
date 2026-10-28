@@ -1,0 +1,68 @@
+# Runs every test on each push and pull request, so broken code shows up on GitHub before anyone pulls it.
+#   backend:  unit tests (fake database), service tests on MySQL, and the whole order flow (e2e) on MySQL
+#   frontend: every page opens, the screens' tests, and the production build
+# MySQL here is an empty server: the MySQL tests build their own throw-away databases from schema.sql.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-root"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ci-root
+      DB_NAME: inventory_management
+      JWT_SECRET: ci-only-secret
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Service tests on MySQL
+        run: npm run test:mysql
+      - name: Whole order flow (e2e)
+        run: npm run e2e
+      - name: Whole order flow, every step by the Super Admin
+        run: npm run e2e
+        env:
+          E2E_ONE_ROLE: SUPER_ADMIN
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Tests
+        run: npm test
+      - name: Build
+        run: npm run build

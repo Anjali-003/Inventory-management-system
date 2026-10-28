@@ -9,7 +9,7 @@ import { MakingLine, OrderValue, sumQty } from "./orderParts"
     1. Order & agreement   Marketing <-> Operations: what was ordered for the customer, what Operations promised,
                            whether Marketing agreed, the decision. The same for both roles.
     2. Making it           Operations' own work: the list to Purchase, each send to Production (stock taken).
-                           Operations sees every step; Marketing sees one line ("500 of 800 given to Production ...").
+                           Operations sees every step; Marketing sees one line ("Production has been asked to make 500 of 800 units ...").
 
   Written for someone who never used the app: who did what, when, and how many units, in plain sentences, with the
   role on every step. Read from order.events (backend order_events), oldest first.
@@ -35,7 +35,10 @@ function sentenceOf(e) {
     case "REVISED":
       return {
         icon: Scale, tone: "warn",
-        text: `Promised ${fmtQty(e.quantity)} of the ${units(d.requested)} and asked Marketing to agree. The other ${fmtQty((d.requested || 0) - e.quantity)} went back to Marketing as draft ${d.held_order_number || ""}.`,
+        text: `Promised ${fmtQty(e.quantity)} of the ${units(d.requested)} and asked Marketing to agree. The other ${fmtQty((d.requested || 0) - e.quantity)} ${
+          // orders revised before 2026-10-28 saved the rest as a draft
+          d.held_order_number ? `went back to Marketing as draft ${d.held_order_number}` : "will not be made"
+        }.`,
         quote: d.remarks,
       }
     case "REVISION_ACCEPTED":
@@ -79,8 +82,8 @@ function agreementNow(order) {
 function makingNow(order) {
   const left = Number(order.left_to_send || 0)
   const sent = sumQty(order.production_request?.items || [])
-  if (left === 0) return { tone: "done", text: `Every unit has been given to Production to build (${units(sent)}).` }
-  return { tone: "wait", text: `${units(left)} not given to Production yet: waiting until their parts are in stock.` }
+  if (left === 0) return { tone: "done", text: `Production has been asked to make every unit (${units(sent)}).` }
+  return { tone: "wait", text: `${units(left)} not sent to Production yet: waiting until their parts are in stock.` }
 }
 
 const DOT = {
@@ -194,8 +197,8 @@ export default function OrderStory({ order, audience = "marketing" }) {
       {approved && (audience === "operations" ? (
         <Part icon={Factory} title="Making it" hint="Operations' own work: parts from Purchase, units sent to Production.">
           <Figures cells={[
-            ["Given to Production", sumQty(order.production_request?.items || []), "text-success"],
-            ["Waiting for parts", Number(order.left_to_send || 0), "text-warning"],
+            ["Sent to Production to make", sumQty(order.production_request?.items || []), "text-success"],
+            ["Waiting for components", Number(order.left_to_send || 0), "text-warning"],
           ]} />
           <ol className={LINE}>
             {making.map((e, i) => <EventStep key={i} e={e} />)}

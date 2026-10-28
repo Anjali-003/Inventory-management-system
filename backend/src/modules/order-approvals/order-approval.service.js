@@ -44,9 +44,9 @@ const { planOrder } = require("./order-planner");
 
     Quantity revision (revise): while an order waits, the admin can say "we will make only this much for now".
         PENDING_APPROVAL --revise--> QUANTITY_REVISED --Marketing accepts (marketing-orders)--> PENDING_APPROVAL
-    The order is split in two at once: the original keeps the quantities the admin will make, the rest becomes a new
-    marketing DRAFT (parent_order_id = original) that the Marketing Manager can send again later. orders.revision keeps
-    requested / approved / held per product. An order can be revised once; it moves no stock.
+    The order keeps only the quantities the admin will make; the rest is dropped (no draft is made for it: if the
+    customer still wants it, Marketing places a new order). orders.revision keeps requested / approved / held per
+    product. An order can be revised once; it moves no stock.
 */
 
 const APPROVAL_STATUSES = ["PENDING_APPROVAL", "QUANTITY_REVISED", "APPROVED", "REJECTED", "CANCELLED"]; // DRAFT is marketing-only: never listed here
@@ -75,6 +75,7 @@ const ORDER_SELECT = `
         cu.name AS created_by_name,
         cu.role AS created_by_role,
         DATE_FORMAT(o.sent_to_admin_at, '%Y-%m-%d %H:%i:%s') AS sent_to_admin_at,
+        DATE_FORMAT(o.required_by_date, '%Y-%m-%d') AS required_by_date,
         DATE_FORMAT(o.estimated_delivery_date, '%Y-%m-%d') AS estimated_delivery_date,
         au.name AS approved_by_name,
         DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
@@ -108,7 +109,7 @@ async function withItems(conn, orders) {
     const byOrder = new Map();
     for (const it of items) {
         if (!byOrder.has(it.order_id)) byOrder.set(it.order_id, []);
-        // price = the product's price list (without GST) today; null when it has none yet
+        // price = the product's price list today; null when it has none yet
         const { selling_price, ...line } = it;
         byOrder.get(it.order_id).push({ ...line, quantity: Number(it.quantity), price: selling_price === null ? null : Number(selling_price) });
     }
@@ -146,6 +147,14 @@ async function withItems(conn, orders) {
          WHERE e.order_id IN (?) ORDER BY e.id`,
         [ids]
     );
+    // units already given to the customer (finished goods handed out by the Store)
+    const [deliveredRows] = await conn.query(
+        `SELECT order_id, SUM(quantity) AS units FROM finished_goods
+         WHERE order_id IN (?) AND status = 'DELIVERED' GROUP BY order_id`,
+        [ids]
+    );
+    const deliveredOf = new Map(deliveredRows.map((r) => [r.order_id, Number(r.units)]));
+
     const eventsOf = new Map();
     for (const { order_id, detail, quantity, ...e } of eventRows) {
         if (!eventsOf.has(order_id)) eventsOf.set(order_id, []);
@@ -171,10 +180,13 @@ async function withItems(conn, orders) {
             ...o,
             // units of an APPROVED order not sent to Production yet (their parts are short): sent once the parts are in
             left_to_send: o.approval_status === "APPROVED" ? Math.max(0, orderedUnits - approvedUnits) : 0,
-            // { remarks, held_order_id, held_order_number, items: [{ product_id, sku, name, requested, approved, held }] } or null
+            // units given out to the customer so far (all ordered units given out = the order is delivered)
+            delivered_units: deliveredOf.get(o.id) || 0,
+            // { remarks, items: [{ product_id, sku, name, requested, approved, held }] } or null
+            // (orders revised before 2026-10-28 also carry held_order_id / held_order_number: the draft made back then)
             revision: asObject(o.revision),
             items: lines,
-            // value = units x price list, without GST (an estimate: the bill sets the real rate); unpriced = products with no price yet
+            // value = units x price list (an estimate: the bill sets the real rate); unpriced = products with no price yet
             totals: {
                 lines: lines.length,
                 quantity: lines.reduce((s, l) => s + l.quantity, 0),
@@ -721,46 +733,32 @@ async function revise(orderId, body, userId) {
             else if (i.held > 0) await conn.query(`UPDATE order_items SET quantity = ? WHERE id = ?`, [i.approved, i.line_id]);
         }
 
-        // 2) the held-back part: a new marketing draft owned by the same Marketing Manager
-        const heldNumber = `${order.order_number}-H`;
-        const [created] = await conn.query(
-            `INSERT INTO orders (order_number, parent_order_id, customer_id, status, approval_status, estimated_delivery_date, created_by)
-             VALUES (?, ?, ?, 'PENDING', 'DRAFT', ?, ?)`,
-            [heldNumber, orderId, order.customer_id || null, order.estimated_delivery_date || null, order.created_by]
-        );
-        const heldId = created.insertId;
-        const heldLines = items.filter((i) => i.held > 0);
-        await conn.query(
-            `INSERT INTO order_items (order_id, product_id, quantity) VALUES ?`,
-            [heldLines.map((i) => [heldId, i.product_id, i.held])]
-        );
+        // 2) the units not made are dropped: no draft is made for them. If the customer still wants them, Marketing
+        //    places a new order itself.
+        const requestedUnits = items.reduce((s, i) => s + i.requested, 0);
+        const approvedUnits = items.reduce((s, i) => s + i.approved, 0);
 
-        // 3) the original now waits for Marketing to agree
-        const revision = {
-            remarks,
-            held_order_id: heldId,
-            held_order_number: heldNumber,
-            items: items.map(({ line_id, ...i }) => i),
-        };
+        // 3) the order now waits for Marketing to agree
+        const revision = { remarks, items: items.map(({ line_id, ...i }) => i) };
         const [saved] = await conn.query(
             `UPDATE orders SET approval_status = 'QUANTITY_REVISED', revision = ?, revised_by = ?, revised_at = NOW() WHERE id = ?`,
             [JSON.stringify(revision), userId, orderId]
         );
         assertSaved(saved);
         await logEvent(conn, orderId, "REVISED", userId, {
-            quantity: items.reduce((s, i) => s + i.approved, 0),
-            detail: { requested: items.reduce((s, i) => s + i.requested, 0), held_order_number: heldNumber, remarks },
+            quantity: approvedUnits,
+            detail: { requested: requestedUnits, remarks },
         });
 
         await notifications.notify(conn, {
             role: "MARKETING_MANAGER",
             type: "QUANTITY_REVISED",
             title: `Quantity reduced on order ${order.order_number}`,
-            body: `Review and accept the revised quantity. The held-back part is saved as draft ${heldNumber}.`,
+            body: `The Operations Admin can make ${approvedUnits} of the ${requestedUnits} units. Accept or decline. If the customer still needs the rest, place a new order.`,
             severity: "action",
             link: `/marketing-orders?order=${orderId}`,
             orderId,
-            payload: { order_number: order.order_number, held_order_number: heldNumber, remarks },
+            payload: { order_number: order.order_number, remarks },
             userId,
         });
         return getOrder(orderId, conn);
@@ -776,7 +774,8 @@ async function updateDeliveryDate(orderId, body, user) {
 
     return inventory.inTransaction(async (conn) => {
         const [orders] = await conn.query(
-            `SELECT id, order_number, approval_status, DATE_FORMAT(estimated_delivery_date, '%Y-%m-%d') AS old_date
+            `SELECT id, order_number, approval_status, DATE_FORMAT(estimated_delivery_date, '%Y-%m-%d') AS old_date,
+                    DATE_FORMAT(required_by_date, '%Y-%m-%d') AS required_by
              FROM orders WHERE id = ? FOR UPDATE`,
             [orderId]
         );
@@ -791,7 +790,8 @@ async function updateDeliveryDate(orderId, body, user) {
                 role: "MARKETING_MANAGER",
                 type: "DELIVERY_DATE_CHANGED",
                 title: `Delivery date changed for order ${order.order_number}`,
-                body: `${oldDate ? `${fmtDate(oldDate)} → ` : "Set to "}${fmtDate(newDate)}${reason ? ` · ${reason}` : ""}`,
+                // the customer's own date, when the new one misses it: that is the call Marketing has to make
+                body: `${oldDate ? `${fmtDate(oldDate)} → ` : "Set to "}${fmtDate(newDate)}${order.required_by && newDate > order.required_by ? ` · customer wants it by ${fmtDate(order.required_by)}` : ""}${reason ? ` · ${reason}` : ""}`,
                 severity: "warning",
                 link: `/marketing-orders?order=${orderId}`,
                 orderId,
@@ -805,11 +805,11 @@ async function updateDeliveryDate(orderId, body, user) {
 }
 
 /*
-    Cancel an APPROVED order (Operations Admin / Super Admin, reason required) while production has NOT started.
-    Everything the approval took out of stock comes back: one RETURNED_FROM_ORDER row per component in the ledger
-    (tied to the order), so the Inventory History balance stays explained. Once any unit is started, cancel is refused.
-    approval_status = CANCELLED takes the order off every list that needs an APPROVED order (production, store issue,
-    purchase "what to buy"). Components Store already handed to the floor must be brought back: Store is told.
+    Cancel an APPROVED order (Operations Admin / Super Admin, reason required) while it has NOT been sent on: nothing
+    went to Production (no stock taken) and no list went to Purchase. So there is nothing to give back and only
+    Marketing is told. Once it was sent on, cancel is refused (ALREADY_SENT_ON): the units it makes become product stock.
+    (Orders cancelled before 2026-10-28 could be cancelled later; their stock came back as RETURNED_FROM_ORDER rows,
+    which Inventory History still counts.)
 */
 async function cancel(orderId, body, userId) {
     const remarks = parseRemarks(body && body.remarks, {
@@ -827,44 +827,14 @@ async function cancel(orderId, body, userId) {
         if (order.approval_status !== "APPROVED") {
             throw AppError.conflict("Only an approved order can be cancelled (a waiting order is rejected instead).", "NOT_APPROVED");
         }
-        const [[started]] = await conn.query(
-            `SELECT COALESCE(SUM(po.quantity_to_produce), 0) AS units FROM production_orders po WHERE po.order_id = ?`,
-            [orderId]
+        // only while it has not been sent on: nothing has left the shelf, nobody else has work for it yet. Once it went
+        // to Production or Purchase, stock and parts are moving and are not pulled back (the units it makes are stock).
+        const [[sentOn]] = await conn.query(
+            `SELECT (SELECT COUNT(*) FROM order_production_items WHERE order_id = ?) + (SELECT COUNT(*) FROM order_purchase_items WHERE order_id = ?) AS n`,
+            [orderId, orderId]
         );
-        if (Number(started.units) > 0) {
-            throw AppError.conflict("Production has already started on this order, so it cannot be cancelled.", "PRODUCTION_STARTED");
-        }
-
-        // what the approval took out of stock for this order, minus anything already given back
-        const [taken] = await conn.query(
-            `SELECT component_id,
-                    SUM(CASE WHEN transaction_type = 'CONSUMED' AND direction = 'OUT' THEN quantity
-                             WHEN transaction_type = 'RETURNED_FROM_ORDER' AND direction = 'IN' THEN -quantity
-                             ELSE 0 END) AS qty
-             FROM inventory_transactions
-             WHERE order_id = ? AND transaction_type IN ('CONSUMED', 'RETURNED_FROM_ORDER')
-             GROUP BY component_id
-             HAVING qty > 0
-             ORDER BY component_id`,
-            [orderId]
-        );
-        for (const t of taken) {
-            await conn.query(
-                `INSERT INTO inventory (component_id, quantity_on_hand, quantity_reserved) VALUES (?, 0, 0)
-                 ON DUPLICATE KEY UPDATE component_id = component_id`,
-                [t.component_id]
-            );
-            await conn.query(
-                `UPDATE inventory SET quantity_on_hand = quantity_on_hand + ?, is_active = 1, archived_at = NULL WHERE component_id = ?`,
-                [t.qty, t.component_id]
-            );
-            const [[stock]] = await conn.query(`SELECT quantity_on_hand FROM inventory WHERE component_id = ?`, [t.component_id]);
-            await conn.query(
-                `INSERT INTO inventory_transactions
-                    (component_id, transaction_type, direction, quantity, balance_after, reason, reason_code, reference_type, reference_id, created_by, order_id)
-                 VALUES (?, 'RETURNED_FROM_ORDER', 'IN', ?, ?, ?, 'ORDER_CANCELLED', 'ORDER_CANCEL', ?, ?, ?)`,
-                [t.component_id, t.qty, stock.quantity_on_hand, `Order ${order.order_number} cancelled: ${remarks}`.slice(0, 255), orderId, userId, orderId]
-            );
+        if (Number(sentOn.n) > 0) {
+            throw AppError.conflict("This order was already sent to Production or Purchase, so it can no longer be cancelled.", "ALREADY_SENT_ON");
         }
 
         assertSaved((await conn.query(
@@ -874,34 +844,13 @@ async function cancel(orderId, body, userId) {
             [remarks, orderId]
         ))[0]);
 
-        // components Store already handed over to the floor are physically there: they must come back to the shelf
-        const [[issued]] = await conn.query(
-            `SELECT COUNT(*) AS n FROM production_material_issues i
-             JOIN production_material_request_items ri ON ri.id = i.request_item_id
-             JOIN production_material_requests r ON r.id = ri.request_id
-             WHERE r.order_id = ?`,
-            [orderId]
-        );
-        const handedOver = Number(issued.n) > 0;
-        const [[toBuy]] = await conn.query(`SELECT COUNT(*) AS n FROM order_purchase_items WHERE order_id = ?`, [orderId]);
+        await notifications.notify(conn, {
+            orderId, userId, payload: { order_number: order.order_number },
+            role: "MARKETING_MANAGER", type: "ORDER_CANCELLED", severity: "warning",
+            link: `/marketing-orders?order=${orderId}`, title: `Order ${order.order_number} cancelled`, body: `Reason: ${remarks}`,
+        });
 
-        const common = { orderId, userId, payload: { order_number: order.order_number } };
-        const reason = `Reason: ${remarks}`;
-        await notifications.notify(conn, { ...common, role: "MARKETING_MANAGER", type: "ORDER_CANCELLED", severity: "warning",
-            link: `/marketing-orders?order=${orderId}`, title: `Order ${order.order_number} cancelled`, body: reason });
-        await notifications.notify(conn, { ...common, role: "PRODUCTION_MANAGER", type: "ORDER_CANCELLED", severity: "warning",
-            link: "/production", title: `Order ${order.order_number} cancelled, do not build it`,
-            body: handedOver ? `${reason}. Give the materials Store handed over back to Store.` : reason });
-        await notifications.notify(conn, { ...common, role: "STORE_MANAGER", type: "ORDER_CANCELLED", severity: handedOver ? "action" : "info",
-            link: "/inventory", title: `Order ${order.order_number} cancelled: its components are back in stock`,
-            body: handedOver ? "You already handed some of them to Production: collect them back to the shelf." : reason });
-        if (Number(toBuy.n)) {
-            await notifications.notify(conn, { ...common, role: "PURCHASE_MANAGER", type: "ORDER_CANCELLED", severity: "warning",
-                link: "/purchase", title: `Order ${order.order_number} cancelled`,
-                body: "Its components no longer need to be bought for this order. Check open purchases." });
-        }
-
-        return { id: orderId, approval_status: "CANCELLED", returned_components: taken.length };
+        return { id: orderId, approval_status: "CANCELLED" };
     });
 }
 

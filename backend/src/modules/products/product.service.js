@@ -440,18 +440,14 @@ async function listProducts() {
     return rows;
 }
 
-/* Price list (Super Admin): the selling price a bill starts from and the product's GST %. price null = not set yet. */
+/* Price list (Super Admin): the selling price a bill starts from. price null = not set yet. There is no GST. */
 async function setPrice(productId, body) {
     const raw = body.selling_price;
     const price = raw === undefined || raw === null || raw === "" ? null : Number(raw);
     if (price !== null && (!Number.isFinite(price) || price < 0 || Math.round(price * 100) !== price * 100)) {
         throw new AppError(422, "Price must be zero or more, with at most 2 decimals", "VALIDATION", { field: "selling_price" });
     }
-    const gst = Number(body.gst_percent);
-    if (!Number.isFinite(gst) || gst < 0 || gst > 100) {
-        throw new AppError(422, "GST % must be between 0 and 100", "VALIDATION", { field: "gst_percent" });
-    }
-    const [res] = await db.query("UPDATE products SET selling_price = ?, gst_percent = ? WHERE id = ?", [price, gst, productId]);
+    const [res] = await db.query("UPDATE products SET selling_price = ? WHERE id = ?", [price, productId]);
     if (!res.affectedRows) throw new AppError(404, "Product not found", "NOT_FOUND");
     return getProductById(productId);
 }

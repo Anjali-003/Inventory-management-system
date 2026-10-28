@@ -54,9 +54,6 @@ ALTER TABLE bill_items AUTO_INCREMENT = 1;
 DELETE FROM bills;
 ALTER TABLE bills AUTO_INCREMENT = 1;
 
-DELETE FROM customers;
-ALTER TABLE customers AUTO_INCREMENT = 1;
-
 DELETE FROM product_stock_transactions;
 ALTER TABLE product_stock_transactions AUTO_INCREMENT = 1;
 
@@ -112,6 +109,11 @@ ALTER TABLE orders AUTO_INCREMENT = 1;
 ALTER TABLE order_items AUTO_INCREMENT = 1;
 ALTER TABLE order_production_items AUTO_INCREMENT = 1;
 ALTER TABLE production_orders AUTO_INCREMENT = 1;
+ALTER TABLE order_events AUTO_INCREMENT = 1;
+
+-- every order names its customer, so customers go after the orders
+DELETE FROM customers;
+ALTER TABLE customers AUTO_INCREMENT = 1;
 
 -- 6. Inventory
 DELETE FROM inventory;

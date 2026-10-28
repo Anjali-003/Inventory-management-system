@@ -3,13 +3,13 @@
   say plainly "who acts next and what they do". Same order and names as backend finished-goods.service.js.
 */
 export const FG_STEPS = [
-  { status: "HANDED_OVER", label: "Passed QC", owner: "STORE_MANAGER", ownerLabel: "Store Manager", action: "receive", button: "Receive into stock", tone: "warning",
+  { status: "HANDED_OVER", label: "Passed QC", hint: "Store to receive it", owner: "STORE_MANAGER", ownerLabel: "Store Manager", action: "receive", button: "Receive into stock", tone: "warning",
     todo: "QC passed and packed it. Count the goods and receive them into product stock." },
-  { status: "IN_STORE", label: "In stock", owner: "MARKETING_MANAGER", ownerLabel: "Marketing Manager", action: "bill", button: "Make bill", tone: "info",
+  { status: "IN_STORE", label: "In stock", hint: "Marketing to make the bill", owner: "MARKETING_MANAGER", ownerLabel: "Marketing Manager", action: "bill", button: "Make bill", tone: "info",
     todo: "Make the customer's bill." },
-  { status: "BILLED", label: "Billed", owner: "STORE_MANAGER", ownerLabel: "Store Manager", action: "dispatch", button: "Give out for delivery", tone: "info",
-    todo: "The bill is fully paid. Give the goods out for delivery (product stock goes down). This completes the order." },
-  { status: "DELIVERED", label: "Given out", owner: null, ownerLabel: null, action: null, button: null, tone: "success",
+  { status: "BILLED", label: "Billed", hint: "Payment, then the Store gives it out", owner: "STORE_MANAGER", ownerLabel: "Store Manager", action: "dispatch", button: "Give out for delivery", tone: "info",
+    todo: "Paid in full. Give the goods out for delivery (product stock goes down). This completes the order." },
+  { status: "DELIVERED", label: "Given out", hint: "Done", owner: null, ownerLabel: null, action: null, button: null, tone: "success",
     todo: "Done. The order is complete." },
 ]
 
@@ -17,8 +17,8 @@ export const fgStepOf = (status) => FG_STEPS.find((s) => s.status === status) ||
 export const fgIndexOf = (status) => FG_STEPS.findIndex((s) => s.status === status)
 
 /* Billed but not fully paid: nothing leaves the Store before the whole bill is paid, so it is Marketing's turn to collect */
-const COLLECT_STEP = { status: "BILLED", label: "Billed", owner: "MARKETING_MANAGER", ownerLabel: "Marketing Manager", action: "pay", button: "Record payment", tone: "info",
-  todo: "Collect the full payment and record it on the bill. The Store gives the goods out only after that." }
+const COLLECT_STEP = { status: "BILLED", label: "Billed", owner: "MARKETING_MANAGER", ownerLabel: "Marketing Manager", action: "pay", button: "Mark as paid", tone: "info",
+  todo: "Take the full payment, then mark the bill as paid. The Store gives the goods out only after that." }
 
 /* where this order stands now: its status' step, or collecting the payment while the bill is still due */
 export const fgStepFor = (item) => (item?.status === "BILLED" && item.bill?.due > 0 ? COLLECT_STEP : fgStepOf(item?.status))

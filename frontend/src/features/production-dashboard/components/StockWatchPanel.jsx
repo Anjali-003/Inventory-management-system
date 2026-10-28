@@ -1,8 +1,8 @@
 import { ArrowUpRight, PackageCheck } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/saturday/button"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/saturday/card"
 import { EmptyState, TableSkeleton } from "@/components/feedback"
 import { qty, getLowStockItems } from "@/features/production-dashboard/productionDashboardUtils"
 

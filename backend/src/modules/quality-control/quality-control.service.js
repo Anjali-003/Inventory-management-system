@@ -563,20 +563,25 @@ async function decideBatch(productionId, decision, remarks, userId, sample = {})
     throw new AppError(400, "Batch decision must be PASS or FAIL");
   }
 
-  // QC checks random sample pieces of the batch: a single bad piece fails the WHOLE batch
-  const sampleSize = Number(sample.size);
-  const sampleFailed = Number(sample.failed);
-  if (!Number.isInteger(sampleSize) || sampleSize <= 0) {
-    throw new AppError(400, "Enter how many sample pieces were checked");
-  }
-  if (!Number.isInteger(sampleFailed) || sampleFailed < 0 || sampleFailed > sampleSize) {
-    throw new AppError(400, "Failed pieces must be between 0 and the number checked");
-  }
-  if (decision === "PASS" && sampleFailed > 0) {
-    throw new AppError(400, "A batch with even one failed sample piece must be failed");
-  }
-  if (decision === "FAIL" && sampleFailed === 0) {
-    throw new AppError(400, "Enter how many sample pieces failed");
+  // The sample (random pieces checked, how many failed) is optional: the QC screen (as on Saturday 2026-10-24) sends
+  // only the decision. When it is sent it is checked: a single bad piece fails the WHOLE batch.
+  const given = (v) => v !== undefined && v !== null && v !== "";
+  const hasSample = given(sample.size) || given(sample.failed);
+  const sampleSize = hasSample ? Number(sample.size) : null;
+  const sampleFailed = hasSample ? Number(sample.failed) : null;
+  if (hasSample) {
+    if (!Number.isInteger(sampleSize) || sampleSize <= 0) {
+      throw new AppError(400, "Enter how many sample pieces were checked");
+    }
+    if (!Number.isInteger(sampleFailed) || sampleFailed < 0 || sampleFailed > sampleSize) {
+      throw new AppError(400, "Failed pieces must be between 0 and the number checked");
+    }
+    if (decision === "PASS" && sampleFailed > 0) {
+      throw new AppError(400, "A batch with even one failed sample piece must be failed");
+    }
+    if (decision === "FAIL" && sampleFailed === 0) {
+      throw new AppError(400, "Enter how many sample pieces failed");
+    }
   }
 
   const cleanRemarks = String(remarks || "").trim();
@@ -626,7 +631,7 @@ async function decideBatch(productionId, decision, remarks, userId, sample = {})
       );
     }
 
-    if (sampleSize > completed) {
+    if (hasSample && sampleSize > completed) {
       throw new AppError(400, `The sample cannot be bigger than the batch (${completed} pieces)`);
     }
 

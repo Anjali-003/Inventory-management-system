@@ -37,6 +37,7 @@ export default function NewOrderModal({ onClose }) {
   const { data: customers = EMPTY } = useGetMarketingCustomersQuery()
   const [showErrors, setShowErrors] = useState(false)
   const customerError = showErrors && !customer.trim() ? "Enter the customer this order is for" : ""
+  const dateError = showErrors && !deliveryDate ? "Ask the customer when they need it" : ""
   const [serverError, setServerError] = useState("")
   const endRef = useRef(null)
 
@@ -51,7 +52,7 @@ export default function NewOrderModal({ onClose }) {
 
   const picked = rows.filter((r) => r.product).length
   const units = rows.reduce((sum, r) => sum + (r.product && /^\d+$/.test(r.qty) ? Number(r.qty) : 0), 0)
-  // the order's value at the price list, without GST (the bill sets the real rate)
+  // the order's value at the price list (the bill sets the real rate)
   const priceOf = (id) => {
     const p = products.find((x) => String(x.id) === String(id))
     return p && p.selling_price !== null && p.selling_price !== undefined ? Number(p.selling_price) : null
@@ -68,14 +69,14 @@ export default function NewOrderModal({ onClose }) {
   const submit = async (e) => {
     e.preventDefault()
     setServerError("")
-    if (rows.some(rowError) || !customer.trim()) { setShowErrors(true); return }
+    if (rows.some(rowError) || !customer.trim() || !deliveryDate) { setShowErrors(true); return }
     // a saved customer by its exact name is sent by id; anything else is a new one the server saves
     const saved = customers.find((c) => c.name.toLowerCase() === customer.trim().toLowerCase())
     try {
       const order = await create({
         ...(saved ? { customer_id: saved.id } : { customer_name: customer.trim() }),
         items: rows.map((r) => ({ productId: Number(r.product), quantity: Number(r.qty) })),
-        estimated_delivery_date: deliveryDate || null,
+        required_by_date: deliveryDate,
       }).unwrap()
       toast.success(`${order.order_number} saved as draft`)
       onClose()
@@ -133,7 +134,7 @@ export default function NewOrderModal({ onClose }) {
 
         <div className="rounded-2xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 sm:p-4">
           <label className={LABEL} htmlFor="order-edd">
-            Estimated Delivery Date
+            Customer wants it by
           </label>
           <input
             id="order-edd"
@@ -141,11 +142,12 @@ export default function NewOrderModal({ onClose }) {
             value={deliveryDate}
             min={new Date().toISOString().slice(0, 10)}
             onChange={(e) => setDeliveryDate(e.target.value)}
-            className="h-10 w-full rounded-[10px] border border-input bg-card px-3 text-sm outline-none transition-shadow focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15"
+            aria-invalid={dateError ? true : undefined}
+            className={cn("h-10 w-full rounded-[10px] border bg-card px-3 text-sm outline-none transition-shadow focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15", dateError ? "border-destructive" : "border-input")}
           />
-          <p className="mt-1 text-xs text-muted-foreground">
-            Target delivery commitment for this order (can be revised by Operations Admin).
-          </p>
+          {dateError
+            ? <p className={ERR}>{dateError}</p>
+            : <p className="mt-1 text-xs text-muted-foreground">The date the customer asked for. The Operations Admin may give a different date.</p>}
         </div>
 
         <div className="relative space-y-3">
@@ -190,7 +192,7 @@ export default function NewOrderModal({ onClose }) {
                       {productBad && <p className={ERR}>{err}</p>}
                       {r.product && (
                         <p className="mt-1.5 text-xs text-muted-foreground">
-                          {priceOf(r.product) === null ? "No price set for this product yet" : `${rupees(priceOf(r.product))} per piece + GST`}
+                          {priceOf(r.product) === null ? "No price set for this product yet" : `${rupees(priceOf(r.product))} per piece`}
                         </p>
                       )}
                     </div>
@@ -219,7 +221,7 @@ export default function NewOrderModal({ onClose }) {
             {picked > 0 && (unpriced === picked
               ? <span className="text-warning"> · price not set yet</span>
               : <>
-                  {" · "}<span className="font-bold tabular-nums text-foreground">{rupees(value)}</span> + GST
+                  {" · "}<span className="font-bold tabular-nums text-foreground">{rupees(value)}</span>
                   {unpriced > 0 && <span className="text-warning"> · {unpriced === 1 ? "1 product has" : `${unpriced} products have`} no price yet, not counted</span>}
                 </>)}
           </p>

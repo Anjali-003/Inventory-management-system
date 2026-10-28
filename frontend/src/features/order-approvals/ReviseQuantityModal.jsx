@@ -16,10 +16,9 @@ import { useGetOrderPlanQuery, useReviseOrderMutation } from "./orderApprovalsAp
   Operations Admin: "we will make only this much of the order".
   For each product the screen shows how many units the stock on the shelf can build right now (GET .../plan, the same
   check as "Check stock & send"), as a guide only: the admin promises any quantity up to what was ordered (pre-filled
-  with what the stock can make). What the stock cannot cover is bought after approval. On save the order is split in two:
-    * this order keeps those quantities and waits for the Marketing Manager to accept them,
-    * the rest becomes a new draft on the Marketing Manager's side, to send again later.
-  A reason is required: the Marketing Manager sees it next to both copies.
+  with what the stock can make). What the stock cannot cover is bought after approval. On save the order keeps those
+  quantities and waits for the Marketing Manager to accept them. The rest is dropped: no draft is made for it (if the
+  customer still wants it, Marketing places a new order). A reason is required: the Marketing Manager sees it.
 */
 
 /** Only a waiting order raised by marketing, and only once (the reason when not: reviseBlockReason). */
@@ -87,7 +86,7 @@ export default function ReviseQuantityModal({ order, onClose, onSwitch }) {
       busy={busy}
       size="lg"
       title={`Revise quantity · ${order.order_number}`}
-      description="Choose how much of the order you will make. What the stock cannot cover now is bought after approval. The rest is saved for the Marketing Manager as a separate draft order."
+      description="Choose how much of the order you will make. What the stock cannot cover now is bought after approval. The rest will not be made: if the customer still needs it, Marketing places a new order."
       footer={
         <>
           <MktBtn onClick={onClose} disabled={busy} className="sm:me-auto">Cancel</MktBtn>
@@ -130,7 +129,7 @@ export default function ReviseQuantityModal({ order, onClose, onSwitch }) {
                 <TableHead className="text-end">Ordered</TableHead>
                 <TableHead className="text-end">Can make now</TableHead>
                 <TableHead className="text-end">Will make</TableHead>
-                <TableHead className="text-end">Held back</TableHead>
+                <TableHead className="text-end">Not made</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

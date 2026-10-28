@@ -28,9 +28,9 @@ import { canApprove } from "./approvalParts"
 
 const HINT = {
   PENDING_APPROVAL: "Needs your decision",
-  APPROVED: "Lists sent to Production / Purchase",
+  APPROVED: "You said yes: send it on to Production and Purchase",
   REJECTED: "With the reason you gave",
-  CANCELLED: "Marketing said no to your reduced quantity, or you cancelled it",
+  // CANCELLED: "Marketing said no to your reduced quantity, or you cancelled it",
 }
 
 export const OPS_STAGES = STAGES.filter((s) => s.status !== "DRAFT").map((s) => ({ ...s, hint: HINT[s.status] ?? s.hint }))
@@ -53,16 +53,24 @@ export const productsSummary = (items = []) => (items.length === 0 ? "No product
 export const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
 export const isDecided = (o) => ["APPROVED", "REJECTED"].includes(o.approval_status)
 
-/** Small line under a status: the quantity was revised (and maybe accepted, or not, by Marketing). */
+/*
+  Small line under a status: the quantity was revised, and where that stands. Once Marketing agrees the order is
+  Pending again, waiting for the admin's Approve, so the line says whose turn it is (not just "accepted").
+*/
 export function RevisionTag({ order, className }) {
   if (!order?.revision) return null
   const accepted = Boolean(order.revision_accepted_at)
   const declined = Boolean(order.revision.declined_at) || declinedOf(order)?.who === "Marketing"
-  return (
-    <span className={cn("mt-1 block text-[11px] font-medium leading-snug", accepted ? "text-emerald-700" : declined ? "text-slate-600" : "text-orange-700", className)}>
-      {accepted ? "Marketing accepted revised qty" : declined ? "Marketing did not accept revised qty" : "Qty revised, waiting for Marketing"}
-    </span>
-  )
+  const units = fmtQty(unitsOf(order.items))
+  const text = declined
+    ? "Marketing did not agree to the reduced qty"
+    : !accepted
+      ? "Qty reduced, waiting for Marketing"
+      : order.approval_status === "PENDING_APPROVAL"
+        ? `Marketing agreed to ${units} · your turn to approve`
+        : `Marketing agreed to ${units}`
+  const tone = declined ? "text-slate-600" : !accepted ? "text-orange-700" : order.approval_status === "PENDING_APPROVAL" ? "text-amber-700" : "text-emerald-700"
+  return <span className={cn("mt-1 block text-xs font-medium leading-snug", tone, className)}>{text}</span>
 }
 
 /* -------------------------------------------------------------------- tiles */

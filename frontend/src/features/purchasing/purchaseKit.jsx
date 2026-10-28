@@ -1,10 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
-import { Link } from "react-router-dom"
 import { motion } from "motion/react"
-import { ArrowUpRight, CheckCircle2, ChevronRight, ClipboardList, FlaskConical, Loader2, PackageCheck, Send, ShoppingCart, Warehouse, XCircle } from "lucide-react"
+import { CheckCircle2, ChevronRight, ClipboardList, FlaskConical, Loader2, PackageCheck, Send, ShoppingCart, Warehouse, XCircle } from "lucide-react"
 import { CountUp } from "@/components/HistoryUI"
+import { FigureTile, tintOf } from "@/components/PageKit"
 import { MktBtn } from "@/features/marketing-orders/mktKit"
-import { PRESS_SOFT, SPRING_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
+import { SPRING_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { timeAgo } from "@/features/activity/time"
 import { fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -167,49 +167,21 @@ export function PurchaseTileGrid({ children, className }) {
  * Give it `to` (a link) or `onClick`. `toggle` makes it a filter button (`active` = the chosen one);
  * `solid` fills it with the stage colour all the time.
  */
-export function PurchaseTile({ stage, value, loading, active, solid, to, onClick, toggle, className }) {
-  const Icon = stage.icon
-  const on = !!(solid || active)
-
-  const body = (
-    <>
-      {/* the colour layer fades, so toggling a filter never "flashes" */}
-      <span aria-hidden className={cn("absolute inset-0 bg-gradient-to-br transition-opacity duration-300", stage.s.grad, on ? "opacity-100" : "opacity-0")} />
-      <span aria-hidden className={cn("pointer-events-none absolute -right-6 -top-8 size-24 rounded-full bg-white/25 blur-xl transition-opacity duration-300", on ? "opacity-100" : "opacity-0")} />
-      <span aria-hidden className={cn("absolute inset-x-0 top-0 h-px bg-white/60 transition-opacity duration-300", on ? "opacity-100" : "opacity-0")} />
-
-      <span className="relative flex items-start justify-between">
-        <span className={cn("grid size-10 place-items-center rounded-xl text-white transition-colors duration-300", on ? "bg-white/20 ring-1 ring-inset ring-white/30" : cn("bg-gradient-to-br shadow-sm", stage.s.grad))}>
-          <Icon className="size-[18px]" strokeWidth={2.1} aria-hidden />
-        </span>
-        {(to || onClick) && (
-          <ArrowUpRight aria-hidden className={cn("size-4 transition-[transform,color] duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5", on ? "text-white/95" : "text-slate-400 group-hover:text-primary")} />
-        )}
-      </span>
-
-      <span className="relative mt-4 block">
-        <span className={cn("block text-[30px] font-bold leading-none tracking-[-0.04em] tabular-nums transition-colors duration-300", on ? "text-white" : "text-foreground")}>
-          {loading ? <span className="inline-block h-7 w-14 animate-pulse rounded-md bg-slate-200/80 align-middle" aria-label="Loading" /> : <CountUp value={value} />}
-        </span>
-        <span className={cn("mt-2 block text-[13px] font-semibold leading-tight transition-colors duration-300", on ? "text-white" : "text-foreground")}>{stage.label}</span>
-        <span className={cn("mt-0.5 block text-[11px] leading-snug transition-colors duration-300", on ? "text-white/95" : "text-muted-foreground")}>{stage.hint}</span>
-      </span>
-    </>
-  )
-
-  const cls = cn(
-    "group relative block w-full overflow-hidden rounded-2xl border p-4 text-left outline-none transition-[box-shadow,border-color] duration-300 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2",
-    on ? cn("border-transparent shadow-lg", stage.s.glow) : "border-[#E3E6EB] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] hover:shadow-md"
-  )
-
+export function PurchaseTile({ stage, value, loading, active, to, onClick, toggle, className }) {
   return (
-    <motion.div variants={rise} whileTap={PRESS_SOFT} whileHover={{ y: -2 }} className={className}>
-      {to ? (
-        <Link to={to} className={cls}>{body}</Link>
-      ) : (
-        <button type="button" onClick={onClick} {...(toggle ? { "aria-pressed": !!active } : {})} className={cls}>{body}</button>
-      )}
-    </motion.div>
+    <FigureTile
+      icon={stage.icon}
+      label={stage.label}
+      hint={stage.hint}
+      tint={tintOf(stage)}
+      value={<CountUp value={value} />}
+      loading={loading}
+      active={active}
+      to={to}
+      onClick={onClick}
+      toggle={!!toggle}
+      className={className}
+    />
   )
 }
 

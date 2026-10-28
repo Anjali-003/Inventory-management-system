@@ -132,8 +132,8 @@ export default function OrderPlanModal({ order, mode = "production", onClose }) 
                   </p>
                   <p className="mt-0.5 text-xs text-white/95">
                     {mode === "production"
-                      ? `${fmtQty(ordered)} units of this order are not given to Production yet.`
-                      : `For the ${fmtQty(ordered)} units not given to Production yet, minus what is in stock.`}
+                      ? `${fmtQty(ordered)} units of this order are not sent to Production yet.`
+                      : `For the ${fmtQty(ordered)} units not sent to Production yet, minus what is in stock.`}
                   </p>
                 </div>
               </div>
@@ -147,9 +147,9 @@ export default function OrderPlanModal({ order, mode = "production", onClose }) 
                   <TableHeader>
                     <TableRow>
                       <TableHead>Product</TableHead>
-                      <TableHead className="text-end">Not given to Production yet</TableHead>
+                      <TableHead className="text-end">Not sent to Production yet</TableHead>
                       <TableHead className="text-end">Can build now (sent)</TableHead>
-                      <TableHead className="text-end">Still waiting for parts</TableHead>
+                      <TableHead className="text-end">Still waiting for components</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

@@ -1,8 +1,8 @@
 import { ClipboardCheck, ArrowRight } from "lucide-react"
 import { useNavigate } from "react-router-dom"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/saturday/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/saturday/button"
 import { EmptyState, TableSkeleton } from "@/components/feedback"
 import { getActionableQcItems, getQcActionLabel } from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
 

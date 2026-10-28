@@ -154,7 +154,7 @@ export default function Products() {
                   <TableCell className="text-right tabular-nums">
                     {p.selling_price === null || p.selling_price === undefined
                       ? <span className="text-xs font-semibold text-warning">Not set</span>
-                      : <>{Number(p.selling_price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}<span className="block text-xs text-muted-foreground">GST {Number(p.gst_percent)}%</span></>}
+                      : Number(p.selling_price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                   </TableCell>
                   <TableCell className="min-w-40"><UserCell name={p.created_by_name} /></TableCell>
                   <TableCell className="text-right">

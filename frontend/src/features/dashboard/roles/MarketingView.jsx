@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { MotionConfig, motion } from "motion/react"
-import { CheckCircle2, ChevronRight, ClipboardList, Loader2, Plus, Send } from "lucide-react"
+import { CalendarClock, CheckCircle2, ChevronRight, ClipboardList, IndianRupee, ListTodo, Loader2, Plus, Send } from "lucide-react"
 import { EmptyState } from "@/components/feedback"
 import { ConfirmDialog } from "@/components/Modal"
-import { Reveal } from "@/components/HistoryUI"
+import { CountUp, Reveal } from "@/components/HistoryUI"
+import { FigureTile, TINT, pageButtonClass } from "@/components/PageKit"
 import { useToast } from "@/components/toast"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -15,11 +16,13 @@ import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMar
 import { useGetNotificationsQuery, useMarkNotificationReadMutation } from "@/features/notifications/notificationsApi"
 import { severityOf } from "@/features/notifications/notificationStyle"
 import NotificationIcon from "@/features/notifications/NotificationIcon"
-import { HeroLink, MktBtn, MktHero, NewOrderFab, StageTile, StatusPill, TileGrid } from "@/features/marketing-orders/mktKit"
+import { HeroLink, MktBtn, MktHero, NewOrderFab, StatusPill, TileGrid } from "@/features/marketing-orders/mktKit"
 import { rise, stagger } from "@/features/marketing-orders/mktMotion"
-import { ALL_STAGE, OrderPipeline, STAGES, countByStatus, newestFirst, ordersHref, plural } from "@/features/marketing-orders/orderParts"
+import { countByStatus, newestFirst, ordersHref, plural, rupees, stageOf } from "@/features/marketing-orders/orderParts"
+import { useGetSalesSummaryQuery } from "@/features/sales/salesApi"
 import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtQty } from "@/lib/stock"
+import { cn } from "@/lib/utils"
 import OrderDrawer from "@/features/marketing-orders/OrderDrawer"
 import FinishedGoodsTodo from "../FinishedGoodsTodo"
 import SalesSnapshot from "@/features/sales/SalesSnapshot"
@@ -27,8 +30,9 @@ import SalesSnapshot from "@/features/sales/SalesSnapshot"
 const EMPTY = []
 
 /* Plain-language line under "Hello": the one thing worth doing next. */
-function nudge(counts, revised) {
+function nudge(counts, revised, late) {
   if (revised) return `${plural(revised, "order")} with a revised quantity. Open it to see both copies and accept.`
+  if (late) return `${plural(late, "order")} past the delivery date. Tell the customer, or ask the Operations Admin.`
   if (counts.REJECTED) return `${plural(counts.REJECTED, "order")} rejected. Open it to read the admin's remarks.`
   if (counts.DRAFT) return `${plural(counts.DRAFT, "draft")} ready to send to the Operations Admin.`
   if (counts.PENDING_APPROVAL) return `${plural(counts.PENDING_APPROVAL, "order")} waiting for the Operations Admin.`
@@ -38,6 +42,64 @@ function nudge(counts, revised) {
 /* One short line for the products of an order: the first product and how many more. */
 const productsSummary = (items = []) => (items.length === 0 ? "No products" : items.length === 1 ? items[0].name : `${items[0].name} + ${items.length - 1} more`)
 const unitsOf = (items = []) => items.reduce((sum, i) => sum + Number(i.quantity || 0), 0)
+
+/* ------------------------------------------------------------- delivery risk */
+
+// orders still on their way to the customer (not rejected, not cancelled)
+const OPEN = ["DRAFT", "PENDING_APPROVAL", "QUANTITY_REVISED", "APPROVED"]
+const RISK_DAYS = 7
+
+const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+// "2026-11-02" -> days from today (negative = already past)
+const daysUntil = (date) => Math.round((new Date(`${date}T00:00:00`) - new Date(`${ymd(new Date())}T00:00:00`)) / 86400000)
+
+// the earlier of the customer's date and the Operations Admin's date: whichever comes first is the one to act on
+const dueDate = (o) => [o.required_by_date, o.estimated_delivery_date].filter(Boolean).sort()[0]
+const shortDay = (ymd) => new Date(`${ymd}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+
+/* Open orders whose due date is past or within RISK_DAYS while some units are not with the customer yet. Earliest first. */
+function deliveryRisk(orders) {
+  return orders
+    .filter((o) => OPEN.includes(o.approval_status) && dueDate(o) && Number(o.delivered_units || 0) < Number(o.totals?.quantity || 0))
+    .map((o) => ({ order: o, days: daysUntil(dueDate(o)) }))
+    .filter((r) => r.days <= RISK_DAYS)
+    .sort((a, b) => a.days - b.days)
+}
+
+const dueLine = (days) => (days < 0 ? `Late by ${plural(-days, "day")}` : days === 0 ? "Due today" : `Due in ${plural(days, "day")}`)
+
+/* "Due for delivery": one row per order, the most urgent first. A row opens the order. */
+function RiskList({ rows, onOpen }) {
+  return (
+    <ul className="divide-y divide-lp-line">
+      {rows.map(({ order: o, days }) => (
+        <li key={o.id}>
+          <button type="button" onClick={() => onOpen(o)} className="flex w-full items-center gap-3 px-5 py-3 text-start outline-none transition-colors hover:bg-lp-bg focus-visible:bg-lp-bg">
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold tabular-nums text-lp-ink">{o.order_number}</span>
+              <span className="block truncate text-xs text-lp-muted">{o.customer_name || "No customer"} · {productsSummary(o.items)}</span>
+              {/* the two dates differ: Operations will deliver after (or before) the day the customer asked for */}
+              {o.required_by_date && o.estimated_delivery_date && o.required_by_date !== o.estimated_delivery_date && (
+                <span className={cn("block text-xs font-medium", o.estimated_delivery_date > o.required_by_date ? "text-destructive" : "text-lp-muted")}>
+                  Customer wants {shortDay(o.required_by_date)} · Operations {shortDay(o.estimated_delivery_date)}
+                </span>
+              )}
+            </span>
+            <span className="shrink-0 text-end">
+              <span className={cn("block text-[13px] font-semibold", days < 0 ? "text-destructive" : "text-warning")}>{dueLine(days)}</span>
+              <span className="block text-xs text-lp-muted">
+                {fmtQty(o.delivered_units || 0)} of {fmtQty(o.totals?.quantity || 0)} given · {stageOf(o.approval_status)?.short}
+              </span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-lp-muted rtl:-scale-x-100" aria-hidden />
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
 
 /*
   Phone: a short card, only what matters at a glance (number, status, products in one line, units, age,
@@ -147,7 +209,7 @@ function Panel({ title, description, to, toLabel, loading, children }) {
           <CardTitle>{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </div>
-        {to && <Link to={to} className="inline-flex h-9 shrink-0 items-center rounded-[10px] border border-cf-line-strong bg-card px-3 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-soft focus-visible:ring-2 focus-visible:ring-ring/60">{toLabel}</Link>}
+        {to && <Link to={to} className={pageButtonClass("outline", "sm")}>{toLabel}</Link>}
       </CardHeader>
       {loading ? <div className="space-y-2 p-5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div> : children}
     </Card>
@@ -211,6 +273,7 @@ export default function MarketingView() {
   const editable = canEdit("marketingOrders")
 
   const { data = EMPTY, isLoading } = useGetMarketingOrdersQuery()
+  const { data: sales, isLoading: salesLoading } = useGetSalesSummaryQuery()
   const [send] = useSendMarketingOrderMutation()
   const [remove, { isLoading: deleting }] = useDeleteMarketingOrderMutation()
   const [busyId, setBusyId] = useState(null)
@@ -259,15 +322,45 @@ export default function MarketingView() {
     }
   }
 
-  // Every figure opens the Orders page with that filter already on.
-  const tiles = [
-    { key: "ALL", stage: ALL_STAGE, value: counts.total, to: ordersHref(null), className: "col-span-2 md:col-span-4 xl:col-span-1" },
-    ...STAGES.map((s) => ({ key: s.status, stage: s, value: counts[s.status], to: ordersHref(s.status) })),
+  /*
+    Three figures, each a question the Marketing Manager asks:
+      Your turn          what do I have to do now?      (answer a revised quantity, send a draft, make a bill)
+      Due for delivery   which customer do I call?       (late or due within a week, not all given out)
+      Money to collect   how much is still out?          (bills not fully paid, oldest first)
+  */
+  const revised = data.filter((o) => o.approval_status === "QUANTITY_REVISED").length
+  const toBill = sales?.toBill ?? 0
+  const myTurn = revised + counts.DRAFT + toBill
+  const risk = useMemo(() => deliveryRisk(data), [data])
+  const late = risk.filter((r) => r.days < 0).length
+  const owed = sales?.toCollect ?? 0
+  const oldest = sales?.owed?.[0]?.days
+
+  const figures = [
+    {
+      key: "turn", icon: ListTodo, label: "Your turn", value: <CountUp value={myTurn} />,
+      hint: [revised && `${revised} to answer`, counts.DRAFT && `${plural(counts.DRAFT, "draft")} to send`, toBill && `${toBill} to bill`].filter(Boolean).join(" · ") || "Nothing is waiting for you",
+      tint: myTurn ? TINT.amber : TINT.slate,
+      // the orders are in "Needs your attention" below; when only bills are left, straight to them
+      ...(revised + counts.DRAFT === 0 && toBill ? { to: "/finished-goods?status=IN_STORE" } : { onClick: () => scrollTo("your-turn") }),
+    },
+    {
+      key: "risk", icon: CalendarClock, label: "Due for delivery", value: <CountUp value={risk.length} />,
+      hint: risk.length ? [late && `${late} late`, risk.length - late && `${risk.length - late} this week`].filter(Boolean).join(" · ") : "Nothing due this week",
+      tint: late ? TINT.rose : risk.length ? TINT.amber : TINT.slate,
+      ...(risk.length ? { onClick: () => scrollTo("delivery-risk") } : {}),
+    },
+    {
+      key: "money", icon: IndianRupee, label: "Money to collect", value: rupees(owed),
+      hint: owed ? (oldest != null ? `Oldest bill is ${plural(oldest, "day")} old` : "Bills not fully paid") : "Every bill is paid",
+      tint: oldest > 30 ? TINT.rose : owed ? TINT.amber : TINT.slate,
+      to: "/bills?show=open",
+    },
   ]
 
   return (
     <MotionConfig reducedMotion="user">
-      <MktHero eyebrow="Marketing dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={nudge(counts, data.filter((o) => o.approval_status === "QUANTITY_REVISED").length)}>
+      <MktHero eyebrow="Marketing dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={nudge(counts, revised, late)}>
         {editable && <HeroLink wrap="hidden md:inline-flex" className="h-10" to={ordersHref(null, { new: 1 })}><Plus /> New order</HeroLink>}
       </MktHero>
 
@@ -279,9 +372,9 @@ export default function MarketingView() {
         />
       )}
 
-      <TileGrid className="md:grid-cols-3 xl:grid-cols-6">
-        {tiles.map((t) => (
-          <StageTile key={t.key} solid stage={t.stage} value={t.value} loading={isLoading} to={t.to} className={t.className} />
+      <TileGrid className="grid-cols-1 sm:grid-cols-3 md:grid-cols-3 xl:grid-cols-3">
+        {figures.map(({ key, ...f }) => (
+          <FigureTile key={key} {...f} toggle={false} loading={isLoading || salesLoading} />
         ))}
       </TileGrid>
 
@@ -292,7 +385,7 @@ export default function MarketingView() {
               Prepare an order, save it as a draft, then send it to the Operations Admin when it is ready.
               {editable && (
                 <span className="mt-4 flex justify-center">
-                  <Link to={ordersHref(null, { new: 1 })} className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-gradient-to-br from-emerald-700 to-teal-800 px-4 text-[13px] font-semibold text-white shadow-[0_8px_18px_-8px_rgba(122,53,255,0.8)] outline-none transition-[filter,transform] hover:brightness-110 focus-visible:ring-3 focus-visible:ring-primary/30 active:scale-[0.97] sm:h-9">
+                  <Link to={ordersHref(null, { new: 1 })} className={pageButtonClass("primary")}>
                     <Plus className="size-4" /> Create your first order
                   </Link>
                 </span>
@@ -303,24 +396,35 @@ export default function MarketingView() {
       ) : (
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <Reveal delay={0.3}>
-            <Panel title="Needs your attention" description="Revised quantities to accept first, then rejected orders, then drafts to send." loading={isLoading} to={attention.length > 5 ? ordersHref("DRAFT") : null} toLabel={`View all (${attention.length})`}>
-              {attention.length === 0 ? (
-                <EmptyState icon={CheckCircle2} title="Nothing needs attention">Every order has been sent and decided.</EmptyState>
-              ) : (
-                <OrderList orders={attention.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
-              )}
-            </Panel>
+            <div id="your-turn" className="scroll-mt-20">
+              <Panel title="Needs your attention" description="Revised quantities to accept first, then rejected orders, then drafts to send." loading={isLoading} to={attention.length > 5 ? ordersHref("DRAFT") : null} toLabel={`View all (${attention.length})`}>
+                {attention.length === 0 ? (
+                  <EmptyState icon={CheckCircle2} title="Nothing needs attention">Every order has been sent and decided.</EmptyState>
+                ) : (
+                  <OrderList orders={attention.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
+                )}
+              </Panel>
+            </div>
           </Reveal>
           <Reveal delay={0.4}>
-            <Panel title="Latest orders" description="Newest first." loading={isLoading} to={ordersHref(null)} toLabel="View all">
-              <OrderList orders={latest.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
-            </Panel>
+            {/* deliveries at risk when there are any; otherwise simply the newest orders */}
+            {risk.length > 0 ? (
+              <div id="delivery-risk" className="scroll-mt-20">
+                <Panel title="Due for delivery" description="Late, or due this week, and not fully given to the customer yet. Most urgent first." loading={isLoading} to={risk.length > 6 ? ordersHref(null) : null} toLabel="All orders">
+                  <RiskList rows={risk.slice(0, 6)} onOpen={openOrder} />
+                </Panel>
+              </div>
+            ) : (
+              <Panel title="Latest orders" description="Newest first." loading={isLoading} to={ordersHref(null)} toLabel="View all">
+                <OrderList orders={latest.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
+              </Panel>
+            )}
           </Reveal>
         </div>
       )}
 
       <SalesSnapshot className="mt-6" />
-      <FinishedGoodsTodo className="mt-4" title="In stock, ready to bill" />
+      <FinishedGoodsTodo className="mt-4" title="Bill or take payment" />
 
       <OrderDrawer
         order={opened && !confirmDelete ? opened : null}

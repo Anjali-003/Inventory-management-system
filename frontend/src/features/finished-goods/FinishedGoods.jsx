@@ -6,17 +6,16 @@ import { finishedGoodsService } from "@/features/finished-goods/finishedGoodsSer
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
 import { FG_STEPS, fgBadge, fgIndexOf, fgStepDone, fgStepFor, myFgStep } from "@/features/finished-goods/fgFlow"
 import { errorMessage } from "@/lib/stock"
-import { HeroButton, MktHero, SearchField, StageTile, TileGrid } from "@/features/marketing-orders/mktKit"
+import { HeroButton, MktHero, SearchField, StageTile, TileGrid } from "@/components/saturday/kit"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { Modal } from "@/components/Modal"
 import { Field, TextInput } from "@/components/FormField"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { Button } from "@/components/saturday/button"
+import { Card } from "@/components/saturday/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/toast"
 import { usePermissions } from "@/features/auth/usePermissions"
-import { useGetCustomersQuery, useSaveCustomerMutation } from "./customersApi"
 import { cn } from "@/lib/utils"
 
 const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -130,54 +129,37 @@ function StepDialog({ item, step, onClose, onDone }) {
 }
 
 /*
-  Marketing's bill: customer + a rate for every product. The rate starts from the price list (Super Admin); a lower
-  rate is a discount and needs a reason. Each product has its own GST %, and the totals are worked out live.
+  Make bill: one click. The customer is the order's own and every product is billed at its price list. No GST: the
+  total is rate x quantity. "Change rate" opens the rate of a product for a discount, which then needs a reason.
+  A product with no price in the list asks for its rate.
 */
 function BillDialog({ item, onClose, onDone }) {
   const toast = useToast()
-  const [form, setForm] = useState({ customer_name: "", customer_address: "", customer_gstin: "", notes: "" })
-  const [customerId, setCustomerId] = useState("")
-  const [saveNew, setSaveNew] = useState(true)
-  const { data: customers = [] } = useGetCustomersQuery()
-  const [saveCustomer] = useSaveCustomerMutation()
-  const [rates, setRates] = useState(() => Object.fromEntries((item?.lines || []).map((l) => [l.productId, l.listPrice ?? ""])))
+  const lines = item?.lines || []
+  const [editing, setEditing] = useState(() => new Set(lines.filter((l) => l.listPrice === null).map((l) => l.productId)))
+  const [rates, setRates] = useState(() => Object.fromEntries(lines.map((l) => [l.productId, l.listPrice ?? ""])))
   const [notes, setNotes] = useState({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
-  const pickCustomer = (id) => {
-    setCustomerId(id)
-    const c = customers.find((x) => String(x.id) === id)
-    setForm((f) => ({ ...f, customer_name: c?.name || "", customer_address: c?.address || "", customer_gstin: c?.gstin || "" }))
-  }
 
-  const rows = (item?.lines || []).map((l) => {
+  const rows = lines.map((l) => {
     const rate = Number(rates[l.productId]) || 0
     const amount = rate * l.quantity
     const discount = l.listPrice !== null && rates[l.productId] !== "" && rate < l.listPrice
-    return { ...l, rate, amount, gst: (amount * l.gstPercent) / 100, discount }
+    return { ...l, rate, amount, discount }
   })
-  const subtotal = rows.reduce((sum, r) => sum + r.amount, 0)
-  const gst = rows.reduce((sum, r) => sum + r.gst, 0)
-  const ready = form.customer_name.trim()
-    && rows.every((r) => rates[r.productId] !== undefined && rates[r.productId] !== "")
-    && rows.every((r) => !r.discount || String(notes[r.productId] || "").trim().length >= 3)
+  const total = rows.reduce((sum, r) => sum + r.amount, 0)
+  const ready = rows.every((r) => rates[r.productId] !== "" && (!r.discount || String(notes[r.productId] || "").trim().length >= 3))
 
   const submit = async (e) => {
     e.preventDefault()
     try {
       setBusy(true)
       setError("")
-      // a new customer is saved first (when ticked), so the next bill can just pick it
-      let id = customerId ? Number(customerId) : null
-      if (!id && saveNew) {
-        id = (await saveCustomer({ name: form.customer_name, address: form.customer_address, gstin: form.customer_gstin }).unwrap()).id
-      }
-      const { data } = await finishedGoodsService.createBill(item.id, {
-        ...form, customer_id: id,
-        items: rows.map((r) => ({ product_id: r.productId, rate: rates[r.productId], note: notes[r.productId] || "" })),
-      })
-      toast.success(`Bill ${data.billNumber} made. Store has been told to give out the goods.`)
+      // only the rates that were changed (or had no price) are sent; the rest is the price list
+      const items = rows.filter((r) => editing.has(r.productId)).map((r) => ({ product_id: r.productId, rate: rates[r.productId], note: notes[r.productId] || "" }))
+      const { data } = await finishedGoodsService.createBill(item.id, items.length ? { items } : {})
+      toast.success(`Bill ${data.billNumber} made.`)
       onDone()
     } catch (err) {
       setError(errorMessage(err, "Could not make the bill."))
@@ -187,75 +169,69 @@ function BillDialog({ item, onClose, onDone }) {
   }
 
   return (
-    <Modal open={!!item} onClose={onClose} busy={busy} size="lg" title="Make bill" description={item?.orderNumber} onSubmit={submit}
+    <Modal open={!!item} onClose={onClose} busy={busy} size="lg" title="Make bill" description={[item?.orderNumber, item?.customerName].filter(Boolean).join(" · ")} onSubmit={submit}
       footer={<><Button type="button" variant="outline" size="lg" onClick={onClose} disabled={busy}>Cancel</Button><Button type="submit" size="lg" disabled={busy || !ready}>{busy ? "Saving..." : "Make bill"}</Button></>}>
       <div className="space-y-4 text-sm">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Saved customer" htmlFor="bill-saved" className="sm:col-span-2" hint={customers.length ? undefined : "No customer saved yet: type the details below."}>
-            <select id="bill-saved" className="h-9 w-full rounded-[8px] border border-cf-line-strong bg-card px-3 text-[13px]" value={customerId} onChange={(e) => pickCustomer(e.target.value)}>
-              <option value="">New customer (type below)</option>
-              {customers.map((c) => <option key={c.id} value={c.id}>{c.name}{c.gstin ? ` · ${c.gstin}` : ""}</option>)}
-            </select>
-          </Field>
-          <Field label="Customer name" htmlFor="bill-customer" required><TextInput id="bill-customer" value={form.customer_name} maxLength={150} onChange={set("customer_name")} disabled={!!customerId} /></Field>
-          <Field label="Customer GSTIN" htmlFor="bill-gstin"><TextInput id="bill-gstin" value={form.customer_gstin} maxLength={20} onChange={set("customer_gstin")} /></Field>
-          <Field label="Delivery address" htmlFor="bill-address" className="sm:col-span-2"><TextInput id="bill-address" value={form.customer_address} maxLength={500} onChange={set("customer_address")} /></Field>
-          {!customerId && (
-            <label className="flex items-center gap-2 text-sm sm:col-span-2">
-              <input type="checkbox" checked={saveNew} onChange={(e) => setSaveNew(e.target.checked)} /> Save this customer for the next bill
-            </label>
-          )}
-        </div>
-
-        <div className="overflow-hidden rounded-xl border">
-          <div className="grid grid-cols-[1fr_3.5rem_7rem_4rem_6.5rem] gap-2 bg-slate-50 px-3 py-2 text-xs font-semibold text-muted-foreground"><span>Product</span><span className="text-right">Qty</span><span className="text-right">Rate (₹)</span><span className="text-right">GST</span><span className="text-right">Amount</span></div>
+        <ul className="divide-y rounded-xl border">
           {rows.map((r) => (
-            <div key={r.productId} className="border-t px-3 py-2">
-              <div className="grid grid-cols-[1fr_3.5rem_7rem_4rem_6.5rem] items-center gap-2">
-                <span className="min-w-0 break-words">{r.name}<span className="block text-xs text-muted-foreground">{r.listPrice === null ? "No price in the list yet" : `List price ${rupees(r.listPrice)}`}</span></span>
-                <span className="text-right tabular-nums">{r.quantity}</span>
-                <TextInput aria-label={`Rate for ${r.name}`} type="number" min="0" step="0.01" className="text-right" value={rates[r.productId] ?? ""} onChange={(e) => setRates((x) => ({ ...x, [r.productId]: e.target.value }))} />
-                <span className="text-right tabular-nums text-muted-foreground">{r.gstPercent}%</span>
-                <span className="text-right tabular-nums">{rupees(r.amount)}</span>
+            <li key={r.productId} className="px-3 py-2.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium break-words">{r.name}</p>
+                  {editing.has(r.productId) ? (
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <span className="tabular-nums text-muted-foreground">{r.quantity} ×</span>
+                      <TextInput aria-label={`Rate for ${r.name}`} type="number" min="0" step="0.01" className="w-32 text-right" value={rates[r.productId] ?? ""}
+                        onChange={(e) => setRates((x) => ({ ...x, [r.productId]: e.target.value }))} placeholder="Rate" />
+                    </div>
+                  ) : (
+                    <p className="tabular-nums text-muted-foreground">
+                      {r.quantity} × {rupees(r.rate)}
+                      <button type="button" onClick={() => setEditing((s) => new Set(s).add(r.productId))} className="ms-2 text-xs font-semibold text-primary hover:underline">Change rate</button>
+                    </p>
+                  )}
+                  {r.listPrice === null && <p className="mt-1 text-xs text-warning">No price in the price list yet: enter the rate.</p>}
+                </div>
+                <span className="shrink-0 font-semibold tabular-nums">{rupees(r.amount)}</span>
               </div>
               {r.discount && (
                 <TextInput aria-label={`Reason for the discount on ${r.name}`} className="mt-2" maxLength={255} value={notes[r.productId] || ""}
-                  onChange={(e) => setNotes((x) => ({ ...x, [r.productId]: e.target.value }))} placeholder={`Below the list price: why? (e.g. bulk order, old customer)`} />
+                  onChange={(e) => setNotes((x) => ({ ...x, [r.productId]: e.target.value }))} placeholder={`Below the price list (${rupees(r.listPrice)}): why?`} />
               )}
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
 
-        <dl className="ml-auto max-w-xs space-y-1 rounded-xl bg-slate-50 px-3 py-2 text-right tabular-nums">
-          <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd>{rupees(subtotal)}</dd></div>
-          <div className="flex justify-between"><dt className="text-muted-foreground">GST</dt><dd>{rupees(gst)}</dd></div>
-          <div className="flex justify-between text-base font-bold"><dt>Total</dt><dd>{rupees(subtotal + gst)}</dd></div>
+        <dl className="ml-auto max-w-xs space-y-1 text-right tabular-nums">
+          <div className="flex justify-between text-base font-bold"><dt>Total</dt><dd>{rupees(total)}</dd></div>
         </dl>
-        <Field label="Notes (optional)" htmlFor="bill-notes"><TextInput id="bill-notes" value={form.notes} maxLength={500} onChange={set("notes")} /></Field>
         {error && <p role="alert" className="rounded-lg bg-cf-red-soft px-3 py-2 text-destructive">{error}</p>}
       </div>
     </Modal>
   )
 }
 
-const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10) }
-const METHODS = [["UPI", "UPI"], ["BANK", "Bank transfer"], ["CASH", "Cash"], ["CHEQUE", "Cheque"], ["OTHER", "Other"]]
+const METHODS = [["UPI", "UPI"], ["CASH", "Cash"], ["BANK", "Bank transfer"], ["CHEQUE", "Cheque"]]
 const PAY_BADGE = { PAID: ["success", "Paid"], PART_PAID: ["warning", "Part paid"], UNPAID: ["danger", "Not paid"] }
 
-/* One small form inside the bill: record a payment, or (Super Admin) cancel the bill */
+/*
+  One small form inside the bill: the payment (always the whole amount, in one go: only "how" is asked), or
+  (Super Admin) cancel the bill.
+*/
 function BillAction({ kind, bill, finishedGoodsId, onDone, onClose }) {
   const toast = useToast()
-  const [form, setForm] = useState({ amount: kind === "payment" ? String(bill.due) : "", paid_on: today(), method: "UPI", reference: "", reason: "" })
+  const [method, setMethod] = useState("UPI")
+  const [reference, setReference] = useState("")
+  const [reason, setReason] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
   const submit = async () => {
     try {
       setBusy(true)
       setError("")
-      if (kind === "payment") await finishedGoodsService.addPayment(finishedGoodsId, form)
-      if (kind === "cancel") await finishedGoodsService.cancelBill(finishedGoodsId, { reason: form.reason })
-      toast.success(kind === "payment" ? "Payment recorded" : "Bill cancelled. Marketing can bill the order again.")
+      if (kind === "payment") await finishedGoodsService.addPayment(finishedGoodsId, { method, reference })
+      if (kind === "cancel") await finishedGoodsService.cancelBill(finishedGoodsId, { reason })
+      toast.success(kind === "payment" ? "Paid. The Store can now give out the goods." : "Bill cancelled. Marketing can bill the order again.")
       onDone()
     } catch (err) {
       setError(errorMessage(err, "Could not save."))
@@ -265,24 +241,24 @@ function BillAction({ kind, bill, finishedGoodsId, onDone, onClose }) {
   }
   return (
     <div className="space-y-3 rounded-xl border bg-slate-50 p-3">
-      <p className="font-semibold">{kind === "payment" ? "Record a payment" : "Cancel this bill"}</p>
-      {kind !== "cancel" && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Amount (₹)" htmlFor="ba-amount" required><TextInput id="ba-amount" type="number" min="0.01" step="0.01" value={form.amount} onChange={set("amount")} /></Field>
-          {kind === "payment" && <Field label="Received on" htmlFor="ba-date" required><TextInput id="ba-date" type="date" value={form.paid_on} onChange={set("paid_on")} /></Field>}
-          {kind === "payment" && (
-            <Field label="How" htmlFor="ba-method" required>
-              <select id="ba-method" className="h-9 w-full rounded-[8px] border bg-card px-3 text-[13px]" value={form.method} onChange={set("method")}>
-                {METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
-            </Field>
+      <p className="font-semibold">{kind === "payment" ? `Paid in full: ${rupees(bill.due)}` : "Cancel this bill"}</p>
+      {kind === "payment" ? (
+        <>
+          <div role="radiogroup" aria-label="How was it paid" className="flex flex-wrap gap-2">
+            {METHODS.map(([v, l]) => (
+              <button key={v} type="button" role="radio" aria-checked={method === v} onClick={() => setMethod(v)}
+                className={cn("h-9 rounded-lg border px-3 text-[13px] font-semibold transition-colors", method === v ? "border-primary bg-primary text-white" : "bg-white hover:bg-muted")}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {method !== "CASH" && (
+            <TextInput aria-label="Reference" maxLength={100} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="UTR / cheque no. (optional)" />
           )}
-          {kind === "payment" && <Field label="Reference (optional)" htmlFor="ba-ref"><TextInput id="ba-ref" maxLength={100} value={form.reference} onChange={set("reference")} placeholder="UTR / cheque no." /></Field>}
-        </div>
-      )}
-      {kind !== "payment" && (
+        </>
+      ) : (
         <Field label="Reason" htmlFor="ba-reason" required>
-          <TextInput id="ba-reason" maxLength={255} value={form.reason} onChange={set("reason")} placeholder="e.g. wrong customer on the bill" />
+          <TextInput id="ba-reason" maxLength={255} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. wrong rate on the bill" />
         </Field>
       )}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -321,24 +297,23 @@ export function BillView({ item, role, onClose, onChanged }) {
             <div>
               <p className="font-semibold">{bill.customerName}</p>
               {bill.customerAddress && <p className="text-muted-foreground">{bill.customerAddress}</p>}
-              {bill.customerGstin && <p className="text-muted-foreground">GSTIN {bill.customerGstin}</p>}
               <p className="mt-1 text-xs text-muted-foreground">Made by {bill.createdByName} · {when(bill.createdAt)}</p>
             </div>
             <Badge variant={PAY_BADGE[bill.paymentStatus][0]}>{PAY_BADGE[bill.paymentStatus][1]}</Badge>
           </div>
           <table className="w-full text-left">
-            <thead className="text-xs text-muted-foreground"><tr><th className="py-1">Product</th><th className="py-1 text-right">Qty</th><th className="py-1 text-right">Rate</th><th className="py-1 text-right">GST</th><th className="py-1 text-right">Amount</th></tr></thead>
+            <thead className="text-xs text-muted-foreground"><tr><th className="py-1">Product</th><th className="py-1 text-right">Qty</th><th className="py-1 text-right">Rate</th><th className="py-1 text-right">Amount</th></tr></thead>
             <tbody className="divide-y border-y">{bill.items.map((i) => (
               <tr key={i.productId}>
                 <td className="py-1.5">{i.name}{i.priceNote && <span className="block text-xs text-muted-foreground">Discount: {i.priceNote} (list {rupees(i.listPrice)})</span>}</td>
                 <td className="text-right tabular-nums">{i.quantity}</td><td className="text-right tabular-nums">{rupees(i.rate)}</td>
-                <td className="text-right tabular-nums">{i.gstPercent}%</td><td className="text-right tabular-nums">{rupees(i.amount)}</td>
+                <td className="text-right tabular-nums">{rupees(i.amount)}</td>
               </tr>
             ))}</tbody>
           </table>
           <dl className="ml-auto max-w-xs space-y-1 tabular-nums">
-            <div className="flex justify-between"><dt className="text-muted-foreground">Subtotal</dt><dd>{rupees(bill.subtotal)}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted-foreground">GST</dt><dd>{rupees(bill.gstAmount)}</dd></div>
+            {/* bills made before GST was dropped (2026-10-28) still show theirs, so their total adds up */}
+            {bill.gstAmount > 0 && <div className="flex justify-between"><dt className="text-muted-foreground">GST (old bill)</dt><dd>{rupees(bill.gstAmount)}</dd></div>}
             <div className="flex justify-between font-bold"><dt>Total</dt><dd>{rupees(bill.total)}</dd></div>
             <div className="flex justify-between text-success"><dt>Received</dt><dd>{rupees(bill.paid)}</dd></div>
             <div className={cn("flex justify-between text-base font-bold", bill.due > 0 && "text-destructive")}><dt>Still to collect</dt><dd>{rupees(bill.due)}</dd></div>
@@ -357,7 +332,7 @@ export function BillView({ item, role, onClose, onChanged }) {
           ) : (canPay || canCancel) && (
             <div className="flex flex-wrap justify-end gap-2">
               {canCancel && <Button type="button" variant="outline" onClick={() => setAction("cancel")}>Cancel bill</Button>}
-              {canPay && <Button type="button" onClick={() => setAction("payment")}>Record payment</Button>}
+              {canPay && <Button type="button" onClick={() => setAction("payment")}>Mark as paid</Button>}
             </div>
           )}
         </div>
@@ -401,18 +376,18 @@ export default function FinishedGoods() {
   // one tile per step, like the Saturday page; "All" first
   const tiles = [
     { key: "all", label: "All", hint: "Every order after QC", icon: PackageCheck, dot: "bg-slate-400", s: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/20" } },
-    ...FG_STEPS.map((step) => ({ key: step.status, label: step.label, hint: step.todo.split(".")[0], icon: STEP_ICON[step.status], dot: TILE_TONE[step.status].dot, s: TILE_TONE[step.status].s })),
+    ...FG_STEPS.map((step) => ({ key: step.status, label: step.label, hint: step.hint, icon: STEP_ICON[step.status], dot: TILE_TONE[step.status].dot, s: TILE_TONE[step.status].s })),
   ].map((t) => ({
     ...t,
     value: t.key === "all" ? items.length : items.filter((i) => i.status === t.key).length,
-    active: t.key === "all" ? activeFilter === "all" || activeFilter === "mine" : activeFilter === t.key,
+    active: t.key === "all" ? activeFilter === "all" : activeFilter === t.key,
     onClick: () => setFilter(t.key === "all" || activeFilter === t.key ? "all" : t.key),
   }))
   const onAct = (i, s) => (s.action === "bill" ? setBillFor(i) : act(i, s))
 
   return (
     <>
-      <MktHero eyebrow="Quality & release" title="Finished Goods" description="Orders that passed Quality Control: Store receives them, Marketing bills them, and Store gives them out once the bill is paid.">
+      <MktHero eyebrow={role === "MARKETING_MANAGER" ? "Billing" : "After Quality Control"} title="Finished Goods" description="Orders that passed Quality Control: Store receives them, Marketing bills them, and Store gives them out once the bill is paid.">
         <HeroButton variant="glass" onClick={refetch} disabled={isFetching} aria-label="Refresh finished goods">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
         </HeroButton>
@@ -430,7 +405,11 @@ export default function FinishedGoods() {
           {activeFilter === "due" && (
             <button type="button" onClick={() => setFilter("all")} className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">Money to collect ×</button>
           )}
-          <span className="ml-auto text-xs text-muted-foreground">Showing {rows.length} of {items.length}</span>
+          <span className="ml-auto text-xs text-muted-foreground">
+            {activeFilter === "mine"
+              ? <>Waiting for you: {rows.length} of {items.length} · <button type="button" onClick={() => setFilter("all")} className="font-semibold text-primary hover:underline">Show all</button></>
+              : <>Showing {rows.length} of {items.length}</>}
+          </span>
         </div>
         {loading ? <div className="p-3"><TableSkeleton rows={4} /></div> : rows.length === 0 ? (
           <EmptyState icon={PackageCheck} title={items.length ? "No matching finished goods" : "No finished goods yet"}>

@@ -18,7 +18,8 @@ const EMPTY = []
 const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
 const when = (at) => (at ? new Date(at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "")
 const BADGE = { PAID: ["success", "Paid"], PART_PAID: ["warning", "Part paid"], UNPAID: ["danger", "Not paid"], CANCELLED: ["neutral", "Cancelled"] }
-const FILTERS = [["open", "To collect"], ["UNPAID", "Not paid"], ["PART_PAID", "Part paid"], ["PAID", "Paid"], ["all", "All"], ["CANCELLED", "Cancelled"], ["received", "Received this month"]]
+// a bill is paid in full in one go, so it is either still to be paid ("open") or paid
+const FILTERS = [["open", "Not paid"], ["PAID", "Paid"], ["all", "All"], ["CANCELLED", "Cancelled"], ["received", "Received this month"]]
 const METHOD = { CASH: "Cash", BANK: "Bank", UPI: "UPI", CHEQUE: "Cheque", OTHER: "Other" }
 
 function Figure({ label, value, sub, to, bad }) {
@@ -37,7 +38,7 @@ function Figure({ label, value, sub, to, bad }) {
   Sales & Billing: every bill, what it was for, what came in and what is still to collect. Click a bill to open it
   (record a payment, print; the Super Admin can cancel it).
   "Received this month" lists the payments themselves (by the date the money came), not bills.
-  Links in: ?show=open|UNPAID|PART_PAID|PAID|all|CANCELLED|received, ?q=<customer / bill / order>, ?bill=<bill id>
+  Links in: ?show=open|PAID|all|CANCELLED|received, ?q=<customer / bill / order>, ?bill=<bill id>
 */
 export default function Bills() {
   const { role } = usePermissions()

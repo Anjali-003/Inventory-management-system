@@ -40,7 +40,7 @@ export const STAGES = [
   },
   {
     status: "APPROVED", label: "Approved", short: "Approved", icon: CheckCircle2, tone: "green", dotTone: "success",
-    bar: "bg-gradient-to-r from-emerald-700 to-emerald-800", dot: "bg-emerald-600", hint: "Sent on to purchase team",
+    bar: "bg-gradient-to-r from-emerald-700 to-emerald-800", dot: "bg-emerald-600", hint: "The Operations Admin Agreed to Make the Order",
     s: {
       grad: "from-emerald-700 to-emerald-800", glow: "shadow-emerald-600/30", soft: "bg-emerald-50 ring-emerald-200/70",
       pill: "bg-emerald-50 text-emerald-800 ring-emerald-200", ink: "text-emerald-700",
@@ -56,7 +56,7 @@ export const STAGES = [
   },
   {
     status: "CANCELLED", label: "Cancelled", short: "Cancelled", icon: XCircle, tone: "slate", dotTone: "neutral",
-    bar: "bg-gradient-to-r from-slate-500 to-slate-700", dot: "bg-slate-400", hint: "Not going ahead: Marketing said no to a reduced quantity, or Operations cancelled it",
+    bar: "bg-gradient-to-r from-slate-500 to-slate-700", dot: "bg-slate-400",
     s: {
       grad: "from-slate-500 to-slate-700", glow: "shadow-slate-500/30", soft: "bg-slate-50 ring-slate-200/70",
       pill: "bg-slate-100 text-slate-700 ring-slate-200", ink: "text-slate-600",
@@ -357,7 +357,7 @@ export function CustomerName({ order, className }) {
 export const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
 
 /**
- * What the order is worth at the price list, without GST: units x each product's selling price (totals.value from
+ * What the order is worth at the price list: units x each product's selling price (totals.value from
  * the backend). An estimate: the bill sets the real rate. Says so when a product has no price yet.
  */
 export function OrderValue({ order, className }) {
@@ -368,8 +368,8 @@ export function OrderValue({ order, className }) {
     return <span className={cn("text-xs text-warning", className)}>Price not set yet</span>
   }
   return (
-    <span className={cn("text-xs text-muted-foreground", className)} title="At the price list, without GST">
-      <b className="font-semibold tabular-nums text-foreground">{rupees(t.value)}</b> + GST
+    <span className={cn("text-xs text-muted-foreground", className)} title="At the price list">
+      <b className="font-semibold tabular-nums text-foreground">{rupees(t.value)}</b>
       {t.unpriced > 0 && <span className="text-warning"> · {t.unpriced === 1 ? "1 product has" : `${t.unpriced} products have`} no price yet, not counted</span>}
     </span>
   )
@@ -400,10 +400,10 @@ export function MakingLine({ order, className }) {
   const sent = sumQty(order.production_request?.items || [])
   const left = Number(order.left_to_send || 0)
   const text = left === 0
-    ? `All ${fmtQty(total)} units given to Production to build.`
+    ? `Production has been asked to make all ${fmtQty(total)} units.`
     : sent === 0
-      ? `Not given to Production yet: waiting for parts (${fmtQty(total)} units).`
-      : `${fmtQty(sent)} of ${fmtQty(total)} units given to Production to build · ${fmtQty(left)} waiting for parts.`
+      ? `Not sent to Production yet: waiting for components (${fmtQty(total)} units).`
+      : `Production has been asked to make ${fmtQty(sent)} of ${fmtQty(total)} units · ${fmtQty(left)} waiting for components.`
   return <p className={cn("text-xs font-medium", left === 0 ? "text-success" : "text-warning", className)}>{text}</p>
 }
 

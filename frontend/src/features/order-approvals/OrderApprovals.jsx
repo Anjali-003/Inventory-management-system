@@ -66,8 +66,8 @@ const QUEUE = "PENDING_APPROVAL";
   "al" is the work queue, so the page opens on it. Each waiting order shows right away how much
   of it can be built from the stock on the shelf. Clicking an order, or its "Review order" button, always opens the
   same drawer (OpsOrderDrawer): the details, the stock check, and the three decisions Reject · Revise quantity ·
-  Check stock & send. The producible list goes to the Production Manager, the missing components to the Purchase
-  Manager. Reject needs a reason.
+  Approve. Once approved, the order is sent on in two separate steps: what the stock can build to the Production
+  Manager, the missing components to the Purchase Manager. Reject needs a reason.
 
   Same layout as the Marketing Orders page: the orders are a table while the list box is 1024px wide or more,
   otherwise each order is a card (container query, so it follows the room the list really has next to the sidebar).

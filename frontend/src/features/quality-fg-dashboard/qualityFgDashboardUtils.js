@@ -1,4 +1,3 @@
-import { fgBadge } from "@/features/finished-goods/fgFlow"
 const number = (value) => Math.max(0, Number(value) || 0)
 
 export function getQcPendingBatches(items = []) {
@@ -28,8 +27,16 @@ export function getQcActionLabel(item) {
     : `Full batch complete · ${number(item.quantityCompleted)} of ${number(item.orderedQuantity)} units ready for Pass/Fail`
 }
 
+/*
+  This dashboard is the Saturday (2026-10-24) one, which counts finished goods in its three steps PACKAGING, DISPATCHED
+  and COMPLETED. The Store and billing steps came after Saturday, so today's statuses are read into those three:
+  packed and sent to the Store = PACKAGING, in the Store or billed = DISPATCHED, given out = COMPLETED.
+*/
+const SATURDAY_STEP = { HANDED_OVER: "PACKAGING", IN_STORE: "DISPATCHED", BILLED: "DISPATCHED", DELIVERED: "COMPLETED" }
+export const saturdayStatus = (status) => SATURDAY_STEP[status] || status
+
 export function countFinishedGoods(items = [], status) {
-  return items.filter((item) => item.status === status).length
+  return items.filter((item) => saturdayStatus(item.status) === status).length
 }
 
 export function getActiveProduction(items = []) {
@@ -42,6 +49,10 @@ export function getProductionCompletion(item) {
   return total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0
 }
 
-export function getFinishedGoodsStatus(status) {
-  return fgBadge(status)
+export function getFinishedGoodsStatus(rawStatus) {
+  const status = saturdayStatus(rawStatus)
+  if (status === "PACKAGING") return { label: "Packaging / ready to dispatch", variant: "warning" }
+  if (status === "DISPATCHED") return { label: "Dispatched / awaiting completion", variant: "info" }
+  if (status === "COMPLETED") return { label: "Completed", variant: "success" }
+  return { label: status || "Unknown", variant: "neutral" }
 }

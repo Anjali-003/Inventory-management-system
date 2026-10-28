@@ -135,7 +135,8 @@ function OverviewTab({ order }) {
         <Fact label="Approved by">{order.approved_by_name || "-"}</Fact>
         <Fact label="Approved on">{fmtDateTime(order.approved_at)}</Fact>
         <Fact label="Products">{plural(order.items?.length ?? 0, "product")}</Fact>
-        <Fact label="Estimated delivery">{order.estimated_delivery_date || <span className="font-normal text-muted-foreground">Not set</span>}</Fact>
+        <Fact label="Customer wants it by">{order.required_by_date || <span className="font-normal text-muted-foreground">Not set</span>}</Fact>
+        <Fact label="Planned delivery">{order.estimated_delivery_date || <span className="font-normal text-muted-foreground">Not set</span>}</Fact>
       </dl>
 
       {order.approval_remarks && (

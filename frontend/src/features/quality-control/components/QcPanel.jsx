@@ -1,5 +1,5 @@
 import { n } from "../qcUtils";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/saturday/button";
 import { X } from "lucide-react";
 import { Notice } from "@/components/feedback";
 import QualityControlForm from "./QualityControlForm";

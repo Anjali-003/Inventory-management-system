@@ -8,14 +8,14 @@ import { errorMessage } from "@/lib/stock"
 import SearchBar from "@/components/SearchBar"
 import Pagination from "@/components/Pagination"
 import StatStrip from "@/components/StatStrip"
-import { HeroButton, MktBtn, MktHero, SearchField, StageTile, TileGrid } from "@/features/marketing-orders/mktKit"
+import { HeroButton, MktBtn, MktHero, SearchField, StageTile, TileGrid } from "@/components/saturday/kit"
 import ProductionOrderCard from "@/features/production/components/ProductionOrderCard"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { useToast } from "@/components/toast"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { Button } from "@/components/saturday/button"
+import { Card } from "@/components/saturday/card"
 import QuantityStepper from "@/components/QuantityStepper"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import ListViewControls from "@/components/ListViewControls"
@@ -63,8 +63,7 @@ function MaterialReadiness({ item }) {
   const outstanding = num(item.material_request_outstanding_quantity)
 
   if (workflow.key === "awaiting_approval") {
-    const approved = item.approval_status === "APPROVED"
-    return <div className="space-y-1"><Badge variant="warning">{workflow.label}</Badge><p className="text-xs text-muted-foreground">{approved ? "The Operations Admin sends it to Production once the stock covers it" : "Operations approval is required"}</p></div>
+    return <div className="space-y-1"><Badge variant="warning">Awaiting approval</Badge><p className="text-xs text-muted-foreground">Operations approval is required</p></div>
   }
   if (workflow.key === "bom_review") {
     return <div className="space-y-1"><Badge variant="warning">BOM needs review</Badge><p className="text-xs text-muted-foreground">Component requirements need fixing</p></div>

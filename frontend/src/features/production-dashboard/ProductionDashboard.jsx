@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react"
 import { Factory, RefreshCw } from "lucide-react"
 import { useNavigate } from "react-router-dom"
-import { HeroButton, MktHero } from "@/features/marketing-orders/mktKit"
+import { HeroButton, MktHero } from "@/components/saturday/kit"
 import { Notice } from "@/components/feedback"
 import { useToast } from "@/components/toast"
 import { useGetMeQuery } from "@/features/auth/authApi"
@@ -18,7 +18,6 @@ import RecentProductionActivity from "@/features/production-dashboard/components
 import { toProductionOrder, inProduction } from "@/features/production-dashboard/productionDashboardUtils"
 import { isProductionCompleted, isApprovedForProduction, productionWorkflowStatus, readyToStartQuantity } from "@/features/production/productionWorkflow"
 import { InteractiveBarChart, InteractiveDonutChart } from "@/features/dashboard/components/InteractiveDashboardCharts"
-import WaitingForYou from "@/features/dashboard/WaitingForYou"
 
 const PRODUCTION_CHART_CATEGORIES = [
   { key: "active", label: "In production", color: "#3478d4", to: "/production" },
@@ -140,14 +139,13 @@ export default function ProductionDashboard() {
       <MktHero
         eyebrow="Production dashboard"
         title={user?.name ? `Hello, ${user.name}` : "Production overview"}
-        description="What to build, what is waiting for material from Store, and what came back from QC for rework."
+        description="Review material allotment, active production, completed products, and work needing QC or rework."
       >
         <HeroButton onClick={() => navigate("/production")}><Factory /> Open production</HeroButton>
         <HeroButton variant="glass" onClick={refresh} disabled={productionQuery.isFetching || inventoryQuery.isFetching}>
           <RefreshCw className={productionQuery.isFetching || inventoryQuery.isFetching ? "animate-spin" : ""} /> Refresh
         </HeroButton>
       </MktHero>
-      <WaitingForYou className="mb-4" />
 
       {productionError && <div className="mb-4"><Notice title="Production data unavailable">{productionError}</Notice></div>}
       {inventoryError && <div className="mb-4"><Notice title="Inventory data unavailable">{inventoryError}</Notice></div>}

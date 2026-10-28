@@ -16,7 +16,7 @@ const comps = (n) => `${n} component${n === 1 ? "" : "s"}`;
 function summaryOf(order, plan) {
   const { ordered, canMake, remaining } = planTotals(plan);
   const toBuy = plan.shortages?.length || 0;
-  const of = hasLeftToSend(order) ? "not given to Production yet" : "ordered";
+  const of = hasLeftToSend(order) ? "not sent to Production yet" : "ordered";
   if (plan.missing_bom?.length) {
     return { tone: "neutral", text: "The bill of materials is incomplete, so the stock cannot be checked yet. Complete the BOM first, or reject the order." };
   }
@@ -40,7 +40,7 @@ function waitingOptions(order, plan) {
       kind: "revise",
       icon: Scale,
       title: "Revise quantity",
-      text: "Promise less than ordered. The rest goes back to Marketing as a separate draft. Marketing has to accept first.",
+      text: "Promise less than ordered. The rest will not be made. Marketing has to accept first.",
       blocked: reviseBlockReason(order, plan),
       recommended: false,
     },

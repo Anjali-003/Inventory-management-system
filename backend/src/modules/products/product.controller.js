@@ -51,7 +51,7 @@ const importBom = handle(async (req, res) => {
     res.json(await svc.importBom(productId(req), req.body));
 });
 
-// Price list (Super Admin): { selling_price, gst_percent }
+// Price list (Super Admin): { selling_price }
 const setPrice = handle(async (req, res) => {
     res.json(await svc.setPrice(productId(req), req.body || {}));
 }, "Failed to save the price");

@@ -1,4 +1,4 @@
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/saturday/card"
 import {
   isApprovedForProduction,
   isProductionCompleted,
@@ -22,7 +22,7 @@ export default function ProductionProgressPanel({ items, loading }) {
     <Card className="min-w-0 overflow-hidden rounded-2xl border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader>
         <CardTitle>Production progress</CardTitle>
-        <CardDescription>Material received from Store and units built, per product line.</CardDescription>
+        <CardDescription>Material allotment and completed units across active product lines.</CardDescription>
       </CardHeader>
       {loading ? (
         <div className="space-y-4 p-5">
@@ -44,7 +44,7 @@ export default function ProductionProgressPanel({ items, loading }) {
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[
-              { label: "Material received", value: allotted, tone: "text-emerald-800 bg-emerald-50 border-emerald-100" },
+              { label: "Allotted", value: allotted, tone: "text-emerald-800 bg-emerald-50 border-emerald-100" },
               { label: "Left to be allotted", value: leftToAllot, tone: "text-amber-800 bg-amber-50 border-amber-100" },
               { label: "Completed", value: completed, tone: "text-blue-800 bg-blue-50 border-blue-100" },
             ].map((metric) => (

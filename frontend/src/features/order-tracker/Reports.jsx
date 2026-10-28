@@ -48,7 +48,7 @@ function Section({ title, children, to, toLabel }) {
 
 /*
   The profit worked out on screen, product by product, so nobody has to do the sum in their head:
-  pieces × price = sold for (without GST), pieces × cost of its parts = cost to make, the difference is the profit.
+  pieces × price = sold for, pieces × cost of its parts = cost to make, the difference is the profit.
 */
 function ProfitSum({ money }) {
   if (money.profit === null) return <p className="mt-4 text-muted-foreground">Profit: — (nothing sold this month that has a cost yet)</p>
@@ -58,7 +58,7 @@ function ProfitSum({ money }) {
       <div className="overflow-x-auto rounded-xl border">
         <table className="w-full min-w-[520px] text-left tabular-nums">
           <thead className="bg-muted/50 text-xs text-muted-foreground">
-            <tr><th className="px-3 py-2">Product</th><th className="px-3 py-2 text-right">Sold for (without GST)</th><th className="px-3 py-2 text-right">Cost to make</th><th className="px-3 py-2 text-right">Profit</th></tr>
+            <tr><th className="px-3 py-2">Product</th><th className="px-3 py-2 text-right">Sold for</th><th className="px-3 py-2 text-right">Cost to make</th><th className="px-3 py-2 text-right">Profit</th></tr>
           </thead>
           <tbody className="divide-y">
             {money.products.map((p) => (
@@ -73,7 +73,7 @@ function ProfitSum({ money }) {
         </table>
       </div>
       <dl className="ml-auto max-w-sm space-y-1 rounded-xl bg-muted/40 p-3 tabular-nums">
-        <div className="flex justify-between"><dt>Sold for (without GST)</dt><dd>{rupees(money.soldFor)}</dd></div>
+        <div className="flex justify-between"><dt>Sold for</dt><dd>{rupees(money.soldFor)}</dd></div>
         <div className="flex justify-between"><dt>− Cost to make</dt><dd>{rupees(money.costOfSold)}</dd></div>
         <div className={cn("flex justify-between border-t pt-1 text-base font-bold", money.profit < 0 ? "text-destructive" : "text-success")}><dt>= Profit</dt><dd>{rupees(money.profit)}</dd></div>
       </dl>
@@ -107,7 +107,7 @@ export default function Reports() {
           <Section title="Money">
             <div className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
               {[
-                ["Sold (with GST)", rupees(r.sales.total), false, "/finished-goods?status=all"],
+                ["Sold", rupees(r.sales.total), false, "/finished-goods?status=all"],
                 ["Money received", rupees(r.sales.collected), false, "/finished-goods?status=all"],
                 ["Money still to come", rupees(r.sales.toCollect), r.sales.toCollect > 0, "/finished-goods?pay=due"],
               ].map(([l, v, bad, to]) => (

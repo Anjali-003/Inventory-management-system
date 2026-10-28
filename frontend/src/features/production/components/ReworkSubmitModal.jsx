@@ -1,5 +1,5 @@
 import { ArrowRight, X, Wrench } from "lucide-react"
-import { MktBtn } from "@/features/marketing-orders/mktKit"
+import { MktBtn } from "@/components/saturday/kit"
 
 export default function ReworkSubmitModal({ item, remarks, onRemarksChange, busy, error, onClose, onSubmit }) {
   if (!item) return null

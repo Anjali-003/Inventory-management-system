@@ -340,6 +340,21 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   CONSTRAINT `chk_notifications_severity` CHECK ((`severity` in (_utf8mb4'info',_utf8mb4'success',_utf8mb4'warning',_utf8mb4'action')))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS `order_events` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `order_id` int NOT NULL,
+  `kind` varchar(30) NOT NULL,
+  `actor_id` int DEFAULT NULL,
+  `quantity` int DEFAULT NULL,
+  `detail` json DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_order_events_order` (`order_id`,`id`),
+  KEY `fk_order_events_actor` (`actor_id`),
+  CONSTRAINT `fk_order_events_actor` FOREIGN KEY (`actor_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_order_events_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS `order_items` (
   `id` int NOT NULL AUTO_INCREMENT,
   `order_id` int NOT NULL,
@@ -394,8 +409,10 @@ CREATE TABLE IF NOT EXISTS `order_purchase_items` (
 CREATE TABLE IF NOT EXISTS `orders` (
   `id` int NOT NULL AUTO_INCREMENT,
   `order_number` varchar(50) NOT NULL,
+  `customer_id` int DEFAULT NULL,
   `parent_order_id` int DEFAULT NULL,
   `status` varchar(40) NOT NULL DEFAULT 'PENDING',
+  `required_by_date` date DEFAULT NULL,
   `estimated_delivery_date` date DEFAULT NULL,
   `approval_status` varchar(20) NOT NULL DEFAULT 'PENDING_APPROVAL',
   `sent_to_admin_at` datetime DEFAULT NULL,
@@ -420,8 +437,10 @@ CREATE TABLE IF NOT EXISTS `orders` (
   KEY `fk_orders_parent` (`parent_order_id`),
   KEY `fk_orders_revised_by` (`revised_by`),
   KEY `fk_orders_revision_accepted_by` (`revision_accepted_by`),
+  KEY `fk_orders_customer` (`customer_id`),
   CONSTRAINT `fk_orders_approved_by` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_orders_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `fk_orders_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
   CONSTRAINT `fk_orders_parent` FOREIGN KEY (`parent_order_id`) REFERENCES `orders` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_orders_revised_by` FOREIGN KEY (`revised_by`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_orders_revision_accepted_by` FOREIGN KEY (`revision_accepted_by`) REFERENCES `users` (`id`),

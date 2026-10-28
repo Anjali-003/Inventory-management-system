@@ -1,6 +1,6 @@
 import { n } from "../qcUtils";
 import { Status } from "./QcStatus";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/saturday/button";
 import { FlaskConical, ClipboardCheck } from "lucide-react";
 import UserCell from "@/components/UserCell";
 

@@ -81,10 +81,30 @@ function parseItems(body) {
     });
 }
 
+/*
+    The date the customer wants the order by (required). Saved twice: required_by_date keeps the customer's date,
+    estimated_delivery_date starts the same and is the one the Operations Admin can move later.
+    (estimated_delivery_date is still read for older callers.)
+*/
+function parseRequiredBy(body) {
+    const raw = body && (body.required_by_date || body.estimated_delivery_date || body.estimatedDeliveryDate);
+    const value = typeof raw === "string" ? raw.trim() : "";
+    if (!value) throw new AppError(422, "Enter the date the customer wants this order by", "VALIDATION", { field: "required_by_date" });
+    const [y, m, d] = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split("-").map(Number) : [];
+    const parsed = new Date(y, m - 1, d);
+    // "2026-02-30" rolls over to March, so it is not a real date
+    if (!y || parsed.getFullYear() !== y || parsed.getMonth() !== m - 1 || parsed.getDate() !== d) {
+        throw new AppError(422, "Enter a valid date", "VALIDATION", { field: "required_by_date" });
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (parsed < today) throw new AppError(422, "The customer's date cannot be in the past", "VALIDATION", { field: "required_by_date" });
+    return value;
+}
+
 async function createDraft(body, userId) {
     const items = parseItems(body || {});
-    const rawDate = body && (body.estimated_delivery_date || body.estimatedDeliveryDate);
-    const deliveryDate = (typeof rawDate === "string" && rawDate.trim().length > 0) ? rawDate.trim() : null;
+    const requiredBy = parseRequiredBy(body);
 
     return inventory.inTransaction(async (conn) => {
         const [found] = await conn.query(`SELECT id FROM products WHERE id IN (?) AND is_active = TRUE`, [items.map((i) => i.productId)]);
@@ -95,8 +115,8 @@ async function createDraft(body, userId) {
 
         const customerId = await resolveCustomer(conn, body, userId);
         const [res] = await conn.query(
-            `INSERT INTO orders (order_number, customer_id, status, approval_status, estimated_delivery_date, created_by) VALUES (?, ?, 'PENDING', 'DRAFT', ?, ?)`,
-            [`TEMP-${Date.now()}-${userId}`, customerId, deliveryDate, userId]
+            `INSERT INTO orders (order_number, customer_id, status, approval_status, required_by_date, estimated_delivery_date, created_by) VALUES (?, ?, 'PENDING', 'DRAFT', ?, ?, ?)`,
+            [`TEMP-${Date.now()}-${userId}`, customerId, requiredBy, requiredBy, userId]
         );
         const id = res.insertId;
         const d = new Date();
@@ -197,7 +217,8 @@ async function declineRevision(orderId, userId) {
              FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ? FOR UPDATE`,
             [orderId]
         );
-        if (rows.length === 0 || rows[0].creator_role !== "MARKETING_MANAGER") throw AppError.notFound("Order not found", "NOT_FOUND");
+        // the same orders accept-revision answers: Marketing's, and the Super Admin's own (the CEO doing Marketing's work)
+        if (rows.length === 0 || !SALES_ROLES.includes(rows[0].creator_role)) throw AppError.notFound("Order not found", "NOT_FOUND");
         if (rows[0].approval_status !== "QUANTITY_REVISED") {
             throw AppError.conflict("This order is not waiting for your answer on a revised quantity. Refresh the page.", "NOT_REVISED");
         }
@@ -210,6 +231,7 @@ async function declineRevision(orderId, userId) {
              WHERE id = ?`,
             ["Marketing did not accept the revised quantity", userId, orderId]
         );
+        // an order revised before 2026-10-28 also left a draft of the rest: it goes too (newer revisions make none)
         await conn.query(`DELETE FROM orders WHERE parent_order_id = ? AND approval_status = 'DRAFT'`, [orderId]); // order_items cascade
         await approvals.logEvent(conn, orderId, "REVISION_DECLINED", userId, { quantity: await approvals.unitsOf(conn, orderId) });
         await notifications.notify(conn, {

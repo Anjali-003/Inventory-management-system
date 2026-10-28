@@ -1,5 +1,5 @@
 import { CheckCircle2, Factory, History } from "lucide-react"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/saturday/card"
 import { EmptyState } from "@/components/feedback"
 import { formatWhen } from "@/features/production-dashboard/productionDashboardUtils"
 import { isProductionCompleted } from "@/features/production/productionWorkflow"

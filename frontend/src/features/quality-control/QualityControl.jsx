@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { CheckCircle2, ClipboardCheck, PackageCheck, RefreshCw, XCircle } from "lucide-react"
 import { useDispatch } from "react-redux"
 import { useToast } from "@/components/toast"
-import { HeroButton, MktHero, SearchField } from "@/features/marketing-orders/mktKit"
+import { HeroButton, MktHero, SearchField } from "@/components/saturday/kit"
 import ListViewControls from "@/components/ListViewControls"
 import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import { usePermissions } from "@/features/auth/usePermissions"
@@ -24,8 +24,7 @@ export default function QualityControl() {
   const { canEdit } = usePermissions()
   const editable = canEdit("qualityControl")
   const { data: items = [], isLoading: loading, isFetching, error: loadError, refetch } = useGetQualityControlQuery()
-  const [params] = useSearchParams()
-  const [query, setQuery] = useState(() => params.get("q") || "") // ?q=<product> from Reports
+  const [query, setQuery] = useState("")
   const [activeView, setActiveView] = useState("pending")
   const [productFilter, setProductFilter] = useState("all")
   const [fromDate, setFromDate] = useState("")
@@ -35,7 +34,6 @@ export default function QualityControl() {
   const [selected, setSelected] = useState(null)
   const [decision, setDecision] = useState(null)
   const [remarks, setRemarks] = useState("")
-  const [sample, setSample] = useState({ size: "", failed: "" })
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState("")
 
@@ -129,7 +127,6 @@ export default function QualityControl() {
     if (!editable || !item || item.batchDecision) return
     setActionError("")
     setRemarks("")
-    setSample({ size: "", failed: nextDecision === "PASS" ? "0" : "" })
     setSelected(item)
     setDecision(nextDecision)
   }
@@ -152,7 +149,7 @@ export default function QualityControl() {
     try {
       setBusy(true)
       setActionError("")
-      const { data } = await qualityControlService.decideBatch(selected.productionId || selected.id, decision, remarks, sample)
+      const { data } = await qualityControlService.decideBatch(selected.productionId || selected.id, decision, remarks)
       setSelected(null)
       setDecision(null)
       setRemarks("")
@@ -171,8 +168,8 @@ export default function QualityControl() {
     <div className="min-w-0 space-y-4">
       <MktHero
         eyebrow="Quality & release"
-        title="Quality Check (QC)"
-        description="Check random sample pieces of every finished batch. One bad piece fails the whole batch and it goes back to Production."
+        title="Quality Control"
+        description="Review completed production batches, record Pass/Fail decisions and send failed batches back for correction."
       >
         <HeroButton variant="glass" onClick={refresh} disabled={loading || isFetching} aria-label="Refresh quality control">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
@@ -292,7 +289,7 @@ export default function QualityControl() {
         />
       )}
 
-      {editable && <BatchDecisionConfirm item={selected} decision={decision} remarks={remarks} onRemarksChange={changeRemarks} sample={sample} onSampleChange={(next) => { setSample(next); if (actionError) setActionError("") }} busy={busy} error={actionError} onClose={closeConfirm} onConfirm={submitDecision} />}
+      {editable && <BatchDecisionConfirm item={selected} decision={decision} remarks={remarks} onRemarksChange={changeRemarks} busy={busy} error={actionError} onClose={closeConfirm} onConfirm={submitDecision} />}
     </div>
   )
 }

@@ -1,12 +1,12 @@
 import { motion } from "motion/react"
 import { Clock3, Loader2, Send, Trash2 } from "lucide-react"
 import UserCell from "@/components/UserCell"
-import { Card } from "@/components/ui/card"
+import { PageButton, Panel } from "@/components/PageKit"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { timeAgo } from "@/features/activity/time"
 import { fmtDateTime, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
-import { MktBtn, StatusPill } from "./mktKit"
+import { StatusPill } from "./mktKit"
 import { SPRING_SOFT } from "./mktMotion"
 import { CustomerName, DECIDED_STATUSES, MakingLine, OrderValue, declinedOf, plural, reviewOf, stageOf } from "./orderParts"
 
@@ -53,9 +53,9 @@ function ReviewCell({ o }) {
           {" of "}
           <span className="tabular-nums">{fmtQty(requested)}</span> units approved
         </p>
-        <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-slate-200/80" aria-hidden>
+        <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-lp-bg" aria-hidden>
           <motion.span
-            className={cn("block h-full origin-left rounded-full bg-gradient-to-r rtl:origin-right", stage.s.grad)}
+            className={cn("block h-full origin-left rounded-full rtl:origin-right", stage.dot)}
             initial={{ scaleX: 0 }}
             animate={{ scaleX: ratio }}
             transition={{ ...SPRING_SOFT, delay: 0.1 }}
@@ -74,7 +74,7 @@ function ReviewCell({ o }) {
 /* Desktop table. Exactly four columns; the draft actions (Send / Delete) sit under the status. */
 export default function OrdersTable({ orders, filterKey, editable, busyId, onOpen, onViewItems, onSend, onDelete, className }) {
   return (
-    <Card className={cn("overflow-hidden", className)}>
+    <Panel className={cn("overflow-hidden", className)}>
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
@@ -87,7 +87,6 @@ export default function OrdersTable({ orders, filterKey, editable, busyId, onOpe
         {/* keyed by the filter so the rows glide in again whenever the filter changes */}
         <TableBody key={filterKey}>
           {orders.map((o, i) => {
-            const stage = stageOf(o.approval_status)
             const extra = o.items.length - SHOW_LINES
             const canAct = editable && o.approval_status === "DRAFT"
             return (
@@ -97,12 +96,8 @@ export default function OrdersTable({ orders, filterKey, editable, busyId, onOpe
                 style={{ animationDelay: `${Math.min(i, 8) * 30}ms`, animationFillMode: "backwards" }}
                 className="group cursor-pointer motion-reduce:animate-none"
               >
-                <TableCell className="relative min-w-40 py-3.5">
-                  <span
-                    aria-hidden
-                    className={cn("absolute inset-y-2.5 start-0 w-1 origin-center scale-y-0 rounded-e-full bg-gradient-to-b transition-transform duration-200 group-hover:scale-y-100 group-focus-within:scale-y-100 motion-reduce:transition-none", stage?.s.grad ?? "from-slate-600 to-slate-800")}
-                  />
-                  <button type="button" className="block text-start font-semibold tabular-nums outline-none transition-colors group-hover:text-primary focus-visible:text-primary focus-visible:underline">
+                <TableCell className="min-w-40 py-3.5">
+                  <button type="button" className="block text-start font-semibold tabular-nums text-lp-ink outline-none transition-colors group-hover:text-lp-green focus-visible:text-lp-green focus-visible:underline">
                     {o.order_number}
                   </button>
                   <CustomerName order={o} />
@@ -116,17 +111,17 @@ export default function OrdersTable({ orders, filterKey, editable, busyId, onOpe
                     {o.items.slice(0, SHOW_LINES).map((it) => (
                       <li key={it.product_id} className="flex max-w-xs items-center gap-2 text-sm">
                         <span className="min-w-0 truncate">{it.name}</span>
-                        <span className="shrink-0 rounded-md bg-emerald-50 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-emerald-800">× {fmtQty(it.quantity)}</span>
+                        <span className="shrink-0 text-[13px] font-semibold tabular-nums text-lp-text">× {fmtQty(it.quantity)}</span>
                       </li>
                     ))}
-                    {extra > 0 && <li className="text-xs font-semibold text-primary">+ {plural(extra, "more product")}</li>}
+                    {extra > 0 && <li className="text-xs font-semibold text-lp-green">+ {plural(extra, "more product")}</li>}
                   </ul>
                   <OrderValue order={o} className="mt-1 block" />
                   {onViewItems && (
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); onViewItems(o) }}
-                      className="mt-1.5 inline-flex items-center gap-1 rounded text-xs font-semibold text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/60"
+                      className="mt-1.5 inline-flex items-center gap-1 rounded text-xs font-semibold text-lp-green outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/60"
                     >
                       View items
                     </button>
@@ -138,10 +133,10 @@ export default function OrdersTable({ orders, filterKey, editable, busyId, onOpe
                     <StatusPill value={o.approval_status} short />
                     {canAct && (
                       <div className="flex items-center gap-2">
-                        <MktBtn variant="danger" size="icon" aria-label={`Delete draft ${o.order_number}`} onClick={(e) => { e.stopPropagation(); onDelete(o) }}><Trash2 /></MktBtn>
-                        <MktBtn variant="primary" disabled={busyId === o.id} onClick={(e) => { e.stopPropagation(); onSend(o) }}>
+                        <PageButton variant="danger" size="icon" aria-label={`Delete draft ${o.order_number}`} onClick={(e) => { e.stopPropagation(); onDelete(o) }}><Trash2 /></PageButton>
+                        <PageButton variant="primary" disabled={busyId === o.id} onClick={(e) => { e.stopPropagation(); onSend(o) }}>
                           {busyId === o.id ? <Loader2 className="animate-spin" /> : <Send />} Send to admin
-                        </MktBtn>
+                        </PageButton>
                       </div>
                     )}
                   </div>
@@ -155,6 +150,6 @@ export default function OrdersTable({ orders, filterKey, editable, busyId, onOpe
           })}
         </TableBody>
       </Table>
-    </Card>
+    </Panel>
   )
 }

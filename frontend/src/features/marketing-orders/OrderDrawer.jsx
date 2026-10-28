@@ -55,19 +55,21 @@ function Fact({ label, children }) {
 
 const COPY_TONE = {
   approved: { ring: "border-emerald-200 bg-emerald-50/60", ink: "text-emerald-800", label: "Promised in this order" },
+  // the units not made are dropped; if the customer still wants them, Marketing places a new order
+  notMade: { ring: "border-orange-200 bg-orange-50/60", ink: "text-orange-800", label: "Not made · place a new order if needed" },
+  // orders revised before 2026-10-28: the rest was saved as a draft (removed again when the order was cancelled)
   held: { ring: "border-orange-200 bg-orange-50/60", ink: "text-orange-800", label: "Not promised · back to Marketing as a draft" },
-  // the order was cancelled: the held-back draft was removed with it
   dropped: { ring: "border-slate-200 bg-slate-50/60", ink: "text-slate-600", label: "Not made · draft removed" },
 }
 
-/* One of the two copies of a revised order: the products with units in `field` (approved | held). */
+/* One of the two halves of a revised order: the products with units in `field` (approved | held). */
 function RevisionCopy({ number, field, items, tone = field }) {
   const t = COPY_TONE[tone]
   const lines = items.filter((i) => Number(i[field]) > 0)
   return (
     <div className={cn("min-w-0 rounded-xl border p-3", t.ring)}>
-      <p className={cn("text-[10px] font-bold uppercase tracking-[0.5px]", t.ink)}>{t.label}</p>
-      <p className="mt-0.5 truncate text-sm font-semibold tabular-nums">{number || "-"}</p>
+      <p className={cn("text-xs font-bold", t.ink)}>{t.label}</p>
+      {number && <p className="mt-0.5 truncate text-sm font-semibold tabular-nums">{number}</p>}
       <ul className="mt-2 space-y-1">
         {lines.map((i) => (
           <li key={i.product_id} className="flex items-center justify-between gap-3 text-[13px]">
@@ -84,8 +86,8 @@ function RevisionCopy({ number, field, items, tone = field }) {
 }
 
 /*
-  The Operations Admin makes only part of this order. Both copies are shown side by side: this order (what will be
-  made) and the held-back draft (the rest), with the admin's reason and whether Marketing has accepted yet.
+  The Operations Admin makes only part of this order. Both halves are shown side by side: what will be made and what
+  will not, with the admin's reason and whether Marketing has accepted yet.
 */
 function RevisionSection({ order, audience }) {
   const r = order.revision
@@ -102,7 +104,12 @@ function RevisionSection({ order, audience }) {
         {r.remarks && <p className="rounded-xl bg-white/70 px-3 py-2 text-sm leading-snug">{r.remarks}</p>}
         <div className="grid gap-2.5 sm:grid-cols-2">
           <RevisionCopy number={order.order_number} field="approved" items={items} />
-          <RevisionCopy number={r.held_order_number} field="held" items={items} tone={order.approval_status === "CANCELLED" ? "dropped" : "held"} />
+          <RevisionCopy
+            number={r.held_order_number}
+            field="held"
+            items={items}
+            tone={!r.held_order_number ? "notMade" : order.approval_status === "CANCELLED" ? "dropped" : "held"}
+          />
         </div>
         {waiting ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-orange-800">
@@ -117,10 +124,51 @@ function RevisionSection({ order, audience }) {
           <p className="inline-flex flex-wrap items-center gap-1.5 text-sm font-medium text-emerald-800">
             <CheckCircle2 className="size-4" aria-hidden /> Accepted by {order.revision_accepted_by_name || "Marketing"}
             <span className="font-normal text-muted-foreground">· {fmtDateTime(order.revision_accepted_at)}</span>
+            {/* agreeing sends it back to the admin, who still has to approve it */}
+            {order.approval_status === "PENDING_APPROVAL" && (
+              <span className="basis-full font-normal text-amber-800">{ops ? "Your turn: approve the order." : "Now waiting for the Operations Admin to approve it."}</span>
+            )}
           </p>
         ) : null}
       </div>
     </section>
+  )
+}
+
+/* ------------------------------------------------------------------ delivery dates */
+
+const fmtDay = (ymd) => new Date(`${ymd}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+const daysBetween = (from, to) => Math.round((new Date(`${to}T00:00:00`) - new Date(`${from}T00:00:00`)) / 86400000)
+
+/*
+  Two dates side by side: what the customer asked for (set by Marketing, never moved) and the date Operations is
+  working to (starts the same, the Operations Admin can move it). When they differ, by how many days.
+*/
+function DeliveryDates({ order, ops }) {
+  const wanted = order.required_by_date
+  const planned = order.estimated_delivery_date
+  const late = wanted && planned ? daysBetween(wanted, planned) : 0
+  const none = <span className="font-normal text-muted-foreground">Not set</span>
+  return (
+    <>
+      <dl className="mt-2 grid grid-cols-2 gap-3">
+        <div className="min-w-0">
+          <dt className="text-[11px] text-muted-foreground">Customer wants it by</dt>
+          <dd className="mt-0.5 text-sm font-semibold tabular-nums">{wanted ? fmtDay(wanted) : none}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-[11px] text-muted-foreground">{ops ? "You plan to deliver" : "Operations plans to deliver"}</dt>
+          <dd className={cn("mt-0.5 text-sm font-semibold tabular-nums", late > 0 && "text-destructive")}>{planned ? fmtDay(planned) : none}</dd>
+        </div>
+      </dl>
+      {late !== 0 && (
+        <p className={cn("mt-2 rounded-lg px-2.5 py-1.5 text-xs font-medium", late > 0 ? "bg-cf-red-soft text-destructive" : "bg-emerald-50 text-emerald-800")}>
+          {late > 0
+            ? `${plural(late, "day")} after the customer's date.${ops ? "" : " Tell the customer."}`
+            : `${plural(-late, "day")} before the customer's date.`}
+        </p>
+      )}
+    </>
   )
 }
 
@@ -182,12 +230,12 @@ function OverviewTab({ order, audience }) {
         </motion.div>
       )}
 
-            {/* Estimated Delivery Date */}
+      {/* Delivery dates: the customer's (fixed) and the Operations Admin's (can be moved) */}
       <div className="rounded-xl border bg-card p-3.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Calendar className="size-4 text-muted-foreground" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estimated Delivery Date</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery date</span>
           </div>
           {canModifyDate && !isEditingDate && (
             <button
@@ -202,11 +250,8 @@ function OverviewTab({ order, audience }) {
             </button>
           )}
         </div>
-        {!isEditingDate ? (
-          <p className="mt-1.5 text-sm font-semibold tabular-nums text-foreground">
-            {order.estimated_delivery_date ? order.estimated_delivery_date : <span className="text-muted-foreground font-normal">Not set by marketing</span>}
-          </p>
-        ) : (
+        <DeliveryDates order={order} ops={ops} />
+        {isEditingDate && (
           <div className="mt-2 space-y-2">
             <input
               type="date"
@@ -217,7 +262,7 @@ function OverviewTab({ order, audience }) {
             />
             <input
               type="text"
-              placeholder="Reason for change (optional, sent to marketing)"
+              placeholder="Reason for change (optional, sent to Marketing)"
               value={dateChangeReason}
               onChange={(e) => setDateChangeReason(e.target.value)}
               className="h-9 w-full rounded-lg border border-input bg-card px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-primary/40"

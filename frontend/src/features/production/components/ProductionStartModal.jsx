@@ -5,7 +5,7 @@ import OrderDisplayNumber from "@/components/OrderDisplayNumber"
 import { Modal } from "@/components/Modal"
 import { Notice } from "@/components/feedback"
 import QuantityStepper from "@/components/QuantityStepper"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/saturday/button"
 import { errorMessage } from "@/lib/stock"
 
 const number = (value) => Math.max(0, Number(value || 0))

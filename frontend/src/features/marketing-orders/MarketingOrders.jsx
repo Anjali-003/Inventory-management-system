@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react"
 import { useUrlState } from "@/lib/useUrlState"
 import { MotionConfig, motion } from "motion/react"
-import { ClipboardList, Loader2, Plus, RefreshCw, Send, Trash2, X } from "lucide-react"
+import { ClipboardList, Loader2, Plus, RefreshCw, Send, Trash2 } from "lucide-react"
 import UserCell from "@/components/UserCell"
 import { ConfirmDialog } from "@/components/Modal"
+import { FilterTabs, PageButton, PageHeader, Panel, SURFACE } from "@/components/PageKit"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { useToast } from "@/components/toast"
-import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { timeAgo } from "@/features/activity/time"
@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils"
 import NewOrderModal from "./NewOrderModal"
 import OrderDrawer from "./OrderDrawer"
 import OrdersTable from "./OrdersTable"
-import { HeroButton, MktBtn, MktHero, NewOrderFab, SearchField, StageChips, StageTile, StatusSelect, StatusPill, TileGrid } from "./mktKit"
+import { NewOrderFab, SearchField, StatusPill } from "./mktKit"
 import { PRESS_SOFT, rise, stagger } from "./mktMotion"
 import { ALL_STAGE, CustomerName, OrderSteps, OrderValue, STAGES, countByStatus, declinedOf, isDrawerTab, isStatus, newestFirst, plural, stageOf } from "./orderParts"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "./marketingOrdersApi"
@@ -31,7 +31,7 @@ const isDecided = (o) => ["APPROVED", "REJECTED"].includes(o.approval_status)
 
   Layout: the orders are a table while the list box is 1024px wide or more, otherwise each order is a card
   (container query, so it follows the room the list really has next to the sidebar).
-  The status filter is a scrolling row of chips on a phone, colour tiles on a tablet and a dropdown on a desktop (lg+).
+  The status filter is one row of tabs (components/PageKit, the home page look) on every screen size.
 
   The page state lives in the URL, so a link (or a click on a dashboard figure) opens it already set up:
     ?status=DRAFT | PENDING_APPROVAL | APPROVED | REJECTED   filter
@@ -50,10 +50,8 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
     <motion.article
       layout="position"
       variants={rise}
-      className="relative overflow-hidden rounded-2xl border border-[#E3E6EB] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
+      className={cn(SURFACE, "relative overflow-hidden transition-colors hover:border-lp-rule")}
     >
-      <span aria-hidden className={cn("absolute inset-y-0 start-0 w-1 bg-gradient-to-b", stage?.s.grad ?? "from-slate-600 to-slate-800")} />
-
       <motion.div
         role="button"
         tabIndex={0}
@@ -62,11 +60,11 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(o) }
         }}
-        className="cursor-pointer p-4 ps-5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60"
+        className="cursor-pointer p-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-lp-green"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-[15px] font-bold tabular-nums tracking-[-0.01em]">{o.order_number}</p>
+            <p className="truncate text-base font-semibold tabular-nums text-lp-ink">{o.order_number}</p>
             <CustomerName order={o} />
             <p className="mt-0.5 truncate text-xs text-muted-foreground" title={fmtDateTime(o.created_at)}>
               {o.created_by_name ? `${o.created_by_name} · ` : ""}{timeAgo(o.created_at)}
@@ -79,10 +77,10 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
           {o.items.slice(0, SHOW_LINES).map((it) => (
             <li key={it.product_id} className="flex items-center justify-between gap-3 text-sm">
               <span className="min-w-0 truncate">{it.name}</span>
-              <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-slate-700">× {fmtQty(it.quantity)}</span>
+              <span className="shrink-0 text-[13px] font-semibold tabular-nums text-lp-text">× {fmtQty(it.quantity)}</span>
             </li>
           ))}
-          {extra > 0 && <li className="text-xs font-semibold text-primary">+ {plural(extra, "more product")}</li>}
+          {extra > 0 && <li className="text-xs font-semibold text-lp-green">+ {plural(extra, "more product")}</li>}
         </ul>
         <OrderValue order={o} className="mt-2 block" />
 
@@ -103,11 +101,11 @@ function OrderCard({ o, editable, busy, onOpen, onSend, onDelete }) {
       </motion.div>
 
       {editable && draft && (
-        <div className="flex gap-2 border-t bg-cf-head/70 px-4 py-3 ps-5">
-          <MktBtn variant="danger" size="icon" aria-label={`Delete draft ${o.order_number}`} onClick={() => onDelete(o)}><Trash2 /></MktBtn>
-          <MktBtn variant="primary" className="flex-1" disabled={busy} onClick={() => onSend(o)}>
+        <div className="flex gap-2 border-t border-lp-line px-4 py-3">
+          <PageButton variant="danger" size="icon" aria-label={`Delete draft ${o.order_number}`} onClick={() => onDelete(o)}><Trash2 /></PageButton>
+          <PageButton variant="primary" className="flex-1" disabled={busy} onClick={() => onSend(o)}>
             {busy ? <Loader2 className="animate-spin" /> : <Send />} Send to admin
-          </MktBtn>
+          </PageButton>
         </div>
       )}
     </motion.article>
@@ -118,7 +116,7 @@ function CardsSkeleton() {
   return (
     <div className="grid gap-3 @2xl:grid-cols-2">
       {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="space-y-3 rounded-2xl border bg-card p-4">
+        <div key={i} className={cn(SURFACE, "space-y-3 p-4")}>
           <div className="flex justify-between"><Skeleton className="h-5 w-28" /><Skeleton className="h-6 w-20 rounded-full" /></div>
           <Skeleton className="h-4 w-3/4" />
           <Skeleton className="h-4 w-1/2" />
@@ -207,67 +205,31 @@ export default function MarketingOrders() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <MktHero eyebrow="Marketing" title="Customer Orders" description="Write the customer's order, then send it to the Operations Admin for approval.">
-        <HeroButton variant="glass" onClick={refetch} disabled={isFetching} aria-label="Refresh orders">
+      <PageHeader eyebrow="Marketing" title="Customer Orders" description="Write the customer's order, then send it to the Operations Admin for approval.">
+        <PageButton onClick={refetch} disabled={isFetching} aria-label="Refresh orders">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
-        </HeroButton>
+        </PageButton>
         {editable && (
           <span className="hidden md:inline-flex">
-            <HeroButton onClick={openNew}><Plus /> New order</HeroButton>
+            <PageButton variant="primary" onClick={openNew}><Plus /> New order</PageButton>
           </span>
         )}
-      </MktHero>
+      </PageHeader>
 
       {error && <div className="mb-4"><Notice title="Something went wrong">Could not load orders. Check that the server is running.</Notice></div>}
 
-      {/* filter: chips on a phone, tiles on tablets, a dropdown (in the bar below) on desktop */}
-      <div className="hidden md:block lg:hidden">
-        <TileGrid className="md:grid-cols-3 xl:grid-cols-6">
-          {filters.map((f) => (
-            <StageTile
-              key={f.key}
-              stage={f.stage}
-              value={f.value}
-              loading={isLoading}
-              active={f.active}
-              onClick={f.onClick}
-              className={f.key === "ALL" ? "col-span-2 md:col-span-4 xl:col-span-1" : undefined}
-            />
-          ))}
-        </TileGrid>
-      </div>
-      <StageChips
+      {/* one row of status tabs on every screen size (it scrolls sideways on a phone) */}
+      <FilterTabs
         label="Filter orders by status"
-        items={filters.map((f) => ({ key: f.key, label: f.stage.label, value: f.value, grad: f.stage.s.grad, pill: f.stage.s.pill, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
+        items={filters.map((f) => ({ key: f.key, label: f.stage.short, value: f.value, active: f.active, onClick: f.onClick }))}
       />
 
-      {/* search: stays under the top bar while a phone scrolls. On a phone the bar stays one line tall:
-          the count and the removable filter tag are for bigger screens (the chips already show the filter). */}
-      <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-8 md:bg-transparent lg:mt-0 md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
-        <SearchField className="min-w-0 flex-1 sm:max-w-xs sm:flex-none" value={query} onChange={(v) => patch({ q: v }, true)} placeholder="Search order or product..." />
-        <StatusSelect
-          className="hidden shrink-0 lg:block"
-          label="Filter orders by status"
-          items={filters.map((f) => ({ key: f.key, label: f.stage.label, short: f.stage.short, value: f.value, dot: f.stage.dot, active: f.active, onClick: f.onClick }))}
-        />
-        <div className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground sm:min-h-8 sm:flex-1 sm:flex-wrap sm:justify-end" aria-live="polite">
+      {/* search: stays under the top bar while a phone scrolls */}
+      <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-4 md:bg-transparent md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
+        <SearchField className="min-w-0 flex-1 sm:max-w-xs sm:flex-none" value={query} onChange={(v) => patch({ q: v }, true)} placeholder="Search order, customer or product..." />
+        <div className="flex shrink-0 items-center gap-3 text-[13px] text-lp-muted sm:flex-1 sm:justify-end" aria-live="polite">
           <span className="hidden tabular-nums sm:inline">Showing {shown.length} of {counts.total}</span>
-          {status && (
-            <span className="hidden sm:inline-flex lg:hidden">
-              <motion.span
-                key={status}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className={cn("inline-flex items-center gap-1 rounded-full py-1 ps-2.5 pe-1 font-semibold ring-1 ring-inset", stageOf(status).s.pill)}
-              >
-                {stageOf(status).label}
-                <button type="button" aria-label={`Remove ${stageOf(status).label} filter`} onClick={() => patch({ status: null })} className="grid size-5 place-items-center rounded-full outline-none transition-colors hover:bg-black/10 focus-visible:ring-2 focus-visible:ring-ring/60">
-                  <X className="size-3" />
-                </button>
-              </motion.span>
-            </span>
-          )}
-          {filtered && <button type="button" onClick={clearFilters} className="whitespace-nowrap font-semibold text-primary outline-none hover:underline focus-visible:underline">Clear filters</button>}
+          {filtered && <button type="button" onClick={clearFilters} className="whitespace-nowrap font-semibold text-lp-green outline-none hover:underline focus-visible:underline">Clear filters</button>}
         </div>
       </div>
 
@@ -276,10 +238,10 @@ export default function MarketingOrders() {
       {isLoading ? (
         <>
           <div className="@5xl:hidden"><CardsSkeleton /></div>
-          <Card className="hidden overflow-hidden @5xl:block"><TableSkeleton /></Card>
+          <Panel className="hidden overflow-hidden @5xl:block"><TableSkeleton /></Panel>
         </>
       ) : shown.length === 0 ? (
-        <Card>
+        <Panel>
           <EmptyState icon={ClipboardList} title={filtered ? "No order matches" : "No orders yet"}>
             {filtered
               ? status && !query.trim() && counts[status] === 0
@@ -287,11 +249,11 @@ export default function MarketingOrders() {
                 : "Try a different search or filter."
               : "Use New order to prepare your first order."}
             <span className="mt-4 flex justify-center gap-2">
-              {filtered && <MktBtn onClick={clearFilters}>Clear filters</MktBtn>}
-              {!filtered && editable && <MktBtn variant="primary" onClick={openNew}><Plus /> New order</MktBtn>}
+              {filtered && <PageButton onClick={clearFilters}>Clear filters</PageButton>}
+              {!filtered && editable && <PageButton variant="primary" onClick={openNew}><Plus /> New order</PageButton>}
             </span>
           </EmptyState>
-        </Card>
+        </Panel>
       ) : (
         <>
           {/* phones + tablets: cards. Keyed by the filter so they rise in again whenever it changes. */}

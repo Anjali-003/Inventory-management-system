@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight } from "lucide-react";
+import { SURFACE, pageButtonClass } from "@/components/PageKit";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { fmtQty } from "@/lib/stock";
@@ -70,7 +71,8 @@ export function Panel({ className, children, ...p }) {
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-[14px] border border-[#E3E6EB]/90 bg-card shadow-[0_1px_2px_rgba(22,34,30,0.035),0_10px_28px_rgba(22,34,30,0.045)]",
+        "overflow-hidden",
+        SURFACE,
         className,
       )}
       {...p}
@@ -85,20 +87,16 @@ export function PanelHeader({ title, subtitle, className, children }) {
   return (
     <div
       className={cn(
-        "flex min-h-[72px] flex-wrap items-center justify-between gap-3 border-b bg-gradient-to-r from-slate-50/90 via-white to-white px-5 py-4",
+        "flex min-h-[72px] flex-wrap items-center justify-between gap-3 border-b border-lp-line px-5 py-4",
         className,
       )}
     >
       <div className="min-w-0">
-        <h2 className="flex items-center gap-2.5 text-[14px] font-bold tracking-[-0.2px]">
-          <span
-            className="h-4 w-[3px] rounded-full bg-gradient-to-b from-[#5B21D6] to-primary"
-            aria-hidden
-          />
+        <h2 className="font-lp-head text-base font-semibold tracking-tight text-lp-ink">
           {title}
         </h2>
         {subtitle && (
-          <p className="mt-1 pl-[13px] text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mt-0.5 text-xs leading-relaxed text-lp-muted">
             {subtitle}
           </p>
         )}
@@ -110,15 +108,11 @@ export function PanelHeader({ title, subtitle, className, children }) {
 
 /* ------------------------------------------------------------------ buttons */
 
-const BTN_BASE =
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] text-xs font-semibold select-none outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-45 [&_svg]:size-[15px] [&_svg]:shrink-0";
+// Same buttons as components/PageKit. CfButton's old names: secondary = outline, ghost = a small violet text button.
 const BTN = {
-  primary:
-    "h-9 bg-primary px-3.5 text-primary-foreground shadow-[0_1px_2px_rgba(122,53,255,0.25)] hover:-translate-y-px hover:bg-cf-green-hover",
-  secondary:
-    "h-9 border border-cf-line-strong bg-card px-3.5 text-foreground hover:bg-muted",
-  ghost:
-    "h-[29px] border border-[#cde1da] bg-[#f8fcfa] px-2.5 text-primary hover:bg-cf-green-soft",
+  primary: pageButtonClass("primary", "sm"),
+  secondary: pageButtonClass("outline", "sm"),
+  ghost: cn(pageButtonClass("ghost", "sm"), "h-8 px-2.5"),
 };
 
 export function CfButton({
@@ -130,7 +124,7 @@ export function CfButton({
   return (
     <button
       type={type}
-      className={cn(BTN_BASE, BTN[variant], className)}
+      className={cn(BTN[variant], className)}
       {...p}
     />
   );
@@ -138,37 +132,13 @@ export function CfButton({
 
 /* -------------------------------------------------------------------- stats */
 
+// [icon tile, small line under the figure]. The colour lives in the icon only; the figure stays ink.
 const STAT_TONE = {
-  blue: [
-    "bg-gradient-to-br from-sky-700 to-blue-800 text-white shadow-[0_5px_12px_rgba(59,130,246,0.22)]",
-    "text-sky-700",
-    "bg-gradient-to-r from-sky-700 to-blue-800",
-    "text-sky-800",
-  ],
-  violet: [
-    "bg-gradient-to-br from-violet-600 to-purple-800 text-white shadow-[0_5px_12px_rgba(124,58,237,0.2)]",
-    "text-violet-700",
-    "bg-gradient-to-r from-violet-600 to-purple-800",
-    "text-violet-800",
-  ],
-  green: [
-    "bg-gradient-to-br from-emerald-700 to-emerald-800 text-white shadow-[0_5px_12px_rgba(16,185,129,0.2)]",
-    "text-emerald-700",
-    "bg-gradient-to-r from-emerald-700 to-emerald-800",
-    "text-emerald-800",
-  ],
-  red: [
-    "bg-gradient-to-br from-rose-600 to-red-800 text-white shadow-[0_5px_12px_rgba(244,63,94,0.2)]",
-    "font-semibold text-red-700",
-    "bg-gradient-to-r from-rose-600 to-red-800",
-    "text-red-700",
-  ],
-  amber: [
-    "bg-gradient-to-br from-amber-700 to-orange-800 text-white shadow-[0_5px_12px_rgba(245,158,11,0.2)]",
-    "font-semibold text-amber-700",
-    "bg-gradient-to-r from-amber-700 to-orange-800",
-    "text-amber-800",
-  ],
+  blue: ["bg-sky-50 text-sky-700", "text-sky-700"],
+  violet: ["bg-lp-tint text-lp-green", "text-lp-green"],
+  green: ["bg-emerald-50 text-emerald-700", "text-emerald-700"],
+  red: ["bg-rose-50 text-rose-700", "font-semibold text-red-700"],
+  amber: ["bg-amber-50 text-amber-700", "font-semibold text-amber-700"],
 };
 
 // Icon tile on the left, label, big number, one small line underneath. (Icon sits on top on phones.)
@@ -185,7 +155,7 @@ export function StatCard({
   onClick,
   active,
 }) {
-  const [tile, detailCls, accent, valueCls] = STAT_TONE[tone] || STAT_TONE.blue;
+  const [tile, detailCls] = STAT_TONE[tone] || STAT_TONE.blue;
   const Tag = onClick ? motion.button : motion.div;
   return (
     <Tag
@@ -194,19 +164,8 @@ export function StatCard({
       transition={{ delay: index * 0.07, duration: 0.4, ease: EASE }}
       whileHover={{ y: -2 }}
       {...(onClick ? { type: "button", onClick, "aria-pressed": active } : {})}
-      className={cn("group relative min-h-[122px] overflow-hidden rounded-[13px] border border-slate-200/80 bg-gradient-to-br from-white via-white to-slate-50/80 py-5 pl-[68px] pr-5 shadow-[0_2px_5px_rgba(22,34,30,0.045),0_8px_22px_rgba(22,34,30,0.04)] transition-[transform,box-shadow,border-color] duration-200 hover:border-slate-300 hover:shadow-[0_6px_12px_rgba(22,34,30,0.055),0_16px_32px_rgba(22,34,30,0.09)] max-sm:min-h-[142px] max-sm:pl-4 max-sm:pt-[61px]", onClick && "w-full cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/60", active && "border-primary/60 ring-2 ring-primary/25")}
+      className={cn(SURFACE, "group relative min-h-[122px] overflow-hidden py-5 pl-[68px] pr-5 transition-[transform,border-color] duration-200 hover:border-lp-rule max-sm:min-h-[142px] max-sm:pl-4 max-sm:pt-[61px]", onClick && "w-full cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-lp-green", active && "border-lp-green ring-2 ring-lp-green/20")}
     >
-      <span
-        aria-hidden
-        className={cn("absolute inset-x-0 top-0 h-[3px]", accent)}
-      />
-      <span
-        aria-hidden
-        className={cn(
-          "absolute -right-8 -top-10 size-28 rounded-full opacity-[0.045] blur-2xl transition-opacity duration-300 group-hover:opacity-[0.12]",
-          accent,
-        )}
-      />
       {onClick && (
         <ArrowUpRight
           aria-hidden
@@ -215,13 +174,13 @@ export function StatCard({
       )}
       <span
         className={cn(
-          "absolute left-4 top-5 grid size-10 place-items-center rounded-[11px] ring-1 ring-white/20 transition-transform duration-200 group-hover:scale-105 max-sm:top-3.5",
+          "absolute left-4 top-5 grid size-10 place-items-center rounded-xl max-sm:top-3.5",
           tile,
         )}
       >
         <Icon className="size-[18px]" strokeWidth={2.1} aria-hidden />
       </span>
-      <p className="text-[11px] font-semibold tracking-[0.01em] text-muted-foreground">
+      <p className="text-[13px] font-semibold text-lp-muted">
         {label}
       </p>
       {loading ? (
@@ -229,8 +188,7 @@ export function StatCard({
       ) : (
         <p
           className={cn(
-            "my-1.5 text-[27px] font-bold leading-tight tracking-[-0.8px] tabular-nums",
-            valueCls,
+            "my-1 text-[28px] font-bold leading-tight tracking-tight text-lp-ink tabular-nums",
           )}
         >
           {value === null || value === undefined ? (
@@ -243,7 +201,7 @@ export function StatCard({
       {!loading && (detail || badge) && (
         <div className="flex flex-wrap items-center gap-2">
           {badge}
-          {detail && <p className={cn("text-[10px]", detailCls)}>{detail}</p>}
+          {detail && <p className={cn("text-xs", detailCls)}>{detail}</p>}
         </div>
       )}
     </Tag>

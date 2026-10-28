@@ -153,7 +153,7 @@ export default function ProfileMenu({ user, roleLabel, onLogout }) {
                   <span className="min-w-0 flex-1">
                     <span className="block">Phone &amp; desktop alerts</span>
                     <span className="block text-xs font-normal text-muted-foreground">
-                      {push === "blocked" ? "Blocked. Allow notifications in the browser's site settings." : "Even when the app is closed"}
+                      {push === "blocked" ? "Blocked. Allow notifications in the browser's site settings." : ""}
                     </span>
                   </span>
                   {pushBusy || push === null ? (

@@ -1,32 +1,32 @@
 import { ArrowRight, PackageCheck, Truck } from "lucide-react"
 import { useNavigate } from "react-router-dom"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/saturday/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/saturday/button"
 import { EmptyState, TableSkeleton } from "@/components/feedback"
-import { countFinishedGoods, getFinishedGoodsStatus } from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
+import { countFinishedGoods, saturdayStatus, getFinishedGoodsStatus } from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
 
 const number = (value) => Math.max(0, Number(value) || 0)
 
 export default function FinishedGoodsPipeline({ items = [], loading }) {
   const navigate = useNavigate()
   const recent = [...items].slice(0, 5)
-  const toStore = countFinishedGoods(items, "HANDED_OVER")
-  const inStore = items.filter((item) => ["IN_STORE", "BILLED"].includes(item.status)).length
-  const completed = countFinishedGoods(items, "DELIVERED")
+  const packaging = countFinishedGoods(items, "PACKAGING")
+  const dispatched = countFinishedGoods(items, "DISPATCHED")
+  const completed = countFinishedGoods(items, "COMPLETED")
 
   return (
     <Card className="overflow-hidden rounded-2xl border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader>
         <div>
           <CardTitle>Finished Goods pipeline</CardTitle>
-          <CardDescription>Your PASS packs the order and sends it to the Store. Store receives it, Marketing bills it, Store gives it out.</CardDescription>
+          <CardDescription>Batches that passed QC move through these steps: pack them, mark them dispatched, then mark them complete.</CardDescription>
         </div>
         <Button variant="outline" size="sm" onClick={() => navigate("/finished-goods")}>View all <ArrowRight /></Button>
       </CardHeader>
 
       <div className="grid grid-cols-3 divide-x border-b">
-        {[ ["Sent to Store", toStore, "warning"], ["In Store / billed", inStore, "info"], ["Given out", completed, "success"] ].map(([label, value, tone]) => (
+        {[ ["Packaging", packaging, "warning"], ["Dispatched", dispatched, "info"], ["Completed", completed, "success"] ].map(([label, value, tone]) => (
           <button key={label} type="button" onClick={() => navigate("/finished-goods")} className="min-w-0 px-3 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
             <p className="truncate text-xs text-muted-foreground">{label}</p>
             <p className={`mt-1 text-2xl font-bold tabular-nums ${tone === "warning" ? "text-amber-700" : tone === "info" ? "text-blue-700" : "text-emerald-700"}`}>{loading ? "—" : value}</p>
@@ -45,7 +45,7 @@ export default function FinishedGoodsPipeline({ items = [], loading }) {
             return (
               <button key={item.id} type="button" onClick={() => navigate("/finished-goods")} className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
                 <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-cf-green-soft text-primary">
-                  {item.status === "DELIVERED" ? <Truck className="size-4" /> : <PackageCheck className="size-4" />}
+                  {saturdayStatus(item.status) === "DISPATCHED" ? <Truck className="size-4" /> : <PackageCheck className="size-4" />}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold">{item.orderNumber || `Batch #${item.id}`}</span>

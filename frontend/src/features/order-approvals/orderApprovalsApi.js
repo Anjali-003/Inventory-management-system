@@ -48,8 +48,8 @@ export const orderApprovalsApi = baseApi.injectEndpoints({
       query: ({ id, ...data }) => ({ url: `/order-approvals/${id}/delivery-date`, method: "patch", data }),
       invalidatesTags: ["OrderApprovals", "MarketingOrders", "Orders"],
     }),
-    // Operations Admin: make only part of the order now. The rest goes back to Marketing as a new draft and the
-    // order waits (QUANTITY_REVISED) until the Marketing Manager accepts the reduced quantity.
+    // Operations Admin: make only part of the order. The rest is dropped (no draft is made for it) and the order
+    // waits (QUANTITY_REVISED) until the Marketing Manager accepts the reduced quantity.
     reviseOrder: build.mutation({
       query: ({ id, ...data }) => ({ url: `/order-approvals/${id}/revise`, method: "post", data }),
       invalidatesTags: ["OrderApprovals", "MarketingOrders", "Orders"],

@@ -64,7 +64,7 @@ const FAQ = [
   },
   {
     q: "What happens when a component is short for an order?",
-    a: "The material check shows the exact shortfall per component. The Operations Admin sends that list to the Purchase Manager when the order is approved.",
+    a: "The material check shows the exact shortfall per component. Once the order is approved, the Operations Admin sends that list to the Purchase Manager.",
   },
   {
     q: "Is every stock movement recorded?",

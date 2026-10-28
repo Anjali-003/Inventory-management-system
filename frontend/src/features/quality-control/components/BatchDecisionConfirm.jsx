@@ -1,13 +1,11 @@
 import { CheckCircle2, X, XCircle } from "lucide-react"
-import { MktBtn } from "@/features/marketing-orders/mktKit"
+import { MktBtn } from "@/components/saturday/kit"
 
 export default function BatchDecisionConfirm({
   item,
   decision,
   remarks = "",
   onRemarksChange,
-  sample = { size: "", failed: "" },
-  onSampleChange,
   busy,
   error,
   onClose,
@@ -16,12 +14,6 @@ export default function BatchDecisionConfirm({
   if (!item || !decision) return null
   const passing = decision === "PASS"
   const hasRemark = String(remarks || "").trim().length > 0
-  const size = Number(sample.size)
-  const failed = Number(sample.failed)
-  const batch = Number(item.quantityCompleted || 0)
-  const sampleOk = Number.isInteger(size) && size > 0 && size <= batch && Number.isInteger(failed) && failed >= 0 && failed <= size
-    && (passing ? failed === 0 : failed > 0)
-  const sampleInput = "w-full rounded-xl border-2 border-slate-300 bg-white px-3 py-2 text-base tabular-nums outline-none focus-visible:border-emerald-700 focus-visible:ring-4 focus-visible:ring-emerald-600/20"
 
   return (
     <div
@@ -45,20 +37,6 @@ export default function BatchDecisionConfirm({
           <div className="grid grid-cols-2 gap-3 rounded-xl border-2 border-slate-200 bg-slate-50 p-3">
             <div><p className="text-xs text-muted-foreground">Batch completed</p><p className="mt-1 text-lg font-semibold tabular-nums">{Number(item.quantityCompleted || 0).toLocaleString()}</p></div>
             <div><p className="text-xs text-muted-foreground">Ordered quantity</p><p className="mt-1 text-lg font-semibold tabular-nums">{Number(item.orderedQuantity || 0).toLocaleString()}</p></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="qc-sample-size" className="block text-sm font-medium">Pieces checked <span className="text-destructive">*</span></label>
-              <input id="qc-sample-size" type="number" min="1" max={batch} step="1" value={sample.size} disabled={busy} className={sampleInput}
-                onChange={(event) => onSampleChange({ ...sample, size: event.target.value })} />
-              <p className="mt-1 text-xs text-muted-foreground">Random pieces from the {batch.toLocaleString()} in the batch</p>
-            </div>
-            <div>
-              <label htmlFor="qc-sample-failed" className="block text-sm font-medium">Pieces failed <span className="text-destructive">*</span></label>
-              <input id="qc-sample-failed" type="number" min={passing ? 0 : 1} step="1" value={sample.failed} disabled={busy || passing} className={sampleInput}
-                onChange={(event) => onSampleChange({ ...sample, failed: event.target.value })} />
-              <p className="mt-1 text-xs text-muted-foreground">{passing ? "Pass means every checked piece was good" : "Even 1 bad piece fails the whole batch"}</p>
-            </div>
           </div>
           <p className="leading-relaxed text-muted-foreground">
             {passing
@@ -89,7 +67,7 @@ export default function BatchDecisionConfirm({
         </div>
         <div className="flex flex-wrap justify-end gap-2 border-t-2 border-slate-200 bg-slate-50 px-5 py-4">
           <MktBtn variant="outline" onClick={onClose} disabled={busy}>No, go back</MktBtn>
-          <MktBtn variant={passing ? "primary" : "danger"} onClick={onConfirm} disabled={busy || !sampleOk || (!passing && !hasRemark)}>
+          <MktBtn variant={passing ? "primary" : "danger"} onClick={onConfirm} disabled={busy || (!passing && !hasRemark)}>
             {busy ? "Saving..." : passing ? "Yes, Pass batch" : "Yes, Fail batch"}
           </MktBtn>
         </div>

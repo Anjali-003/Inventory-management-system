@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react"
 import { ClipboardCheck, Factory, PackageCheck, RefreshCw, RotateCcw, Truck, XCircle } from "lucide-react"
 import { useNavigate } from "react-router-dom"
-import { HeroButton, MktHero, MktBtn } from "@/features/marketing-orders/mktKit"
+import { HeroButton, MktHero, MktBtn } from "@/components/saturday/kit"
 import { Notice } from "@/components/feedback"
 import { useGetMeQuery } from "@/features/auth/authApi"
 import { useGetQualityControlQuery } from "@/features/quality-control/qualityControlApi"
@@ -14,7 +14,6 @@ import FinishedGoodsPipeline from "@/features/quality-fg-dashboard/components/Fi
 import ProductionReadOnlyPanel from "@/features/quality-fg-dashboard/components/ProductionReadOnlyPanel"
 import { InteractiveBarChart, InteractiveDonutChart } from "@/features/dashboard/components/InteractiveDashboardCharts"
 import { countFinishedGoods, getQcPendingBatches, getQcFailedBatches, getQcReadyForRetest } from "@/features/quality-fg-dashboard/qualityFgDashboardUtils"
-import WaitingForYou from "@/features/dashboard/WaitingForYou"
 
 const asArray = (value) => Array.isArray(value) ? value : []
 
@@ -103,8 +102,8 @@ export default function QualityFinishedGoodsDashboard() {
   const qcPendingCount = useMemo(() => getQcPendingBatches(qcItems).length, [qcItems])
   const qcFailedCount = useMemo(() => getQcFailedBatches(qcItems).length, [qcItems])
   const qcRetestCount = useMemo(() => getQcReadyForRetest(qcItems).length, [qcItems])
-  const toStoreCount = useMemo(() => countFinishedGoods(finishedItems, "HANDED_OVER"), [finishedItems])
-  const doneCount = useMemo(() => countFinishedGoods(finishedItems, "DELIVERED"), [finishedItems])
+  const packagingCount = useMemo(() => countFinishedGoods(finishedItems, "PACKAGING"), [finishedItems])
+  const dispatchedCount = useMemo(() => countFinishedGoods(finishedItems, "DISPATCHED"), [finishedItems])
   const qcChartItems = useMemo(() => {
     const retestItems = getQcReadyForRetest(qcItems)
     const failedItems = getQcFailedBatches(qcItems)
@@ -128,7 +127,7 @@ export default function QualityFinishedGoodsDashboard() {
       <MktHero
         eyebrow="Quality & release dashboard"
         title={user?.name ? `Hello, ${user.name}` : "Quality & Finished Goods"}
-        description="Batches to check, batches back from rework, and orders to pack."
+        description="See which completed batches need a QC decision, which batches need correction, and which finished goods need to move forward."
       >
         <HeroButton onClick={() => navigate("/quality-control")}><ClipboardCheck /> Open Quality Control</HeroButton>
         <HeroButton variant="glass" onClick={() => navigate("/finished-goods")}><PackageCheck /> Open Finished Goods</HeroButton>
@@ -136,7 +135,6 @@ export default function QualityFinishedGoodsDashboard() {
           <RefreshCw className={qcQuery.isFetching || finishedQuery.isFetching || productionQuery.isFetching ? "animate-spin" : ""} /> Refresh
         </HeroButton>
       </MktHero>
-      <WaitingForYou className="mb-4" />
 
       {(qcError || finishedError || productionError) && (
         <div className="mb-4 space-y-2">
@@ -171,8 +169,8 @@ export default function QualityFinishedGoodsDashboard() {
         <DashboardMetricCard index={0} to="/quality-control" icon={ClipboardCheck} tone={qcPendingCount ? "amber" : "green"} label="Pending QC decisions" value={qcPendingCount} loading={qcQuery.isLoading} detail="Fully completed batches awaiting Pass / Fail" />
         <DashboardMetricCard index={1} to="/qc-failed" icon={XCircle} tone={qcFailedCount ? "red" : "green"} label="Failed / needs correction" value={qcFailedCount} loading={qcQuery.isLoading} detail="Open QC Failed to record the repair" />
         <DashboardMetricCard index={2} to="/qc-failed" icon={RotateCcw} tone={qcRetestCount ? "blue" : "green"} label="Ready for QC retest" value={qcRetestCount} loading={qcQuery.isLoading} detail="Open QC Failed to review submitted repairs" />
-        <DashboardMetricCard index={3} to="/finished-goods?status=HANDED_OVER" icon={PackageCheck} tone="blue" label="Sent to Store" value={toStoreCount} loading={finishedQuery.isLoading} detail="Passed QC, Store to receive" />
-        <DashboardMetricCard index={4} to="/finished-goods?status=DELIVERED" icon={Truck} tone="green" label="Given out" value={doneCount} loading={finishedQuery.isLoading} detail="Orders complete" />
+        <DashboardMetricCard index={3} to="/finished-goods" icon={PackageCheck} tone={packagingCount ? "amber" : "green"} label="Packaging queue" value={packagingCount} loading={finishedQuery.isLoading} detail="Passed QC and ready to dispatch" />
+        <DashboardMetricCard index={4} to="/finished-goods" icon={Truck} tone={dispatchedCount ? "blue" : "green"} label="Dispatched batches" value={dispatchedCount} loading={finishedQuery.isLoading} detail="Waiting for final completion" />
       </div>
 
       <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-3">
