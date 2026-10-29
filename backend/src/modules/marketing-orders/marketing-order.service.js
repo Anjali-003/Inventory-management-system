@@ -77,8 +77,24 @@ function parseItems(body) {
         if (!Number.isInteger(quantity) || quantity <= 0 || quantity > 1000000) {
             throw new AppError(422, "Quantity must be a whole number greater than 0", "VALIDATION", { line, field: "quantity" });
         }
-        return { productId, quantity };
+        return { productId, quantity, ...parseRate(raw, line) };
     });
+}
+
+/*
+    The rate agreed with the customer (rate lock), optional: { rate, rate_note }. Empty = nothing agreed, the bill
+    uses the price list. A rate below the price list needs the reason (checked in createDraft, where the price is known).
+*/
+function parseRate(raw, line) {
+    const value = raw && raw.rate;
+    if (value === undefined || value === null || value === "") return { rate: null, note: null };
+    const rate = Number(value);
+    if (!Number.isFinite(rate) || rate < 0 || rate > 10000000 || Math.round(rate * 100) !== rate * 100) {
+        throw new AppError(422, "Rate must be 0 or more, with at most 2 decimals", "VALIDATION", { line, field: "rate" });
+    }
+    const note = typeof raw.rate_note === "string" ? raw.rate_note.trim().replace(/\s+/g, " ") : "";
+    if (note.length > 255) throw new AppError(422, "The reason can be at most 255 characters", "VALIDATION", { line, field: "rate_note" });
+    return { rate, note: note || null };
 }
 
 /*
@@ -107,10 +123,17 @@ async function createDraft(body, userId) {
     const requiredBy = parseRequiredBy(body);
 
     return inventory.inTransaction(async (conn) => {
-        const [found] = await conn.query(`SELECT id FROM products WHERE id IN (?) AND is_active = TRUE`, [items.map((i) => i.productId)]);
-        const have = new Set(found.map((r) => r.id));
+        const [found] = await conn.query(`SELECT id, name, selling_price FROM products WHERE id IN (?) AND is_active = TRUE`, [items.map((i) => i.productId)]);
+        const product = new Map(found.map((r) => [r.id, r]));
         items.forEach((it, line) => {
-            if (!have.has(it.productId)) throw new AppError(404, "Product not found", "NOT_FOUND", { line, field: "product" });
+            const p = product.get(it.productId);
+            if (!p) throw new AppError(404, "Product not found", "NOT_FOUND", { line, field: "product" });
+            // an agreed rate below the price list is a discount: it needs its reason, as on the bill
+            const below = it.rate !== null && p.selling_price !== null && it.rate < Number(p.selling_price);
+            if (below && (!it.note || it.note.length < 3)) {
+                throw new AppError(422, `${p.name}: the rate is below the price list (₹${Number(p.selling_price)}). Write the reason for the discount.`, "DISCOUNT_REASON_REQUIRED", { line, field: "rate_note" });
+            }
+            if (!below) it.note = null;
         });
 
         const customerId = await resolveCustomer(conn, body, userId);
@@ -125,7 +148,10 @@ async function createDraft(body, userId) {
         await conn.query(`UPDATE orders SET order_number = ? WHERE id = ?`, [number, id]);
 
         for (const it of items) {
-            await conn.query(`INSERT INTO order_items (order_id, product_id, quantity) VALUES (?, ?, ?)`, [id, it.productId, it.quantity]);
+            await conn.query(
+                `INSERT INTO order_items (order_id, product_id, quantity, agreed_rate, agreed_note) VALUES (?, ?, ?, ?, ?)`,
+                [id, it.productId, it.quantity, it.rate, it.note]
+            );
         }
         return approvals.getOrder(id, conn);
     });

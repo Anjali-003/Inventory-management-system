@@ -29,7 +29,7 @@ const stockTotal = async () => Number((await db.query("SELECT SUM(quantity_on_ha
 /* An order sent by Marketing, approved, and sent to Production in full. Returns its id and its lines (one per product). */
 async function approvedOrder(lines) {
   const order = await marketing.createDraft(
-    { customer_name: "Test Traders", items: lines.map(([product, quantity]) => ({ productId: fx.products[product].id, quantity })) },
+    { customer_name: "Test Traders", required_by_date: "2099-11-30", items: lines.map(([product, quantity]) => ({ productId: fx.products[product].id, quantity })) },
     fx.users.MARKETING_MANAGER
   );
   await marketing.send(order.id, fx.users.MARKETING_MANAGER);
@@ -98,7 +98,7 @@ describe("starting production", () => {
   });
 
   it("refuses an order that is not approved", async () => {
-    const order = await marketing.createDraft({ customer_name: "Test Traders", items: [{ productId: fx.products.Controller.id, quantity: 2 }] }, fx.users.MARKETING_MANAGER);
+    const order = await marketing.createDraft({ customer_name: "Test Traders", required_by_date: "2099-11-30", items: [{ productId: fx.products.Controller.id, quantity: 2 }] }, fx.users.MARKETING_MANAGER);
     await marketing.send(order.id, fx.users.MARKETING_MANAGER);
     const [[item]] = await db.query("SELECT id FROM order_items WHERE order_id = ?", [order.id]);
     await expect(start(item.id, 1)).rejects.toMatchObject({ status: 409 });

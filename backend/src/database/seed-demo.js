@@ -23,6 +23,23 @@
       H  P1 x 2 + P2 x 2 ................. two products in one order
       I  P1 x 3 .......................... left as a draft (Marketing: send / delete)
       J  P1 x 20 ......................... also short (B took the stock): with B, ONE combined purchase order for both
+
+    9-sales-history (Marketing's money): orders taken all the way through, then moved back in time, so the dashboard
+    has bills of every age, last month's sales to compare with, and top customers:
+      K  Mehta Distributors   billed 100 days ago, not paid ............ "Over 90 days" (red)
+      L  Kapoor Enterprises   billed 75 days ago, not paid ............. "61-90 days"
+      M  Singh Agencies       billed 45 days ago, not paid ............. "31-60 days"
+      N  Verma & Sons         billed 10 days ago, not paid ............. "0-30 days"
+      O  Gupta Traders        last month: billed, paid, delivered
+      P  Sharma Electronics   last month: billed, paid, delivered
+      Q  Mehta Distributors   billed last month, paid this month ....... in "Received" this month, not in "Billed"
+      R  Sharma Electronics   this month, two products: billed, paid, delivered (the top customer)
+      S  Kapoor Enterprises   this month: billed below the price list (discount with a reason), paid, delivered,
+                              then a credit note for a damaged piece
+      T  Singh Agencies       billed, then the bill cancelled (wrong details): in the Store to bill again
+      U  Verma & Sons         in the Store, not billed yet ............. "Your turn: to bill"; its rate was agreed on the
+                              order 5% under the price list ("Annual contract"), so the bill starts from that rate
+      Joshi Electricals       ordered 120, 90 and 60 days ago (every 30 days), nothing since . "Going quiet"
 */
 const path = require("path");
 const { spawnSync } = require("child_process");
@@ -117,7 +134,7 @@ async function main() {
         /* ---- 2. Marketing raises the orders and sends them ---- */
         const lines = (...pairs) => pairs.map(([p, quantity]) => ({ productId: p.id, quantity }));
         const raise = async (customer, items, due, send = true) => {
-            const o = await MKT("POST", "/marketing-orders", { customer_name: customer, items, estimated_delivery_date: due });
+            const o = await MKT("POST", "/marketing-orders", { customer_name: customer, items, required_by_date: due });
             if (send) await MKT("POST", `/marketing-orders/${o.id}/send`);
             return o;
         };
@@ -233,6 +250,139 @@ async function main() {
         /* ---- 8. Marketing bills A (one click: the order's customer, the price list); not paid yet ---- */
         for (const f of fgA) await MKT("POST", `/finished-goods/${f.id}/bill`, {});
         checkpoint("8-billed", "A billed, not paid yet: the Store cannot give it out until it is paid in full");
+
+        /* ---- 9. Sales history for Marketing: orders taken to the Store, billed / paid / delivered, then moved back in time ---- */
+        // the orders above used most of the stock: a second delivery of every component
+        await db.query(`UPDATE inventory SET quantity_on_hand = quantity_on_hand + ${STOCK}`);
+        await db.query(
+            `INSERT INTO inventory_transactions (component_id, transaction_type, direction, quantity, balance_after, reason, created_by)
+             SELECT component_id, 'STOCK_IN', 'IN', ${STOCK}, quantity_on_hand, 'Second delivery (demo)', NULL FROM inventory`
+        );
+
+        // approved, built, passed by QC and taken into the Store: the order's finished goods, ready to bill
+        const toStore = async (o) => {
+            await approve(o);
+            await toProduction(o);
+            const [its] = await db.query("SELECT id, quantity FROM order_items WHERE order_id = ? ORDER BY id", [o.id]);
+            for (const line of its) {
+                const units = Number(line.quantity);
+                await handOver(line, units);
+                await PROD("POST", `/orders/${line.id}/start-production`, { quantity: units });
+                const run = (await PROD("GET", "/production")).find((r) => r.order_item_id === line.id);
+                await PROD("POST", `/production/${run.id}/update-progress`, { quantity: units });
+                await QC("POST", `/quality-control/${run.id}/decision`, { decision: "PASS", sample_size: Math.min(3, units), sample_failed: 0 });
+            }
+            const fg = (await STORE("GET", "/finished-goods")).filter((f) => f.orderId === o.id);
+            for (const f of fg) await STORE("POST", `/finished-goods/${f.id}/receive`);
+            return fg;
+        };
+        const bill = (f, body = {}) => MKT("POST", `/finished-goods/${f.id}/bill`, body);
+        const pay = (f, method, reference) => MKT("POST", `/finished-goods/${f.id}/payments`, { method, reference });
+        const giveOut = (f) => STORE("POST", `/finished-goods/${f.id}/dispatch`, { note: "Delivered by our van" });
+
+        // the tables whose rows belong to an order (or to its bill), with their date columns. The component ledger is
+        // append-only (a trigger refuses UPDATE) and keeps its real dates.
+        const [dated] = await db.query(
+            `SELECT c.TABLE_NAME AS t, c.COLUMN_NAME AS by_col, GROUP_CONCAT(d.COLUMN_NAME) AS cols
+             FROM information_schema.COLUMNS c
+             JOIN information_schema.COLUMNS d ON d.TABLE_SCHEMA = c.TABLE_SCHEMA AND d.TABLE_NAME = c.TABLE_NAME
+                  AND d.DATA_TYPE IN ('date', 'datetime', 'timestamp') AND d.EXTRA NOT LIKE '%VIRTUAL GENERATED%' AND d.EXTRA NOT LIKE '%STORED GENERATED%'
+             WHERE c.TABLE_SCHEMA = DATABASE() AND c.COLUMN_NAME IN ('order_id', 'bill_id') AND c.TABLE_NAME <> 'inventory_transactions'
+             GROUP BY c.TABLE_NAME, c.COLUMN_NAME`
+        );
+        // every date of the order (and of its bills, payments, events, notifications) `days` earlier; the order number
+        // carries the day it was made, so it is made again (and in the notifications that name it)
+        const moveBack = async (o, days) => {
+            const shift = (cols) => cols.split(",").map((c) => `\`${c}\` = \`${c}\` - INTERVAL ${days} DAY`).join(", ");
+            const [[{ cols }]] = await db.query(
+                `SELECT GROUP_CONCAT(COLUMN_NAME) AS cols FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND DATA_TYPE IN ('date', 'datetime', 'timestamp')`
+            );
+            await db.query(`UPDATE orders SET ${shift(cols)} WHERE id = ?`, [o.id]);
+            for (const { t, by_col, cols: c } of dated) {
+                if (by_col === "order_id") await db.query(`UPDATE \`${t}\` SET ${shift(c)} WHERE order_id = ?`, [o.id]);
+                else await db.query(`UPDATE \`${t}\` SET ${shift(c)} WHERE bill_id IN (SELECT id FROM bills WHERE order_id = ?)`, [o.id]);
+            }
+            const [[row]] = await db.query("SELECT order_number, DATE_FORMAT(created_at, '%Y%m%d-%H') AS stamp FROM orders WHERE id = ?", [o.id]);
+            const number = `ORD-${row.stamp}-${String(o.id).padStart(3, "0")}`;
+            await db.query("UPDATE orders SET order_number = ? WHERE id = ?", [number, o.id]);
+            await db.query(
+                `UPDATE notifications SET title = REPLACE(title, ?, ?), body = REPLACE(body, ?, ?),
+                        payload = CAST(REPLACE(CAST(payload AS CHAR), ?, ?) AS JSON) WHERE order_id = ?`,
+                [row.order_number, number, row.order_number, number, row.order_number, number, o.id]
+            );
+        };
+        // the money came in `days` ago (after the bill was made)
+        const paidAgo = (o, days) => db.query(
+            `UPDATE bill_payments SET paid_on = CURRENT_DATE - INTERVAL ${days} DAY, created_at = NOW() - INTERVAL ${days} DAY
+             WHERE bill_id IN (SELECT id FROM bills WHERE order_id = ?)`,
+            [o.id]
+        );
+        // days back to the middle of last month, however far into this month today is
+        const lastMonth = new Date().getDate() + 12;
+
+        // oldest first, so the bill numbers go up with the dates
+        const K = await raise("Mehta Distributors", lines([P2, 4]), day(10));
+        for (const f of await toStore(K)) await bill(f);
+        await moveBack(K, 100);
+
+        const L = await raise("Kapoor Enterprises", lines([P1, 3]), day(10));
+        for (const f of await toStore(L)) await bill(f);
+        await moveBack(L, 75);
+
+        const M = await raise("Singh Agencies", lines([P2, 6]), day(10));
+        for (const f of await toStore(M)) await bill(f);
+        await moveBack(M, 45);
+
+        const O = await raise("Gupta Traders", lines([P1, 5]), day(10));
+        for (const f of await toStore(O)) { await bill(f); await pay(f, "BANK", "NEFT 448210"); await giveOut(f); }
+        await moveBack(O, lastMonth + 2);
+        await paidAgo(O, lastMonth);
+
+        const P = await raise("Sharma Electronics", lines([P2, 8]), day(10));
+        for (const f of await toStore(P)) { await bill(f); await pay(f, "UPI", "UPI 7781"); await giveOut(f); }
+        await moveBack(P, lastMonth);
+        await paidAgo(P, lastMonth - 3);
+
+        const Q = await raise("Mehta Distributors", lines([P2, 3]), day(10));
+        for (const f of await toStore(Q)) { await bill(f); await pay(f, "CHEQUE", "Cheque 004512"); await giveOut(f); }
+        await moveBack(Q, lastMonth - 5);
+        await paidAgo(Q, new Date().getDate() - 1); // the 1st of this month
+
+        const N = await raise("Verma & Sons", lines([P2, 2]), day(10));
+        for (const f of await toStore(N)) await bill(f);
+        await moveBack(N, 10);
+
+        const R = await raise("Sharma Electronics", lines([P2, 10], [P1, 2]), day(10));
+        for (const f of await toStore(R)) { await bill(f); await pay(f, "BANK", "RTGS 99120"); await giveOut(f); }
+
+        const S = await raise("Kapoor Enterprises", lines([P1, 4]), day(10));
+        for (const f of await toStore(S)) {
+            const rate = Math.floor(Number(P1.selling_price ?? 1000) * 0.9);
+            await bill(f, { items: [{ product_id: P1.id, rate, note: "Festive offer, 10% off" }] });
+            await pay(f, "CASH");
+            await giveOut(f);
+            await SA("POST", `/finished-goods/${f.id}/credit-note`, { amount: rate, reason: "One piece damaged in transit" });
+        }
+
+        const T = await raise("Singh Agencies", lines([P2, 2]), day(10));
+        for (const f of await toStore(T)) {
+            await bill(f);
+            await SA("POST", `/finished-goods/${f.id}/bill/cancel`, { reason: "Wrong billing address, make it again" });
+        }
+
+        // a rate agreed on the order, 5% under the price list: the bill starts from it, with the order's reason
+        const agreed = Math.floor(Number(P1.selling_price ?? 1000) * 0.95);
+        const U = await raise("Verma & Sons", [{ productId: P1.id, quantity: 2, rate: agreed, rate_note: "Annual contract" }], day(10));
+        await toStore(U);
+
+        // a regular customer gone quiet: an order every 30 days, then nothing for 60
+        for (const ago of [120, 90, 60]) {
+            const o = await raise("Joshi Electricals", lines([P2, 2]), day(10));
+            for (const f of await toStore(o)) { await bill(f); await pay(f, "BANK", `NEFT ${ago}`); await giveOut(f); }
+            await moveBack(o, ago);
+        }
+        checkpoint("9-sales-history", "bills of every age (K L M N unpaid), last month's sales (O P Q), this month's (R S), T and U to bill (U at an agreed rate), Joshi going quiet");
     } finally {
         server.close();
         await db.end().catch(() => {});

@@ -129,15 +129,17 @@ function StepDialog({ item, step, onClose, onDone }) {
 }
 
 /*
-  Make bill: one click. The customer is the order's own and every product is billed at its price list. No GST: the
-  total is rate x quantity. "Change rate" opens the rate of a product for a discount, which then needs a reason.
-  A product with no price in the list asks for its rate.
+  Make bill: one click. The customer is the order's own and every product is billed at the rate agreed on the order
+  (rate lock), else at its price list. No GST: the total is rate x quantity. "Change rate" opens the rate of a product
+  for a discount, which then needs a reason (an agreed discount brings its reason from the order). A product with no
+  agreed rate and no price in the list asks for its rate.
 */
 function BillDialog({ item, onClose, onDone }) {
   const toast = useToast()
   const lines = item?.lines || []
-  const [editing, setEditing] = useState(() => new Set(lines.filter((l) => l.listPrice === null).map((l) => l.productId)))
-  const [rates, setRates] = useState(() => Object.fromEntries(lines.map((l) => [l.productId, l.listPrice ?? ""])))
+  const startRate = (l) => l.agreedRate ?? l.listPrice
+  const [editing, setEditing] = useState(() => new Set(lines.filter((l) => startRate(l) === null).map((l) => l.productId)))
+  const [rates, setRates] = useState(() => Object.fromEntries(lines.map((l) => [l.productId, startRate(l) ?? ""])))
   const [notes, setNotes] = useState({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
@@ -146,7 +148,9 @@ function BillDialog({ item, onClose, onDone }) {
     const rate = Number(rates[l.productId]) || 0
     const amount = rate * l.quantity
     const discount = l.listPrice !== null && rates[l.productId] !== "" && rate < l.listPrice
-    return { ...l, rate, amount, discount }
+    // still the agreed rate: its reason comes from the order, nothing to write
+    const agreed = l.agreedRate !== null && l.agreedRate !== undefined && rates[l.productId] !== "" && rate === l.agreedRate
+    return { ...l, rate, amount, discount: discount && !agreed, agreed }
   })
   const total = rows.reduce((sum, r) => sum + r.amount, 0)
   const ready = rows.every((r) => rates[r.productId] !== "" && (!r.discount || String(notes[r.productId] || "").trim().length >= 3))
@@ -156,7 +160,7 @@ function BillDialog({ item, onClose, onDone }) {
     try {
       setBusy(true)
       setError("")
-      // only the rates that were changed (or had no price) are sent; the rest is the price list
+      // only the rates that were changed (or had no price) are sent; the rest is the agreed rate, else the price list
       const items = rows.filter((r) => editing.has(r.productId)).map((r) => ({ product_id: r.productId, rate: rates[r.productId], note: notes[r.productId] || "" }))
       const { data } = await finishedGoodsService.createBill(item.id, items.length ? { items } : {})
       toast.success(`Bill ${data.billNumber} made.`)
@@ -190,7 +194,12 @@ function BillDialog({ item, onClose, onDone }) {
                       <button type="button" onClick={() => setEditing((s) => new Set(s).add(r.productId))} className="ms-2 text-xs font-semibold text-primary hover:underline">Change rate</button>
                     </p>
                   )}
-                  {r.listPrice === null && <p className="mt-1 text-xs text-warning">No price in the price list yet: enter the rate.</p>}
+                  {r.agreed && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Rate agreed on the order{r.listPrice !== null && r.rate !== r.listPrice ? ` (price list ${rupees(r.listPrice)})` : ""}{r.agreedNote && r.rate < (r.listPrice ?? 0) ? `: ${r.agreedNote}` : ""}
+                    </p>
+                  )}
+                  {r.listPrice === null && !r.agreed && <p className="mt-1 text-xs text-warning">No price in the price list yet: enter the rate.</p>}
                 </div>
                 <span className="shrink-0 font-semibold tabular-nums">{rupees(r.amount)}</span>
               </div>

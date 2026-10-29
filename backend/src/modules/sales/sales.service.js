@@ -86,9 +86,16 @@ async function listPayments(month) {
     }));
 }
 
-/* the month's money + what still has to be billed (orders in the Store without a bill) */
+/* the month before "2026-01" is "2025-12" */
+function previousMonth(month) {
+    const [y, m] = month.split("-").map(Number);
+    return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+
+/* the month's money (and last month's, to compare) + what still has to be billed (orders in the Store without a bill) */
 async function summary(month) {
     const { sales } = await reports.monthly(month);
+    const last = await reports.sales(reports.monthRange(previousMonth(month)));
     const [[toBill]] = await db.query(`SELECT COUNT(*) AS n FROM finished_goods WHERE status = 'IN_STORE'`);
     return {
         month,
@@ -99,6 +106,8 @@ async function summary(month) {
         collected: sales.collected,
         toCollect: sales.toCollect,
         owed: sales.owed,
+        ageing: sales.ageing,
+        lastMonth: { net: last.net, collected: last.collected },
         byCustomer: sales.byCustomer,
         toBill: n(toBill.n),
     };

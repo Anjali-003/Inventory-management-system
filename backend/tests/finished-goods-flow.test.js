@@ -48,6 +48,8 @@ function run(raw, p = []) {
   if (sql.startsWith("SELECT id FROM customers WHERE id = ?")) return [[{ id: p[0] }]];
   if (sql.startsWith("SELECT c.id, c.name, c.address, c.gstin FROM orders o LEFT JOIN customers c")) return [[s.orderCustomer]];
   if (sql.startsWith("SELECT id, name, selling_price, gst_percent FROM products WHERE id IN (?)")) return [s.products.filter((x) => p[0].includes(x.id))];
+  // rates agreed on the order (rate lock): none here, the bill uses the price list (covered in tests/mysql/rate-lock)
+  if (sql.startsWith("SELECT product_id, MAX(agreed_rate) AS rate")) return [[]];
   if (sql.includes("FROM bills b JOIN orders o ON o.id = b.order_id JOIN finished_goods fg") && sql.includes("FOR UPDATE")) {
     const bill = s.bills.length ? { id: 1, bill_number: "BILL-2026-0001", order_id: s.order.id, order_number: s.order.order_number, total: s.bills[0][10], fg_status: s.fg.status } : null;
     return [bill ? [bill] : []];

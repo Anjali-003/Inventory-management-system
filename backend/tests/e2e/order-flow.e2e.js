@@ -69,7 +69,7 @@ describe(`one order through every role${ONE_ROLE ? ` (every step as ${ONE_ROLE})
       const key = (p) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const stage = async (id) => (await OPS("GET", "/order-tracker")).data.find((o) => o.id === id);
       // every Marketing order is for a customer (a new name is saved by the server)
-      const newOrder = (quantity) => MKT("POST", "/marketing-orders", { customer_name: "E2E Traders", items: [{ productId: product.id, quantity }], estimated_delivery_date: daysFromNow(60) });
+      const newOrder = (quantity) => MKT("POST", "/marketing-orders", { customer_name: "E2E Traders", items: [{ productId: product.id, quantity }], required_by_date: daysFromNow(60) });
 
       /*
         The Operations Admin's three separate steps: approve (the decision only), then send the short components to
@@ -104,7 +104,7 @@ describe(`one order through every role${ONE_ROLE ? ` (every step as ${ONE_ROLE})
       if (!ONE_ROLE) ok("Marketing cannot change the price list", (await MKT("PUT", `/products/${product.id}/price`, { selling_price: 1 })).status === 403);
 
       /* ---- 1. Marketing raises the order, Operations Admin approves it ---- */
-      const noCustomer = await MKT("POST", "/marketing-orders", { items: [{ productId: product.id, quantity: UNITS }] });
+      const noCustomer = await MKT("POST", "/marketing-orders", { items: [{ productId: product.id, quantity: UNITS }], required_by_date: daysFromNow(60) });
       ok("An order without a customer is refused", noCustomer.status === 422, noCustomer.data?.code);
       const created = await newOrder(UNITS);
       const orderId = created.data?.id;

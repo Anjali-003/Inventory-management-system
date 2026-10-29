@@ -38,6 +38,7 @@ const isDecided = (o) => ["APPROVED", "REJECTED"].includes(o.approval_status)
     ?q=text                                                  search
     ?order=12                                                that order's popup
     ?new=1                                                   the New order popup
+    ?new=1&from=12                                           ... filled in from order 12 ("Order again")
 */
 
 /* One order as a card (phones and tablets). The body opens the order; the buttons under it never do. */
@@ -138,6 +139,7 @@ export default function MarketingOrders() {
   const orderId = params.get("order")
   const tab = isDrawerTab(params.get("tab")) ? params.get("tab") : "overview"
   const adding = editable && params.get("new") === "1"
+  const fromId = params.get("from")
 
   const { data = EMPTY, isLoading, isFetching, error, refetch } = useGetMarketingOrdersQuery()
   const [send] = useSendMarketingOrderMutation()
@@ -287,7 +289,10 @@ export default function MarketingOrders() {
 
       {editable && <NewOrderFab onClick={openNew} />}
 
-      {adding && <NewOrderModal onClose={() => closePopup({ new: null })} />}
+      {/* "Order again" waits for the orders, so the popup opens already filled in */}
+      {adding && !(fromId && isLoading) && (
+        <NewOrderModal from={fromId ? data.find((o) => String(o.id) === fromId) : null} onClose={() => closePopup({ new: null, from: null })} />
+      )}
       <OrderDrawer
         order={selected && !confirmDelete ? selected : null}
         tab={tab}

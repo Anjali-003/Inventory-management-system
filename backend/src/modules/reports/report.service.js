@@ -65,6 +65,13 @@ async function sales({ start, end }) {
         [start, end]
     );
     const now = Date.now();
+    const age = (r) => Math.floor((now - new Date(r.created_at).getTime()) / 86400000);
+    // what is still owed, by how old the bill is (0-30, 31-60, 61-90, over 90 days)
+    const ageing = [0, 0, 0, 0];
+    for (const r of owed) {
+        const d = age(r);
+        ageing[d <= 30 ? 0 : d <= 60 ? 1 : d <= 90 ? 2 : 3] += n(r.due);
+    }
     return {
         bills: n(billed.bills),
         total: n(billed.total),
@@ -77,8 +84,9 @@ async function sales({ start, end }) {
         toCollect: Number(owed.reduce((sum, r) => sum + n(r.due), 0).toFixed(2)),
         owed: owed.slice(0, 10).map((r) => ({
             billNumber: r.bill_number, finishedGoodsId: r.finished_goods_id, customer: r.customer_name, due: Number(n(r.due).toFixed(2)),
-            days: Math.floor((now - new Date(r.created_at).getTime()) / 86400000),
+            days: age(r),
         })),
+        ageing: ageing.map((v) => Number(v.toFixed(2))),
         byCustomer: byCustomer.map((r) => ({ name: r.name, bills: n(r.bills), total: n(r.total) })),
         subtotal: n(billed.subtotal),
     };
@@ -262,4 +270,4 @@ async function monthly(rawMonth) {
     return { month: range.month, sales: s, money, suppliers: sup, qualityCheck: qc, orderTime: time };
 }
 
-module.exports = { monthly, monthRange };
+module.exports = { monthly, monthRange, sales };

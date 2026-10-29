@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef } from "react"
 import { createPortal } from "react-dom"
+import { useNavigate } from "react-router-dom"
 import { AnimatePresence, motion } from "motion/react"
-import { Calendar, Check, CheckCircle2, Clock3, Edit3, Loader2, Scale, Send, Trash2, X } from "lucide-react"
+import { Calendar, Check, CheckCircle2, Clock3, Copy, Edit3, Loader2, Scale, Send, Trash2, X } from "lucide-react"
 import { useState } from "react"
 import { useToast } from "@/components/toast"
 import { usePermissions } from "@/features/auth/usePermissions"
@@ -14,7 +15,7 @@ import { cn } from "@/lib/utils"
 import { MktBtn, StatusPill } from "./mktKit"
 import { SPRING, SPRING_SOFT } from "./mktMotion"
 import OrderStory from "./OrderStory"
-import { CustomerName, DECIDED_STATUSES, DRAWER_TABS, MakingLine, OrderValue, approvedFor, plural, reviewOf, sentToProduction, stageOf, sumQty } from "./orderParts"
+import { CustomerName, DECIDED_STATUSES, DRAWER_TABS, MakingLine, OrderValue, approvedFor, ordersHref, plural, reviewOf, rupees, sentToProduction, stageOf, sumQty } from "./orderParts"
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
 
@@ -371,6 +372,13 @@ function ItemsTab({ order, audience }) {
                 <TableCell className="whitespace-normal">
                   <p className="font-medium leading-snug">{r.name}</p>
                   {r.sku && <p className="text-xs text-muted-foreground">{r.sku}</p>}
+                  {/* the rate agreed with the customer (the bill starts from it), else the price list */}
+                  {r.agreed_rate != null ? (
+                    <p className="mt-0.5 text-xs">
+                      <span className="font-semibold text-foreground">Agreed {rupees(r.agreed_rate)}</span>
+                      <span className="text-muted-foreground"> per piece{r.list_price != null && r.list_price !== r.agreed_rate ? ` · price list ${rupees(r.list_price)}` : ""}{r.agreed_note ? ` · ${r.agreed_note}` : ""}</span>
+                    </p>
+                  ) : r.price != null && <p className="mt-0.5 text-xs text-muted-foreground">Price list {rupees(r.price)} per piece</p>}
                 </TableCell>
                 <TableCell className="text-end font-semibold tabular-nums">{fmtQty(r.quantity)}</TableCell>
                 {decided && <TableCell className={cn("text-end font-semibold tabular-nums", r.approved === 0 && "text-muted-foreground")}>{fmtQty(r.approved)}</TableCell>}
@@ -414,6 +422,7 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
   const revised = order.approval_status === "QUANTITY_REVISED"
   const units = sumQty(order.items)
   const toast = useToast()
+  const navigate = useNavigate()
   const [acceptRevision, { isLoading: accepting }] = useAcceptOrderRevisionMutation()
   const [declineRevision, { isLoading: declining }] = useDeclineOrderRevisionMutation()
 
@@ -578,6 +587,12 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
           )}
           <MktBtn onClick={onClose} className={actions ? "sm:me-auto" : undefined}>Close</MktBtn>
           {actions}
+          {/* the same customer and products as a new draft (the customer's date is asked again) */}
+          {editable && audience === "marketing" && !draft && (
+            <MktBtn onClick={() => navigate(ordersHref(null, { new: 1, from: order.id }))}>
+              <Copy /> Order again
+            </MktBtn>
+          )}
           {editable && revised && (
             <MktBtn variant="danger" disabled={accepting || declining} onClick={decline}>
               {declining ? <Loader2 className="animate-spin" /> : <X />} Don&apos;t accept

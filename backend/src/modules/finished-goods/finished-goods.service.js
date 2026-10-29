@@ -117,7 +117,8 @@ const mapRow = (r) => ({
 async function attachLines(conn, items) {
   if (!items.length) return items;
   const [rows] = await conn.query(
-    `SELECT oi.order_id, p.id AS product_id, p.sku, p.name, p.selling_price, p.gst_percent, CAST(SUM(oi.quantity) AS SIGNED) AS quantity
+    `SELECT oi.order_id, p.id AS product_id, p.sku, p.name, p.selling_price, p.gst_percent, CAST(SUM(oi.quantity) AS SIGNED) AS quantity,
+            MAX(oi.agreed_rate) AS agreed_rate, MAX(oi.agreed_note) AS agreed_note
      FROM order_items oi
      JOIN products p ON p.id = oi.product_id
      WHERE oi.order_id IN (?)
@@ -130,8 +131,9 @@ async function attachLines(conn, items) {
       .filter((r) => Number(r.order_id) === item.orderId)
       .map((r) => ({
         productId: r.product_id, sku: r.sku, name: r.name, quantity: Number(r.quantity),
-        // price list (Super Admin): the bill starts from these
+        // price list (Super Admin); the bill starts from the rate agreed on the order when there is one, else the list
         listPrice: r.selling_price === null ? null : Number(r.selling_price), gstPercent: Number(r.gst_percent),
+        agreedRate: r.agreed_rate == null ? null : Number(r.agreed_rate), agreedNote: r.agreed_note || null,
       }));
   }
   return items;
@@ -568,8 +570,9 @@ const PAYMENT_METHODS = ["CASH", "BANK", "UPI", "CHEQUE", "OTHER"];
   body (everything optional): { items?: [{ product_id, rate, note? }], customer_id?, customer_name?, customer_address?,
                                 customer_gstin?, notes? }
   The simple bill is just {}: the customer is the order's own (name and address from Customers) and every product is
-  billed at its price list. There is no GST: the total is rate x quantity. A rate sent for a product changes it; a rate BELOW the list price is a discount and needs
-  a reason (note). A product with no price in the list must be sent with a rate.
+  billed at the rate agreed on the order (rate lock), else at its price list. There is no GST: the total is rate x quantity.
+  A rate sent for a product changes it; a rate BELOW the list price is a discount and needs a reason (note), which an
+  agreed rate brings from the order. A product with no agreed rate and no price in the list must be sent with a rate.
 */
 function parseBill(body) {
   const customerName = cleanText(body.customer_name, 150);
@@ -637,16 +640,27 @@ async function createBill(id, body = {}, userId = null) {
       [lines.map((l) => l.productId)]
     );
     const priceOf = new Map(prices.map((p) => [Number(p.id), p]));
+    // the rates agreed with the customer on the order (rate lock), with the reason when below the price list
+    const [agreedRows] = await conn.query(
+      `SELECT product_id, MAX(agreed_rate) AS rate, MAX(agreed_note) AS note FROM order_items WHERE order_id = ? AND agreed_rate IS NOT NULL GROUP BY product_id`,
+      [record.order_id]
+    );
+    const agreedOf = new Map(agreedRows.map((a) => [Number(a.product_id), { cents: toCents(a.rate), note: a.note || `Rate agreed on order ${record.order_number}` }]));
 
     const items = lines.map((l) => {
       const product = priceOf.get(l.productId);
       const listPrice = product.selling_price === null ? null : toCents(product.selling_price);
-      // no rate sent: the price list
-      if (!bill.rates.has(l.productId) && listPrice === null) {
+      const agreed = agreedOf.get(l.productId) || null;
+      // no rate sent: the rate agreed on the order, else the price list
+      if (!bill.rates.has(l.productId) && !agreed && listPrice === null) {
         throw new AppError(422, `${product.name} has no price in the price list yet: enter its rate (or ask the Super Admin to set the price)`, "PRICE_REQUIRED");
       }
-      const { cents: rate, note } = bill.rates.get(l.productId) || { cents: listPrice, note: null };
-      if (listPrice !== null && rate < listPrice && (!note || note.length < 3)) {
+      const sent = bill.rates.get(l.productId);
+      let { cents: rate, note } = sent || (agreed && { ...agreed, note: null }) || { cents: listPrice, note: null };
+      // an agreed discount already has its reason (written on the order): the bill keeps it
+      const discount = listPrice !== null && rate < listPrice;
+      if (agreed && rate === agreed.cents && discount && (!note || note.length < 3)) note = agreed.note;
+      if (discount && (!note || note.length < 3)) {
         throw new AppError(422, `${product.name}: the rate is below the price list (₹${money(listPrice)}). Write the reason for the discount.`, "DISCOUNT_REASON_REQUIRED");
       }
       const amount = rate * l.quantity;

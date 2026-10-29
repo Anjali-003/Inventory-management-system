@@ -21,6 +21,14 @@
   --color-lp-green: #7A35FF;
   --color-lp-green-dark: #6424E3;
   --color-lp-deep: #2A1260;
+
+  /* "You landed here" (class animate-card-flash): the whole card fills light violet with a violet ring, twice, after
+     a link on the same page scrolled to it. The 380ms delay lets the smooth scroll arrive first. Colour only. */
+  --animate-card-flash: card-flash 1.2s ease-in-out 380ms;
+  @keyframes card-flash {
+    0%, 50%, 100% { background-color: #fff; box-shadow: 0 0 0 0 rgb(122 53 255 / 0); }
+    25%, 75% { background-color: #E9DDFF; box-shadow: 0 0 0 3px rgb(122 53 255 / 0.55); }
+  }
 }
 
 
@@ -119,6 +127,8 @@
   html { scroll-behavior: smooth; }
   body { @apply min-h-screen; font-feature-settings: normal; }
   ::selection { background: color-mix(in oklch, var(--ring) 35%, transparent); }
+  /* Tailwind v4 gives buttons the arrow cursor: everything clickable shows the hand again (not while disabled) */
+  button:not(:disabled), [role="button"]:not([aria-disabled="true"]), select:not(:disabled), summary, label[for] { cursor: pointer; }
   select { @apply appearance-none bg-no-repeat; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right 0.6rem center; }
 }
 /*

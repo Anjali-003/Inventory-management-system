@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils"
 const EMPTY = []
 const rupees = (n) => `₹${Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
 
-/* add a customer, or change one's details (name, address, phone) */
+/* add a customer, or change one's details (name, phone, address, GSTIN) */
 function CustomerDialog({ customer, onClose }) {
   const toast = useToast()
   const [save, { isLoading: saving }] = useSaveCustomerMutation()
@@ -46,25 +46,47 @@ function CustomerDialog({ customer, onClose }) {
         <Field label="Name" htmlFor="cu-name" required><TextInput id="cu-name" maxLength={150} value={form.name} onChange={set("name")} /></Field>
         <Field label="Phone" htmlFor="cu-phone"><TextInput id="cu-phone" maxLength={20} value={form.phone} onChange={set("phone")} /></Field>
         <Field label="Address" htmlFor="cu-address"><TextInput id="cu-address" maxLength={500} value={form.address} onChange={set("address")} /></Field>
+        <Field label="GSTIN" htmlFor="cu-gstin"><TextInput id="cu-gstin" maxLength={20} value={form.gstin} onChange={set("gstin")} /></Field>
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       </div>
     </Modal>
   )
 }
 
-/* Customers: what each one bought, what it still owes; click to see its bills. Link in: ?q=<name> */
+/* "Last order 60 days ago · usually every 30": shown for every customer with a sent order */
+const daysText = (n) => (n === 0 ? "today" : n === 1 ? "1 day ago" : `${n} days ago`)
+function OrderRhythm({ c }) {
+  if (!c.orders) return null
+  return (
+    <span className="block text-xs text-muted-foreground">
+      Last order {daysText(c.daysSinceOrder)}{c.usualGapDays ? ` · usually every ${c.usualGapDays} days` : ""}
+    </span>
+  )
+}
+
+/*
+  Customers: what each one bought, what it still owes; click to see its bills.
+  "Going quiet": a regular customer whose next order is 1.5x its usual gap late (worked out by the server), worth a call.
+  Links in: ?q=<name>, ?quiet=1 (only the customers going quiet)
+*/
 export default function Customers() {
   const { canEdit } = usePermissions()
   const editable = canEdit("customers")
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
+  const quietOnly = params.get("quiet") === "1"
+  const setQuietOnly = (on) => setParams((p) => { const next = new URLSearchParams(p); if (on) next.set("quiet", "1"); else next.delete("quiet"); return next }, { replace: true })
   const { data: customers = EMPTY, isLoading, error } = useGetCustomersQuery()
   const [query, setQuery] = useState(() => params.get("q") || "")
   const [editing, setEditing] = useState(null)
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return customers.filter((c) => !q || `${c.name} ${c.phone || ""}`.toLowerCase().includes(q)).sort((a, b) => b.due - a.due || b.bought - a.bought)
-  }, [customers, query])
+    return customers
+      .filter((c) => (!quietOnly || c.goingQuiet) && (!q || `${c.name} ${c.phone || ""}`.toLowerCase().includes(q)))
+      // going quiet: the longest silence first; otherwise who owes most
+      .sort((a, b) => (quietOnly ? b.daysSinceOrder - a.daysSinceOrder : b.due - a.due || b.bought - a.bought))
+  }, [customers, query, quietOnly])
+  const quietCount = customers.filter((c) => c.goingQuiet).length
   const totalDue = customers.reduce((sum, c) => sum + c.due, 0)
 
   return (
@@ -74,10 +96,18 @@ export default function Customers() {
       </PageHeader>
       {error && <div className="mb-4"><Notice title="Something went wrong">{errorMessage(error, "Could not load customers.")}</Notice></div>}
       <Card className="overflow-hidden">
-        <div className="border-b px-4 py-3 sm:px-5"><SearchBar value={query} onChange={setQuery} placeholder="Search name or phone..." /></div>
+        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 sm:px-5">
+          {[[false, "All", customers.length], [true, "Going quiet", quietCount]].map(([on, label, n]) => (
+            <button key={label} type="button" aria-pressed={quietOnly === on} onClick={() => setQuietOnly(on)}
+              className={cn("rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors", quietOnly === on ? "border-primary bg-primary text-primary-foreground" : "bg-white text-slate-700 hover:bg-slate-50")}>
+              {label} <span className="tabular-nums opacity-80">{n}</span>
+            </button>
+          ))}
+          <div className="w-full sm:ml-auto sm:w-64"><SearchBar value={query} onChange={setQuery} placeholder="Search name or phone..." /></div>
+        </div>
         {isLoading ? <TableSkeleton rows={6} /> : rows.length === 0 ? (
-          <EmptyState icon={Users} title={customers.length ? "No matching customer" : "No customers yet"}>
-            {customers.length ? "Try another search." : "A customer is saved when you make its first bill, or add one here."}
+          <EmptyState icon={Users} title={quietOnly && !query.trim() ? "Nobody is going quiet" : customers.length ? "No matching customer" : "No customers yet"}>
+            {quietOnly && !query.trim() ? "Every regular customer is ordering at their usual pace." : customers.length ? "Try another search." : "A customer is saved when you make its first bill, or add one here."}
           </EmptyState>
         ) : (
           <Table>
@@ -89,8 +119,12 @@ export default function Customers() {
               {rows.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="whitespace-normal">
-                    <Link to={`/bills?show=all&q=${encodeURIComponent(c.name)}`} className="font-semibold hover:text-primary hover:underline">{c.name}</Link>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <Link to={`/bills?show=all&q=${encodeURIComponent(c.name)}`} className="font-semibold hover:text-primary hover:underline">{c.name}</Link>
+                      {c.goingQuiet && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200">Going quiet</span>}
+                    </span>
                     <span className="block text-xs text-muted-foreground">{c.phone || "—"}</span>
+                    <OrderRhythm c={c} />
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{c.bills}</TableCell>
                   <TableCell className="text-right tabular-nums">{rupees(c.bought)}</TableCell>

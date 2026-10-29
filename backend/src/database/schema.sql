@@ -360,12 +360,15 @@ CREATE TABLE IF NOT EXISTS `order_items` (
   `order_id` int NOT NULL,
   `product_id` int NOT NULL,
   `quantity` decimal(12,2) NOT NULL,
+  `agreed_rate` decimal(12,2) DEFAULT NULL,
+  `agreed_note` varchar(255) DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `fk_order_items_order` (`order_id`),
   KEY `fk_order_items_product` (`product_id`),
   CONSTRAINT `fk_order_items_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_order_items_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`),
+  CONSTRAINT `chk_order_item_agreed_rate` CHECK (((`agreed_rate` is null) or (`agreed_rate` >= 0))),
   CONSTRAINT `chk_order_item_quantity` CHECK ((`quantity` > 0))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

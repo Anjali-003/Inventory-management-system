@@ -1,11 +1,11 @@
 /*
-  Marketing dashboard: the three figures answer the Marketing Manager's questions.
-    Your turn          revised quantities to answer + drafts to send + orders to bill
+  Marketing dashboard: the figures answer the Marketing Manager's questions.
+    Your turn          revised quantities to answer + drafts to send + orders to bill (the line under Orders)
     Due for delivery   open orders late or due within 7 days that are not all with the customer yet
     Money to collect   what the bills still owe
 */
 import { describe, expect, it } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderApp } from "@/test/renderApp";
 import { respond } from "@/test/fakeApi";
 import MarketingView from "./MarketingView";
@@ -41,7 +41,8 @@ describe("Marketing dashboard figures", () => {
 
     const due = await screen.findByText("Due for delivery", { selector: "span" });
     const figure = due.closest("button");
-    expect(await within(figure).findByText("1 late · 1 this week")).toBeInTheDocument();
+    await waitFor(() => expect(figure).toHaveTextContent("1 late · 1 this week"));
+    fireEvent.click(figure); // the rejected order is shown first: the figure opens the deliveries
     expect(await screen.findByText("Late by 3 days")).toBeInTheDocument();
     expect(screen.getByText("Due in 2 days")).toBeInTheDocument();
   });
@@ -60,7 +61,7 @@ describe("Marketing dashboard figures", () => {
     renderApp(<MarketingView />, { role: "MARKETING_MANAGER" });
 
     expect(await screen.findByText("1 to answer · 2 drafts to send · 3 to bill")).toBeInTheDocument();
-    expect(tile("Your turn")).toBeInTheDocument();
+    expect(screen.getByText("Your turn:", { exact: false })).toBeInTheDocument();
   });
 
   it("Money to collect shows what the bills still owe and how old the oldest is", async () => {
@@ -76,5 +77,35 @@ describe("Marketing dashboard figures", () => {
     expect(await screen.findByText("Nothing is waiting for you")).toBeInTheDocument();
     expect(screen.getByText("Nothing due this week")).toBeInTheDocument();
     expect(screen.getByText("Every bill is paid")).toBeInTheDocument();
+  });
+
+  it("Sales & billing compares with last month, lists the top customers and splits the money out by bill age", async () => {
+    respond("GET", "/sales/summary", {
+      net: 12000, collected: 5000, toCollect: 9000, toBill: 0, lastMonth: { net: 10000, collected: 0 },
+      owed: [{ billNumber: "BILL-1", customer: "Sharma Traders", days: 95, due: 9000 }], ageing: [0, 0, 0, 9000],
+      byCustomer: [{ name: "Sharma Traders", bills: 2, total: 12000 }],
+    });
+    renderApp(<MarketingView />, { role: "MARKETING_MANAGER" });
+
+    expect(await screen.findByText("vs ₹10,000 last month", { exact: false })).toHaveTextContent("up20%");
+    expect(screen.getByText("Last month ₹0")).toBeInTheDocument(); // nothing received last month: no %
+    expect(screen.getByText("Top customers")).toBeInTheDocument();
+    expect(screen.getByText("2 bills", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Over 90 days").nextSibling).toHaveTextContent("₹9,000");
+  });
+
+  it("lists the regular customers going quiet, the longest silence first", async () => {
+    respond("GET", "/customers", [
+      { id: 1, name: "Quiet Co", orders: 3, daysSinceOrder: 50, usualGapDays: 30, goingQuiet: true },
+      { id: 2, name: "Silent Co", orders: 3, daysSinceOrder: 60, usualGapDays: 20, goingQuiet: true },
+      { id: 3, name: "Busy Co", orders: 5, daysSinceOrder: 2, usualGapDays: 7, goingQuiet: false },
+    ]);
+    renderApp(<MarketingView />, { role: "MARKETING_MANAGER" });
+
+    expect(await screen.findByText("Silent Co")).toBeInTheDocument();
+    const names = screen.getAllByText(/^(Silent|Quiet|Busy) Co$/).map((el) => el.textContent);
+    expect(names).toEqual(["Silent Co", "Quiet Co"]); // 3.0x late before 1.7x; Busy Co is on time
+    expect(screen.getByText("No order for 60 days · usually every 20")).toBeInTheDocument();
+    expect(screen.getByText("3.0× late")).toBeInTheDocument();
   });
 });

@@ -25,7 +25,7 @@ const notes = (role, type) => all("SELECT * FROM notifications WHERE role = ? AN
 /* 100 controllers + 40 sensors, sent by `by` (Marketing unless said), waiting for the Operations Admin. */
 async function waitingOrder(by = "MARKETING_MANAGER") {
   const order = await marketing.createDraft({
-    customer_name: "Test Traders", estimated_delivery_date: "2026-11-30",
+    customer_name: "Test Traders", required_by_date: "2099-11-30",
     items: [{ productId: fx.products.Controller.id, quantity: 100 }, { productId: fx.products.Sensor.id, quantity: 40 }],
   }, fx.users[by]);
   await marketing.send(order.id, fx.users[by]);
@@ -128,17 +128,18 @@ describe("Marketing answers the revised quantity", () => {
 describe("Operations Admin changes the expected delivery date", () => {
   it("saves the date and tells the Marketing Manager, linking to the order", async () => {
     const id = await waitingOrder();
-    await approvals.updateDeliveryDate(id, { estimated_delivery_date: "2026-12-15", reason: "Supplier delay" }, { id: ops() });
+    await approvals.updateDeliveryDate(id, { estimated_delivery_date: "2099-12-15", reason: "Supplier delay" }, { id: ops() });
 
-    expect((await one("SELECT DATE_FORMAT(estimated_delivery_date, '%Y-%m-%d') AS d FROM orders WHERE id = ?", [id])).d).toBe("2026-12-15");
+    const dates = await one("SELECT DATE_FORMAT(required_by_date, '%Y-%m-%d') AS wanted, DATE_FORMAT(estimated_delivery_date, '%Y-%m-%d') AS planned FROM orders WHERE id = ?", [id]);
+    expect(dates).toEqual({ wanted: "2099-11-30", planned: "2099-12-15" }); // the customer's date is kept
     expect(await notes("MARKETING_MANAGER", "DELIVERY_DATE_CHANGED")).toEqual([
-      expect.objectContaining({ body: "30 Nov 2026 → 15 Dec 2026 · Supplier delay", severity: "warning", link: `/marketing-orders?order=${id}`, order_id: id }),
+      expect.objectContaining({ body: "30 Nov 2099 → 15 Dec 2099 · customer wants it by 30 Nov 2099 · Supplier delay", severity: "warning", link: `/marketing-orders?order=${id}`, order_id: id }),
     ]);
   });
 
   it("tells nobody when the date did not actually change", async () => {
     const id = await waitingOrder();
-    await approvals.updateDeliveryDate(id, { estimated_delivery_date: "2026-11-30" }, { id: ops() });
+    await approvals.updateDeliveryDate(id, { estimated_delivery_date: "2099-11-30" }, { id: ops() });
     expect(await notes("MARKETING_MANAGER", "DELIVERY_DATE_CHANGED")).toEqual([]);
   });
 });

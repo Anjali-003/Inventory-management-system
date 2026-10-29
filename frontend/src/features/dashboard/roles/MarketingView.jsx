@@ -1,35 +1,33 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { MotionConfig, motion } from "motion/react"
-import { CalendarClock, CheckCircle2, ChevronRight, ClipboardList, IndianRupee, ListTodo, Loader2, Plus, Send } from "lucide-react"
+import { CalendarClock, CheckCircle2, ChevronRight, ClipboardList, FileText, IndianRupee, Loader2, Plus, Receipt, Send, Wallet } from "lucide-react"
 import { EmptyState } from "@/components/feedback"
 import { ConfirmDialog } from "@/components/Modal"
-import { CountUp, Reveal } from "@/components/HistoryUI"
-import { FigureTile, TINT, pageButtonClass } from "@/components/PageKit"
+import { pageButtonClass } from "@/components/PageKit"
 import { useToast } from "@/components/toast"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useGetMeQuery } from "@/features/auth/authApi"
 import { usePermissions } from "@/features/auth/usePermissions"
+import { useGetCustomersQuery } from "@/features/finished-goods/customersApi"
+import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
+import { myFgStep } from "@/features/finished-goods/fgFlow"
 import { useDeleteMarketingOrderMutation, useGetMarketingOrdersQuery, useSendMarketingOrderMutation } from "@/features/marketing-orders/marketingOrdersApi"
 import { useGetNotificationsQuery, useMarkNotificationReadMutation } from "@/features/notifications/notificationsApi"
-import { severityOf } from "@/features/notifications/notificationStyle"
-import NotificationIcon from "@/features/notifications/NotificationIcon"
-import { HeroLink, MktBtn, MktHero, NewOrderFab, StatusPill, TileGrid } from "@/features/marketing-orders/mktKit"
+import { MktBtn, NewOrderFab, StatusPill } from "@/features/marketing-orders/mktKit"
 import { rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { countByStatus, newestFirst, ordersHref, plural, rupees, stageOf } from "@/features/marketing-orders/orderParts"
 import { useGetSalesSummaryQuery } from "@/features/sales/salesApi"
+import { Receivables, TopCustomers, VsLastMonth } from "@/features/sales/SalesSnapshot"
 import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import OrderDrawer from "@/features/marketing-orders/OrderDrawer"
-import FinishedGoodsTodo from "../FinishedGoodsTodo"
-import SalesSnapshot from "@/features/sales/SalesSnapshot"
 
 const EMPTY = []
 
-/* Plain-language line under "Hello": the one thing worth doing next. */
+/* Plain-language line under the title: the one thing worth doing next. */
 function nudge(counts, revised, late) {
   if (revised) return `${plural(revised, "order")} with a revised quantity. Open it to see both copies and accept.`
   if (late) return `${plural(late, "order")} past the delivery date. Tell the customer, or ask the Operations Admin.`
@@ -74,9 +72,9 @@ function RiskList({ rows, onOpen }) {
     <ul className="divide-y divide-lp-line">
       {rows.map(({ order: o, days }) => (
         <li key={o.id}>
-          <button type="button" onClick={() => onOpen(o)} className="flex w-full items-center gap-3 px-5 py-3 text-start outline-none transition-colors hover:bg-lp-bg focus-visible:bg-lp-bg">
+          <button type="button" onClick={() => onOpen(o)} className="group flex w-full items-center gap-3 px-5 py-3 text-start outline-none transition-[background-color,box-shadow] hover:bg-lp-tint focus-visible:bg-lp-tint active:bg-lp-portal-on/40 hover:shadow-[inset_3px_0_0_var(--color-lp-green)] focus-visible:shadow-[inset_3px_0_0_var(--color-lp-green)]">
             <span className="min-w-0 flex-1">
-              <span className="block font-semibold tabular-nums text-lp-ink">{o.order_number}</span>
+              <span className="block whitespace-nowrap font-semibold tabular-nums text-lp-ink transition-colors group-hover:text-lp-green">{o.order_number}</span>
               <span className="block truncate text-xs text-lp-muted">{o.customer_name || "No customer"} · {productsSummary(o.items)}</span>
               {/* the two dates differ: Operations will deliver after (or before) the day the customer asked for */}
               {o.required_by_date && o.estimated_delivery_date && o.required_by_date !== o.estimated_delivery_date && (
@@ -85,7 +83,7 @@ function RiskList({ rows, onOpen }) {
                 </span>
               )}
             </span>
-            <span className="shrink-0 text-end">
+            <span className="max-w-[45%] shrink-0 text-end">
               <span className={cn("block text-[13px] font-semibold", days < 0 ? "text-destructive" : "text-warning")}>{dueLine(days)}</span>
               <span className="block text-xs text-lp-muted">
                 {fmtQty(o.delivered_units || 0)} of {fmtQty(o.totals?.quantity || 0)} given · {stageOf(o.approval_status)?.short}
@@ -111,7 +109,7 @@ function OrderCard({ order, canSend, busy, onSend, onOpen }) {
   const rejected = order.approval_status === "REJECTED"
   return (
     <motion.li variants={rise} className="relative rounded-xl border border-[#E3E6EB] bg-card transition-colors duration-200 hover:border-[#CDD2DA]">
-      <button type="button" onClick={onOpen} aria-label={`Open ${order.order_number}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />
+      <button type="button" onClick={onOpen} aria-label={`Open ${order.order_number}`} className="absolute inset-0 rounded-xl outline-none transition-colors hover:bg-lp-soft active:bg-lp-tint focus-visible:ring-2 focus-visible:ring-ring/60" />
       <div className="pointer-events-none relative p-4">
         <div className="flex items-start justify-between gap-3">
           <span className="min-w-0 break-all text-[15px] font-semibold leading-snug tabular-nums">{order.order_number}</span>
@@ -155,8 +153,8 @@ function OrderTable({ orders, editable, busyId, onSend, onOpen }) {
         {orders.map((o) => {
           const items = o.items ?? []
           return (
-            <TableRow key={o.id} onClick={() => onOpen(o)} className="cursor-pointer">
-              <TableCell>
+            <TableRow key={o.id} onClick={() => onOpen(o)} className="group cursor-pointer hover:bg-lp-tint active:bg-lp-portal-on/40">
+              <TableCell className="transition-shadow group-hover:shadow-[inset_3px_0_0_var(--color-lp-green)]">
                 <button type="button" onClick={() => onOpen(o)} className="font-semibold tabular-nums text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring/60">{o.order_number}</button>
                 <p className="text-xs text-muted-foreground">{timeAgo(o.created_at)}</p>
               </TableCell>
@@ -201,21 +199,6 @@ function OrderList({ orders, editable, busyId, onSend, onOpen }) {
   )
 }
 
-function Panel({ title, description, to, toLabel, loading, children }) {
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader className="items-center">
-        <div className="min-w-0">
-          <CardTitle>{title}</CardTitle>
-          {description && <CardDescription>{description}</CardDescription>}
-        </div>
-        {to && <Link to={to} className={pageButtonClass("outline", "sm")}>{toLabel}</Link>}
-      </CardHeader>
-      {loading ? <div className="space-y-2 p-5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div> : children}
-    </Card>
-  )
-}
-
 /* The list inside a panel: rows rise in one after another. */
 const RowList = ({ children }) => (
   <motion.ul variants={stagger(0.05, 0.05)} initial="hidden" animate="show" className="grid gap-3 p-3 sm:p-4">
@@ -223,62 +206,199 @@ const RowList = ({ children }) => (
   </motion.ul>
 )
 
-/* "The Operations Admin moved a delivery date": one row per change, until the Marketing Manager acknowledges it. */
-function DeliveryDateNotices({ items, onOpen, onAcknowledge }) {
+/* ------------------------------------------------------------------ billing list */
+
+/* Finished goods where the next step is Marketing's: make the bill, or take the payment. A row opens Finished Goods. */
+function BillingList({ rows }) {
   return (
-    <Card className="mt-4 overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b px-5 py-3">
-        <p className="text-sm font-bold">Delivery date changes</p>
-        <span className="rounded-full bg-cf-amber-soft px-2 py-0.5 text-[11px] font-semibold text-warning tabular-nums">{items.length} new</span>
-      </div>
-      <ul className="divide-y">
-        {items.map((n) => {
-          const s = severityOf(n)
-          // rows saved before notifications had a body: build the same line from the payload
-          const body = n.body || `${n.old_date ? `${n.old_date} → ` : "Set to "}${n.new_date}${n.reason ? ` · ${n.reason}` : ""}`
-          return (
-            <li key={n.id} className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-center">
-              <span className={`grid size-9 shrink-0 place-items-center rounded-xl ${s.soft} ${s.tone}`}>
-                <NotificationIcon n={n} className="size-[18px]" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-semibold leading-snug">{n.title}</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {body}
-                  <span className="text-cf-faint"> · {timeAgo(n.created_at)}{n.created_by_name ? ` by ${n.created_by_name}` : ""}</span>
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-2">
-                {n.order_id && (
-                  <button type="button" onClick={() => onOpen(n)} className="inline-flex h-9 items-center gap-1 rounded-lg border px-3 text-xs font-semibold outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary/30 sm:h-8">
-                    View order <ChevronRight className="size-3.5" />
-                  </button>
-                )}
-                <button type="button" onClick={() => onAcknowledge(n)} className="inline-flex h-9 items-center gap-1 rounded-lg bg-accent px-3 text-xs font-semibold text-accent-foreground outline-none transition-colors hover:bg-violet-100 focus-visible:ring-2 focus-visible:ring-primary/30 sm:h-8">
-                  <CheckCircle2 className="size-3.5" /> Got it
-                </button>
-              </div>
+    <ul className="divide-y divide-lp-line">
+      {rows.map(({ item: f, step }) => (
+        <li key={f.id}>
+          <Link to={`/finished-goods?status=${f.status}`} className="group flex items-center gap-3 px-5 py-3 outline-none transition-[background-color,box-shadow] hover:bg-lp-tint focus-visible:bg-lp-tint active:bg-lp-portal-on/40 hover:shadow-[inset_3px_0_0_var(--color-lp-green)] focus-visible:shadow-[inset_3px_0_0_var(--color-lp-green)]">
+            <span className="min-w-0 flex-1">
+              <span className="block whitespace-nowrap font-semibold tabular-nums text-lp-ink transition-colors group-hover:text-lp-green">{f.orderNumber}</span>
+              <span className="block truncate text-xs text-lp-muted">{[f.customerName || f.bill?.customerName, f.productName].filter(Boolean).join(" · ")}</span>
+            </span>
+            <span className="shrink-0 text-end">
+              <span className={cn("inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold", step.action === "pay" ? "bg-amber-50 text-amber-800" : "bg-sky-50 text-sky-800")}>{step.button}</span>
+              <span className="block text-xs text-lp-muted tabular-nums">{step.action === "pay" ? `${rupees(f.bill?.due)} due` : `${fmtQty(f.quantity ?? 0)} units`}</span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-lp-muted rtl:-scale-x-100" aria-hidden />
+          </Link>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/* ------------------------------------------------------------------ header */
+
+// "2026-10" for a date
+const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+const monthLabel = (key) => new Date(`${key}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" })
+// this month and the eleven before it, newest first
+// "2026-08" before "2026-09"
+const monthBefore = (key) => { const d = new Date(`${key}-01T00:00:00`); d.setMonth(d.getMonth() - 1); return monthKey(d) }
+const MONTHS = Array.from({ length: 12 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); return monthKey(d) })
+
+/* "The Operations Admin moved a delivery date": one slim line per change, until it is opened or acknowledged. */
+function DateNotices({ items, onOpen, onAcknowledge }) {
+  return (
+    <ul className="mb-6 grid gap-2">
+      {items.map((n) => {
+        // rows saved before notifications had a body: build the same line from the payload
+        const body = n.body || `${n.old_date ? `${n.old_date} → ` : "Set to "}${n.new_date}${n.reason ? ` · ${n.reason}` : ""}`
+        return (
+          <li key={n.id} role="status" className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-2.5 sm:flex-row sm:items-center">
+            <CalendarClock className="hidden size-4 shrink-0 text-amber-700 sm:block" aria-hidden />
+            <p className="min-w-0 flex-1 text-[13px] text-lp-ink">
+              <span className="font-semibold">{n.title}</span>
+              <span className="text-lp-muted"> · {body} · {timeAgo(n.created_at)}</span>
+            </p>
+            <div className="flex shrink-0 gap-2">
+              {n.order_id && <MktBtn size="sm" onClick={() => onOpen(n)}>View order</MktBtn>}
+              <MktBtn size="sm" variant="ghost" onClick={() => onAcknowledge(n)}>Dismiss</MktBtn>
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/* ------------------------------------------------------------------ KPI cards */
+
+/*
+  One figure: label and a small icon, the number, one line under it (a change, or what it means). Link or button.
+  Hover: violet border, soft shadow, the icon turns violet. Press: shrinks a little. `selected`: the Orders card below
+  is showing this figure's list, so it keeps the violet border and ring.
+*/
+function Kpi({ icon: Icon, label, value, foot, to, onClick, selected = false }) {
+  const body = (
+    <>
+      <span className="flex items-center justify-between gap-2">
+        <span className="text-[13px] font-medium text-lp-muted">{label}</span>
+        <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg transition-colors group-hover:bg-lp-green group-hover:text-white", selected ? "bg-lp-green text-white" : "bg-lp-bg text-lp-muted")} aria-hidden>
+          <Icon className="size-4" />
+        </span>
+      </span>
+      <span className="mt-2 block text-2xl font-semibold tracking-tight text-lp-ink tabular-nums">{value}</span>
+      <span className="mt-1.5 block min-h-5 text-xs text-lp-muted">{foot}</span>
+    </>
+  )
+  // flex-col: a <button> centres its content up and down, a link does not; both start at the top this way
+  const cls = cn(
+    "group flex min-w-0 flex-col justify-start rounded-xl border bg-white p-4 text-start outline-none transition-[border-color,box-shadow,transform,background-color] duration-150",
+    "hover:-translate-y-0.5 hover:border-lp-green hover:bg-lp-soft hover:shadow-[0_14px_30px_-14px_rgba(122,53,255,0.55)] active:translate-y-0 active:scale-[0.98] active:bg-lp-tint focus-visible:ring-2 focus-visible:ring-lp-green/40",
+    selected ? "border-lp-green ring-2 ring-lp-green/15" : "border-lp-line"
+  )
+  return to ? <Link to={to} className={cls}>{body}</Link> : <button type="button" onClick={onClick} aria-pressed={selected} className={cls}>{body}</button>
+}
+
+/* a status word with its colour: "4 late" in red, "2 this week" in amber */
+const Flag = ({ tone, children }) => <span className={cn("font-medium", tone === "bad" ? "text-destructive" : "text-warning")}>{children}</span>
+
+/* ------------------------------------------------------------------ going quiet */
+
+/*
+  Regular customers whose next order is late: more than 1.5x their usual gap since the last one (worked out by the
+  server, see customers list()). The longest silence first; a row opens the customer.
+*/
+function GoingQuiet({ customers, loading }) {
+  const quiet = customers.filter((c) => c.goingQuiet).sort((a, b) => b.daysSinceOrder / b.usualGapDays - a.daysSinceOrder / a.usualGapDays)
+  return (
+    <Card className="overflow-hidden">
+      <CardHeader className="items-center">
+        <div className="min-w-0"><CardTitle>Going quiet</CardTitle><CardDescription>Regulars whose next order is late</CardDescription></div>
+        {quiet.length > 0 && (
+          <Link to="/customers?quiet=1" className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary outline-none transition-colors hover:bg-lp-tint focus-visible:ring-2 focus-visible:ring-lp-green/40 active:bg-lp-portal-on/40">
+            All {quiet.length}<ChevronRight className="size-3.5" />
+          </Link>
+        )}
+      </CardHeader>
+      {loading ? <p className="px-5 pb-5 text-sm text-lp-muted">Loading…</p> : quiet.length === 0 ? (
+        <p className="flex items-center gap-2 px-5 pb-5 text-sm text-lp-muted"><CheckCircle2 className="size-4 text-success" /> Every regular customer is ordering on time.</p>
+      ) : (
+        <ul className="px-5 pb-4">
+          {quiet.slice(0, 4).map((c) => (
+            <li key={c.id}>
+              <Link to={`/customers?quiet=1&q=${encodeURIComponent(c.name)}`} className="group -mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2 text-sm outline-none transition-colors hover:bg-lp-tint focus-visible:ring-2 focus-visible:ring-ring/60 active:bg-lp-portal-on/40">
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-lp-ink transition-colors group-hover:text-lp-green">{c.name}</span>
+                  <span className="block text-xs text-lp-muted">No order for {c.daysSinceOrder} days · usually every {c.usualGapDays}</span>
+                </span>
+                <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 tabular-nums">{(c.daysSinceOrder / c.usualGapDays).toFixed(1)}× late</span>
+              </Link>
             </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  )
+}
+
+/* ------------------------------------------------------------------ orders card */
+
+/* The orders that need something, in one card: a tab per kind of work, each with how many are waiting. */
+/*
+  "You landed here": after a figure or link above scrolls the page down to a card, the whole card blinks twice (light
+  violet fill and a violet ring, the Tailwind animation animate-card-flash in index.css) so the eye finds it.
+  flash() restarts it on every click: the class goes off for one frame, then on again; it goes off by itself at the end.
+*/
+function useFlash() {
+  const [on, setOn] = useState(false)
+  const flash = () => { setOn(false); requestAnimationFrame(() => setOn(true)) }
+  // only the card's own animation ends it (the rows inside fade in with animations of their own)
+  const onAnimationEnd = (e) => { if (e.target === e.currentTarget) setOn(false) }
+  return [{ className: on ? "animate-card-flash" : "", onAnimationEnd }, flash]
+}
+
+function OrdersCard({ tabs, tab, onTab, summary, children, footer, flash }) {
+  return (
+    <Card id="work" className={cn("scroll-mt-20 overflow-hidden", flash?.className)} onAnimationEnd={flash?.onAnimationEnd}>
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 px-5 pt-4">
+        <div className="min-w-0">
+          <CardTitle>Orders</CardTitle>
+          <p className="mt-0.5 text-xs text-lp-muted">{summary}</p>
+        </div>
+      </div>
+      <div role="tablist" aria-label="Orders" className="mkt-scroll-x mt-3 flex gap-1 overflow-x-auto border-b px-3">
+        {tabs.map((t) => {
+          const active = t.id === tab
+          return (
+            <button key={t.id} type="button" role="tab" aria-selected={active} onClick={() => onTab(t.id)}
+              className={cn("-mb-px inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md border-b-2 px-2 py-2.5 text-[13px] font-medium outline-none transition-colors focus-visible:bg-lp-bg active:bg-lp-line/60",
+                active ? "border-lp-green text-lp-green" : "border-transparent text-lp-muted hover:border-lp-portal-on hover:bg-lp-tint hover:text-lp-green")}>
+              {t.label}
+              {t.count != null && <span className={cn("rounded px-1.5 text-[11px] font-semibold tabular-nums", t.alert && t.count ? "bg-rose-50 text-rose-700" : "bg-lp-bg text-lp-muted")}>{t.count}</span>}
+            </button>
           )
         })}
-      </ul>
+      </div>
+      <div role="tabpanel">{children}</div>
+      {footer && <div className="border-t px-5 py-2.5 text-end">{footer}</div>}
     </Card>
   )
 }
 
 export default function MarketingView() {
   const toast = useToast()
-  const { data: me } = useGetMeQuery()
-  const { canEdit } = usePermissions()
+  const { canEdit, role } = usePermissions()
   const editable = canEdit("marketingOrders")
 
+  const thisMonth = MONTHS[0]
+  const [month, setMonth] = useState(thisMonth)
   const { data = EMPTY, isLoading } = useGetMarketingOrdersQuery()
-  const { data: sales, isLoading: salesLoading } = useGetSalesSummaryQuery()
+  // this month is the default request (no ?month=), so it is shared with every other screen that reads it
+  const { data: sales, isFetching: salesLoading } = useGetSalesSummaryQuery(month === thisMonth ? undefined : month)
+  const { data: goods = EMPTY } = useGetFinishedGoodsQuery()
+  const { data: customers = EMPTY, isLoading: customersLoading } = useGetCustomersQuery()
   const [send] = useSendMarketingOrderMutation()
   const [remove, { isLoading: deleting }] = useDeleteMarketingOrderMutation()
   const [busyId, setBusyId] = useState(null)
   const [openedId, setOpenedId] = useState(null) // the order whose side drawer is open
   const [tab, setTab] = useState("overview")
+  const [workTab, setWorkTab] = useState(null) // null: the first tab with something waiting
   const openOrder = (o) => { setOpenedId(o.id); setTab("overview") }
   const closeOrder = () => { setOpenedId(null); setTab("overview") }
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -293,6 +413,7 @@ export default function MarketingView() {
     () => [...latest.filter((o) => o.approval_status === "QUANTITY_REVISED"), ...latest.filter((o) => o.approval_status === "REJECTED"), ...latest.filter((o) => o.approval_status === "DRAFT")],
     [latest]
   )
+  const billing = useMemo(() => goods.map((item) => ({ item, step: myFgStep(item, role) })).filter((r) => r.step), [goods, role])
 
   // read from the live list, so the drawer moves on by itself once the order is sent or decided
   const opened = useMemo(() => data.find((o) => o.id === openedId) ?? null, [data, openedId])
@@ -323,108 +444,110 @@ export default function MarketingView() {
   }
 
   /*
-    Three figures, each a question the Marketing Manager asks:
-      Your turn          what do I have to do now?      (answer a revised quantity, send a draft, make a bill)
-      Due for delivery   which customer do I call?       (late or due within a week, not all given out)
+    Four figures: the month's money (billed, received), then the two questions the Marketing Manager asks every day:
       Money to collect   how much is still out?          (bills not fully paid, oldest first)
+      Due for delivery   which customer do I call?       (late or due within a week, not all given out)
+    "Your turn" (answer a revised quantity, send a draft, make a bill) is the line under Orders.
   */
   const revised = data.filter((o) => o.approval_status === "QUANTITY_REVISED").length
   const toBill = sales?.toBill ?? 0
-  const myTurn = revised + counts.DRAFT + toBill
   const risk = useMemo(() => deliveryRisk(data), [data])
   const late = risk.filter((r) => r.days < 0).length
   const owed = sales?.toCollect ?? 0
   const oldest = sales?.owed?.[0]?.days
+  const loadingFigures = isLoading || salesLoading
+  const [workFlash, flashWork] = useFlash()
+  // a figure or link above: open that list, scroll down to it, and blink the card so the eye lands on it
+  const show = (id) => { setWorkTab(id); scrollTo("work"); flashWork() }
+  const yourTurn = [revised && `${revised} to answer`, counts.DRAFT && `${plural(counts.DRAFT, "draft")} to send`, toBill && `${toBill} to bill`].filter(Boolean).join(" · ")
 
-  const figures = [
-    {
-      key: "turn", icon: ListTodo, label: "Your turn", value: <CountUp value={myTurn} />,
-      hint: [revised && `${revised} to answer`, counts.DRAFT && `${plural(counts.DRAFT, "draft")} to send`, toBill && `${toBill} to bill`].filter(Boolean).join(" · ") || "Nothing is waiting for you",
-      tint: myTurn ? TINT.amber : TINT.slate,
-      // the orders are in "Needs your attention" below; when only bills are left, straight to them
-      ...(revised + counts.DRAFT === 0 && toBill ? { to: "/finished-goods?status=IN_STORE" } : { onClick: () => scrollTo("your-turn") }),
-    },
-    {
-      key: "risk", icon: CalendarClock, label: "Due for delivery", value: <CountUp value={risk.length} />,
-      hint: risk.length ? [late && `${late} late`, risk.length - late && `${risk.length - late} this week`].filter(Boolean).join(" · ") : "Nothing due this week",
-      tint: late ? TINT.rose : risk.length ? TINT.amber : TINT.slate,
-      ...(risk.length ? { onClick: () => scrollTo("delivery-risk") } : {}),
-    },
-    {
-      key: "money", icon: IndianRupee, label: "Money to collect", value: rupees(owed),
-      hint: owed ? (oldest != null ? `Oldest bill is ${plural(oldest, "day")} old` : "Bills not fully paid") : "Every bill is paid",
-      tint: oldest > 30 ? TINT.rose : owed ? TINT.amber : TINT.slate,
-      to: "/bills?show=open",
-    },
+  const tabs = [
+    { id: "attention", label: "Needs attention", count: attention.length, alert: revised + counts.REJECTED > 0 },
+    { id: "risk", label: "Due for delivery", count: risk.length, alert: late > 0 },
+    { id: "billing", label: "To bill & collect", count: billing.length },
+    { id: "latest", label: "All recent", count: null },
   ]
+  const shownTab = workTab ?? tabs.find((t) => t.count > 0)?.id ?? "latest"
+  const LIMIT = 6
+  const more = { attention: attention.length, risk: risk.length, billing: billing.length, latest: latest.length }[shownTab] > LIMIT
+  const moreLink = { attention: [ordersHref(null), "All orders"], risk: [ordersHref("APPROVED"), "All approved orders"], billing: ["/finished-goods", "Open Finished Goods"], latest: [ordersHref(null), "All orders"] }[shownTab]
+  const label = monthLabel(month)
+  const money = (v) => (loadingFigures ? "…" : rupees(v))
+  // another month picked: every link opens that month's bills, and the comparison names the month before it
+  const past = month !== thisMonth
+  const monthParam = past ? `&month=${month}` : ""
+  const prev = past ? `in ${monthLabel(monthBefore(month))}` : undefined
 
   return (
     <MotionConfig reducedMotion="user">
-      <MktHero eyebrow="Marketing dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={nudge(counts, revised, late)}>
-        {editable && <HeroLink wrap="hidden md:inline-flex" className="h-10" to={ordersHref(null, { new: 1 })}><Plus /> New order</HeroLink>}
-      </MktHero>
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <h1 className="font-lp-head text-2xl font-semibold tracking-tight text-lp-ink">Marketing</h1>
+          <p className="mt-1 text-sm text-lp-muted">{nudge(counts, revised, late)}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="sr-only" htmlFor="mkt-month">Month</label>
+          <select id="mkt-month" value={month} onChange={(e) => setMonth(e.target.value)}
+            className="h-11 rounded-lg border border-lp-line bg-white ps-3 pe-8 text-[13px] font-medium text-lp-ink outline-none transition-colors hover:border-lp-green/50 hover:bg-lp-soft focus-visible:ring-2 focus-visible:ring-lp-green/40 sm:h-9">
+            {MONTHS.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+          </select>
+          {editable && <Link to={ordersHref(null, { new: 1 })} className={cn(pageButtonClass("primary"), "max-md:hidden")}><Plus /> New order</Link>}
+        </div>
+      </header>
 
       {dateNotifs.length > 0 && (
-        <DeliveryDateNotices
-          items={dateNotifs}
-          onOpen={(n) => { markRead(n.id); openOrder({ id: n.order_id }) }}
-          onAcknowledge={(n) => markRead(n.id)}
-        />
+        <DateNotices items={dateNotifs} onOpen={(n) => { markRead(n.id); openOrder({ id: n.order_id }) }} onAcknowledge={(n) => markRead(n.id)} />
       )}
 
-      <TileGrid className="grid-cols-1 sm:grid-cols-3 md:grid-cols-3 xl:grid-cols-3">
-        {figures.map(({ key, ...f }) => (
-          <FigureTile key={key} {...f} toggle={false} loading={isLoading || salesLoading} />
-        ))}
-      </TileGrid>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <Kpi icon={FileText} label={month === thisMonth ? "Billed this month" : `Billed in ${label}`} to={`/bills?show=all${monthParam}`} value={money(sales?.net)}
+          foot={sales?.lastMonth ? <VsLastMonth now={sales.net} before={sales.lastMonth.net} prev={prev} /> : `${sales?.bills ?? 0} bills`} />
+        <Kpi icon={Wallet} label={month === thisMonth ? "Received this month" : `Received in ${label}`} to={`/bills?show=received${monthParam}`} value={money(sales?.collected)}
+          foot={sales?.lastMonth ? <VsLastMonth now={sales.collected} before={sales.lastMonth.collected} prev={prev} /> : "Payments in"} />
+        <Kpi icon={IndianRupee} label="Money to collect" to="/bills?show=open" value={money(owed)}
+          foot={owed ? (oldest != null ? <Flag tone={oldest > 30 ? "bad" : "warn"}>{`Oldest bill is ${plural(oldest, "day")} old`}</Flag> : "Bills not fully paid") : "Every bill is paid"} />
+        <Kpi icon={CalendarClock} label="Due for delivery" onClick={() => show("risk")} selected={shownTab === "risk"} value={isLoading ? "…" : risk.length}
+          foot={risk.length ? <>{late > 0 && <Flag tone="bad">{late} late</Flag>}{late > 0 && risk.length - late > 0 && " · "}{risk.length - late > 0 && <Flag tone="warn">{risk.length - late} this week</Flag>}</> : "Nothing due this week"} />
+      </div>
 
-      {!isLoading && counts.total === 0 ? (
-        <Reveal delay={0.3} className="mt-6">
-          <Card>
-            <EmptyState icon={ClipboardList} title="No orders yet">
-              Prepare an order, save it as a draft, then send it to the Operations Admin when it is ready.
-              {editable && (
-                <span className="mt-4 flex justify-center">
-                  <Link to={ordersHref(null, { new: 1 })} className={pageButtonClass("primary")}>
-                    <Plus className="size-4" /> Create your first order
-                  </Link>
-                </span>
-              )}
-            </EmptyState>
-          </Card>
-        </Reveal>
-      ) : (
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <Reveal delay={0.3}>
-            <div id="your-turn" className="scroll-mt-20">
-              <Panel title="Needs your attention" description="Revised quantities to accept first, then rejected orders, then drafts to send." loading={isLoading} to={attention.length > 5 ? ordersHref("DRAFT") : null} toLabel={`View all (${attention.length})`}>
-                {attention.length === 0 ? (
-                  <EmptyState icon={CheckCircle2} title="Nothing needs attention">Every order has been sent and decided.</EmptyState>
-                ) : (
-                  <OrderList orders={attention.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
-                )}
-              </Panel>
-            </div>
-          </Reveal>
-          <Reveal delay={0.4}>
-            {/* deliveries at risk when there are any; otherwise simply the newest orders */}
-            {risk.length > 0 ? (
-              <div id="delivery-risk" className="scroll-mt-20">
-                <Panel title="Due for delivery" description="Late, or due this week, and not fully given to the customer yet. Most urgent first." loading={isLoading} to={risk.length > 6 ? ordersHref(null) : null} toLabel="All orders">
-                  <RiskList rows={risk.slice(0, 6)} onOpen={openOrder} />
-                </Panel>
-              </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        {/* min-w-0: a grid column would otherwise grow to its longest one-line text and push the page sideways on a phone */}
+        <div className="min-w-0 lg:col-span-2">
+          <OrdersCard flash={workFlash} tabs={tabs} tab={shownTab} onTab={setWorkTab}
+            summary={<>Your turn: <button type="button" onClick={() => show(revised + counts.DRAFT === 0 && toBill ? "billing" : "attention")} className="rounded font-semibold text-lp-green underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-lp-green/40 active:opacity-70">{yourTurn || "Nothing is waiting for you"}</button></>}
+            footer={more && <Link to={moreLink[0]} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary outline-none transition-colors hover:bg-lp-tint focus-visible:ring-2 focus-visible:ring-lp-green/40 active:bg-lp-portal-on/40">{moreLink[1]}<ChevronRight className="size-3.5" /></Link>}>
+            {isLoading ? (
+              <div className="space-y-2 p-5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+            ) : shownTab === "attention" ? (
+              attention.length ? <OrderList orders={attention.slice(0, LIMIT)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
+                : <EmptyState icon={CheckCircle2} title="Nothing needs attention">Every order has been sent and decided.</EmptyState>
+            ) : shownTab === "risk" ? (
+              risk.length ? <RiskList rows={risk.slice(0, LIMIT)} onOpen={openOrder} />
+                : <EmptyState icon={CalendarClock} title="No delivery in the next 7 days">Late orders and those due within a week show here.</EmptyState>
+            ) : shownTab === "billing" ? (
+              billing.length ? <BillingList rows={billing.slice(0, LIMIT)} />
+                : <EmptyState icon={Receipt} title="Nothing to bill or collect">Orders in the Store to bill, and bills to take payment on, show here.</EmptyState>
+            ) : latest.length ? (
+              <OrderList orders={latest.slice(0, LIMIT)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
             ) : (
-              <Panel title="Latest orders" description="Newest first." loading={isLoading} to={ordersHref(null)} toLabel="View all">
-                <OrderList orders={latest.slice(0, 5)} editable={editable} busyId={busyId} onSend={sendOrder} onOpen={openOrder} />
-              </Panel>
+              <EmptyState icon={ClipboardList} title="No orders yet">
+                Prepare an order, save it as a draft, then send it to the Operations Admin when it is ready.
+                {editable && (
+                  <span className="mt-4 flex justify-center">
+                    <Link to={ordersHref(null, { new: 1 })} className={pageButtonClass("primary")}><Plus className="size-4" /> Create your first order</Link>
+                  </span>
+                )}
+              </EmptyState>
             )}
-          </Reveal>
+          </OrdersCard>
         </div>
-      )}
+        <div className="flex min-w-0 flex-col gap-6">
+          <TopCustomers s={sales} loading={salesLoading} month={month === thisMonth ? "This month" : label} monthParam={monthParam} />
+          <GoingQuiet customers={customers} loading={customersLoading} />
+        </div>
+      </div>
 
-      <SalesSnapshot className="mt-6" />
-      <FinishedGoodsTodo className="mt-4" title="Bill or take payment" />
+      <Receivables s={sales} loading={salesLoading} className="mt-6" />
 
       <OrderDrawer
         order={opened && !confirmDelete ? opened : null}

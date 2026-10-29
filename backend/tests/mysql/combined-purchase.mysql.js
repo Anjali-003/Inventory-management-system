@@ -23,7 +23,7 @@ const key = (p) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 10)
 
 /* An order of `units` controllers, approved, with its short components sent to Purchase. */
 async function shortOrder(units) {
-  const order = await marketing.createDraft({ customer_name: "Test Traders", items: [{ productId: fx.products.Controller.id, quantity: units }] }, fx.users.MARKETING_MANAGER);
+  const order = await marketing.createDraft({ customer_name: "Test Traders", required_by_date: "2099-11-30", items: [{ productId: fx.products.Controller.id, quantity: units }] }, fx.users.MARKETING_MANAGER);
   await marketing.send(order.id, fx.users.MARKETING_MANAGER);
   const before = await approvals.getPlan(order.id);
   await approvals.approve(order.id, { idempotency_key: key("ap"), expected_round: before.approval_round }, fx.users.OPERATIONS_ADMIN);

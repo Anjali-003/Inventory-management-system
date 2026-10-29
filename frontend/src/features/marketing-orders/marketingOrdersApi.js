@@ -25,11 +25,13 @@ export const marketingOrdersApi = baseApi.injectEndpoints({
     }),
     createMarketingOrder: build.mutation({
       query: (data) => ({ url: "/marketing-orders", method: "post", data }),
-      invalidatesTags: ["MarketingOrders"],
+      // a new customer may be saved with it
+      invalidatesTags: ["MarketingOrders", "Customers"],
     }),
     sendMarketingOrder: build.mutation({
       query: (id) => ({ url: `/marketing-orders/${id}/send`, method: "post" }),
-      invalidatesTags: ["MarketingOrders", "OrderApprovals"],
+      // a sent order counts in the customer's order rhythm ("going quiet")
+      invalidatesTags: ["MarketingOrders", "OrderApprovals", "Customers"],
     }),
     // agree to the reduced quantity the Operations Admin proposed: the order goes back to the admin's queue
     acceptOrderRevision: build.mutation({

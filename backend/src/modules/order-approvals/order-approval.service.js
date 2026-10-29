@@ -98,7 +98,7 @@ async function withItems(conn, orders) {
     if (orders.length === 0) return [];
 
     const [items] = await conn.query(
-        `SELECT oi.order_id, oi.product_id, p.sku, p.name, oi.quantity, p.selling_price
+        `SELECT oi.order_id, oi.product_id, p.sku, p.name, oi.quantity, p.selling_price, oi.agreed_rate, oi.agreed_note
          FROM order_items oi
          JOIN products p ON p.id = oi.product_id
          WHERE oi.order_id IN (?)
@@ -109,9 +109,12 @@ async function withItems(conn, orders) {
     const byOrder = new Map();
     for (const it of items) {
         if (!byOrder.has(it.order_id)) byOrder.set(it.order_id, []);
-        // price = the product's price list today; null when it has none yet
-        const { selling_price, ...line } = it;
-        byOrder.get(it.order_id).push({ ...line, quantity: Number(it.quantity), price: selling_price === null ? null : Number(selling_price) });
+        // price = the rate agreed on the order (rate lock), else the product's price list today; null when neither
+        // list_price = the price list, to show an agreed discount against it
+        const { selling_price, agreed_rate, ...line } = it;
+        const listPrice = selling_price == null ? null : Number(selling_price);
+        const agreed = agreed_rate == null ? null : Number(agreed_rate);
+        byOrder.get(it.order_id).push({ ...line, quantity: Number(it.quantity), price: agreed ?? listPrice, list_price: listPrice, agreed_rate: agreed });
     }
 
     const ids = orders.map((o) => o.id);
@@ -186,7 +189,7 @@ async function withItems(conn, orders) {
             // (orders revised before 2026-10-28 also carry held_order_id / held_order_number: the draft made back then)
             revision: asObject(o.revision),
             items: lines,
-            // value = units x price list (an estimate: the bill sets the real rate); unpriced = products with no price yet
+            // value = units x agreed rate (else price list: an estimate, the bill sets the real rate); unpriced = no price yet
             totals: {
                 lines: lines.length,
                 quantity: lines.reduce((s, l) => s + l.quantity, 0),

@@ -368,7 +368,7 @@ export function OrderValue({ order, className }) {
     return <span className={cn("text-xs text-warning", className)}>Price not set yet</span>
   }
   return (
-    <span className={cn("text-xs text-muted-foreground", className)} title="At the price list">
+    <span className={cn("text-xs text-muted-foreground", className)} title="At the agreed rates (the price list where none was agreed)">
       <b className="font-semibold tabular-nums text-foreground">{rupees(t.value)}</b>
       {t.unpriced > 0 && <span className="text-warning"> · {t.unpriced === 1 ? "1 product has" : `${t.unpriced} products have`} no price yet, not counted</span>}
     </span>
