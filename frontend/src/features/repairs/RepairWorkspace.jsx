@@ -52,7 +52,7 @@ function RequestForm({ onCreated }) {
     try { await createRepair({ ...form, productId: Number(form.productId), quantity: Number(form.quantity) }).unwrap(); setForm(initialRequest); onCreated(); }
     catch (e) { setError(errorText(e)); }
   }
-  return <Card className="overflow-hidden rounded-2xl border-[#dce5e0] shadow-sm"><CardHeader><CardTitle>Raise a repair request</CardTitle><p className="text-sm text-muted-foreground">Submit the customer's product and quantity. Production Admin must approve it before repair work starts.</p></CardHeader><CardContent>
+  return <Card className="overflow-hidden rounded-xl border-[#dce5e0] shadow-sm"><CardHeader><CardTitle>Raise a repair request</CardTitle><p className="text-sm text-muted-foreground">Submit the customer's product and quantity. Production Admin must approve it before repair work starts.</p></CardHeader><CardContent>
     {error && <Notice title="Request not saved">{error}</Notice>}
     <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <div><label className={labelClass}>Product *</label><select className={inputClass} required value={form.productId} onChange={change("productId")} disabled={productsLoading}><option value="">Select product</option>{products.map((p) => <option key={p.id} value={p.id}>{p.sku ? `${p.sku} — ` : ""}{p.name}</option>)}</select></div>
@@ -112,7 +112,7 @@ function RepairCard({ repair, mode }) {
   }
   const [eventOpen, setEventOpen] = useState(false);
   return <>
-    <Card className="min-w-0 overflow-hidden rounded-2xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+    <Card className="min-w-0 overflow-hidden rounded-xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader className="space-y-3 pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{repair.repair_number}</p><CardTitle className="mt-1 text-lg">{repair.product_name} <span className="font-normal text-muted-foreground">× {fmtQty(repair.requested_quantity)}</span></CardTitle><p className="mt-1 text-sm text-muted-foreground">{repair.customer_name}{repair.customer_reference ? ` · Ref: ${repair.customer_reference}` : ""}</p></div><Badge variant={statusVariant(repair.status)}>{statusLabel[repair.status] || repair.status}</Badge></div>
         <Progress repair={repair} />
@@ -149,7 +149,7 @@ function QuantitySummary({ repairs }) {
     { label: "Awaiting QC", value: sum(repairs, awaitingQc), icon: ClipboardCheck, tone: "text-amber-700 bg-amber-50" },
     { label: "Dispatched", value: sum(repairs, (r) => number(r.dispatched_quantity)), icon: PackageCheck, tone: "text-emerald-700 bg-emerald-50" },
   ];
-  return <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">{cards.map(({ label, value, icon: Icon, tone }) => <Card key={label} className="rounded-2xl border-[#dce5e0] shadow-sm"><CardContent className="flex items-center gap-3 p-4"><span className={`grid size-11 shrink-0 place-items-center rounded-xl ${tone}`}><Icon className="size-5"/></span><div className="min-w-0"><p className="text-sm text-muted-foreground">{label}</p><p className="text-2xl font-bold tabular-nums">{fmtQty(value)} <span className="text-sm font-medium text-muted-foreground">items</span></p></div></CardContent></Card>)}</div>;
+  return <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">{cards.map(({ label, value, icon: Icon, tone }) => <Card key={label} className="rounded-xl border-[#dce5e0] shadow-sm"><CardContent className="flex items-center gap-3 p-4"><span className={`grid size-11 shrink-0 place-items-center rounded-xl ${tone}`}><Icon className="size-5"/></span><div className="min-w-0"><p className="text-sm text-muted-foreground">{label}</p><p className="text-2xl font-bold tabular-nums">{fmtQty(value)} <span className="text-sm font-medium text-muted-foreground">items</span></p></div></CardContent></Card>)}</div>;
 }
 
 export default function RepairWorkspace({ mode }) {
@@ -193,7 +193,7 @@ export default function RepairWorkspace({ mode }) {
     {mode === "requests" && section === "requests" && <RequestForm onCreated={() => { setNotice("Your request was submitted to Production Admin for approval."); setSection("requests"); refetch(); }} />}
     {error && <Notice title="Repair data could not be loaded">{errorText(error)}</Notice>}
     {mode === "register" && <QuantitySummary repairs={repairs.filter((r) => !["PENDING_APPROVAL", "REJECTED"].includes(r.status))} />}
-    <Card className="min-w-0 overflow-hidden rounded-2xl border-[#dce5e0] shadow-sm">
+    <Card className="min-w-0 overflow-hidden rounded-xl border-[#dce5e0] shadow-sm">
       <div className="space-y-3 border-b bg-slate-50/70 p-3 sm:p-4">
         <SectionTabs value={section} onChange={setSection} items={tabs}/>
         <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center"><div className="w-full min-w-0 sm:max-w-md"><SearchField className="w-full" value={query} onChange={setQuery} placeholder="Search repair no., product, customer, status…" /></div><p className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground sm:ml-auto">{filtered.length} result{filtered.length === 1 ? "" : "s"}{isFetching ? " · Updating…" : ""}</p></div>

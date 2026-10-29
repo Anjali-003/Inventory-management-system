@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { CheckCircle2, ClipboardCheck, PackageCheck, RefreshCw, XCircle } from "lucide-react"
 import { useDispatch } from "react-redux"
 import { useToast } from "@/components/toast"
@@ -15,20 +15,29 @@ import QcBatchSection from "./components/QcBatchSection"
 import BatchDecisionConfirm from "./components/BatchDecisionConfirm"
 
 const asArray = (value) => Array.isArray(value) ? value : []
+// ?month=2026-10 (from Reports): the QC decisions of that month, as the dates from / to
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+const monthRange = (key) => {
+  const [y, m] = key.split("-").map(Number)
+  return { from: `${key}-01`, to: `${key}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}` }
+}
+const monthName = (key) => new Date(`${key}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" })
 const searchText = (item) => `${item.orderNumber || ""} ${item.productName || ""} ${item.productSku || ""} ${item.decisionRemarks || ""} ${(item.decisionHistory || []).map((attempt) => `${attempt.remarks || ""} ${attempt.reworkRemarks || ""}`).join(" ")}`.toLowerCase()
 
 export default function QualityControl() {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  const linkedMonth = MONTH_RE.test(params.get("month") || "") ? params.get("month") : null
   const dispatch = useDispatch()
   const toast = useToast()
   const { canEdit } = usePermissions()
   const editable = canEdit("qualityControl")
   const { data: items = [], isLoading: loading, isFetching, error: loadError, refetch } = useGetQualityControlQuery()
   const [query, setQuery] = useState("")
-  const [activeView, setActiveView] = useState("pending")
+  const [activeView, setActiveView] = useState(() => (params.get("view") === "history" || linkedMonth ? "history" : "pending"))
   const [productFilter, setProductFilter] = useState("all")
-  const [fromDate, setFromDate] = useState("")
-  const [toDate, setToDate] = useState("")
+  const [fromDate, setFromDate] = useState(() => (linkedMonth ? monthRange(linkedMonth).from : ""))
+  const [toDate, setToDate] = useState(() => (linkedMonth ? monthRange(linkedMonth).to : ""))
   const [sortBy, setSortBy] = useState("newest")
   const [view, setView] = useState("table")
   const [selected, setSelected] = useState(null)
@@ -82,6 +91,10 @@ export default function QualityControl() {
       const bt = recordTimestamp(b.decisionAt || b.completedAt)
       return sortBy === "oldest" || sortBy === "waiting" ? at - bt : bt - at
     }), [allHistoryRows, fromDate, toDate, sortBy])
+  // the month from Reports, while the dates still match it: its first-try figure, to compare with the report
+  const monthShown = linkedMonth && fromDate === monthRange(linkedMonth).from && toDate === monthRange(linkedMonth).to ? linkedMonth : null
+  const firstTry = historyRows.filter((item) => Number(item.attemptNumber || 1) === 1)
+  const firstTryPassed = firstTry.filter((item) => item.batchDecision === "PASS").length
   const clearToolbarFilters = () => { setProductFilter("all"); setFromDate(""); setToDate("") }
   const toolbarFilters = [
     { key: "product", label: "Product", value: productFilter, options: productOptions, onChange: setProductFilter },
@@ -203,7 +216,7 @@ export default function QualityControl() {
               type="button"
               onClick={openSummary}
               aria-label={`${label}: ${loading ? "loading" : value}. Open related work.`}
-              className="group relative min-w-0 overflow-hidden rounded-2xl border border-[#E3E6EB] bg-white p-4 text-left shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-[#CDD2DA] hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/40 sm:p-5"
+              className="group relative min-w-0 overflow-hidden rounded-2xl border border-border bg-white p-4 text-left shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-lp-rule hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/40 sm:p-5"
             >
               <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${toneStyles.edge}`} />
               <div className="flex min-w-0 items-start justify-between gap-3">
@@ -222,7 +235,7 @@ export default function QualityControl() {
         })}
       </section>
 
-      <section aria-label="Quality Control views" className="grid min-w-0 grid-cols-1 gap-2 rounded-2xl border border-[#E3E6EB] bg-white p-1.5 sm:grid-cols-2 sm:p-2">
+      <section aria-label="Quality Control views" className="grid min-w-0 grid-cols-1 gap-2 rounded-2xl border border-border bg-white p-1.5 sm:grid-cols-2 sm:p-2">
         <button
           type="button"
           role="tab"
@@ -251,7 +264,7 @@ export default function QualityControl() {
         </button>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-[#E3E6EB] bg-white p-3 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] sm:p-4">
+      <section className="overflow-hidden rounded-2xl border border-border bg-white p-3 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] sm:p-4">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
           <div className="min-w-0 flex-1 sm:max-w-sm">
             <SearchField value={query} onChange={setQuery} placeholder="Search order, product or SKU..." />
@@ -259,6 +272,15 @@ export default function QualityControl() {
           <p className="ml-auto shrink-0 text-xs font-semibold text-slate-600">{(activeView === "pending" ? pendingRows : historyRows).length} result{(activeView === "pending" ? pendingRows : historyRows).length === 1 ? "" : "s"}</p>
           <ListViewControls view={view} onViewChange={setView} sortBy={sortBy} onSortChange={setSortBy} sortOptions={sortOptions} filters={toolbarFilters} onClearFilters={clearToolbarFilters} hasActiveFilters={productFilter !== "all" || !!fromDate || !!toDate} />
         </div>
+        {monthShown && activeView === "history" && (
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            QC decisions in
+            <button type="button" onClick={() => { setFromDate(""); setToDate("") }} className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-accent px-2.5 py-1 text-xs font-semibold text-primary hover:bg-accent/70" aria-label={`Show every month, not only ${monthName(monthShown)}`}>
+              {monthName(monthShown)} <span aria-hidden>×</span>
+            </button>
+            <span className="font-semibold text-foreground tabular-nums">Passed first try: {firstTryPassed} of {firstTry.length}</span>
+          </p>
+        )}
         <p className="mt-3 text-xs leading-relaxed text-slate-600">Only batches where completed production meets the full ordered quantity are listed.</p>
       </section>
 

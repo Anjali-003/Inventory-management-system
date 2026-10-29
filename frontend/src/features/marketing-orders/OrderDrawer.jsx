@@ -46,7 +46,7 @@ function QtyBar({ ratio, grad }) {
 function Fact({ label, children }) {
   return (
     <div className="min-w-0 rounded-xl border bg-card px-3.5 py-3">
-      <dt className="text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">{label}</dt>
+      <dt className="text-[11px] font-bold uppercase tracking-[0.5px] text-cf-faint">{label}</dt>
       <dd className="mt-1 min-w-0 text-sm font-medium">{children}</dd>
     </div>
   )
@@ -100,7 +100,7 @@ function RevisionSection({ order, audience }) {
   return (
     <section className="space-y-2.5">
       <h3 className="flex items-center gap-1.5 text-sm font-semibold"><Scale className="size-4 text-orange-600" aria-hidden /> {ops ? "You promised less than was ordered" : "Operations promised less than was ordered"}</h3>
-      <div className="space-y-3 rounded-2xl bg-orange-50/40 px-4 py-3.5 ring-1 ring-inset ring-orange-200/70">
+      <div className="space-y-3 rounded-xl bg-orange-50/40 px-4 py-3.5 ring-1 ring-inset ring-orange-200/70">
         <UserCell name={order.revised_by_name} sub={fmtDateTime(order.revised_at)} />
         {r.remarks && <p className="rounded-xl bg-white/70 px-3 py-2 text-sm leading-snug">{r.remarks}</p>}
         <div className="grid gap-2.5 sm:grid-cols-2">
@@ -212,7 +212,7 @@ function OverviewTab({ order, audience }) {
           key={order.approval_status}
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1, transition: SPRING_SOFT }}
-          className={cn("relative overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg", stage.s.grad, stage.s.glow)}
+          className={cn("relative overflow-hidden rounded-xl bg-gradient-to-br p-4 text-white shadow-lg", stage.s.grad, stage.s.glow)}
         >
           <span aria-hidden className="pointer-events-none absolute -end-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
           <div className="relative flex items-center gap-3.5">
@@ -298,7 +298,7 @@ function OverviewTab({ order, audience }) {
       {order.approval_status !== "CANCELLED" && <section className="space-y-2.5">
         <h3 className="text-sm font-semibold">{ops ? "Your decision" : "Operations' decision"}</h3>
         {decided ? (
-          <div className={cn("space-y-3 rounded-2xl px-4 py-3.5 ring-1 ring-inset", stage.s.soft)}>
+          <div className={cn("space-y-3 rounded-xl px-4 py-3.5 ring-1 ring-inset", stage.s.soft)}>
             <div>
               <p className={cn("flex items-center gap-1.5 text-sm font-bold", stage.s.ink)}>
                 <Icon className="size-4 shrink-0" aria-hidden />
@@ -349,7 +349,7 @@ function ItemsTab({ order, audience }) {
         <div className={cn("grid gap-2.5", cards.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
           {cards.map(([label, value]) => (
             <div key={label} className="rounded-xl border bg-card px-3 py-2.5">
-              <p className="text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">{label}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.5px] text-cf-faint">{label}</p>
               <p className="mt-1 text-lg font-bold leading-none tabular-nums">{fmtQty(value)}</p>
             </div>
           ))}
@@ -511,15 +511,15 @@ function Panel({ order, tab, onTab, onClose, editable, busy, onSend, onDelete, a
         aria-modal="true"
         aria-labelledby={`${uid}-title`}
         tabIndex={-1}
-        className={cn("absolute inset-y-0 end-0 flex w-full flex-col bg-card shadow-[-24px_0_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-[#E3E6EB]", wide ? "sm:max-w-3xl" : "sm:max-w-xl")}
+        className={cn("absolute inset-y-0 end-0 flex w-full flex-col bg-card shadow-[-24px_0_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-border", wide ? "sm:max-w-3xl" : "sm:max-w-xl")}
         initial={{ x: offscreen }}
         animate={{ x: 0 }}
         exit={{ x: offscreen }}
         transition={SPRING}
       >
-        <div className="flex items-start justify-between gap-4 border-b bg-gradient-to-r from-accent/70 via-white to-white px-5 pt-4">
+        <div className="flex items-start justify-between gap-4 border-b bg-card px-5 pt-4">
           <div className="min-w-0 pb-3">
-            <p className="text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">Order details</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.5px] text-cf-faint">Order details</p>
             <h2 id={`${uid}-title`} className="mt-0.5 truncate text-[17px] font-bold leading-snug tracking-[-0.2px] tabular-nums">{order.order_number}</h2>
             <CustomerName order={order} className="text-[15px]" />
             <p className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground">

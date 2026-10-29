@@ -133,7 +133,7 @@ export function StageTile({ stage, value, loading, active, solid, to, onClick, c
 
   const cls = cn(
     "group relative block w-full overflow-hidden rounded-2xl border p-4 text-start outline-none transition-[box-shadow,border-color] duration-300 focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2",
-    on ? cn("border-transparent shadow-lg", stage.s.glow) : "border-[#E3E6EB] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] hover:shadow-md"
+    on ? cn("border-transparent shadow-lg", stage.s.glow) : "border-border bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] hover:shadow-md"
   )
 
   return (

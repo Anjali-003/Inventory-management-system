@@ -77,7 +77,7 @@ function ProfitSum({ money }) {
         <div className="flex justify-between"><dt>− Cost to make</dt><dd>{rupees(money.costOfSold)}</dd></div>
         <div className={cn("flex justify-between border-t pt-1 text-base font-bold", money.profit < 0 ? "text-destructive" : "text-success")}><dt>= Profit</dt><dd>{rupees(money.profit)}</dd></div>
       </dl>
-      <p className="text-xs text-muted-foreground">Cost to make = the parts in one piece (its BOM) at the price they were last bought for. GST is left out: it goes to the government.</p>
+      {/* <p className="text-xs text-muted-foreground">Cost to make = the parts in one piece (its BOM) at the price they were last bought for. GST is left out: it goes to the government.</p> */}
     </div>
   )
 }
@@ -96,10 +96,10 @@ export default function Reports() {
       {isLoading || !r ? <TableSkeleton rows={6} /> : (
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Figure label="Sales" to="/finished-goods?status=all" value={rupees(r.sales.net)} sub={`${r.sales.bills} bill${r.sales.bills === 1 ? "" : "s"} · received ${rupees(r.sales.collected)}`} />
+            <Figure label="Sales" to={`/bills?show=all&month=${month}`} value={rupees(r.sales.net)} sub={`${r.sales.bills} bill${r.sales.bills === 1 ? "" : "s"} · received ${rupees(r.sales.collected)}`} />
             <Figure label="IQC rejected" to="/iqc" value={show(r.suppliers.rejectedPct, "%")} bad={r.suppliers.rejectedPct > 2}
               sub={`${fmtQty(r.suppliers.rejected)} of ${fmtQty(r.suppliers.received)} pieces · ${r.suppliers.late} of ${r.suppliers.due} deliveries late`} />
-            <Figure label="QC passed first try" to="/quality-control" value={show(r.qualityCheck.firstTryPassPct, "%")} bad={r.qualityCheck.firstTryPassPct !== null && r.qualityCheck.firstTryPassPct < 90}
+            <Figure label="QC passed first try" to={`/quality-control?view=history&month=${month}`} value={show(r.qualityCheck.firstTryPassPct, "%")} bad={r.qualityCheck.firstTryPassPct !== null && r.qualityCheck.firstTryPassPct < 90}
               sub={`${r.qualityCheck.firstTryPassed} of ${r.qualityCheck.firstTryBatches} batches · ${r.qualityCheck.failed} fails in total`} />
             <Figure label="Order to delivery" to="/order-tracker?show=done" value={show(r.orderTime.avgDays, " days")} sub={`${r.orderTime.delivered} order${r.orderTime.delivered === 1 ? "" : "s"} delivered`} />
           </div>
@@ -107,9 +107,9 @@ export default function Reports() {
           <Section title="Money">
             <div className="grid gap-x-8 gap-y-1 sm:grid-cols-2">
               {[
-                ["Sold", rupees(r.sales.total), false, "/finished-goods?status=all"],
-                ["Money received", rupees(r.sales.collected), false, "/finished-goods?status=all"],
-                ["Money still to come", rupees(r.sales.toCollect), r.sales.toCollect > 0, "/finished-goods?pay=due"],
+                ["Sold", rupees(r.sales.total), false, `/bills?show=all&month=${month}`],
+                ["Money received", rupees(r.sales.collected), false, `/bills?show=received&month=${month}`],
+                ["Money still to come (all bills)", rupees(r.sales.toCollect), r.sales.toCollect > 0, "/bills?show=open"],
               ].map(([l, v, bad, to]) => (
                 <Row key={l} to={to} className="border-b border-dashed"><span>{l}</span><span className={cn("font-semibold tabular-nums", bad && "text-destructive")}>{v}</span></Row>
               ))}
@@ -118,7 +118,7 @@ export default function Reports() {
           </Section>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Section title="Still to collect (oldest first)" to="/finished-goods?pay=due" toLabel="All">
+            <Section title="Still to collect (oldest first)" to="/bills?show=open" toLabel="All">
               {r.sales.owed.length === 0 ? <p className="text-muted-foreground">Every bill is paid.</p> : r.sales.owed.map((o) => (
                 <Row key={o.billNumber} to={`/finished-goods?status=all&bill=${o.finishedGoodsId}`}>
                   <span>{o.billNumber} <span className="text-xs text-muted-foreground">· {o.customer} · {o.days} d</span></span>
@@ -159,7 +159,7 @@ export default function Reports() {
 
             <Section title="Sales by customer">
               {r.sales.byCustomer.length === 0 ? <p className="text-muted-foreground">No bill this month.</p> : r.sales.byCustomer.map((c) => (
-                <Row key={c.name} to={`/finished-goods?status=all&q=${q(c.name)}`}>
+                <Row key={c.name} to={`/bills?show=all&month=${month}&q=${q(c.name)}`}>
                   <span>{c.name} <span className="text-xs text-muted-foreground">· {c.bills} bill{c.bills === 1 ? "" : "s"}</span></span>
                   <span className="font-semibold tabular-nums">{rupees(c.total)}</span>
                 </Row>

@@ -20,7 +20,7 @@ export function Stat({ dot, label, value, sub, onClick }) {
       <span className="mt-1.5 block text-xl font-bold leading-none tracking-[-0.5px] tabular-nums">
         {value}
       </span>
-      <span className="mt-1.5 block text-[10px] text-muted-foreground">
+      <span className="mt-1.5 block text-[11px] text-muted-foreground">
         {sub}
       </span>
     </>

@@ -52,7 +52,7 @@ function OverviewTab({ purchase: p }) {
           key={p.status}
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1, transition: SPRING_SOFT }}
-          className={cn("relative overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg", stage.s.grad, stage.s.glow)}
+          className={cn("relative overflow-hidden rounded-xl bg-gradient-to-br p-4 text-white shadow-lg", stage.s.grad, stage.s.glow)}
         >
           <span aria-hidden className="pointer-events-none absolute -end-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
           <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/60" />
@@ -115,7 +115,7 @@ function ComponentsTab({ purchase: p }) {
       <div className={cn("grid gap-2.5", cards.length === 3 ? "grid-cols-3" : "grid-cols-1")}>
         {cards.map(([label, value]) => (
           <div key={label} className="rounded-xl border bg-card px-3 py-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">{label}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.5px] text-cf-faint">{label}</p>
             <p className="mt-1 text-lg font-bold leading-none tabular-nums">{value}</p>
           </div>
         ))}

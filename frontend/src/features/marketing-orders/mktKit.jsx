@@ -158,7 +158,7 @@ export function StatusPill({ value, short, className }) {
   if (!stage) return <span className={cn("inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600", className)}>{value || "Unknown"}</span>
   const Icon = stage.icon
   return (
-    <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset", short ? "whitespace-nowrap rounded-full" : "max-w-60 whitespace-normal rounded-2xl text-start leading-snug", stage.s.pill, className)}>
+    <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset", short ? "whitespace-nowrap rounded-full" : "max-w-60 whitespace-normal rounded-xl text-start leading-snug", stage.s.pill, className)}>
       <Icon className={cn("size-3.5 shrink-0", !short && "self-start")} aria-hidden />
       {short ? stage.short : stage.label}
     </span>

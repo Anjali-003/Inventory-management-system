@@ -203,7 +203,7 @@ function RowCards({ rows, onOpen, rightLabel }) {
   return (
     <ul className="grid gap-3 p-3 sm:p-4">
       {rows.map((r) => (
-        <li key={r.id} className="relative rounded-xl border border-[#E3E6EB] bg-card transition-colors duration-200 hover:border-[#CDD2DA]">
+        <li key={r.id} className="relative rounded-xl border border-border bg-card transition-colors duration-200 hover:border-lp-rule">
           {openable(r) && <button type="button" onClick={() => onOpen(r)} aria-label={`Open ${r.title}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />}
           <div className="pointer-events-none relative p-4">
             <div className="flex items-start justify-between gap-3">
@@ -267,7 +267,7 @@ export function InfoModal({ title, description, badge, fields, onClose }) {
       <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border">
         {fields.map(([label, value]) => (
           <div key={label} className="bg-card px-4 py-2.5">
-            <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</dt>
+            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</dt>
             <dd className="mt-0.5 text-sm font-medium tabular-nums">{value ?? "-"}</dd>
           </div>
         ))}

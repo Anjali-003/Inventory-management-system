@@ -3,7 +3,7 @@ const AppError = require("../../shared/AppError");
 
 /*
     The month report for the Super Admin / Operations Admin: four questions, one figure each, with the rows behind it.
-        1. Money          sales, credit notes, money collected and still to collect, purchases, estimated profit
+        1. Money          sales, money collected and still to collect, purchases, estimated profit
         2. Suppliers      per supplier: what IQC received / rejected (%), deliveries late against the promised date
         3. Quality check  batches decided for the FIRST time in the month: how many passed on the first try (%)
         4. Order time     orders delivered in the month: days from sent for approval to delivered, and where the time went
@@ -26,8 +26,7 @@ const days = (v) => (v === null || v === undefined ? null : Number(Number(v).toF
 /*
     Money of the month.
       billed      ACTIVE bills made in the month (a cancelled bill does not count)
-      credited    credit notes made in the month (goods returned / bill reduced after the goods left)
-      net sales   billed - credited
+      net sales   billed
       collected   payments received in the month (by the date the money came)
       to collect  what customers still owe on every ACTIVE bill, whatever its month
       spent       purchase orders placed in the month: ordered quantity x rate per piece
@@ -42,10 +41,6 @@ async function sales({ start, end }) {
          FROM bills WHERE status = 'ACTIVE' AND created_at >= ? AND created_at < ?`,
         [start, end]
     );
-    const [[credited]] = await db.query(
-        `SELECT COUNT(*) AS notes, COALESCE(SUM(amount), 0) AS amount FROM bill_credit_notes WHERE created_at >= ? AND created_at < ?`,
-        [start, end]
-    );
     const [[collected]] = await db.query(
         `SELECT COUNT(*) AS payments, COALESCE(SUM(amount), 0) AS amount FROM bill_payments WHERE paid_on >= ? AND paid_on < ?`,
         [start, end]
@@ -53,8 +48,7 @@ async function sales({ start, end }) {
     // what is still owed, bill by bill (oldest first)
     const [owed] = await db.query(
         `SELECT b.bill_number, b.finished_goods_id, b.customer_name, b.created_at, c.phone,
-                b.total - COALESCE((SELECT SUM(amount) FROM bill_credit_notes WHERE bill_id = b.id), 0)
-                        - COALESCE((SELECT SUM(amount) FROM bill_payments WHERE bill_id = b.id), 0) AS due
+                b.total - COALESCE((SELECT SUM(amount) FROM bill_payments WHERE bill_id = b.id), 0) AS due
          FROM bills b LEFT JOIN customers c ON c.id = b.customer_id WHERE b.status = 'ACTIVE'
          HAVING due > 0.004 ORDER BY b.created_at`
     );
@@ -76,9 +70,7 @@ async function sales({ start, end }) {
         bills: n(billed.bills),
         total: n(billed.total),
         gst: n(billed.gst),
-        credited: n(credited.amount),
-        creditNotes: n(credited.notes),
-        net: Number((n(billed.total) - n(credited.amount)).toFixed(2)),
+        net: n(billed.total),
         collected: n(collected.amount),
         payments: n(collected.payments),
         toCollect: Number(owed.reduce((sum, r) => sum + n(r.due), 0).toFixed(2)),
@@ -94,7 +86,7 @@ async function sales({ start, end }) {
     };
 }
 
-async function costs({ start, end }, salesFigures) {
+async function costs({ start, end }) {
     const [[spent]] = await db.query(
         `SELECT COALESCE(SUM(poi.quantity_ordered * poi.rate), 0) AS amount, COUNT(DISTINCT po.id) AS purchases
          FROM purchase_orders po JOIN purchase_order_items poi ON poi.purchase_order_id = po.id
@@ -147,8 +139,7 @@ async function costs({ start, end }, salesFigures) {
             profit: Number((amount - quantity * each).toFixed(2)),
         });
     }
-    // a credit note lowers the month's income
-    const profit = revenue - cost - salesFigures.credited;
+    const profit = revenue - cost;
     return {
         spent: Number(n(spent.amount).toFixed(2)),
         purchases: n(spent.purchases),
@@ -268,7 +259,7 @@ async function orderTime({ start, end }) {
 async function monthly(rawMonth) {
     const range = monthRange(rawMonth);
     const [s, sup, qc, time] = await Promise.all([sales(range), suppliers(range), qualityCheck(range), orderTime(range)]);
-    const money = await costs(range, s);
+    const money = await costs(range);
     return { month: range.month, sales: s, money, suppliers: sup, qualityCheck: qc, orderTime: time };
 }
 

@@ -174,7 +174,7 @@ export default function PurchaseDetailSheet({ purchase, onClose }) {
             key={purchase.status}
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1, transition: SPRING_SOFT }}
-            className={cn("relative overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg", stage.s.grad, stage.s.glow)}
+            className={cn("relative overflow-hidden rounded-xl bg-gradient-to-br p-4 text-white shadow-lg", stage.s.grad, stage.s.glow)}
           >
             <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
             <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/60" />

@@ -11,23 +11,23 @@ import { cn } from "@/lib/utils"
   Every shared piece draws from here (PageHeader, MktHero, Button, MktBtn, HeroButton, CfButton, Card, Panel), so a
   change made here reaches every page.
 
-  Text sizes (and nothing in between): title 28/32px · section 16px · body 14px · small 13px · tiny 12px
+  Text sizes (and nothing in between): title 22/24px · section 16px · body 14px · small 13px · tiny 12px
 */
 
 export const FOCUS = "outline-none focus-visible:ring-2 focus-visible:ring-lp-green focus-visible:ring-offset-2 focus-visible:ring-offset-lp-bg"
 export const PRESS = { scale: 0.98, transition: { type: "spring", duration: 0.18, bounce: 0 } }
 
 /** The surface of every card and panel. */
-export const SURFACE = "rounded-2xl border border-lp-line bg-white shadow-[0_1px_2px_rgba(16,33,28,0.04)]"
+export const SURFACE = "rounded-xl border border-lp-line bg-white shadow-[0_1px_2px_rgba(16,33,28,0.04)]"
 
 /** Page title: small violet eyebrow, big heading, one line of help, buttons on the right. */
 export function PageHeader({ eyebrow, title, description, children, className }) {
   return (
-    <header className={cn("mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-4 sm:mb-8", className)}>
+    <header className={cn("mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-3 sm:mb-6", className)}>
       <div className="min-w-0">
-        {eyebrow && <p className="text-sm font-semibold text-lp-green">{eyebrow}</p>}
-        <h1 className={cn("font-lp-head text-[28px] font-bold leading-tight tracking-tight text-balance text-lp-ink sm:text-[32px]", eyebrow && "mt-1")}>{title}</h1>
-        {description && <p className="mt-1.5 max-w-2xl text-sm text-pretty text-lp-muted sm:text-base">{description}</p>}
+        {eyebrow && <p className="text-[13px] font-semibold text-lp-green">{eyebrow}</p>}
+        <h1 className={cn("font-lp-head text-[22px] font-bold leading-tight tracking-tight text-balance text-lp-ink sm:text-2xl", eyebrow && "mt-0.5")}>{title}</h1>
+        {description && <p className="mt-1 max-w-2xl text-sm text-pretty text-lp-muted">{description}</p>}
       </div>
       {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
     </header>
@@ -147,6 +147,37 @@ export function FilterTabs({ items, label, layoutId = "page-filter", className }
           </button>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+  Filter pills in a card's toolbar (above a table), each with its count. Wraps on a phone.
+  items: [{ key, label, value, active, onClick, alert }]   alert: the count is a problem (rose until chosen)
+*/
+export function FilterPills({ items, label, className }) {
+  return (
+    <div role="group" aria-label={label} className={cn("flex flex-wrap items-center gap-2", className)}>
+      {items.map((it) => (
+        <button
+          key={it.key}
+          type="button"
+          aria-pressed={!!it.active}
+          onClick={it.onClick}
+          className={cn(
+            "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors",
+            FOCUS,
+            it.active
+              ? "border-lp-green bg-lp-green text-white"
+              : it.alert
+                ? "border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100"
+                : "border-lp-line bg-white text-lp-text hover:border-lp-rule hover:bg-lp-bg hover:text-lp-ink"
+          )}
+        >
+          {it.label}
+          {it.value != null && <span className={cn("tabular-nums", it.active ? "text-white/85" : "opacity-75")}>{it.value}</span>}
+        </button>
+      ))}
     </div>
   )
 }

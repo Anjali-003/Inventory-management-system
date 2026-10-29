@@ -37,7 +37,7 @@ import { errorMessage, fmtQty } from "@/lib/stock";
     All business figures come from the server (GET /inventory/history, /history/balance, /history/products);
     only the charts are drawn in the browser.
 
-    Look: CircuitFlow (green, soft grey, compact type, DM Sans), switched on for this page only by the
+    Look: CircuitFlow (green, soft grey, compact type), switched on for this page only by the
     `cf-scope` wrapper (see index.css).
     Layout: header + month picker -> four stat cards -> reconciliation panel (balance sheet first)
     -> monthly receipts (one bar per month, Jan to Dec of the picked year) with the working for the picked month.
@@ -63,7 +63,7 @@ function FlowRow({ label, value, sign, hint, strong }) {
         <p className={`text-xs ${strong ? "font-bold" : "font-medium"}`}>
           {label}
         </p>
-        {hint && <p className="mt-0.5 text-[10px] text-cf-faint">{hint}</p>}
+        {hint && <p className="mt-0.5 text-[11px] text-cf-faint">{hint}</p>}
       </div>
       <p
         className={`text-xs tabular-nums ${strong ? "text-base font-bold tracking-tight text-primary" : "font-semibold"}`}
@@ -196,7 +196,7 @@ export default function InventoryHistory() {
             key: "shortfall",
             label: "Shortfall",
             badge: (
-              <span className="rounded-full bg-cf-red-soft px-1.5 py-px text-[10px] font-bold tabular-nums text-destructive">
+              <span className="rounded-full bg-cf-red-soft px-1.5 py-px text-[11px] font-bold tabular-nums text-destructive">
                 {fmtQty(Math.abs(diff))}
               </span>
             ),
@@ -207,7 +207,7 @@ export default function InventoryHistory() {
       key: "products",
       label: "Finished products",
       badge: products && (
-        <span className="rounded-full bg-card px-1.5 py-px text-[10px] font-bold tabular-nums text-muted-foreground ring-1 ring-border">
+        <span className="rounded-full bg-card px-1.5 py-px text-[11px] font-bold tabular-nums text-muted-foreground ring-1 ring-border">
           {fmtQty(products.total_produced)}
         </span>
       ),
@@ -221,7 +221,7 @@ export default function InventoryHistory() {
   };
 
   const iconBtn =
-    "grid size-9 place-items-center text-muted-foreground outline-none transition-all hover:bg-cf-green-soft hover:text-primary active:scale-95 focus-visible:bg-muted disabled:pointer-events-none disabled:opacity-40";
+    "grid size-9 place-items-center text-muted-foreground outline-none transition-all hover:bg-accent hover:text-primary active:scale-95 focus-visible:bg-muted disabled:pointer-events-none disabled:opacity-40";
   const monthControls = ready && (
     <div className="flex items-center gap-2 rounded-xl border border-white/80 bg-white/75 p-1.5 shadow-[0_4px_14px_rgba(22,34,30,0.055)] backdrop-blur-sm">
       {!isCurrent && (
@@ -468,7 +468,7 @@ export default function InventoryHistory() {
                       transition={{ duration: 0.3, ease: "easeOut" }}
                       className="border-t bg-gradient-to-br from-emerald-50/60 via-cf-head/70 to-white lg:col-span-2 lg:border-l lg:border-t-0"
                     >
-                      <p className="px-[18px] pb-1 pt-4 text-[10px] font-bold uppercase tracking-[0.6px] text-cf-faint">
+                      <p className="px-[18px] pb-1 pt-4 text-[11px] font-bold uppercase tracking-[0.6px] text-cf-faint">
                         {monthLabel(picked.month)}
                       </p>
                       <div className="py-1">

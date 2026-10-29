@@ -92,7 +92,7 @@ export function MktTile({ stage, value, loading, active, to, onClick, className 
     </>
   )
   const cls = cn(
-    "flex min-h-[148px] w-full items-start gap-4 rounded-2xl border-2 border-l-[10px] p-5 text-left shadow-sm outline-none transition-[transform,box-shadow] duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-4 focus-visible:ring-blue-600/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+    "flex min-h-[148px] w-full items-start gap-4 rounded-xl border-2 border-l-[10px] p-5 text-left shadow-sm outline-none transition-[transform,box-shadow] duration-150 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-4 focus-visible:ring-blue-600/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0",
     stage.s.tile,
     active && "ring-4 ring-slate-900",
     className
@@ -123,7 +123,7 @@ export function MktStatus({ value, className }) {
 
 export function MktPanel({ title, description, to, toLabel, loading, children, className }) {
   return (
-    <section className={cn("overflow-hidden rounded-2xl border-2 border-slate-300 bg-white shadow-sm", className)}>
+    <section className={cn("overflow-hidden rounded-xl border-2 border-slate-300 bg-white shadow-sm", className)}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-slate-200 bg-slate-50 px-6 py-5">
         <div className="min-w-0">
           <h2 className="text-2xl font-extrabold leading-tight text-slate-950">{title}</h2>
@@ -150,7 +150,7 @@ export function MktEmpty({ icon: Icon, title, children }) {
   return (
     <div className="flex flex-col items-center px-6 py-16 text-center">
       {Icon && (
-        <span className="mb-5 grid size-16 place-items-center rounded-2xl bg-accent text-[#5B21D6]">
+        <span className="mb-5 grid size-16 place-items-center rounded-xl bg-accent text-[#5B21D6]">
           <Icon className="size-8" aria-hidden />
         </span>
       )}
@@ -162,7 +162,7 @@ export function MktEmpty({ icon: Icon, title, children }) {
 
 export function MktNotice({ title, children }) {
   return (
-    <div role="alert" className="flex gap-4 rounded-2xl border-2 border-red-600 bg-red-50 px-5 py-4 text-red-900">
+    <div role="alert" className="flex gap-4 rounded-xl border-2 border-red-600 bg-red-50 px-5 py-4 text-red-900">
       <span className="grid size-8 shrink-0 place-items-center rounded-full bg-red-600 text-lg font-extrabold text-white" aria-hidden>!</span>
       <div>
         {title && <p className="text-lg font-bold">{title}</p>}
@@ -191,7 +191,7 @@ export const MTd = ({ className, ...p }) => <td className={cn("px-5 py-5 align-m
 /* Product lines of one order (read-only), in the big type. */
 export function MktOrderLines({ items }) {
   return (
-    <div className="overflow-hidden rounded-2xl border-2 border-slate-300">
+    <div className="overflow-hidden rounded-xl border-2 border-slate-300">
       <MTable>
         <MHead>
           <tr>

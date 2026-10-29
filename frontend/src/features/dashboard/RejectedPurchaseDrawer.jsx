@@ -18,7 +18,7 @@ function Body({ purchase: p }) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl border border-rose-200 bg-rose-50/60 px-4 py-3.5">
+      <div className="rounded-xl border border-rose-200 bg-rose-50/60 px-4 py-3.5">
         <p className="text-sm font-bold text-rose-900">
           {entireLot ? "IQC rejected the entire shipment" : `IQC rejected ${count} ${count === 1 ? "component" : "components"}`}
         </p>

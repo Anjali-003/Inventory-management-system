@@ -47,7 +47,7 @@ function ReworkCard({ item, editable, busy, onSubmit }) {
   const canSubmit = editable && (status === "NEEDS_REWORK" || status === "IN_PROGRESS")
 
   return (
-    <article className="relative min-w-0 overflow-hidden rounded-2xl border border-[#E3E6EB] bg-white shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] transition-shadow hover:shadow-md">
+    <article className="relative min-w-0 overflow-hidden rounded-2xl border border-border bg-white shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] transition-shadow hover:shadow-md">
       <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1 bg-gradient-to-b", status === "NEEDS_REWORK" ? "from-rose-600 to-red-800" : status === "IN_PROGRESS" ? "from-amber-700 to-orange-800" : "from-emerald-700 to-teal-800")} />
       <div className="min-w-0 p-4 pl-5 sm:p-5 sm:pl-6">
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">

@@ -11,12 +11,12 @@ let role = "SUPER_ADMIN";
 let table = [];
 export const requests = [];
 
-const ZERO_SALES = { month: "", net: 0, billed: 0, credited: 0, bills: 0, collected: 0, payments: 0, toCollect: 0, owed: [], ageing: [0, 0, 0, 0], lastMonth: { net: 0, collected: 0 }, byCustomer: [], subtotal: 0, toBill: 0 };
+const ZERO_SALES = { month: "", net: 0, billed: 0, bills: 0, collected: 0, payments: 0, toCollect: 0, owed: [], ageing: [0, 0, 0, 0], lastMonth: { net: 0, collected: 0 }, byCustomer: [], subtotal: 0, toBill: 0 };
 
 // an empty month, exactly as the backend sends it (GET /reports/monthly?month=2020-01 on an empty database)
 const EMPTY_MONTH = {
   month: "2020-01",
-  sales: { bills: 0, total: 0, gst: 0, credited: 0, creditNotes: 0, net: 0, collected: 0, payments: 0, toCollect: 0, owed: [], ageing: [0, 0, 0, 0], byCustomer: [], subtotal: 0 },
+  sales: { bills: 0, total: 0, gst: 0, net: 0, collected: 0, payments: 0, toCollect: 0, owed: [], ageing: [0, 0, 0, 0], byCustomer: [], subtotal: 0 },
   money: { spent: 0, purchases: 0, soldFor: 0, costOfSold: 0, products: [], profit: null, marginPct: null, unpricedProducts: 0, estimatedProducts: 0 },
   suppliers: { received: 0, rejected: 0, rejectedPct: null, due: 0, late: 0, bySupplier: [] },
   qualityCheck: { firstTryBatches: 0, firstTryPassed: 0, firstTryPassPct: null, decisions: 0, failed: 0, failsByProduct: [] },

@@ -34,8 +34,7 @@
       P  Sharma Electronics   last month: billed, paid, delivered
       Q  Mehta Distributors   billed last month, paid this month ....... in "Received" this month, not in "Billed"
       R  Sharma Electronics   this month, two products: billed, paid, delivered (the top customer)
-      S  Kapoor Enterprises   this month: billed below the price list (discount with a reason), paid, delivered,
-                              then a credit note for a damaged piece
+      S  Kapoor Enterprises   this month: billed below the price list (discount with a reason), paid, delivered
       T  Singh Agencies       billed, then the bill cancelled (wrong details): in the Store to bill again
       U  Verma & Sons         in the Store, not billed yet ............. "Your turn: to bill"; its rate was agreed on the
                               order 5% under the price list ("Annual contract"), so the bill starts from that rate
@@ -362,7 +361,6 @@ async function main() {
             await bill(f, { items: [{ product_id: P1.id, rate, note: "Festive offer, 10% off" }] });
             await pay(f, "CASH");
             await giveOut(f);
-            await SA("POST", `/finished-goods/${f.id}/credit-note`, { amount: rate, reason: "One piece damaged in transit" });
         }
 
         const T = await raise("Singh Agencies", lines([P2, 2]), day(10));

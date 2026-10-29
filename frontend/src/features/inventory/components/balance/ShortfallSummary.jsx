@@ -19,7 +19,7 @@ export default function ShortfallSummary({
   return (
     <div className="grid border-b lg:grid-cols-[minmax(15rem,1fr)_2.2fr] lg:divide-x">
       <div className="flex flex-col justify-center gap-2 bg-cf-red-soft/60 px-[18px] py-5">
-        <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.6px] text-muted-foreground">
+        <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.6px] text-muted-foreground">
           <span className="grid size-6 place-items-center rounded-full bg-cf-red-soft text-destructive">
             <AlertTriangle className="size-3.5" aria-hidden />
           </span>

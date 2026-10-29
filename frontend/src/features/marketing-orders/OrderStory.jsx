@@ -98,7 +98,7 @@ function Figures({ cells }) {
     <div className="grid grid-cols-2 gap-2">
       {cells.map(([label, value, tone]) => (
         <div key={label} className="rounded-xl border bg-card px-3 py-2.5">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
+          <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{label}</p>
           <p className={cn("mt-0.5 text-lg font-extrabold tabular-nums", value ? tone : "text-muted-foreground")}>{value === null ? "-" : fmtQty(value)}</p>
         </div>
       ))}
@@ -113,7 +113,7 @@ function Step({ role, name, at, icon: Icon, tone, children }) {
       <span className={cn("relative z-10 grid size-7 shrink-0 place-items-center rounded-full", DOT[tone])}><Icon className="size-3.5" /></span>
       <div className="min-w-0 pt-0.5">
         <p className="text-xs text-muted-foreground">
-          <span className={cn("me-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ring-1 ring-inset", r.chip)}>{r.label}</span>
+          <span className={cn("me-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase ring-1 ring-inset", r.chip)}>{r.label}</span>
           {name || "-"} · {fmtDateTime(at)}
         </p>
         {children}
@@ -145,7 +145,7 @@ function NowStep({ now }) {
         {now.tone === "wait" ? <Clock3 className="size-3.5" /> : now.tone === "fail" ? <X className="size-3.5" /> : <Check className="size-3.5" />}
       </span>
       <div className="min-w-0 pt-1">
-        <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Now</p>
+        <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Now</p>
         <p className="text-sm font-semibold">{now.text}</p>
       </div>
     </li>
@@ -154,7 +154,7 @@ function NowStep({ now }) {
 
 function Part({ icon: Icon, title, hint, children }) {
   return (
-    <section className="space-y-3 rounded-2xl border p-4">
+    <section className="space-y-3 rounded-xl border p-4">
       <div>
         <h3 className="flex items-center gap-1.5 text-sm font-bold"><Icon className="size-4 text-primary" aria-hidden /> {title}</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>

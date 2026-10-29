@@ -3,7 +3,7 @@ import { cn } from "../../lib/utils"
 
 // White card: thin border, 14px corners, very soft shadow (same surface as the Inventory History panels).
 export const Card = ({ className, ...p }) => (
-  <div className={cn("rounded-[14px] border border-[#E3E6EB]/90 bg-card text-card-foreground shadow-[0_1px_2px_rgba(22,34,30,0.035),0_10px_28px_rgba(22,34,30,0.045)]", className)} {...p} />
+  <div className={cn("rounded-[14px] border border-border/90 bg-card text-card-foreground shadow-[0_1px_2px_rgba(22,34,30,0.035),0_10px_28px_rgba(22,34,30,0.045)]", className)} {...p} />
 )
 export const CardHeader = ({ className, ...p }) => (
   <div className={cn("flex min-h-[64px] items-start justify-between gap-4 rounded-t-[14px] border-b bg-gradient-to-r from-slate-50/90 via-white to-white px-5 py-4", className)} {...p} />

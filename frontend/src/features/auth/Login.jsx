@@ -56,27 +56,32 @@ function Login({ portal = LOGIN_PORTALS.SUPER_ADMIN }) {
     <div className="login-page">
       <div className="login-card">
         <div className="login-header">
+          <img src="/ss_logo.png" alt="" className="mx-auto mb-4 size-12 rounded-xl bg-white object-contain ring-1 ring-border" />
           <h1>{portal.title}</h1>
 
           <p>Inventory Management System</p>
         </div>
 
         <form onSubmit={handleLogin}>
-          <label>Email</label>
+          <label htmlFor="login-email">Email</label>
 
           <input
+            id="login-email"
             type="email"
+            aria-invalid={error && !email ? true : undefined}
             autoComplete="username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Enter your email"
           />
 
-          <label>Password</label>
+          <label htmlFor="login-password">Password</label>
 
           <div className="relative">
             <input
+              id="login-password"
               type={showPassword ? "text" : "password"}
+              aria-invalid={error && !password ? true : undefined}
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -94,7 +99,7 @@ function Login({ portal = LOGIN_PORTALS.SUPER_ADMIN }) {
             </button>
           </div>
 
-          {error && <div className="login-error">{error}</div>}
+          {error && <div role="alert" className="login-error">{error}</div>}
 
           <button type="submit" disabled={loading}>
             {loading ? "Logging in..." : "Login"}

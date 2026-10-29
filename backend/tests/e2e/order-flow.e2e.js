@@ -190,22 +190,21 @@ describe(`one order through every role${ONE_ROLE ? ` (every step as ${ONE_ROLE})
       ok("Giving out completes the order", done.status === "DELIVERED" && (await stage(orderId))?.waitingFor === null, (await stage(orderId))?.stage);
       const mine = (await MKT("GET", "/marketing-orders")).data.find((o) => o.id === orderId);
       ok("Marketing sees every unit given to the customer", mine?.delivered_units === UNITS, `${mine?.delivered_units} of ${UNITS}`);
-      ok("Super Admin makes a credit note (1 piece returned)", (await SA("POST", `/finished-goods/${fg.id}/credit-note`, { amount: 250, reason: "1 piece returned damaged" })).status === 201);
       const paidBill = (await MKT("GET", `/finished-goods/${fg.id}/bill`)).data;
-      ok("Bill: 1000 paid, 250 credit = 250 to give back", paidBill.due === 0 && paidBill.refund === 250 && paidBill.paymentStatus === "PAID", `refund ${paidBill.refund}`);
+      ok("Bill: 1000 paid, nothing left to pay", paidBill.due === 0 && paidBill.net === 1000 && paidBill.paymentStatus === "PAID", `due ${paidBill.due}`);
 
       /* ---- Sales & Billing (Marketing) ---- */
       const billsList = (await MKT("GET", "/sales/bills")).data;
       const active = billsList.find((b) => b.finishedGoodsId === fg.id && b.status === "ACTIVE");
       const cancelledBill = billsList.find((b) => b.finishedGoodsId === fg.id && b.status === "CANCELLED");
-      ok("Bills list: the bill, paid in full after the credit note", active?.paymentStatus === "PAID" && active.net === 750 && active.due === 0, `${active?.billNumber} net ${active?.net}`);
+      ok("Bills list: the bill, paid in full", active?.paymentStatus === "PAID" && active.net === 1000 && active.due === 0, `${active?.billNumber} net ${active?.net}`);
       ok("Bills list keeps the cancelled bill with its reason", cancelledBill?.paymentStatus === "CANCELLED" && !!cancelledBill.cancelReason);
       const sales = (await MKT("GET", "/sales/summary")).data;
-      ok("Marketing sees this month's sales and money in", sales.net === 750 && sales.collected === 1000 && sales.toCollect === 0);
+      ok("Marketing sees this month's sales and money in", sales.net === 1000 && sales.collected === 1000 && sales.toCollect === 0);
       const paid = (await MKT("GET", "/sales/payments")).data;
       ok("Received this month: the one payment behind it, adding up to the figure", paid.length === 1 && paid.reduce((s, p) => s + p.amount, 0) === sales.collected && paid.every((p) => p.billNumber), `${paid.length} payments`);
       const customerRow = (await MKT("GET", "/customers")).data.find((c) => c.id === customer.id);
-      ok("Customer shows what it bought and owes", customerRow?.bought === 750 && customerRow.due === 0 && customerRow.bills === 1, `bought ${customerRow?.bought}`);
+      ok("Customer shows what it bought and owes", customerRow?.bought === 1000 && customerRow.due === 0 && customerRow.bills === 1, `bought ${customerRow?.bought}`);
       ok("Marketing edits the customer", (await MKT("PUT", `/customers/${customer.id}`, { name: customer.name, phone: "9876543210", gstin: "27ABCDE1234F1Z5" })).status === 200);
       if (!ONE_ROLE) ok("Store cannot open Sales & Billing", (await STORE("GET", "/sales/bills")).status === 403);
       if (!ONE_ROLE) ok("Operations Admin can look at the bills", (await OPS("GET", "/sales/bills")).status === 200);
@@ -290,7 +289,7 @@ describe(`one order through every role${ONE_ROLE ? ` (every step as ${ONE_ROLE})
       const month = new Date().toISOString().slice(0, 7);
       const report = (await SA("GET", `/reports/monthly?month=${month}`)).data;
       ok("Report counts the sale", report.sales.total > 0 && report.orderTime.delivered === 1, `₹${report.sales.total}`);
-      ok("Report: net sales after the credit note, the cancelled bill not counted", report.sales.net === 750 && report.sales.bills === 1, `net ₹${report.sales.net}`);
+      ok("Report: net sales, the cancelled bill not counted", report.sales.net === 1000 && report.sales.bills === 1, `net ₹${report.sales.net}`);
       ok("Report: money received (the 1000 in one payment) and nothing left to collect", report.sales.collected === 1000 && report.sales.toCollect === 0, `received ₹${report.sales.collected}`);
       ok("Report: money spent on purchases", report.money.spent > 0, `₹${report.money.spent}`);
       ok("Report: profit worked out (standard costs where nothing was bought with a rate)", report.money.profit !== null && report.money.estimatedProducts > 0, `₹${report.money.profit}`);
@@ -312,8 +311,8 @@ describe(`one order through every role${ONE_ROLE ? ` (every step as ${ONE_ROLE})
       ok("Super Admin's bell has every department's notifications", ["MARKETING_MANAGER", "OPERATIONS_ADMIN", "STORE_MANAGER", "PRODUCTION_MANAGER", "PURCHASE_MANAGER"].every((r) => roles.has(r)), [...roles].length + " roles");
       ok("Each one says who sent it", inbox.items.some((x) => x.from_role && x.for_role !== x.from_role));
       const important = (await SA("GET", "/notifications?important=1")).data.items.map((x) => x.type);
-      ok("Important: IQC rejection, extra material, discounted bill, cancels, credit note",
-        ["IQC_RESULT", "EXTRA_MATERIAL_REQUESTED", "FINISHED_GOODS_BILLED", "ORDER_CANCELLED", "BILL_CANCELLED", "CREDIT_NOTE"].every((t) => important.includes(t)), [...new Set(important)].join(","));
+      ok("Important: IQC rejection, extra material, discounted bill, cancels",
+        ["IQC_RESULT", "EXTRA_MATERIAL_REQUESTED", "FINISHED_GOODS_BILLED", "ORDER_CANCELLED", "BILL_CANCELLED"].every((t) => important.includes(t)), [...new Set(important)].join(","));
       ok("Important leaves out the everyday hand-overs", !important.includes("MATERIAL_ISSUED") && !important.includes("FINISHED_GOODS_IN_STORE"));
       if (!ONE_ROLE) {
         const own = (await STORE("GET", "/notifications")).data.items;

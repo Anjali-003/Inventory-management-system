@@ -1,6 +1,6 @@
 /**
  * The Marketing dashboard's money (GET /sales/summary) on the real MySQL (a throw-away copy, see helpers/mysqlDb.js):
- *   trend   net sales (bills after credit notes) of the 6 months ending with the month asked, oldest first
+ *   trend   net sales (the ACTIVE bills' total) of the 6 months ending with the month asked, oldest first
  *   owed    each bill still to collect carries the saved customer's phone, for a payment reminder
  *   byProduct  what sold best in the month: units, amount, customers and share, biggest amount first
  */
@@ -41,8 +41,7 @@ describe("sales summary", () => {
     await billOn("2026-04-20", 999); // 7 months back: left out
     await billOn("2026-05-02", 1000);
     await billOn("2026-07-31", 2000);
-    const credited = await billOn("2026-09-14", 3000);
-    await db.query("INSERT INTO bill_credit_notes (credit_number, bill_id, amount, reason, created_at) VALUES ('CN-T-1', ?, 500, 'damaged', '2026-09-20 10:00:00')", [credited]);
+    await billOn("2026-09-14", 3000);
     await billOn("2026-10-01", 4000);
     await billOn("2026-10-02", 700, { status: "CANCELLED" }); // a cancelled bill is no sale
     await billOn("2026-11-01", 5000); // after the month asked: left out
@@ -53,7 +52,7 @@ describe("sales summary", () => {
       { month: "2026-06", net: 0 },
       { month: "2026-07", net: 2000 },
       { month: "2026-08", net: 0 },
-      { month: "2026-09", net: 2500 },
+      { month: "2026-09", net: 3000 },
       { month: "2026-10", net: 4000 },
     ]);
   });

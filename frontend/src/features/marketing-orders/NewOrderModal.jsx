@@ -133,7 +133,7 @@ export default function NewOrderModal({ from = null, onClose }) {
           </div>
         )}
 
-        <div className="rounded-2xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 sm:p-4">
+        <div className="rounded-xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 sm:p-4">
           <label className={LABEL} htmlFor="order-customer">Customer</label>
           <input
             id="order-customer"
@@ -153,7 +153,7 @@ export default function NewOrderModal({ from = null, onClose }) {
             : <p className="mt-1 text-xs text-muted-foreground">A new name is saved, so it can be picked next time.</p>}
         </div>
 
-        <div className="rounded-2xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 sm:p-4">
+        <div className="rounded-xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 sm:p-4">
           <label className={LABEL} htmlFor="order-edd">
             Customer wants it by
           </label>
@@ -184,7 +184,7 @@ export default function NewOrderModal({ from = null, onClose }) {
                   initial={{ opacity: 0, y: 12, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1, transition: SPRING }}
                   exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.15 } }}
-                  className="rounded-2xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 shadow-[0_1px_2px_rgba(22,34,30,0.04)] sm:p-4"
+                  className="rounded-xl border bg-gradient-to-br from-white to-slate-50/80 p-3.5 shadow-[0_1px_2px_rgba(22,34,30,0.04)] sm:p-4"
                 >
                   {/* the remove button lives in the card's own header, so it never has to line up with a field label */}
                   <div className="mb-3 flex items-center gap-2">

@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/feedback"
+import { pageButtonClass } from "@/components/PageKit"
 import { Users, SearchX } from "lucide-react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
@@ -30,7 +31,7 @@ export default function AttendanceList({
       <div>
         <EmptyState icon={Users} title="No active employees">Add employees first, then come back to mark attendance.</EmptyState>
         <div className="-mt-6 flex justify-center pb-10">
-          <Link to="/employees" className="inline-flex h-9 items-center rounded-lg bg-primary px-3.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/85">Go to employees</Link>
+          <Link to="/employees" className={pageButtonClass("primary")}>Go to employees</Link>
         </div>
       </div>
     ) : visible.length === 0 ? (

@@ -17,11 +17,11 @@ function ComponentRow({ c }) {
     <li className="flex items-center justify-between gap-3 px-[18px] py-2.5">
       <div className="min-w-0">
         <p className="truncate text-xs font-semibold">{c.name}</p>
-        <p className="mt-0.5 text-[10px] text-cf-faint">{c.sku}</p>
+        <p className="mt-0.5 text-[11px] text-cf-faint">{c.sku}</p>
       </div>
       <p className="whitespace-nowrap text-xs font-bold tabular-nums">
         {fmtQty(c.quantity)}{" "}
-        <span className="text-[10px] font-normal text-muted-foreground">{c.unit}</span>
+        <span className="text-[11px] font-normal text-muted-foreground">{c.unit}</span>
       </p>
     </li>
   );
@@ -83,7 +83,7 @@ export default function AllEntriesDialog({
                         <ChevronRight className={cn("size-4 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-90")} />
                         <span className="min-w-0">
                           <span className="block truncate text-xs font-semibold tabular-nums">{o.order_number}</span>
-                          <span className="mt-0.5 block text-[10px] text-cf-faint">
+                          <span className="mt-0.5 block text-[11px] text-cf-faint">
                             {WHERE[o.status] || o.status} · {o.components.length} components
                           </span>
                         </span>

@@ -59,7 +59,7 @@ function StripGrid({ items, cols, layoutId }) {
       {items.map((it) => {
         const inner = (
           <>
-            {it.active && <motion.span layoutId={layoutId} className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[#5B21D6] to-primary" />}
+            {it.active && <motion.span layoutId={layoutId} className="absolute inset-x-0 top-0 h-[3px] bg-primary" />}
             <span className="flex items-center gap-2 text-[11px] font-semibold text-muted-foreground">
               <span className={cn("size-2 rounded-full", DOT[it.tone ?? "neutral"])} />
               {it.label}
@@ -75,7 +75,7 @@ function StripGrid({ items, cols, layoutId }) {
             type="button"
             aria-pressed={!!it.active}
             onClick={it.onClick}
-            className={cn(cell, "outline-none transition-colors focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60", it.active ? "bg-cf-green-soft/70" : "bg-card hover:bg-cf-head")}
+            className={cn(cell, "outline-none transition-colors focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60", it.active ? "bg-accent/70" : "bg-card hover:bg-cf-head")}
           >
             {inner}
           </button>

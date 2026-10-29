@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { useUrlState } from "@/lib/useUrlState"
 import { Route } from "lucide-react"
 import PageHeader from "@/components/PageHeader"
+import { FilterPills } from "@/components/PageKit"
 import SearchBar from "@/components/SearchBar"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { Modal } from "@/components/Modal"
@@ -89,14 +90,9 @@ export default function OrderTracker() {
       {error && <div className="mb-4"><Notice title="Something went wrong">{errorMessage(error, "Could not load the orders.")}</Notice></div>}
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 sm:px-5">
-          {[["open", "Open"], ["stuck", `Stuck ${STUCK_DAYS}+ days`], ["late", "Late for customer"], ["done", "Done / closed"], ["all", "All"]].map(([k, l]) => (
-            <button key={k} type="button" aria-pressed={show === k} onClick={() => setShow(k)}
-              className={cn("rounded-full border px-3 py-1.5 text-xs font-semibold", show === k ? "border-primary bg-primary text-primary-foreground" : (k === "stuck" || k === "late") && counts[k] ? "border-rose-200 bg-rose-50 text-rose-800" : "bg-white text-slate-700")}>
-              {l} <span className="tabular-nums opacity-80">{counts[k]}</span>
-            </button>
-          ))}
+          <FilterPills label="Show orders" items={[["open", "Open"], ["stuck", `Stuck ${STUCK_DAYS}+ days`], ["late", "Late for customer"], ["done", "Done / closed"], ["all", "All"]].map(([k, l]) => ({ key: k, label: l, value: counts[k], active: show === k, alert: (k === "stuck" || k === "late") && counts[k] > 0, onClick: () => setShow(k) }))} />
           {roleFilter && (
-            <button type="button" onClick={() => setParam("role", "")} className="rounded-full border border-primary bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
+            <button type="button" onClick={() => setParam("role", "")} className="inline-flex h-8 items-center rounded-full border border-primary bg-primary/10 px-3 text-xs font-semibold text-primary hover:bg-primary/15">
               Waiting for {ROLE_LABELS[roleFilter] || roleFilter} ×
             </button>
           )}

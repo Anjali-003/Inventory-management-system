@@ -31,7 +31,7 @@ export function ItemCard({
           <span className="block break-words text-xs font-semibold leading-snug">
             {title}
           </span>
-          <span className="mt-0.5 block truncate text-[10px] text-cf-faint">
+          <span className="mt-0.5 block truncate text-[11px] text-cf-faint">
             {sub}
           </span>
         </span>

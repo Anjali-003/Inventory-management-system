@@ -6,6 +6,7 @@
 import { Suspense, lazy, useEffect } from "react";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
+import { MotionConfig } from "motion/react";
 
 import Layout from "@/components/Layout";
 import { ToastProvider } from "@/components/toast";
@@ -53,6 +54,8 @@ function TitleSync() {
 function App() {
   useResponsiveTables(); // phones: every table row becomes a card
   return (
+    // every animation in the app follows the OS "reduce motion" setting
+    <MotionConfig reducedMotion="user">
     <ToastProvider>
       <BrowserRouter>
         <TitleSync />
@@ -98,6 +101,7 @@ function App() {
         </Routes>
       </BrowserRouter>
     </ToastProvider>
+    </MotionConfig>
   );
 }
 

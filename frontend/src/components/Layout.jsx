@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { AnimatePresence, motion } from "motion/react";
-import { GiHamburgerMenu } from "react-icons/gi";
-import { TiPinOutline } from "react-icons/ti";
-import { VscUnpin } from "react-icons/vsc";
 import {
   X,
+  Menu,
+  Pin,
+  PinOff,
+  PanelLeftClose,
+  LogOut,
   Boxes,
   ClipboardList,
   ClipboardCheck,
@@ -257,10 +259,10 @@ function NavList({ id }) {
   })).filter((g) => g.items.length > 0);
 
   return (
-    <nav className="flex flex-col gap-5 p-3 pt-4">
+    <nav aria-label="Main" className="flex flex-col gap-5 p-3 pt-4">
       {groups.map((g) => (
         <div key={g.label} className="flex flex-col gap-1">
-          <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-[0.6px] text-cf-faint">
+          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.5px] text-cf-faint">
             {g.label}
           </p>
 
@@ -274,11 +276,24 @@ function NavList({ id }) {
   );
 }
 
+function LogoutButton({ onLogout }) {
+  return (
+    <button
+      type="button"
+      onClick={onLogout}
+      className="flex w-full items-center gap-3 rounded-[9px] px-3 py-2 text-left text-[13px] font-medium text-sidebar-foreground outline-none transition-colors hover:bg-cf-red-soft hover:text-destructive focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+    >
+      <LogOut className="size-[18px]" aria-hidden />
+      Logout
+    </button>
+  );
+}
+
 function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
   return (
-    <div className="flex min-h-full w-60 flex-col">
+    <div className="flex min-h-full w-full flex-col">
       <div className="flex h-11 items-center justify-between border-b px-4">
-        <span className="text-[10px] font-bold uppercase tracking-[0.6px] text-cf-faint">
+        <span className="text-[11px] font-bold uppercase tracking-[0.6px] text-cf-faint">
           Menu
         </span>
 
@@ -289,22 +304,38 @@ function SidebarBody({ id, pinned, onTogglePin, onLogout }) {
           onClick={onTogglePin}
           className="grid size-8 place-items-center rounded-lg text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
-          {pinned ? <VscUnpin className="size-5" /> : <TiPinOutline className="size-5" />}
+          {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
         </button>
       </div>
 
       <NavList id={id} />
 
-      <div className="mt-auto px-3 pb-4">
-        <button
-          onClick={onLogout}
-          className="w-full rounded-[9px] px-3 py-2 text-left text-[13px] font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          Logout
-        </button>
+      <div className="mt-auto border-t px-3 py-3">
+        <LogoutButton onLogout={onLogout} />
       </div>
     </div>
   );
+}
+
+/* The desktop sidebar's pinned / unpinned choice, kept in this browser. Until someone chooses, it is pinned on a
+   wide screen (1024px+) and floats on a tablet, where it would take too much of the page. Storage can be blocked
+   (private window): then that default is used. */
+const PIN_KEY = "sidebar-pinned";
+function readPinned() {
+  let saved = null;
+  try {
+    saved = localStorage.getItem(PIN_KEY);
+  } catch {
+    /* use the default */
+  }
+  return saved === null ? window.innerWidth >= 1024 : saved === "1";
+}
+function savePinned(on) {
+  try {
+    localStorage.setItem(PIN_KEY, on ? "1" : "0");
+  } catch {
+    /* not remembered, still works */
+  }
 }
 
 // pathname isi liye use ho raha hai, taaki page badalne par sidebar band ho aur naya page animation ke saath dikhe.
@@ -316,7 +347,7 @@ function ViewAsSwitcher({ value, onChange }) {
     <label className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
       <span className="hidden sm:inline">View as</span>
       <select aria-label="View the app as" value={value || ""} onChange={(e) => onChange(e.target.value || null)}
-        className={cn("h-8 rounded-full border px-2 text-xs font-semibold", value ? "border-amber-400 bg-amber-50 text-amber-950" : "bg-card text-foreground")}>
+        className={cn("h-8 w-32 truncate rounded-full border pl-2 pr-7 text-xs font-semibold sm:w-auto", value ? "border-amber-400 bg-amber-50 text-amber-950" : "bg-card text-foreground")}>
         <option value="">Super Admin (me)</option>
         {VIEW_AS_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
       </select>
@@ -332,7 +363,7 @@ export default function Layout() {
   const dispatch = useDispatch();
 
   const [open, setOpen] = useState(false); // mobile drawer
-  const [pinned, setPinned] = useState(false); // desktop: fixed in the layout (default: unpinned)
+  const [pinned, setPinned] = useState(readPinned); // desktop: fixed in the layout (default: pinned)
   const [floatOpen, setFloatOpen] = useState(false); // desktop: floating over the page while unpinned
 
   useEffect(() => {
@@ -340,17 +371,26 @@ export default function Layout() {
     setFloatOpen(false);
   }, [pathname]);
 
+  // Escape closes the floating sidebar and the phone menu
   useEffect(() => {
-    if (!floatOpen) return;
-    const onKey = (e) => e.key === "Escape" && setFloatOpen(false);
+    if (!floatOpen && !open) return;
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      setFloatOpen(false);
+      setOpen(false);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [floatOpen]);
+  }, [floatOpen, open]);
 
   const togglePin = () => {
-    setPinned((p) => !p);
+    savePinned(!pinned);
+    setPinned(!pinned);
     setFloatOpen(false);
   };
+
+  // the header's sidebar button: hides a pinned sidebar, otherwise opens / closes the floating one
+  const toggleSidebar = () => (pinned ? togglePin() : setFloatOpen((o) => !o));
 
   // Super Admin: show the app as another role (or back), starting from that role's dashboard
   const viewAs = (role) => {
@@ -380,50 +420,50 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white/85 px-3 text-foreground backdrop-blur-md md:px-6">
-        <div className="flex items-center gap-2 md:gap-3">
+      <a href="#main-content" className="skip-link">Skip to content</a>
+
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b bg-white/90 px-3 text-foreground backdrop-blur-md md:px-6">
+        <div className="flex min-w-0 items-center gap-2 md:gap-3">
           <button
+            type="button"
             aria-label="Open menu"
+            aria-expanded={open}
             onClick={() => setOpen(true)}
-            className="grid size-9 place-items-center rounded-lg hover:bg-muted md:hidden"
+            className="grid size-9 shrink-0 place-items-center rounded-lg hover:bg-muted md:hidden"
           >
-            <GiHamburgerMenu className="size-5" />
+            <Menu className="size-5" />
           </button>
 
           <button
-            aria-label="Toggle sidebar"
+            type="button"
+            aria-label={pinned ? "Hide sidebar" : floatOpen ? "Close menu" : "Open menu"}
+            title={pinned ? "Hide sidebar" : "Show menu"}
             aria-expanded={pinned || floatOpen}
-            onClick={() => setFloatOpen((o) => !o)}
-            className={cn(
-              "hidden size-9 place-items-center rounded-lg hover:bg-muted md:grid",
-              pinned && "md:invisible",
-            )}
+            onClick={toggleSidebar}
+            className="hidden size-9 shrink-0 place-items-center rounded-lg text-sidebar-foreground hover:bg-muted hover:text-foreground md:grid"
           >
-            <GiHamburgerMenu className="size-5" />
+            {pinned ? <PanelLeftClose className="size-5" /> : <Menu className="size-5" />}
           </button>
 
           <img
             src="/ss_logo.png"
             alt="Sensation Systems"
-            className="size-8 rounded-lg bg-white object-contain ring-1 ring-border"
+            className="size-8 shrink-0 rounded-lg bg-white object-contain ring-1 ring-border"
           />
 
-          <div className="hidden leading-none md:block">
-            <p className="text-lg font-bold italic tracking-tight text-primary">
-              Sensation Systems
-            </p>
+          <p className="hidden text-base font-bold italic tracking-tight text-primary lg:block">
+            Sensation Systems
+          </p>
 
-            <p className="mt-0.5 text-[11px] font-medium text-primary"></p>
-          </div>
+          {/* which role this tab works as (one browser can be logged in as several roles) */}
+          {roleLabel && (
+            <span className="min-w-0 truncate rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground ring-1 ring-inset ring-primary/15">
+              {roleLabel}
+            </span>
+          )}
         </div>
 
-        {roleLabel && (
-          <p className="min-w-0 flex-1 truncate px-2 text-center text-base font-extrabold uppercase tracking-wide text-primary sm:text-xl lg:text-2xl">
-            {roleLabel}
-          </p>
-        )}
-
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-4">
           <span className="hidden text-xs text-muted-foreground xl:block">{today}</span>
 
           {realRole === "SUPER_ADMIN" && <ViewAsSwitcher value={viewingAs} onChange={viewAs} />}
@@ -431,10 +471,7 @@ export default function Layout() {
           {user && <NotificationBell />}
 
           {user && (
-            <div className="hidden text-right leading-tight sm:block">
-              <p className="text-xs font-semibold">{user.name}</p>
-              <p className="text-[11px] text-muted-foreground">{roleLabel}</p>
-            </div>
+            <p className="hidden max-w-40 truncate text-[13px] font-semibold sm:block">{user.name}</p>
           )}
 
           <ProfileMenu user={user} roleLabel={roleLabel} onLogout={handleLogout} />
@@ -459,7 +496,7 @@ export default function Layout() {
           aria-hidden={!pinned}
           inert={!pinned}
         >
-          <div className="h-full w-60 overflow-y-auto">
+          <div className="h-full w-60 overflow-y-auto overflow-x-hidden [scrollbar-width:thin]">
             <SidebarBody id="pinned" pinned onTogglePin={togglePin} onLogout={handleLogout} />
           </div>
         </motion.aside>
@@ -479,7 +516,7 @@ export default function Layout() {
 
               <motion.aside
                 key="float-panel"
-                className="fixed bottom-0 left-0 top-14 z-40 hidden w-60 overflow-y-auto border-r bg-sidebar shadow-xl md:block"
+                className="fixed bottom-0 left-0 top-14 z-40 hidden w-60 overflow-y-auto overflow-x-hidden border-r [scrollbar-width:thin] bg-sidebar shadow-xl md:block"
                 initial={{ x: "-100%" }}
                 animate={{ x: 0 }}
                 exit={{ x: "-100%" }}
@@ -505,7 +542,8 @@ export default function Layout() {
 
               <motion.aside
                 key="drawer"
-                className="fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] overflow-y-auto bg-sidebar shadow-xl md:hidden"
+                aria-label="Menu"
+                className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-sidebar shadow-xl md:hidden"
                 initial={{ x: "-100%" }}
                 animate={{ x: 0 }}
                 exit={{ x: "-100%" }}
@@ -529,35 +567,30 @@ export default function Layout() {
 
                 <NavList id="mobile" />
 
-                <div className="px-3 pb-4">
-                  <button
-                    onClick={handleLogout}
-                    className="w-full rounded-[9px] px-3 py-2 text-left text-[13px] font-medium text-sidebar-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  >
-                    Logout
-                  </button>
+                <div className="mt-auto border-t px-3 py-3">
+                  <LogoutButton onLogout={handleLogout} />
                 </div>
               </motion.aside>
             </>
           )}
         </AnimatePresence>
 
-        <main className="min-w-0 flex-1">
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 outline-none">
           <motion.div
             key={pathname}
             initial={{
               opacity: 0,
-              y: 10,
+              y: 6,
             }}
             animate={{
               opacity: 1,
               y: 0,
             }}
             transition={{
-              duration: 0.25,
+              duration: 0.2,
               ease: "easeOut",
             }}
-            className="w-full px-4 py-5 md:px-8 md:py-6"
+            className="mx-auto w-full max-w-[1600px] px-4 py-5 md:px-8 md:py-6"
           >
             <Outlet />
           </motion.div>

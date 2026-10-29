@@ -1,3 +1,4 @@
+import { cloneElement, isValidElement } from "react"
 import { cn } from "../lib/utils"
 
 const base =
@@ -15,17 +16,25 @@ export const selectClass =
   "h-9 rounded-[8px] border border-cf-line-strong bg-card pl-3 pr-8 text-[13px] outline-none transition-shadow focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/15"
 
 export function Field({ label, htmlFor, required, error, hint, className, children }) {
+  // screen readers read the error (or hint) and "required" with the box; a child that sets its own keeps it
+  const noteId = htmlFor && (error ? `${htmlFor}-error` : hint ? `${htmlFor}-hint` : null)
+  const control = isValidElement(children) && htmlFor
+    ? cloneElement(children, {
+        "aria-describedby": children.props["aria-describedby"] ?? noteId ?? undefined,
+        "aria-required": children.props["aria-required"] ?? (required || undefined),
+      })
+    : children
   return (
     <div className={className}>
       <label htmlFor={htmlFor} className="mb-1.5 block text-[13px] font-semibold">
         {label}
         {required && <span className="ml-0.5 text-destructive" aria-hidden="true">*</span>}
       </label>
-      {children}
+      {control}
       {error ? (
-        <p id={`${htmlFor}-error`} className="mt-1.5 text-xs text-destructive">{error}</p>
+        <p id={`${htmlFor}-error`} role="alert" className="mt-1.5 text-xs text-destructive">{error}</p>
       ) : hint ? (
-        <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>
+        <p id={htmlFor ? `${htmlFor}-hint` : undefined} className="mt-1.5 text-xs text-muted-foreground">{hint}</p>
       ) : null}
     </div>
   )

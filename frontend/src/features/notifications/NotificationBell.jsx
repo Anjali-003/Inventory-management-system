@@ -100,7 +100,7 @@ export default function NotificationBell() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.5, opacity: 0 }}
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              className="absolute -right-0.5 -top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white tabular-nums"
+              className="absolute -right-0.5 -top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-destructive px-1 text-[11px] font-bold leading-none text-white ring-2 ring-white tabular-nums"
             >
               {unread > 99 ? "99+" : unread}
             </motion.span>
@@ -117,7 +117,7 @@ export default function NotificationBell() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: 0.12 } }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="fixed inset-x-2 top-16 z-50 flex max-h-[calc(100vh-5rem)] origin-top-right flex-col overflow-hidden rounded-2xl border bg-popover text-popover-foreground shadow-[0_20px_48px_-12px_rgba(22,34,30,0.28)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-[400px] sm:max-h-[min(560px,calc(100vh-5rem))]"
+            className="fixed inset-x-2 top-16 z-50 flex max-h-[calc(100vh-5rem)] origin-top-right flex-col overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-[0_20px_48px_-12px_rgba(22,34,30,0.28)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-[400px] sm:max-h-[min(560px,calc(100vh-5rem))]"
           >
             <div className="flex items-center justify-between gap-3 border-b px-4 pb-2 pt-3.5">
               <div>
@@ -128,7 +128,7 @@ export default function NotificationBell() {
                 type="button"
                 disabled={!unread}
                 onClick={() => markAllRead()}
-                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-soft focus-visible:ring-2 focus-visible:ring-primary/30 disabled:pointer-events-none disabled:text-muted-foreground disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold text-primary outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/30 disabled:pointer-events-none disabled:text-muted-foreground disabled:opacity-60"
               >
                 <CheckCheck className="size-3.5" /> Mark all as read
               </button>
@@ -185,7 +185,7 @@ export default function NotificationBell() {
 function Section({ label, items, onOpen, ceo = false }) {
   return (
     <div>
-      {label && <p className="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-[0.6px] text-cf-faint">{label}</p>}
+      {label && <p className="px-4 pb-1 pt-3 text-[11px] font-bold uppercase tracking-[0.6px] text-cf-faint">{label}</p>}
       <ul className="py-1">
         {items.map((n) => (
           <li key={n.id}>
@@ -209,7 +209,7 @@ function NotificationRow({ n, onOpen, ceo }) {
       onClick={onOpen}
       className={cn(
         "group flex w-full items-start gap-3 px-4 py-3 text-left outline-none transition-colors hover:bg-muted/70 focus-visible:bg-muted/70",
-        !n.read && "bg-cf-green-soft/40"
+        !n.read && "bg-accent/40"
       )}
     >
       <span className={cn("mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl", n.done ? "bg-muted text-muted-foreground" : `${s.soft} ${s.tone}`)}>
@@ -219,7 +219,7 @@ function NotificationRow({ n, onOpen, ceo }) {
         <span className={cn("block text-[13px] leading-snug", n.read ? "font-medium text-foreground/80" : "font-semibold text-foreground")}>{n.title}</span>
         {n.body && <span className="mt-0.5 line-clamp-2 block text-xs leading-snug text-muted-foreground">{n.body}</span>}
         {ceo && n.for_role && n.for_role !== "SUPER_ADMIN" && (
-          <span className="mt-1 flex flex-wrap items-center gap-1 text-[10px] font-semibold">
+          <span className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-semibold">
             {n.from_role && <span className="rounded-full bg-muted px-1.5 py-0.5 text-muted-foreground">{ROLE_LABELS[n.from_role] || n.from_role}</span>}
             <span className="text-muted-foreground">→</span>
             <span className="rounded-full bg-muted px-1.5 py-0.5 text-muted-foreground">{ROLE_LABELS[n.for_role] || n.for_role}</span>

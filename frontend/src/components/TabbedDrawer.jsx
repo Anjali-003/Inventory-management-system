@@ -100,15 +100,15 @@ function Panel({ eyebrow, title, subtitle, tabs = [], tab, onTab, tabContent, ac
         aria-modal="true"
         aria-labelledby={`${uid}-title`}
         tabIndex={-1}
-        className="absolute inset-y-0 end-0 flex w-full flex-col bg-card shadow-[-24px_0_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-[#E3E6EB] sm:max-w-xl"
+        className="absolute inset-y-0 end-0 flex w-full flex-col bg-card shadow-[-24px_0_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-border sm:max-w-xl"
         initial={{ x: offscreen }}
         animate={{ x: 0 }}
         exit={{ x: offscreen }}
         transition={SPRING}
       >
-        <div className="flex items-start justify-between gap-4 border-b bg-gradient-to-r from-emerald-50/70 via-white to-white px-5 pt-4">
+        <div className="flex items-start justify-between gap-4 border-b bg-card px-5 pt-4">
           <div className="min-w-0 pb-3">
-            {eyebrow && <p className="text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">{eyebrow}</p>}
+            {eyebrow && <p className="text-[11px] font-bold uppercase tracking-[0.5px] text-cf-faint">{eyebrow}</p>}
             <h2 id={`${uid}-title`} className="mt-0.5 truncate text-[17px] font-bold leading-snug tracking-[-0.2px] tabular-nums">{title}</h2>
             {subtitle && <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-muted-foreground">{subtitle}</div>}
           </div>
@@ -144,7 +144,7 @@ function Panel({ eyebrow, title, subtitle, tabs = [], tab, onTab, tabContent, ac
               >
                 {t.label}
                 {t.badge != null && (
-                  <span className={cn("rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums", active ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-600")}>{t.badge}</span>
+                  <span className={cn("rounded-full px-1.5 py-px text-[11px] font-bold tabular-nums", active ? "bg-primary/10 text-primary" : "bg-slate-100 text-slate-600")}>{t.badge}</span>
                 )}
                 {active && <motion.span layoutId={`${uid}-ink`} transition={SPRING} className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary" />}
               </button>
@@ -187,7 +187,7 @@ export default function TabbedDrawer({ open, ...props }) {
 export function Fact({ label, children }) {
   return (
     <div className="min-w-0 rounded-xl border bg-card px-3.5 py-3">
-      <dt className="text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">{label}</dt>
+      <dt className="text-[11px] font-bold uppercase tracking-[0.5px] text-cf-faint">{label}</dt>
       <dd className="mt-1 min-w-0 break-words text-sm font-medium">{children}</dd>
     </div>
   )

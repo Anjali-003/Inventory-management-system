@@ -46,10 +46,10 @@ function orderRhythm(r) {
 const mapRow = (r) => ({
     id: r.id, name: r.name, address: r.address, gstin: r.gstin, phone: r.phone,
     bills: Number(r.bills || 0),
-    // bought = bills after credit notes; due = what the customer still owes
-    bought: money(Number(r.billed || 0) - Number(r.credited || 0)),
+    // bought = the ACTIVE bills' total; due = what the customer still owes
+    bought: money(r.billed),
     paid: money(r.paid),
-    due: Math.max(0, money(Number(r.billed || 0) - Number(r.credited || 0) - Number(r.paid || 0))),
+    due: Math.max(0, money(Number(r.billed || 0) - Number(r.paid || 0))),
     lastBillAt: r.last_bill_at || null,
     ...orderRhythm(r),
 });
@@ -59,8 +59,6 @@ async function list() {
         `SELECT c.*,
                 (SELECT COUNT(*) FROM bills b WHERE b.customer_id = c.id AND b.status = 'ACTIVE') AS bills,
                 (SELECT COALESCE(SUM(b.total), 0) FROM bills b WHERE b.customer_id = c.id AND b.status = 'ACTIVE') AS billed,
-                (SELECT COALESCE(SUM(cn.amount), 0) FROM bill_credit_notes cn JOIN bills b ON b.id = cn.bill_id
-                  WHERE b.customer_id = c.id AND b.status = 'ACTIVE') AS credited,
                 (SELECT COALESCE(SUM(bp.amount), 0) FROM bill_payments bp JOIN bills b ON b.id = bp.bill_id
                   WHERE b.customer_id = c.id AND b.status = 'ACTIVE') AS paid,
                 (SELECT MAX(b.created_at) FROM bills b WHERE b.customer_id = c.id AND b.status = 'ACTIVE') AS last_bill_at,

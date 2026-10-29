@@ -32,7 +32,7 @@ export function ProductionCard({ item, onOpen }) {
           ["QC ready", qc],
         ].map(([label, value]) => (
           <div key={label} className="bg-card py-2.5">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
               {label}
             </p>
             <p className="font-semibold tabular-nums">{value}</p>

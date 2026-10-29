@@ -71,7 +71,7 @@ function Panel({ onClose, title, description, size, busy, onSubmit, footer, chil
         aria-describedby={description ? descId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-t-2xl bg-card shadow-[0_24px_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-[#E3E6EB] sm:max-h-[calc(100dvh-3rem)] sm:rounded-[16px]",
+          "relative flex max-h-[calc(100dvh-1.5rem)] w-full flex-col overflow-hidden rounded-t-2xl bg-card shadow-[0_24px_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-border sm:max-h-[calc(100dvh-3rem)] sm:rounded-xl",
           SIZES[size],
           className
         )}
@@ -80,9 +80,9 @@ function Panel({ onClose, title, description, size, busy, onSubmit, footer, chil
         exit={{ opacity: 0, y: 10, scale: 0.985 }}
         transition={{ duration: 0.18, ease: "easeOut" }}
       >
-        <div className="flex items-start justify-between gap-4 border-b bg-gradient-to-r from-slate-50/90 via-white to-white px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b bg-card px-5 py-4">
           <div className="min-w-0">
-            <h2 id={titleId} className="text-[15px] font-bold leading-snug tracking-[-0.2px]">{title}</h2>
+            <h2 id={titleId} className="text-base font-semibold leading-snug tracking-tight">{title}</h2>
             {description && <p id={descId} className="mt-1 text-sm text-muted-foreground">{description}</p>}
           </div>
           <button
@@ -154,7 +154,7 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, children, confi
       }
     >
       <div className="flex gap-3.5">
-        <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", danger ? "bg-cf-red-soft text-destructive" : "bg-cf-green-soft text-primary")}>
+        <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", danger ? "bg-cf-red-soft text-destructive" : "bg-accent text-primary")}>
           <AlertCircle className="size-[18px]" />
         </span>
         <div className="min-w-0 space-y-2 pt-0.5 text-sm text-muted-foreground">{children}</div>

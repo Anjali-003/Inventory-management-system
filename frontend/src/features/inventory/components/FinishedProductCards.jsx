@@ -40,7 +40,7 @@ export default function FinishedProductCards({ data }) {
           <div key={c.key} className="px-5 py-[18px]">
             <p className="text-[11px] font-semibold text-muted-foreground">{c.label}</p>
             <p className={cn("mt-1.5 text-[22px] font-bold leading-tight tracking-[-0.6px] tabular-nums", c.accent && "text-primary")}>{c.value}</p>
-            <p className="mt-0.5 text-[10px] text-cf-faint">{c.hint}</p>
+            <p className="mt-0.5 text-[11px] text-cf-faint">{c.hint}</p>
           </div>
         ))}
       </div>
@@ -72,7 +72,7 @@ export default function FinishedProductCards({ data }) {
                       <Initials name={p.name} />
                       <div className="min-w-0">
                         <p className="font-semibold">{p.name}</p>
-                        <p className="mt-0.5 text-[10px] text-cf-faint">{p.sku}</p>
+                        <p className="mt-0.5 text-[11px] text-cf-faint">{p.sku}</p>
                       </div>
                     </div>
                   </td>
@@ -89,7 +89,7 @@ export default function FinishedProductCards({ data }) {
                           transition={{ delay: 0.25 + i * 0.07, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
                         />
                       </div>
-                      <span className="w-9 text-[10px] tabular-nums text-muted-foreground">{Math.round(share)}%</span>
+                      <span className="w-9 text-[11px] tabular-nums text-muted-foreground">{Math.round(share)}%</span>
                     </div>
                   </td>
                 </motion.tr>

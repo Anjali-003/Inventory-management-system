@@ -121,7 +121,7 @@ export default function ProfileMenu({ user, roleLabel, onLogout }) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: 0.12 } }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className="fixed inset-x-2 top-16 z-50 origin-top-right overflow-hidden rounded-2xl border bg-popover text-popover-foreground shadow-[0_20px_48px_-12px_rgba(23,26,33,0.28)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-80"
+            className="fixed inset-x-2 top-16 z-50 origin-top-right overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-[0_20px_48px_-12px_rgba(23,26,33,0.28)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-[calc(100%+8px)] sm:w-80"
           >
             {/* who is logged in */}
             <div className="flex items-center gap-3 border-b px-4 py-4">

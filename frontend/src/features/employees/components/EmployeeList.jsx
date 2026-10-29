@@ -67,7 +67,7 @@ export default function EmployeeList({
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-cf-head text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">
+              <tr className="border-b bg-cf-head text-[11px] font-bold uppercase tracking-[0.5px] text-cf-faint">
                 <SortHeader
                   label="Employee"
                   k="name"

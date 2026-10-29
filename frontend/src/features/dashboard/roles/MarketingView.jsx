@@ -110,7 +110,7 @@ function OrderCard({ order, canSend, busy, onSend, onOpen }) {
   const items = order.items ?? []
   const rejected = order.approval_status === "REJECTED"
   return (
-    <motion.li variants={rise} className="relative rounded-xl border border-[#E3E6EB] bg-card transition-colors duration-200 hover:border-[#CDD2DA]">
+    <motion.li variants={rise} className="relative rounded-xl border border-border bg-card transition-colors duration-200 hover:border-lp-rule">
       <button type="button" onClick={onOpen} aria-label={`Open ${order.order_number}`} className="absolute inset-0 rounded-xl outline-none transition-colors hover:bg-lp-soft active:bg-lp-tint focus-visible:ring-2 focus-visible:ring-ring/60" />
       <div className="pointer-events-none relative p-4">
         <div className="flex items-start justify-between gap-3">
@@ -476,7 +476,7 @@ export default function MarketingView() {
           detail: sales?.lastMonth ? <VsLastMonth now={sales.collected} before={sales.lastMonth.collected} prev={prev} /> : "Payments in" },
         // gross margin: an estimate from the parts' cost, so it says so on hover; only the % is shown, never costs
         { label: month === thisMonth ? "Margin this month" : `Margin in ${label}`, icon: Percent, tone: "blue",
-          title: "Sales minus what the products' parts cost at their latest purchase rate (and credit notes). Labour and overheads are not included.",
+          title: "Sales minus what the products' parts cost at their latest purchase rate. Labour and overheads are not included.",
           value: loadingFigures ? "…" : sales?.margin?.pct == null ? "—" : `${sales.margin.pct}%`,
           detail: sales?.margin ? <MarginChange pct={sales.margin.pct} lastPct={sales.margin.lastPct} prev={prev ?? "last month"} /> : "Parts cost only, an estimate" },
         { label: "Money to collect", icon: IndianRupee, tone: owed ? "amber" : "green", to: "/bills?show=open", value: money(owed),

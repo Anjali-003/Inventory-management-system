@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { fmtQty } from "@/lib/stock";
 
 /*
-    Building blocks for the Inventory History page, in the CircuitFlow look (green, soft grey, compact type, DM Sans).
+    Building blocks for the Inventory History page, in the CircuitFlow look (green, soft grey, compact type).
     The look comes from the `.cf-scope` wrapper on the page (see index.css), so everything here is plain Tailwind.
 
     Exports: CountUp, Reveal, Panel, PanelHeader, CfButton, StatCard, TabBar, TabPanel, Pill, Initials, MonthBars
@@ -173,7 +173,7 @@ export function StatCard({
       whileHover={{ y: -2 }}
       {...(to ? { to } : onClick ? { type: "button", onClick, "aria-pressed": active } : {})}
       title={title}
-      className={cn(SURFACE, "group relative min-h-[122px] overflow-hidden py-5 pl-[68px] pr-5 transition-[transform,border-color] duration-200 hover:border-lp-rule max-sm:min-h-[142px] max-sm:pl-4 max-sm:pt-[61px]", live && "block w-full cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-lp-green", active && "border-lp-green ring-2 ring-lp-green/20")}
+      className={cn(SURFACE, "group relative min-h-[122px] overflow-hidden py-5 pl-[68px] pr-5 transition-[transform,border-color] duration-200 hover:border-lp-rule max-sm:min-h-0 max-sm:py-4", live && "block w-full cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-lp-green", active && "border-lp-green ring-2 ring-lp-green/20")}
     >
       {live && (
         <ArrowUpRight
@@ -183,7 +183,7 @@ export function StatCard({
       )}
       <span
         className={cn(
-          "absolute left-4 top-5 grid size-10 place-items-center rounded-xl max-sm:top-3.5",
+          "absolute left-4 top-5 grid size-10 place-items-center rounded-xl max-sm:top-4",
           tile,
         )}
       >
@@ -318,7 +318,7 @@ export function Pill({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-[9px] py-1 text-[10px] font-semibold",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-[9px] py-1 text-[11px] font-semibold",
         PILL[tone],
         className,
       )}
@@ -368,7 +368,7 @@ export function Initials({ name, className }) {
     <span
       aria-hidden
       className={cn(
-        "grid size-8 shrink-0 place-items-center rounded-lg bg-cf-green-soft text-[11px] font-bold text-primary",
+        "grid size-8 shrink-0 place-items-center rounded-lg bg-accent text-[11px] font-bold text-primary",
         className,
       )}
     >
@@ -426,7 +426,7 @@ export function MonthBars({
             >
               <span
                 className={cn(
-                  "h-4 whitespace-nowrap text-[10px] font-bold tabular-nums transition-opacity",
+                  "h-4 whitespace-nowrap text-[11px] font-bold tabular-nums transition-opacity",
                   active
                     ? "text-primary opacity-100"
                     : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100",
@@ -459,7 +459,7 @@ export function MonthBars({
               </span>
               <span
                 className={cn(
-                  "truncate text-[10px]",
+                  "truncate text-[11px]",
                   active
                     ? "font-bold text-foreground"
                     : r.disabled

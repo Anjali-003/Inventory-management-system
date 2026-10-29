@@ -225,7 +225,7 @@ export function PurchaseSteps({ status, className }) {
               transition={{ ...SPRING_SOFT, delay: 0.08 * i }}
             />
           </span>
-          <span className={cn("mt-1.5 block truncate text-[10px] font-medium", state === "todo" ? "text-cf-faint" : state === "fail" ? "text-destructive" : "text-muted-foreground")}>
+          <span className={cn("mt-1.5 block truncate text-[11px] font-medium", state === "todo" ? "text-cf-faint" : state === "fail" ? "text-destructive" : "text-muted-foreground")}>
             {label}
           </span>
         </div>
@@ -278,7 +278,7 @@ export function PurchaseCard({ purchase: p, editable, busy, onOpen, onReceive, o
   const lines = p.totals?.lines ?? p.items?.length ?? 0
   const canStep = editable && (p.status === "ORDER_PLACED" || p.status === "RECEIVED")
   return (
-    <motion.li variants={rise} className="relative rounded-xl border border-[#E3E6EB] bg-card transition-colors duration-200 hover:border-[#CDD2DA]">
+    <motion.li variants={rise} className="relative rounded-xl border border-border bg-card transition-colors duration-200 hover:border-lp-rule">
       <button type="button" onClick={onOpen} aria-label={`Open ${p.po_number}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />
       <div className="pointer-events-none relative p-4">
         <div className="flex items-start justify-between gap-3">

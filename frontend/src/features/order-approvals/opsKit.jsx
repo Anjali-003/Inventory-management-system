@@ -95,7 +95,7 @@ export function OpsPanel({ title, description, to, toLabel, loading, children })
           <CardTitle>{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </div>
-        {to && <Link to={to} className="inline-flex h-9 shrink-0 items-center rounded-[10px] border border-cf-line-strong bg-card px-3 text-xs font-semibold text-primary outline-none transition-colors hover:bg-cf-green-soft focus-visible:ring-2 focus-visible:ring-ring/60">{toLabel}</Link>}
+        {to && <Link to={to} className="inline-flex h-9 shrink-0 items-center rounded-[10px] border border-cf-line-strong bg-card px-3 text-xs font-semibold text-primary outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/60">{toLabel}</Link>}
       </CardHeader>
       {loading ? <div className="space-y-2 p-5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div> : children}
     </Card>
@@ -121,7 +121,7 @@ export function ApprovalCard({ order, showPlan, onOpen }) {
   const rejected = order.approval_status === "REJECTED"
 
   return (
-    <motion.li variants={rise} className="relative rounded-xl border border-[#E3E6EB] bg-card transition-colors duration-200 hover:border-[#CDD2DA]">
+    <motion.li variants={rise} className="relative rounded-xl border border-border bg-card transition-colors duration-200 hover:border-lp-rule">
       <button type="button" onClick={onOpen} aria-label={`Open ${order.order_number}`} className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring/60" />
       <div className="pointer-events-none relative p-4">
         <div className="flex items-start justify-between gap-3">
@@ -145,7 +145,7 @@ export function ApprovalCard({ order, showPlan, onOpen }) {
         </div>
 
         {showPlan && approvable && (
-          <div className="mt-3 rounded-xl border border-[#E3E6EB] px-3 py-2.5">
+          <div className="mt-3 rounded-xl border border-border px-3 py-2.5">
             <PlanSummary orderId={order.id} items={items} />
           </div>
         )}
@@ -177,7 +177,7 @@ export function ApprovalPageCard({ order: o, canAct, onOpen, onReview }) {
     <motion.article
       layout="position"
       variants={rise}
-      className="relative overflow-hidden rounded-2xl border border-[#E3E6EB] bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
+      className="relative overflow-hidden rounded-xl border border-border bg-card shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]"
     >
       <span aria-hidden className={cn("absolute inset-y-0 start-0 w-1 bg-gradient-to-b", stage?.s.grad ?? "from-slate-600 to-slate-800")} />
 

@@ -39,5 +39,4 @@ module.exports = {
     step,
     addPayment: withBody("addPayment", "Failed to record the payment"),
     cancelBill: withBody("cancelBill", "Failed to cancel the bill"),
-    addCreditNote: withBody("addCreditNote", "Failed to make the credit note"),
 };

@@ -63,12 +63,12 @@ export function BomBlockModal({ order, plan, onClose }) {
         <motion.div
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1, transition: SPRING_SOFT }}
-          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-600 to-orange-800 p-5 text-white shadow-lg shadow-orange-600/30"
+          className="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-600 to-orange-800 p-5 text-white shadow-lg shadow-orange-600/30"
         >
           <span aria-hidden className="pointer-events-none absolute -end-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
           <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/60" />
           <div className="relative flex items-center gap-4">
-            <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-white/20 ring-1 ring-inset ring-white/40 motion-safe:animate-pulse">
+            <span className="grid size-14 shrink-0 place-items-center rounded-xl bg-white/20 ring-1 ring-inset ring-white/40 motion-safe:animate-pulse">
               <TriangleAlert className="size-8" strokeWidth={2.2} aria-hidden />
             </span>
             <div className="min-w-0">

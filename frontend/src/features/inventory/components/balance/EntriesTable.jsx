@@ -17,7 +17,7 @@ const th =
 export function OrderCell({ m }) {
   return m.order_number ? (
     <div>
-      <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-cf-green-soft px-2 py-0.5 text-[11px] font-bold tabular-nums text-primary">
+      <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-accent px-2 py-0.5 text-[11px] font-bold tabular-nums text-primary">
         <ClipboardList className="size-3" aria-hidden />
         {m.order_number}
       </span>
@@ -76,7 +76,7 @@ export function EntriesTable({ rows, showComponent, showReason }) {
             {showComponent && (
               <td className="whitespace-nowrap px-[18px] py-3">
                 <p className="font-semibold">{m.component_name}</p>
-                <p className="mt-0.5 text-[10px] text-cf-faint">{m.sku}</p>
+                <p className="mt-0.5 text-[11px] text-cf-faint">{m.sku}</p>
               </td>
             )}
             {showReason && (
@@ -100,7 +100,7 @@ export function EntriesTable({ rows, showComponent, showReason }) {
               )}
             >
               {fmtQty(m.quantity)}{" "}
-              <span className="text-[10px] font-normal text-muted-foreground">
+              <span className="text-[11px] font-normal text-muted-foreground">
                 {m.unit}
               </span>
             </td>

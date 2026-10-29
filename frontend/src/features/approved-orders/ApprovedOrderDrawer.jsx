@@ -110,7 +110,7 @@ function OverviewTab({ order }) {
         key={stage.status}
         initial={{ opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1, transition: SPRING_SOFT }}
-        className={cn("relative overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg", stage.s.grad, stage.s.glow)}
+        className={cn("relative overflow-hidden rounded-xl bg-gradient-to-br p-4 text-white shadow-lg", stage.s.grad, stage.s.glow)}
       >
         <span aria-hidden className="pointer-events-none absolute -end-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
         <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/60" />
@@ -157,7 +157,7 @@ function PurchasesTab({ purchases, onOpenPurchase }) {
     <ul className="space-y-2">
       {purchases.map((p) => (
         <li key={p.id}>
-          <button type="button" onClick={() => onOpenPurchase(p)} className="flex w-full items-center justify-between gap-3 rounded-xl border bg-card px-3.5 py-3 text-left outline-none transition-colors hover:border-[#CDD2DA] focus-visible:ring-2 focus-visible:ring-ring/60">
+          <button type="button" onClick={() => onOpenPurchase(p)} className="flex w-full items-center justify-between gap-3 rounded-xl border bg-card px-3.5 py-3 text-left outline-none transition-colors hover:border-lp-rule focus-visible:ring-2 focus-visible:ring-ring/60">
             <div className="min-w-0">
               <p className="break-all text-sm font-semibold tabular-nums">{p.po_number}</p>
               <p className="truncate text-xs text-muted-foreground">{p.supplier} · {plural(p.totals?.lines ?? p.items?.length ?? 0, "item")} · {fmtQty(p.totals?.ordered ?? 0)} ordered</p>

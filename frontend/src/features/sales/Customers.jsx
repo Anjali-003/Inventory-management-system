@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { Users } from "lucide-react"
 import PageHeader from "@/components/PageHeader"
+import { FilterPills } from "@/components/PageKit"
 import SearchBar from "@/components/SearchBar"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { Modal } from "@/components/Modal"
@@ -97,12 +98,7 @@ export default function Customers() {
       {error && <div className="mb-4"><Notice title="Something went wrong">{errorMessage(error, "Could not load customers.")}</Notice></div>}
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 sm:px-5">
-          {[[false, "All", customers.length], [true, "Going quiet", quietCount]].map(([on, label, n]) => (
-            <button key={label} type="button" aria-pressed={quietOnly === on} onClick={() => setQuietOnly(on)}
-              className={cn("rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors", quietOnly === on ? "border-primary bg-primary text-primary-foreground" : "bg-white text-slate-700 hover:bg-slate-50")}>
-              {label} <span className="tabular-nums opacity-80">{n}</span>
-            </button>
-          ))}
+          <FilterPills label="Show customers" items={[[false, "All", customers.length], [true, "Going quiet", quietCount]].map(([on, label, n]) => ({ key: label, label, value: n, active: quietOnly === on, onClick: () => setQuietOnly(on) }))} />
           <div className="w-full sm:ml-auto sm:w-64"><SearchBar value={query} onChange={setQuery} placeholder="Search name or phone..." /></div>
         </div>
         {isLoading ? <TableSkeleton rows={6} /> : rows.length === 0 ? (

@@ -43,7 +43,6 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
               type="button"
               size="lg"
               onClick={() => onAllot(request)}
-              className="bg-gradient-to-r from-emerald-700 to-teal-800 text-white hover:from-emerald-800 hover:to-teal-800"
             >
               <PackageCheck className="size-4" />
               Allot materials
@@ -53,8 +52,8 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
       }
     >
       <div className="space-y-4">
-        <div className={`overflow-hidden rounded-2xl bg-gradient-to-br ${meta.accent} p-[1px]`}>
-          <div className="rounded-[15px] bg-white p-4 sm:p-5">
+        <div className={`overflow-hidden rounded-xl bg-gradient-to-br ${meta.accent} p-[1px]`}>
+          <div className="rounded-xl bg-white p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
                 <span className={`grid size-11 shrink-0 place-items-center rounded-xl ring-1 ${meta.soft}`}>
@@ -72,11 +71,11 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
             {request.requested_product_quantity !== null && request.requested_product_quantity !== undefined && (
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 <div className="rounded-lg border border-emerald-100 bg-emerald-50/70 px-3 py-2.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Products requested</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Products requested</p>
                   <p className="mt-1 text-sm font-bold text-emerald-950">{fmtQty(request.requested_product_quantity)}</p>
                 </div>
                 <div className="rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">Products allotted</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-700">Products allotted</p>
                   <p className="mt-1 text-sm font-bold text-blue-950">{fmtQty(request.issued_product_quantity || 0)} / {fmtQty(request.requested_product_quantity)}</p>
                 </div>
               </div>
@@ -85,11 +84,11 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2.5">
                 <CalendarClock className="size-4 shrink-0 text-emerald-700" />
-                <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Requested on</p><p className="mt-0.5 truncate text-xs font-semibold text-slate-800">{fmtDateTime(request.created_at)}</p></div>
+                <div className="min-w-0"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Requested on</p><p className="mt-0.5 truncate text-xs font-semibold text-slate-800">{fmtDateTime(request.created_at)}</p></div>
               </div>
               <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2.5">
                 <UserRound className="size-4 shrink-0 text-blue-700" />
-                <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Requested by</p><p className="mt-0.5 truncate text-xs font-semibold text-slate-800">{request.requested_by_name || "Production"}</p></div>
+                <div className="min-w-0"><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Requested by</p><p className="mt-0.5 truncate text-xs font-semibold text-slate-800">{request.requested_by_name || "Production"}</p></div>
               </div>
             </div>
 
@@ -105,7 +104,7 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
 
         {request.notes && (
           <div className="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50 px-3.5 py-3 text-sm text-amber-950">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700">Note from Production</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">Note from Production</p>
             <p className="mt-1 whitespace-pre-wrap">{request.notes}</p>
           </div>
         )}
@@ -120,7 +119,7 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
 
         {items.length ? (
           <div className="overflow-hidden rounded-xl border border-slate-200">
-            <div className="hidden grid-cols-[minmax(0,1fr)_76px_76px_76px] gap-2 bg-slate-50 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 sm:grid sm:px-4">
+            <div className="hidden grid-cols-[minmax(0,1fr)_76px_76px_76px] gap-2 bg-slate-50 px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 sm:grid sm:px-4">
               <span>Component</span><span className="text-right">Requested</span><span className="text-right">Allotted</span><span className="text-right">Remaining</span>
             </div>
             <div className="divide-y divide-slate-100">
@@ -136,7 +135,7 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
                       <div className="min-w-0">
                         <p className="break-words text-sm font-semibold text-slate-800">{item.name}</p>
                         <p className="mt-0.5 text-[11px] text-slate-500">{item.sku || "No SKU"} · {item.unit}</p>
-                        <p className="mt-1 text-[10px] font-semibold text-slate-500 sm:hidden">
+                        <p className="mt-1 text-[11px] font-semibold text-slate-500 sm:hidden">
                           Requested {fmtQty(item.requested_quantity)} · Allotted {fmtQty(item.issued_quantity)} · Remaining {fmtQty(item.remaining_quantity)}
                         </p>
                       </div>
@@ -145,7 +144,7 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
                     <span className="hidden text-right text-sm font-semibold tabular-nums text-emerald-700 sm:block">{fmtQty(item.issued_quantity)}</span>
                     <span className={`hidden text-right text-sm font-bold tabular-nums sm:block ${remaining > 0 ? "text-amber-700" : "text-emerald-700"}`}>{fmtQty(item.remaining_quantity)}</span>
                     <div className="flex items-center justify-between sm:hidden">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${itemComplete ? "bg-emerald-50 text-emerald-700" : Number(item.issued_quantity) > 0 ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold ${itemComplete ? "bg-emerald-50 text-emerald-700" : Number(item.issued_quantity) > 0 ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>
                         <span className="size-1.5 rounded-full bg-current" />{itemComplete ? "Complete" : Number(item.issued_quantity) > 0 ? "Partial" : "Waiting"}
                       </span>
                       <span className="text-xs font-semibold text-slate-600">{fmtQty(item.remaining_quantity)} {item.unit} left</span>

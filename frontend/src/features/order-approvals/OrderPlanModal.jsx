@@ -118,7 +118,7 @@ export default function OrderPlanModal({ order, mode = "production", onClose }) 
             <motion.div
               initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1, transition: SPRING_SOFT }}
-              className={cn("relative overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg", m.grad, m.glow)}
+              className={cn("relative overflow-hidden rounded-xl bg-gradient-to-br p-4 text-white shadow-lg", m.grad, m.glow)}
             >
               <div className="relative flex items-center gap-3.5">
                 <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/20 ring-1 ring-inset ring-white/30">
@@ -142,7 +142,7 @@ export default function OrderPlanModal({ order, mode = "production", onClose }) 
             {blocked && <Notice title="Nothing to send">{blocked}</Notice>}
 
             {mode === "production" ? (
-              <div className="overflow-x-auto rounded-2xl border">
+              <div className="overflow-x-auto rounded-xl border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -168,7 +168,7 @@ export default function OrderPlanModal({ order, mode = "production", onClose }) 
                 </Table>
               </div>
             ) : shortages.length > 0 && (
-              <div className="overflow-x-auto rounded-2xl border">
+              <div className="overflow-x-auto rounded-xl border">
                 <Table>
                   <TableHeader>
                     <TableRow>

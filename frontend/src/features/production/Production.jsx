@@ -110,7 +110,7 @@ export default function Production() {
 
       {loading ? (
         <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-52 animate-pulse rounded-2xl border border-lp-line bg-white" />)}
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-52 animate-pulse rounded-xl border border-lp-line bg-white" />)}
         </div>
       ) : rows.length === 0 ? (
         <Panel>

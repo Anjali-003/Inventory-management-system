@@ -21,7 +21,6 @@ const fresh = () => ({
   // price list: product 1 has a price (100), product 2 none yet; GST differs per product
   products: [{ id: 1, name: "Fan", selling_price: "100.00", gst_percent: "18.00" }, { id: 2, name: "Bulb", selling_price: null, gst_percent: "12.00" }],
   payments: [],
-  credits: [],
   // the customer the order is for (a bill is made out to them unless another is sent)
   orderCustomer: { id: 7, name: "Sharma Traders", address: "Pune", gstin: null },
 });
@@ -54,12 +53,10 @@ function run(raw, p = []) {
     const bill = s.bills.length ? { id: 1, bill_number: "BILL-2026-0001", order_id: s.order.id, order_number: s.order.order_number, total: s.bills[0][10], fg_status: s.fg.status } : null;
     return [bill ? [bill] : []];
   }
-  if (sql.startsWith("SELECT (SELECT COALESCE(SUM(amount), 0) FROM bill_payments")) {
-    return [[{ paid: s.payments.reduce((a, x) => a + x, 0), credited: s.credits.reduce((a, x) => a + x, 0) }]];
+  if (sql.startsWith("SELECT COALESCE(SUM(amount), 0) AS paid FROM bill_payments")) {
+    return [[{ paid: s.payments.reduce((a, x) => a + x, 0) }]];
   }
   if (sql.startsWith("INSERT INTO bill_payments")) { s.payments.push(Number(p[1])); return [{}]; }
-  if (sql.includes("FROM bill_credit_notes WHERE credit_number LIKE ? FOR UPDATE")) return [[{ n: s.credits.length }]];
-  if (sql.startsWith("INSERT INTO bill_credit_notes")) { s.credits.push(Number(p[2])); return [{}]; }
   if (sql.startsWith("UPDATE bills SET status = 'CANCELLED'")) { s.billCancelled = true; return [{}]; }
   throw new Error(`fake db: unexpected SQL: ${sql}`);
 }
@@ -163,10 +160,9 @@ describe("finished goods after QC", () => {
     await expect(fg.addPayment(5, { method: "UPI" }, 1)).rejects.toMatchObject({ code: "ALREADY_PAID" });
   });
 
-  it("cancels a bill only while the goods are in the Store; after that it is a credit note", async () => {
+  it("cancels a bill only while the goods are in the Store", async () => {
     s.fg.status = "IN_STORE";
     await fg.createBill(5, BILL, 1);
-    await expect(fg.addCreditNote(5, { amount: 100, reason: "2 returned" }, 1)).rejects.toMatchObject({ code: "GOODS_IN_STORE" });
     await fg.cancelBill(5, { reason: "wrong customer" }, 1);
     expect([s.billCancelled, s.fg.status]).toEqual([true, "IN_STORE"]);
 
@@ -175,9 +171,6 @@ describe("finished goods after QC", () => {
     await fg.createBill(5, BILL, 1);
     s.fg.status = "DELIVERED";
     await expect(fg.cancelBill(5, { reason: "wrong customer" }, 1)).rejects.toMatchObject({ code: "GOODS_LEFT" });
-    const cn = await fg.addCreditNote(5, { amount: 100, reason: "1 piece returned damaged" }, 1);
-    expect(cn.creditNumber).toMatch(/^CN-\d{4}-0001$/);
-    await expect(fg.addCreditNote(5, { amount: 5000, reason: "too much" }, 1)).rejects.toMatchObject({ code: "MORE_THAN_BILL" });
   });
 
   it("bills the order's customer at the price list; only a product with no price needs its rate", async () => {

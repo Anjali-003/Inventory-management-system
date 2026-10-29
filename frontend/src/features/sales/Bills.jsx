@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import { useUrlState } from "@/lib/useUrlState"
 import { ChevronRight, Receipt, X } from "lucide-react"
 import PageHeader from "@/components/PageHeader"
+import { FilterPills, pageButtonClass } from "@/components/PageKit"
 import SearchBar from "@/components/SearchBar"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
 import { Badge } from "@/components/ui/badge"
@@ -81,7 +82,7 @@ export default function Bills() {
   return (
     <>
       <PageHeader title="Bills" description="Every bill: what came in and what is still to collect. Click a bill to record a payment or print it.">
-        <Link to="/to-bill" className="inline-flex h-10 items-center rounded-[8px] bg-primary px-4 text-[13px] font-semibold text-primary-foreground outline-none transition-colors hover:bg-primary/90 focus-visible:ring-3 focus-visible:ring-primary/30">
+        <Link to="/to-bill" className={pageButtonClass("primary")}>
           Make a bill ({summary?.toBill ?? 0} waiting)
         </Link>
       </PageHeader>
@@ -90,7 +91,7 @@ export default function Bills() {
         <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Figure label={`Sales ${period}`} to={`/bills?show=all${month ? `&month=${month}` : ""}`} value={rupees(summary.net)} sub={`${summary.bills} bill${summary.bills === 1 ? "" : "s"}`} />
           <Figure label={`Received ${period}`} to={`/bills?show=received${month ? `&month=${month}` : ""}`} value={rupees(summary.collected)} sub={`${payments.length} payment${payments.length === 1 ? "" : "s"}`} />
-          <Figure label="NOT RECEIVED" to="/bills?show=open" value={rupees(summary.toCollect)} bad={summary.toCollect > 0} sub={summary.owed[0] ? `Oldest: ${summary.owed[0].billNumber}, ${summary.owed[0].days} days` : "Every bill is paid"} />
+          <Figure label="Not received" to="/bills?show=open" value={rupees(summary.toCollect)} bad={summary.toCollect > 0} sub={summary.owed[0] ? `Oldest: ${summary.owed[0].billNumber}, ${summary.owed[0].days} days` : "Every bill is paid"} />
           <Figure label="Orders to bill" to="/to-bill" value={summary.toBill} bad={summary.toBill > 0} sub="In the Store, no bill yet" />
         </div>
       )}
@@ -109,12 +110,7 @@ export default function Bills() {
 
       <Card className="overflow-hidden">
         <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 sm:px-5">
-          {FILTERS.map(([k, l]) => (
-            <button key={k} type="button" aria-pressed={show === k} onClick={() => setShow(k)}
-              className={cn("rounded-full border px-3 py-1.5 text-xs font-semibold", show === k ? "border-primary bg-primary text-primary-foreground" : "bg-white text-slate-700 hover:bg-slate-50")}>
-              {k === "received" ? `Received ${period}` : l} <span className="tabular-nums opacity-80">{count(k)}</span>
-            </button>
-          ))}
+          <FilterPills label="Show bills" items={FILTERS.map(([k, l]) => ({ key: k, label: k === "received" ? `Received ${period}` : l, value: count(k), active: show === k, onClick: () => setShow(k) }))} />
           <div className="w-full sm:ml-auto sm:w-64"><SearchBar value={query} onChange={setQuery} placeholder="Search bill, order or customer..." /></div>
         </div>
         {show === "received" ? (

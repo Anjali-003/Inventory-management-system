@@ -28,7 +28,6 @@ const selectSql = `
     b.total AS bill_total,
     b.created_at AS billed_at,
     (SELECT COALESCE(SUM(bp.amount), 0) FROM bill_payments bp WHERE bp.bill_id = b.id) AS bill_paid,
-    (SELECT COALESCE(SUM(cn.amount), 0) FROM bill_credit_notes cn WHERE cn.bill_id = b.id) AS bill_credited,
     products.product_id,
     products.product_sku,
     products.product_name,
@@ -68,13 +67,12 @@ const selectSql = `
   LEFT JOIN users lu ON lu.id = fg.delivered_by
 `;
 
-/* net = total - credit notes; due = what the customer still owes; refund = paid more than the net (after a credit) */
+/* net = the bill's total; due = what the customer still owes */
 function billMoney(b) {
-  const net = Math.round((b.total - b.credited) * 100) / 100;
+  const net = b.total;
   const due = Math.max(0, Math.round((net - b.paid) * 100) / 100);
-  const refund = Math.max(0, Math.round((b.paid - net) * 100) / 100);
   const status = due === 0 ? "PAID" : b.paid > 0 ? "PART_PAID" : "UNPAID";
-  return { ...b, net, due, refund, paymentStatus: status };
+  return { ...b, net, due, paymentStatus: status };
 }
 
 const mapRow = (r) => ({
@@ -108,7 +106,7 @@ const mapRow = (r) => ({
   deliveryNote: r.delivery_note,
   bill: r.bill_id ? billMoney({
     id: r.bill_id, billNumber: r.bill_number, customerName: r.customer_name,
-    total: Number(r.bill_total), paid: Number(r.bill_paid), credited: Number(r.bill_credited),
+    total: Number(r.bill_total), paid: Number(r.bill_paid),
   }) : null,
   lines: [],
 });
@@ -706,7 +704,7 @@ async function createBill(id, body = {}, userId = null) {
   });
 }
 
-/* the ACTIVE bill of a finished-goods record, locked, with what was paid and credited */
+/* the ACTIVE bill of a finished-goods record, locked, with what was paid */
 async function lockActiveBill(conn, id) {
   const [rows] = await conn.query(
     `SELECT b.*, o.order_number, fg.status AS fg_status
@@ -716,11 +714,10 @@ async function lockActiveBill(conn, id) {
   );
   if (!rows.length) throw new AppError(404, "No bill has been made for this order yet", "NOT_FOUND");
   const [[sums]] = await conn.query(
-    `SELECT (SELECT COALESCE(SUM(amount), 0) FROM bill_payments WHERE bill_id = ?) AS paid,
-            (SELECT COALESCE(SUM(amount), 0) FROM bill_credit_notes WHERE bill_id = ?) AS credited`,
-    [rows[0].id, rows[0].id]
+    `SELECT COALESCE(SUM(amount), 0) AS paid FROM bill_payments WHERE bill_id = ?`,
+    [rows[0].id]
   );
-  return { ...rows[0], ...billMoney({ total: Number(rows[0].total), paid: Number(sums.paid), credited: Number(sums.credited) }) };
+  return { ...rows[0], ...billMoney({ total: Number(rows[0].total), paid: Number(sums.paid) }) };
 }
 
 /*
@@ -770,9 +767,9 @@ async function cancelBill(id, body = {}, userId = null) {
   return inTransaction(async (conn) => {
     const bill = await lockActiveBill(conn, id);
     if (bill.fg_status !== "BILLED") {
-      throw new AppError(409, "The goods have already left the Store: make a credit note instead", "GOODS_LEFT");
+      throw new AppError(409, "The goods have already left the Store: the bill can no longer be cancelled", "GOODS_LEFT");
     }
-    if (bill.paid > 0) throw new AppError(409, "Money was already received on this bill: make a credit note instead", "BILL_PAID");
+    if (bill.paid > 0) throw new AppError(409, "Money was already received on this bill: it can no longer be cancelled", "BILL_PAID");
     await conn.query(
       `UPDATE bills SET status = 'CANCELLED', cancelled_by = ?, cancelled_at = CURRENT_TIMESTAMP, cancel_reason = ? WHERE id = ?`,
       [userId, reason, bill.id]
@@ -791,37 +788,6 @@ async function cancelBill(id, body = {}, userId = null) {
       orderId: record.order_id, payload: { bill_number: bill.bill_number }, userId,
     });
     return { success: true, billNumber: bill.bill_number, status: "IN_STORE" };
-  });
-}
-
-/* Super Admin: reduce the bill after the goods left (return, damage, wrong rate). body: { amount, reason } */
-async function addCreditNote(id, body = {}, userId = null) {
-  const amount = Number(body.amount);
-  if (!Number.isFinite(amount) || amount <= 0 || Math.round(amount * 100) !== amount * 100) {
-    throw new AppError(422, "Amount must be more than 0, with at most 2 decimals", "VALIDATION");
-  }
-  const reason = cleanText(body.reason);
-  if (!reason || reason.length < 5) throw new AppError(422, "Write why the bill is reduced (at least 5 characters)", "VALIDATION");
-
-  return inTransaction(async (conn) => {
-    const bill = await lockActiveBill(conn, id);
-    if (bill.fg_status === "BILLED") {
-      throw new AppError(409, "The goods are still in the Store: cancel the bill instead", "GOODS_IN_STORE");
-    }
-    if (toCents(amount) > toCents(bill.net)) {
-      throw new AppError(409, `The credit cannot be more than the bill's ₹${bill.net}`, "MORE_THAN_BILL");
-    }
-    const creditNumber = await nextNumber(conn, "bill_credit_notes", "credit_number", "CN");
-    await conn.query(
-      `INSERT INTO bill_credit_notes (credit_number, bill_id, amount, reason, created_by) VALUES (?, ?, ?, ?, ?)`,
-      [creditNumber, bill.id, amount, reason, userId]
-    );
-    await notifications.notify(conn, {
-      role: "MARKETING_MANAGER", type: "CREDIT_NOTE", severity: "warning", link: "/finished-goods",
-      title: `Credit note ${creditNumber} on bill ${bill.bill_number}`, body: `₹${amount} less. Reason: ${reason}`,
-      orderId: bill.order_id, payload: { bill_number: bill.bill_number, credit_number: creditNumber }, userId,
-    });
-    return { success: true, creditNumber, billNumber: bill.bill_number };
   });
 }
 
@@ -845,18 +811,12 @@ async function getBill(id) {
      FROM bill_payments bp LEFT JOIN users u ON u.id = bp.created_by WHERE bp.bill_id = ? ORDER BY bp.paid_on, bp.id`,
     [b.id]
   );
-  const [credits] = await db.query(
-    `SELECT cn.id, cn.credit_number, cn.amount, cn.reason, cn.created_at, u.name AS by_name
-     FROM bill_credit_notes cn LEFT JOIN users u ON u.id = cn.created_by WHERE cn.bill_id = ? ORDER BY cn.id`,
-    [b.id]
-  );
   const [cancelled] = await db.query(
     `SELECT b.bill_number, b.total, b.cancel_reason, b.cancelled_at, u.name AS by_name
      FROM bills b LEFT JOIN users u ON u.id = b.cancelled_by WHERE b.finished_goods_id = ? AND b.status = 'CANCELLED' ORDER BY b.id`,
     [id]
   );
   const paid = payments.reduce((sum, x) => sum + Number(x.amount), 0);
-  const credited = credits.reduce((sum, x) => sum + Number(x.amount), 0);
   return {
     id: b.id,
     billNumber: b.bill_number,
@@ -870,14 +830,13 @@ async function getBill(id) {
     notes: b.notes,
     createdAt: b.created_at,
     createdByName: b.created_by_name,
-    ...billMoney({ total: Number(b.total), paid, credited }),
+    ...billMoney({ total: Number(b.total), paid }),
     items: items.map((i) => ({
       productId: i.product_id, sku: i.sku, name: i.name, quantity: Number(i.quantity), rate: Number(i.rate),
       listPrice: i.list_price === null ? null : Number(i.list_price), amount: Number(i.amount),
       gstPercent: Number(i.gst_percent), gstAmount: Number(i.gst_amount), priceNote: i.price_note,
     })),
     payments: payments.map((x) => ({ id: x.id, amount: Number(x.amount), paidOn: x.paid_on, method: x.method, reference: x.reference, byName: x.by_name })),
-    creditNotes: credits.map((x) => ({ id: x.id, number: x.credit_number, amount: Number(x.amount), reason: x.reason, at: x.created_at, byName: x.by_name })),
     cancelledBills: cancelled.map((x) => ({ number: x.bill_number, total: Number(x.total), reason: x.cancel_reason, at: x.cancelled_at, byName: x.by_name })),
   };
 }
@@ -891,6 +850,5 @@ module.exports = {
   getBill,
   addPayment,
   cancelBill,
-  addCreditNote,
   PAYMENT_METHODS,
 };

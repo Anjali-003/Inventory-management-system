@@ -195,7 +195,7 @@ async function timeline(orderId) {
         add(fg.billed_at, "Dispatch", `Bill ${fg.bill_number} made for ${fg.customer_name}`, fg.billed_by_name, `₹${n(fg.total).toLocaleString("en-IN")}`);
         add(fg.dispatched_at, "Dispatch", "Given out for delivery: order complete", fg.dispatched_by_name, fg.dispatch_note);
 
-        // money: cancelled bills, payments received and credit notes
+        // money: cancelled bills and payments received
         const [cancelled] = await db.query(
             `SELECT b.bill_number, b.cancelled_at, b.cancel_reason, u.name AS by_name
              FROM bills b LEFT JOIN users u ON u.id = b.cancelled_by WHERE b.finished_goods_id = ? AND b.status = 'CANCELLED'`,
@@ -209,13 +209,6 @@ async function timeline(orderId) {
             [fg.id]
         );
         for (const x of paid) add(x.created_at, "Money", `Payment received: ₹${n(x.amount).toLocaleString("en-IN")} (${x.method})`, x.by_name);
-        const [credits] = await db.query(
-            `SELECT cn.credit_number, cn.amount, cn.reason, cn.created_at, u.name AS by_name
-             FROM bill_credit_notes cn JOIN bills b ON b.id = cn.bill_id LEFT JOIN users u ON u.id = cn.created_by
-             WHERE b.finished_goods_id = ?`,
-            [fg.id]
-        );
-        for (const c of credits) add(c.created_at, "Money", `Credit note ${c.credit_number}: ₹${n(c.amount).toLocaleString("en-IN")} less`, c.by_name, c.reason, "warning");
     }
 
     events.sort((a, b) => new Date(a.at) - new Date(b.at));

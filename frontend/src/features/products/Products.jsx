@@ -132,19 +132,18 @@ export default function Products() {
             <Upload />
             Import from Excel
           </Button>
-          <Button size="lg" onClick={() => setAdding(true)}>
-            <Plus />
-            Add product
-          </Button>
           <Button
-            variant="default"
+            variant="outline"
             size="lg"
-            className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 text-white shadow-md shadow-teal-900/20 hover:from-emerald-700 hover:via-teal-700 hover:to-cyan-700 hover:shadow-lg focus-visible:ring-emerald-500 [&_svg]:text-white"
             onClick={() => setVersionPickerOpen(true)}
             disabled={products.length === 0}
           >
             <GitBranch />
             Create product version
+          </Button>
+          <Button size="lg" onClick={() => setAdding(true)}>
+            <Plus />
+            Add product
           </Button>
         </div>
       </PageHeader>

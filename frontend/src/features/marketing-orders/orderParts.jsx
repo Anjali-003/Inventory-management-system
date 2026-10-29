@@ -263,7 +263,7 @@ export function OrderSteps({ status, className }) {
               transition={{ ...SPRING_SOFT, delay: 0.08 * i }}
             />
           </span>
-          <span className={cn("mt-1.5 block text-[10px] font-medium leading-tight", state === "todo" ? "text-cf-faint" : state === "fail" ? "text-destructive" : "text-muted-foreground")}>
+          <span className={cn("mt-1.5 block text-[11px] font-medium leading-tight", state === "todo" ? "text-cf-faint" : state === "fail" ? "text-destructive" : "text-muted-foreground")}>
             {label}
           </span>
         </div>

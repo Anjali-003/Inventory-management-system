@@ -72,7 +72,7 @@ export function ToastProvider({ children }) {
               role={t.kind === "error" ? "alert" : "status"}
               onPointerEnter={() => pauseTimer(t.id)}
               onPointerLeave={() => startTimer(t)}
-              className="pointer-events-auto relative flex w-full max-w-sm items-start gap-3 overflow-hidden rounded-xl border border-[#E3E6EB] bg-card p-3.5 text-[13px] shadow-[0_12px_32px_-8px_rgba(22,34,30,0.22)]"
+              className="pointer-events-auto relative flex w-full max-w-sm items-start gap-3 overflow-hidden rounded-xl border border-border bg-card p-3.5 text-[13px] shadow-[0_12px_32px_-8px_rgba(22,34,30,0.22)]"
             >
               <ToastBody t={t} onDismiss={() => dismiss(t.id)} />
             </motion.div>
@@ -115,7 +115,7 @@ function ToastBody({ t, onDismiss }) {
         <NotificationIcon n={t} className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className={`text-[10px] font-bold uppercase tracking-[0.6px] ${s.tone}`}>{s.label}</p>
+        <p className={`text-[11px] font-bold uppercase tracking-[0.6px] ${s.tone}`}>{s.label}</p>
         <p className="mt-0.5 font-semibold leading-snug text-foreground">{t.title}</p>
         {t.body && <p className="mt-0.5 leading-snug text-muted-foreground">{t.body}</p>}
         {t.action && (

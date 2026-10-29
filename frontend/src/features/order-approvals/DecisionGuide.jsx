@@ -116,7 +116,7 @@ export default function DecisionGuide({ order, plan, onDecide }) {
                   className={cn(
                     "group flex h-full w-full flex-col rounded-xl border bg-card p-3 text-start outline-none transition-[border-color,box-shadow,transform] duration-200",
                     "focus-visible:ring-2 focus-visible:ring-ring/60 enabled:hover:-translate-y-0.5 enabled:hover:shadow-[0_12px_24px_-16px_rgba(16,26,23,0.4)] enabled:active:translate-y-0",
-                    o.recommended && !o.blocked ? "border-primary ring-1 ring-primary/30" : "border-[#E3E6EB]",
+                    o.recommended && !o.blocked ? "border-primary ring-1 ring-primary/30" : "border-border",
                     o.danger ? "enabled:hover:border-destructive" : "enabled:hover:border-primary",
                     "disabled:cursor-not-allowed disabled:opacity-55"
                   )}
@@ -126,7 +126,7 @@ export default function DecisionGuide({ order, plan, onDecide }) {
                       <Icon className="size-4" /> {o.title}
                     </span>
                     {o.recommended && !o.blocked && (
-                      <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary-foreground">Recommended</span>
+                      <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-primary-foreground">Recommended</span>
                     )}
                   </span>
                   <span className="mt-1.5 flex-1 text-xs leading-snug text-muted-foreground">{o.blocked || o.text}</span>

@@ -107,7 +107,7 @@ export default function OrderShortageModal({ order, onClose, canRaisePurchase })
             key={needs ? "needs" : "done"}
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1, transition: SPRING_SOFT }}
-            className={cn("relative overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg", grad)}
+            className={cn("relative overflow-hidden rounded-xl bg-gradient-to-br p-4 text-white shadow-lg", grad)}
           >
             <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
             <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/60" />
@@ -150,7 +150,7 @@ export default function OrderShortageModal({ order, onClose, canRaisePurchase })
             <h3 className="text-sm font-semibold">Short components</h3>
             {shortages.length === 0 ? (
               <div className="flex flex-col items-center rounded-xl border px-6 py-10 text-center">
-                <span className="mb-3 grid size-11 place-items-center rounded-xl bg-cf-green-soft text-primary ring-1 ring-primary/10">
+                <span className="mb-3 grid size-11 place-items-center rounded-xl bg-accent text-primary ring-1 ring-primary/10">
                   <PackageCheck className="size-5" aria-hidden />
                 </span>
                 <p className="font-medium">No shortage for this order</p>

@@ -133,7 +133,7 @@ function RequestCard({ request, onView, onAllot }) {
   const extraCount = Math.max(0, items.length - names.length)
 
   return (
-    <Card className="group relative min-w-0 overflow-hidden border-[#E3E6EB] bg-white shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
+    <Card className="group relative min-w-0 overflow-hidden border-border bg-white shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
       <div className={`h-1 bg-gradient-to-r ${meta.accent}`} />
       <CardContent className="min-w-0 space-y-4 p-4 sm:p-5">
         <div className="flex min-w-0 items-start gap-3">
@@ -147,7 +147,7 @@ function RequestCard({ request, onView, onAllot }) {
             aria-label={`View request ${request.id} material list`}
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">Request #{request.id}</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">Request #{request.id}</span>
               <RequestStatus status={request.status} />
             </div>
             <p className="mt-1 break-words text-[15px] font-extrabold leading-snug tracking-[-0.01em] text-slate-950">
@@ -177,14 +177,14 @@ function RequestCard({ request, onView, onAllot }) {
           <div className="flex min-w-0 items-start gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
             <CalendarClock className="mt-0.5 size-4 shrink-0 text-emerald-700" aria-hidden />
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Requested on</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Requested on</p>
               <p className="mt-0.5 break-words text-xs font-semibold text-slate-800">{fmtDateTime(request.created_at)}</p>
             </div>
           </div>
           <div className="flex min-w-0 items-start gap-2 rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
             <UserRound className="mt-0.5 size-4 shrink-0 text-blue-700" aria-hidden />
             <div className="min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Requested by</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Requested by</p>
               <p className="mt-0.5 break-words text-xs font-semibold text-slate-800">{request.requested_by_name || "Production"}</p>
             </div>
           </div>
@@ -213,11 +213,11 @@ function RequestCard({ request, onView, onAllot }) {
         <RequestProgress request={request} />
 
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-dashed border-slate-200 pt-3">
-          <Button type="button" variant="outline" size="sm" onClick={() => onView(request)} className="border-slate-200 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800">
+          <Button type="button" variant="outline" size="sm" onClick={() => onView(request)}>
             <Eye className="size-4" /> View list
           </Button>
           {canIssue ? (
-            <Button type="button" size="sm" onClick={() => onAllot(request)} className="bg-gradient-to-br from-emerald-600 to-teal-800 text-white shadow-sm hover:brightness-110">
+            <Button type="button" size="sm" onClick={() => onAllot(request)}>
               <PackageCheck className="size-4" /> Allot materials
             </Button>
           ) : (
@@ -233,11 +233,11 @@ function RequestActions({ request, onView, onAllot }) {
   const { outstandingLines } = getRequestMetrics(request)
   return (
     <div className="flex flex-wrap gap-1.5">
-      <Button type="button" variant="outline" size="sm" onClick={() => onView(request)} className="border-slate-200 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800">
+      <Button type="button" variant="outline" size="sm" onClick={() => onView(request)}>
         <Eye className="size-3.5" /> View
       </Button>
       {request.status !== "ISSUED" && outstandingLines > 0 && (
-        <Button type="button" size="sm" onClick={() => onAllot(request)} className="bg-gradient-to-br from-emerald-600 to-teal-800 text-white hover:brightness-110">
+        <Button type="button" size="sm" onClick={() => onAllot(request)}>
           <PackageCheck className="size-3.5" /> Allot
         </Button>
       )}
@@ -434,7 +434,7 @@ export default function StoreMaterialRequests() {
           </TileGrid>
         </div>
 
-        <Card className="min-w-0 overflow-hidden border-[#E3E6EB] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
+        <Card className="min-w-0 overflow-hidden border-border shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
           <div className="md:hidden">
             <div className="grid grid-cols-2 gap-px bg-slate-200 sm:grid-cols-4">
               {stats.map((item) => (
@@ -445,7 +445,7 @@ export default function StoreMaterialRequests() {
                   aria-pressed={item.active}
                   className={`relative min-w-0 bg-white px-3 py-3 text-left transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-emerald-600/60 ${item.active ? "bg-emerald-50/80" : "hover:bg-slate-50"}`}
                 >
-                  <span className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-600"><span className={`size-2 rounded-full ${item.key === "open" ? "bg-amber-500" : item.key === "partial" ? "bg-blue-500" : item.key === "complete" ? "bg-emerald-500" : "bg-slate-500"}`} />{item.label}</span>
+                  <span className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"><span className={`size-2 rounded-full ${item.key === "open" ? "bg-amber-500" : item.key === "partial" ? "bg-blue-500" : item.key === "complete" ? "bg-emerald-500" : "bg-slate-500"}`} />{item.label}</span>
                   <span className="mt-1 block text-xl font-extrabold tabular-nums text-slate-900">{isLoading ? "—" : item.value}</span>
                 </button>
               ))}
@@ -480,7 +480,7 @@ export default function StoreMaterialRequests() {
           {isLoading ? (
             <>
               <div className="hidden grid-cols-2 gap-4 p-4 lg:grid 2xl:grid-cols-3">
-                {Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-64 animate-pulse rounded-2xl border border-slate-200 bg-slate-100" />)}
+                {Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-64 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />)}
               </div>
               <div className="lg:hidden"><TableSkeleton rows={6} /></div>
             </>

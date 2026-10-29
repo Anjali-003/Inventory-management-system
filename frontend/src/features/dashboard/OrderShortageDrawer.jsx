@@ -159,15 +159,15 @@ function Panel({ order, onClose, canRaisePurchase }) {
         aria-modal="true"
         aria-labelledby={`${uid}-title`}
         tabIndex={-1}
-        className="absolute inset-y-0 end-0 flex w-full flex-col bg-card shadow-[-24px_0_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-[#E3E6EB] sm:max-w-xl"
+        className="absolute inset-y-0 end-0 flex w-full flex-col bg-card shadow-[-24px_0_64px_-12px_rgba(16,26,23,0.35)] outline-none ring-1 ring-border sm:max-w-xl"
         initial={{ x: offscreen }}
         animate={{ x: 0 }}
         exit={{ x: offscreen }}
         transition={SPRING}
       >
-        <div className="flex items-start justify-between gap-4 border-b bg-gradient-to-r from-emerald-50/70 via-white to-white px-5 pt-4">
+        <div className="flex items-start justify-between gap-4 border-b bg-card px-5 pt-4">
           <div className="min-w-0 pb-3">
-            <p className="text-[10px] font-bold uppercase tracking-[0.5px] text-cf-faint">Customer order · shortage details</p>
+            <p className="text-[11px] font-bold uppercase tracking-[0.5px] text-cf-faint">Customer order · shortage details</p>
             <h2 id={`${uid}-title`} className="mt-0.5 truncate text-[17px] font-bold leading-snug tracking-[-0.2px] tabular-nums">{order.order_number}</h2>
             <p className="mt-1 text-sm text-muted-foreground">Approved {fmtDateTime(order.approved_at)}{order.approved_by_name ? ` by ${order.approved_by_name}` : ""}</p>
           </div>
@@ -187,7 +187,7 @@ function Panel({ order, onClose, canRaisePurchase }) {
             key={needs ? "needs" : "done"}
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1, transition: SPRING_SOFT }}
-            className={cn("relative overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-lg", grad)}
+            className={cn("relative overflow-hidden rounded-xl bg-gradient-to-br p-4 text-white shadow-lg", grad)}
           >
             <span aria-hidden className="pointer-events-none absolute -end-8 -top-10 size-32 rounded-full bg-white/20 blur-2xl" />
             <div className="relative flex items-center gap-3.5">

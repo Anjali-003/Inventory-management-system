@@ -61,15 +61,15 @@ function BatchCard({ item, kind, onDecide, editable, navigate }) {
   const history = kind === "history"
   const retest = !history && (item.reworkStatus === "READY_FOR_QC" || Number(item.attemptNumber || 1) > 1)
   return (
-    <article className={`min-w-0 rounded-2xl border p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] ${retest ? "border-amber-300 bg-gradient-to-br from-amber-50 via-white to-white ring-1 ring-amber-200" : "border-[#E3E6EB] bg-white"}`}>
+    <article className={`min-w-0 rounded-2xl border p-4 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] ${retest ? "border-amber-300 bg-gradient-to-br from-amber-50 via-white to-white ring-1 ring-amber-200" : "border-border bg-white"}`}>
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1"><BatchIdentity item={item} /></div>
         {history ? <ResultBadge decision={item.batchDecision} /> : retest && <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-100 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-900"><RefreshCw className="size-3.5" aria-hidden /> Retest · Attempt {item.attemptNumber || 2}</span>}
       </div>
       {retest && <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-100/70 px-3 py-2 text-xs font-semibold leading-relaxed text-amber-950"><RefreshCw className="mt-0.5 size-4 shrink-0" aria-hidden /><span>This batch has been repaired and returned for another QC decision. Review both notes below before deciding.</span></div>}
       <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border bg-muted/20 p-3">
-        <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Batch completed</p><p className="mt-1 text-lg font-semibold tabular-nums">{Number(item.quantityCompleted || 0).toLocaleString()}</p></div>
-        <div className="min-w-0"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Ordered</p><p className="mt-1 text-lg font-semibold tabular-nums">{Number(item.orderedQuantity || 0).toLocaleString()}</p></div>
+        <div className="min-w-0"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Batch completed</p><p className="mt-1 text-lg font-semibold tabular-nums">{Number(item.quantityCompleted || 0).toLocaleString()}</p></div>
+        <div className="min-w-0"><p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Ordered</p><p className="mt-1 text-lg font-semibold tabular-nums">{Number(item.orderedQuantity || 0).toLocaleString()}</p></div>
       </div>
       {history ? (
         <>
@@ -144,7 +144,7 @@ export default function QcBatchSection({ title, description, icon: Icon, kind, i
                   <TableCell className="whitespace-normal align-top"><p className="font-semibold tabular-nums">{Number(item.quantityCompleted || 0).toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">of {Number(item.orderedQuantity || 0).toLocaleString()}</p></TableCell>
                   {history && <TableCell className="whitespace-normal align-top"><ResultBadge decision={item.batchDecision} /></TableCell>}
                   <TableCell className="whitespace-normal align-top text-sm">
-                    {history ? <><p>Attempt {item.attemptNumber || 1}</p><p className="mt-1 break-words text-xs text-muted-foreground">{dateLabel(item.decisionAt)}</p>{item.decisionByName && <UserCell className="mt-1" name={item.decisionByName} sub="QC by" />}</> : <>{retest && <span className="mb-1 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-amber-900"><RefreshCw className="size-3" aria-hidden /> Retest · Attempt {item.attemptNumber || 2}</span>}<p className="break-words">{retest ? `Retest ${item.attemptNumber || 2}` : dateLabel(item.completedAt)}</p><p className="mt-1 text-xs text-muted-foreground">Full batch completed</p></>}
+                    {history ? <><p>Attempt {item.attemptNumber || 1}</p><p className="mt-1 break-words text-xs text-muted-foreground">{dateLabel(item.decisionAt)}</p>{item.decisionByName && <UserCell className="mt-1" name={item.decisionByName} sub="QC by" />}</> : <>{retest && <span className="mb-1 inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-amber-900"><RefreshCw className="size-3" aria-hidden /> Retest · Attempt {item.attemptNumber || 2}</span>}<p className="break-words">{retest ? `Retest ${item.attemptNumber || 2}` : dateLabel(item.completedAt)}</p><p className="mt-1 text-xs text-muted-foreground">Full batch completed</p></>}
                   </TableCell>
                   <TableCell className="whitespace-normal align-top">
                     {history ? <>

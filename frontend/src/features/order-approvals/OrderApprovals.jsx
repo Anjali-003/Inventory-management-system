@@ -220,7 +220,7 @@ function CardsSkeleton() {
   return (
     <div className="grid gap-3 @2xl:grid-cols-2">
       {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="space-y-3 rounded-2xl border bg-card p-4">
+        <div key={i} className="space-y-3 rounded-xl border bg-card p-4">
           <div className="flex justify-between">
             <Skeleton className="h-5 w-28" />
             <Skeleton className="h-6 w-20 rounded-full" />
@@ -522,7 +522,7 @@ export default function OrderApprovals() {
                       <TableCell className="px-3! py-1! align-top!">
                         <StatusPill
                           value={o.approval_status}
-                          className="px-2! py-0.5! text-[10px]!"
+                          className="px-2! py-0.5! text-[11px]!"
                         />
                         <RevisionTag order={o} />
                       </TableCell>

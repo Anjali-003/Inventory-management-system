@@ -23,11 +23,11 @@ const SEVERITIES = new Set(["info", "success", "warning", "action"]);
 /*
     The Super Admin (CEO) sees EVERY department's notifications in the bell (read only: a role's task is still closed
     by that role). Only the important ones also go to the Super Admin's phone, so the phone stays worth looking at:
-    QC fail, IQC rejection, order / bill cancelled, credit note, discounted bill, extra material, an order stuck.
+    QC fail, IQC rejection, order / bill cancelled, discounted bill, extra material, an order stuck.
     A caller marks one important with `important: true`; these types always are.
 */
 const SUPER_ADMIN = "SUPER_ADMIN";
-const IMPORTANT_TYPES = new Set(["QC_FAILED", "ORDER_CANCELLED", "BILL_CANCELLED", "CREDIT_NOTE", "EXTRA_MATERIAL_REQUESTED", "ORDER_STUCK"]);
+const IMPORTANT_TYPES = new Set(["QC_FAILED", "ORDER_CANCELLED", "BILL_CANCELLED", "EXTRA_MATERIAL_REQUESTED", "ORDER_STUCK"]);
 const isImportant = (type, important) => !!important || IMPORTANT_TYPES.has(type);
 
 /*

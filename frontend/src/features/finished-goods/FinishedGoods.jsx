@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { useUrlState } from "@/lib/useUrlState"
-import { Check, CircleCheck, FileText, PackageCheck, Receipt, RefreshCw, Truck, Warehouse } from "lucide-react"
+import { Check, CircleCheck, FileText, PackageCheck, Receipt, RefreshCw, Truck, Warehouse, X } from "lucide-react"
 import { finishedGoodsService } from "@/features/finished-goods/finishedGoodsService"
 import { useGetFinishedGoodsQuery } from "@/features/finished-goods/finishedGoodsApi"
 import { FG_STEPS, fgBadge, fgIndexOf, fgStepDone, fgStepFor, myFgStep } from "@/features/finished-goods/fgFlow"
@@ -27,6 +27,9 @@ const TILE_TONE = {
   BILLED: { dot: "bg-indigo-500", s: { grad: "from-blue-600 to-indigo-800", glow: "shadow-blue-500/20" } },
   DELIVERED: { dot: "bg-emerald-500", s: { grad: "from-emerald-700 to-teal-800", glow: "shadow-emerald-500/20" } },
 }
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+const monthOf = (at) => { const d = new Date(at); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` }
+const monthName = (key) => new Date(`${key}-01T00:00:00`).toLocaleDateString("en-IN", { month: "long", year: "numeric" })
 const when = (at) => (at ? new Date(at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "")
 
 /* who did the latest step of this order, and when ("Last action by") */
@@ -352,11 +355,14 @@ export function BillView({ item, role, onClose, onChanged }) {
 
 /*
   Links into this page: ?bill=<finished goods id> opens that bill, ?pay=due shows the bills with money to collect,
-  ?q=<text> searches (order, product, bill, customer), ?status=<step> picks a step.
+  ?q=<text> searches (order, product, bill, customer), ?status=<step> picks a step,
+  ?month=2026-10 keeps only the orders billed in that month (the bills behind the Reports' Sales figure).
 */
 export default function FinishedGoods() {
   const { role } = usePermissions()
-  const { params, openPopup, closePopup } = useUrlState()
+  const { params, setParams, openPopup, closePopup } = useUrlState()
+  const month = MONTH_RE.test(params.get("month") || "") ? params.get("month") : null
+  const clearMonth = () => setParams((p) => { const next = new URLSearchParams(p); next.delete("month"); return next }, { replace: true })
   const { data: items = [], isLoading: loading, isFetching, error: loadError, refetch } = useGetFinishedGoodsQuery()
   const [query, setQuery] = useState(() => params.get("q") || "")
   const [filter, setFilter] = useState(() => (params.get("pay") === "due" ? "due" : params.get("status") || "mine")) // "mine" | "all" | "due" | a step status
@@ -373,11 +379,15 @@ export default function FinishedGoods() {
     const q = query.trim().toLowerCase()
     return items.filter((i) => {
       if (activeFilter === "mine" && !myFgStep(i, role)) return false
+      if (month && !(i.bill && monthOf(i.billedAt) === month)) return false
       if (activeFilter === "due" && !(i.bill?.due > 0)) return false
       if (!["mine", "all", "due"].includes(activeFilter) && i.status !== activeFilter) return false
       return !q || `${i.orderNumber} ${i.lines.map((l) => `${l.name} ${l.sku}`).join(" ")} ${i.bill?.billNumber || ""} ${i.bill?.customerName || ""}`.toLowerCase().includes(q)
     })
-  }, [items, query, activeFilter, role])
+  }, [items, query, activeFilter, role, month])
+  // the month's bills add up to the Reports' Sales figure
+  const monthBills = month ? items.filter((i) => i.bill && monthOf(i.billedAt) === month) : []
+  const monthTotal = monthBills.reduce((sum, i) => sum + Number(i.bill.total || 0), 0)
 
   const act = (item, step) => setActing({ item, step })
   const done = () => { setActing({ item: null, step: null }); refetch() }
@@ -403,6 +413,16 @@ export default function FinishedGoods() {
       </MktHero>
 
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
+
+      {month && (
+        <p className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          Billed in
+          <button type="button" onClick={clearMonth} className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-accent px-2.5 py-1 text-xs font-semibold text-primary hover:bg-accent/70" aria-label={`Show every month, not only ${monthName(month)}`}>
+            {monthName(month)} <X className="size-3.5" />
+          </button>
+          <span className="font-semibold text-foreground tabular-nums">{monthBills.length} bill{monthBills.length === 1 ? "" : "s"} · {rupees(monthTotal)}</span>
+        </p>
+      )}
 
       <TileGrid className="mb-4 md:grid-cols-3 xl:grid-cols-5">
         {tiles.map((t) => <StageTile key={t.key} stage={t} value={t.value} loading={loading} active={t.active} onClick={t.onClick} />)}

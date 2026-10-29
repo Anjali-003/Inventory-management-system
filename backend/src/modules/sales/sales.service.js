@@ -3,7 +3,7 @@ const reports = require("../reports/report.service");
 
 /*
     Sales & Billing for the Marketing Manager: every bill with what was paid and what is still due, and the month's
-    money (same figures as Reports, so both always agree). Read only: bills are made, paid, cancelled and credited
+    money (same figures as Reports, so both always agree). Read only: bills are made, paid and cancelled
     through the finished-goods routes, where each action checks its role.
 */
 const n = (v) => Number(v || 0);
@@ -15,7 +15,6 @@ async function listBills() {
                 b.subtotal, b.gst_amount, b.total, b.status, b.created_at, b.cancel_reason, fg.status AS goods_status,
                 u.name AS created_by_name,
                 (SELECT COALESCE(SUM(amount), 0) FROM bill_payments WHERE bill_id = b.id) AS paid,
-                (SELECT COALESCE(SUM(amount), 0) FROM bill_credit_notes WHERE bill_id = b.id) AS credited,
                 (SELECT MAX(paid_on) FROM bill_payments WHERE bill_id = b.id) AS last_paid_on
          FROM bills b
          JOIN orders o ON o.id = b.order_id
@@ -26,7 +25,7 @@ async function listBills() {
     );
     const now = Date.now();
     return rows.map((r) => {
-        const net = round(n(r.total) - n(r.credited));
+        const net = n(r.total);
         const due = r.status === "ACTIVE" ? Math.max(0, round(net - n(r.paid))) : 0;
         return {
             id: r.id,
@@ -37,7 +36,6 @@ async function listBills() {
             customerId: r.customer_id,
             customerName: r.customer_name,
             total: n(r.total),
-            credited: n(r.credited),
             net,
             paid: n(r.paid),
             due,
@@ -93,8 +91,8 @@ function previousMonth(month) {
 }
 
 /*
-    Net sales (bills after credit notes, as `net`) of the 6 months ending with `month`, oldest first:
-    [{ month: "2026-05", net }, ...]. Two grouped queries, not 6 month reports.
+    Net sales (the ACTIVE bills' total, as `net`) of the 6 months ending with `month`, oldest first:
+    [{ month: "2026-05", net }, ...]. One grouped query, not 6 month reports.
 */
 async function trend(month) {
     const months = [month];
@@ -106,21 +104,14 @@ async function trend(month) {
          WHERE status = 'ACTIVE' AND created_at >= ? AND created_at < ? GROUP BY m`,
         [start, end]
     );
-    const [credited] = await db.query(
-        `SELECT DATE_FORMAT(created_at, '%Y-%m') AS m, SUM(amount) AS amount FROM bill_credit_notes
-         WHERE created_at >= ? AND created_at < ? GROUP BY m`,
-        [start, end]
-    );
-    const of = (rows, key) => new Map(rows.map((r) => [r.m, n(r[key])]));
-    const b = of(billed, "total");
-    const c = of(credited, "amount");
-    return months.map((m) => ({ month: m, net: round((b.get(m) || 0) - (c.get(m) || 0)) }));
+    const b = new Map(billed.map((r) => [r.m, n(r.total)]));
+    return months.map((m) => ({ month: m, net: round(b.get(m) || 0) }));
 }
 
 /*
     What sold best in the month: one row per product billed (ACTIVE bills made in the month), biggest amount first,
     the top 10: { productId, name, sku, units, amount, customers, share }. share = % of everything billed for
-    products that month. Amounts are the bill lines' (a credit note reduces a whole bill, not a product line).
+    products that month. Amounts are the bill lines'.
 */
 async function topProducts(month, costed = []) {
     const { start, end } = reports.monthRange(month);
@@ -150,13 +141,12 @@ async function summary(month) {
     const { sales, money } = await reports.monthly(month);
     const lastRange = reports.monthRange(previousMonth(month));
     const last = await reports.sales(lastRange);
-    const lastMoney = await reports.costs(lastRange, last);
+    const lastMoney = await reports.costs(lastRange);
     const [[toBill]] = await db.query(`SELECT COUNT(*) AS n FROM finished_goods WHERE status = 'IN_STORE'`);
     return {
         month,
         net: sales.net,
         billed: sales.total,
-        credited: sales.credited,
         bills: sales.bills,
         collected: sales.collected,
         toCollect: sales.toCollect,
@@ -168,7 +158,7 @@ async function summary(month) {
         byProduct: await topProducts(month, money.products),
         /*
             Gross margin %, the month and the month before (the same estimate as Reports: what was sold minus what its
-            parts cost at their latest purchase rate, and credit notes; no labour or overheads). Only the percentages
+            parts cost at their latest purchase rate; no labour or overheads). Only the percentages
             go to Marketing, never the costs. estimated: some parts costed at their standard cost (never bought yet);
             uncosted: products sold that could not be costed at all (left out of the margin).
         */

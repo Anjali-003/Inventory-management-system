@@ -101,7 +101,6 @@ export default function useQualityControl() {
   const qcInspectedTotal = n(detail?.qualityControl?.quantityInspected);
   const qcApprovedTotal = n(detail?.qualityControl?.quantityApproved);
   const qcRejectedTotal = n(detail?.qualityControl?.quantityRejected);
-  const orderedTotal = n(detail?.production?.orderedQuantity);
   const redoPassedNumber = Number(redoPassed || 0);
   const newPassedTotal = passedTotal + redoPassedNumber;
   const newFailedTotal = Math.max(0, failedTotal - redoPassedNumber);
