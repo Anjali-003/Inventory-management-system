@@ -1,17 +1,16 @@
 import { useMemo } from "react"
-import { MotionConfig } from "motion/react"
+import { Link } from "react-router-dom"
 import { ClipboardList, FlaskConical, PackageSearch, ShoppingCart, XCircle } from "lucide-react"
+import { pageButtonClass } from "@/components/PageKit"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useGetMeQuery } from "@/features/auth/authApi"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
 import { stockState } from "@/features/inventory/components/StockBadge"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useGetApprovedOrdersQuery } from "@/features/order-approvals/orderApprovalsApi"
-import { HeroLink, MktHero } from "@/features/marketing-orders/mktKit"
 import { plural } from "@/features/marketing-orders/orderParts"
 import { useGetPurchasesQuery } from "@/features/purchasing/purchasingApi"
-import { PurchaseTile, PurchaseTileGrid, countPurchases, purchaseHref } from "@/features/purchasing/purchaseKit"
-import { useDrill } from "../DashboardKit"
+import { countPurchases, purchaseHref } from "@/features/purchasing/purchaseKit"
+import { Greeting, StatRow, useDrill } from "../DashboardKit"
 import DepartmentOverview, { shortageOf } from "../DepartmentOverview"
 import UrgentPurchaseSection from "../UrgentPurchaseSection"
 import IqcRejectionsSection from "../IqcRejectionsSection"
@@ -22,20 +21,8 @@ const EMPTY = []
 /* Plain-language line under "Hello": only what still has to be bought. */
 const nudge = (orders) => (orders ? `${plural(orders, "approved customer order")} with components to buy.` : "No components pending purchase.")
 
-/* One colour family per KPI card, kept whole so Tailwind can see the class names. Green = nothing to do. */
-const FAMILY = {
-  amber: { grad: "from-amber-700 to-orange-800", glow: "shadow-orange-500/30" },
-  rose: { grad: "from-rose-600 to-red-800", glow: "shadow-red-500/30" },
-  blue: { grad: "from-sky-700 to-blue-800", glow: "shadow-blue-500/30" },
-  violet: { grad: "from-violet-600 to-purple-800", glow: "shadow-purple-500/30" },
-  green: { grad: "from-emerald-700 to-emerald-800", glow: "shadow-emerald-600/30" },
-  slate: { grad: "from-slate-600 to-slate-800", glow: "shadow-slate-500/30" },
-}
-const tile = (label, icon, hint, family) => ({ label, icon, hint, s: FAMILY[family] })
-
 export default function PurchaseView() {
   const drill = useDrill()
-  const { data: me } = useGetMeQuery()
   const { canEdit, canView } = usePermissions()
   const canOrders = canView("approvedOrders") // an IQC / Store viewer cannot read approved orders: those figures are left out
   const canRaise = canEdit("purchase")
@@ -69,36 +56,31 @@ export default function PurchaseView() {
     }
   }, [orders, buys.data, inv.data])
 
-  const tiles = [
-    { key: "low", stage: tile("Low Stock", PackageSearch, "At or below minimum", d.lowStock ? "amber" : "green"), value: d.lowStock, to: "/inventory?filter=low", loading: inv.isLoading },
-    { key: "out", stage: tile("Out of Stock", XCircle, "Nothing available", d.outStock ? "rose" : "green"), value: d.outStock, to: "/inventory?filter=out", loading: inv.isLoading },
-    canOrders && { key: "req", stage: tile("Purchase Requirements", ClipboardList, "Component lines to order", d.requirementLines ? "amber" : "green"), value: d.requirementLines, to: "/purchase-requests" },
-    { key: "iqcstatus", stage: tile("With IQC", FlaskConical, "Awaiting inspection", d.counts.PENDING_IQC ? "violet" : "green"), value: d.counts.PENDING_IQC, to: purchaseHref("PENDING_IQC") },
-    { key: "rejected", stage: tile("IQC Rejected", XCircle, "Defective lots / returns", d.rejCount ? "rose" : "green"), value: d.rejCount, to: purchaseHref("REJECTED") },
+  const stats = [
+    canOrders && { label: "Components to buy", value: d.requirementLines, icon: ClipboardList, tone: d.requirementLines ? "amber" : "green", loading,
+      detail: d.requirementLines ? `For ${plural(d.needs.length, "approved order")}` : "Nothing to buy", to: "/purchase-requests" },
+    { label: "Low stock", value: d.lowStock, icon: PackageSearch, tone: d.lowStock ? "amber" : "green", loading: inv.isLoading, detail: "At or below the minimum", to: "/inventory?filter=low" },
+    { label: "Out of stock", value: d.outStock, icon: XCircle, tone: d.outStock ? "red" : "green", loading: inv.isLoading, detail: d.outStock ? "Nothing left in the Store" : "Every part in stock", to: "/inventory?filter=out" },
+    { label: "With IQC", value: d.counts.PENDING_IQC, icon: FlaskConical, tone: "blue", loading, detail: "Waiting for inspection", to: purchaseHref("PENDING_IQC") },
+    { label: "IQC rejected", value: d.rejCount, icon: XCircle, tone: d.rejCount ? "red" : "green", loading, detail: d.rejCount ? "Defective lots to return" : "Nothing rejected", to: purchaseHref("REJECTED") },
   ]
 
   const pending = d.needs.length
 
   return (
-    <MotionConfig reducedMotion="user">
-      <MktHero eyebrow="Purchase dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={canOrders ? nudge(pending) : "Purchases and supplier deliveries."}>
+    <>
+      <Greeting description={canOrders ? nudge(pending) : "Purchases and supplier deliveries."}>
         {/* the purchase manager's way into one combined order for every pending request */}
-        {canOrders ? (
-          <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to="/purchase-requests"><ShoppingCart /> Purchase requests{pending ? ` (${pending})` : ""}</HeroLink>
-        ) : (
-          <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to="/purchase"><ShoppingCart /> Open purchase</HeroLink>
-        )}
-      </MktHero>
-      <WaitingForYou className="mb-4" />
+        <Link to={canOrders ? "/purchase-requests" : "/purchase"} className={pageButtonClass("primary")}>
+          <ShoppingCart /> {canOrders ? `Purchase requests${pending ? ` (${pending})` : ""}` : "Open purchase"}
+        </Link>
+      </Greeting>
 
-      <PurchaseTileGrid className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-        {tiles.filter(Boolean).map((t) => (
-          <PurchaseTile key={t.key} solid stage={t.stage} value={t.value} loading={t.loading ?? loading} to={t.to} />
-        ))}
-      </PurchaseTileGrid>
+      <StatRow drill={drill} stats={stats} />
+      <WaitingForYou className="mt-4" />
 
       {loading ? (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-44 rounded-xl" />)}</div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-44 rounded-xl" />)}</div>
       ) : (
         <>
           {/* Urgent Purchase Requirements: nearest delivery first, components to buy shown inline */}
@@ -110,11 +92,11 @@ export default function PurchaseView() {
           <IqcRejectionsSection purchases={buys.data ?? EMPTY} />
 
           {/* Department overview (read-only); each card opens that department's main dashboard */}
-          <DepartmentOverview className="mt-6" depts={["iqc", "store"]} />
+          <DepartmentOverview className="mt-4" depts={["iqc", "store"]} />
         </>
       )}
 
       {drill.host}
-    </MotionConfig>
+    </>
   )
 }

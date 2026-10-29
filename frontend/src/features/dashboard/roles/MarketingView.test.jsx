@@ -39,7 +39,7 @@ describe("Marketing dashboard figures", () => {
     ]);
     renderApp(<MarketingView />, { role: "MARKETING_MANAGER" });
 
-    const due = await screen.findByText("Due for delivery", { selector: "span" });
+    const due = await screen.findByText("Due for delivery", { selector: "p" });
     const figure = due.closest("button");
     await waitFor(() => expect(figure).toHaveTextContent("1 late · 1 this week"));
     fireEvent.click(figure); // the rejected order is shown first: the figure opens the deliveries

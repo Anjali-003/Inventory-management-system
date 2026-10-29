@@ -30,6 +30,7 @@ export const USERS = [
   { id: 2, name: "Store Keeper", email: "store@example.com", role: "STORE_MANAGER" },
   { id: 3, name: "Purchase Desk", email: "purchase@example.com", role: "PURCHASE_MANAGER" },
   { id: 4, name: "IQC Desk", email: "iqc@example.com", role: "IQC_MANAGER" },
+  { id: 5, name: "Production Admin", email: "production-admin@example.com", role: "PRODUCTION_ADMIN" },
 ]
 
 // [id, sku, name, unit, category, size, location]

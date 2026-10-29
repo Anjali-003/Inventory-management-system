@@ -25,7 +25,8 @@ const EMPTY_MONTH = {
 
 // answers for paths whose screen expects an object, not a list
 const DEFAULTS = [
-  ["GET", /^\/auth\/me$/, () => ({ id: 1, name: "Test User", email: "test@test.local", role })],
+  // the backend wraps the user ({ user }), like GET /auth/me does
+  ["GET", /^\/auth\/me$/, () => ({ user: { id: 1, name: "Test User", email: "test@test.local", role } })],
   ["GET", /^\/notifications$/, () => ({ items: [], unread: 0, total: 0 })],
   ["GET", /^\/sales\/summary$/, () => ZERO_SALES],
   ["GET", /^\/reports\/monthly$/, () => EMPTY_MONTH],

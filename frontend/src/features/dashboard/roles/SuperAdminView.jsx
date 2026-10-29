@@ -1,18 +1,17 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
-import { AlertTriangle, CalendarClock, ChevronRight, IndianRupee, PackageX, Route } from "lucide-react"
+import { AlertTriangle, CalendarClock, IndianRupee, PackageX, Route } from "lucide-react"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
 import { useGetAttendanceQuery } from "@/features/attendance/attendanceApi"
 import { useGetProductStockQuery } from "@/features/product-stock/productStockApi"
 import { useGetExtraMaterialsQuery } from "@/features/material-requests/extraMaterialsApi"
 import { useGetMonthlyReportQuery, useGetStockBalanceQuery, useGetTrackedOrdersQuery } from "@/features/order-tracker/orderTrackerApi"
 import RecentActivity from "@/features/activity/RecentActivity"
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ROLE_LABELS } from "@/lib/permissions"
 import { fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
-import { Greeting, StatRow, useDrill } from "../DashboardKit"
+import { Greeting, Line, Panel, StatRow, useDrill } from "../DashboardKit"
 import { isLowStock, stockRow } from "../rows"
 
 /*
@@ -29,28 +28,6 @@ const pctText = (v) => (v === null || v === undefined ? "—" : `${v}%`)
 const ATT = [["Present", "PRESENT", "text-success"], ["Absent", "ABSENT", "text-destructive"], ["Half day", "HALF_DAY", "text-warning"], ["On leave", "LEAVE", "text-primary"]]
 // every department's own screen, read here without logging in as that role (see Dashboard.jsx DEPT_VIEWS)
 const DEPARTMENTS = [["marketing", "Marketing"], ["operations", "Operations"], ["purchase", "Purchase"], ["iqc", "IQC"], ["store", "Store"], ["production", "Production"], ["quality", "QC & Finished Goods"], ["hr", "HR"]]
-
-function Panel({ title, description, to, toLabel, children, className }) {
-  return (
-    <Card className={cn("overflow-hidden", className)}>
-      <CardHeader className="items-center">
-        <div><CardTitle>{title}</CardTitle>{description && <CardDescription>{description}</CardDescription>}</div>
-        {to && <Link to={to} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline">{toLabel}<ChevronRight className="size-3.5" /></Link>}
-      </CardHeader>
-      <div className="px-5 pb-5">{children}</div>
-    </Card>
-  )
-}
-
-function Line({ label, value, bad, sub, to }) {
-  const body = (
-    <div className="flex items-baseline justify-between gap-3 py-1.5">
-      <span className="min-w-0">{label}{sub && <span className="block text-xs text-muted-foreground">{sub}</span>}</span>
-      <span className={cn("shrink-0 font-semibold tabular-nums", bad && "text-destructive")}>{value}</span>
-    </div>
-  )
-  return to ? <Link to={to} className="-mx-2 block rounded-md px-2 hover:bg-muted/60">{body}</Link> : body
-}
 
 function OrderList({ rows, empty, late }) {
   if (!rows.length) return <p className="py-4 text-sm text-muted-foreground">{empty}</p>

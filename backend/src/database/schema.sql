@@ -582,6 +582,9 @@ CREATE TABLE IF NOT EXISTS `production_orders` (
 
 CREATE TABLE IF NOT EXISTS `products` (
   `id` int NOT NULL AUTO_INCREMENT,
+  `version_family_id` int DEFAULT NULL,
+  `version_major` int NOT NULL DEFAULT '1',
+  `version_minor` int NOT NULL DEFAULT '0',
   `sku` varchar(50) NOT NULL,
   `name` varchar(150) NOT NULL,
   `description` text,
@@ -593,8 +596,10 @@ CREATE TABLE IF NOT EXISTS `products` (
   `gst_percent` decimal(5,2) NOT NULL DEFAULT '18.00',
   PRIMARY KEY (`id`),
   UNIQUE KEY `sku` (`sku`),
+  UNIQUE KEY `uq_products_version` (`version_family_id`,`version_major`,`version_minor`),
   KEY `fk_products_created_by` (`created_by`),
-  CONSTRAINT `fk_products_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`)
+  CONSTRAINT `fk_products_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `fk_products_version_family` FOREIGN KEY (`version_family_id`) REFERENCES `products` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `purchase_order_items` (
@@ -734,6 +739,63 @@ CREATE TABLE IF NOT EXISTS `quality_control_rework_cycles` (
   CONSTRAINT `fk_qc_rework_reviewed_by` FOREIGN KEY (`reviewed_by`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_qc_rework_started_by` FOREIGN KEY (`started_by`) REFERENCES `users` (`id`),
   CONSTRAINT `fk_qc_rework_submitted_by` FOREIGN KEY (`submitted_by`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS `repair_events` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `repair_id` bigint unsigned NOT NULL,
+  `action` varchar(40) NOT NULL,
+  `from_status` varchar(32) DEFAULT NULL,
+  `to_status` varchar(32) DEFAULT NULL,
+  `quantity` int unsigned DEFAULT NULL,
+  `remarks` text,
+  `created_by` int NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_repair_events` (`repair_id`,`created_at`),
+  KEY `fk_repair_event_user` (`created_by`),
+  CONSTRAINT `fk_repair_event_request` FOREIGN KEY (`repair_id`) REFERENCES `repair_requests` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_repair_event_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS `repair_requests` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `repair_number` varchar(32) NOT NULL,
+  `product_id` int NOT NULL,
+  `requested_quantity` int unsigned NOT NULL,
+  `repaired_quantity` int unsigned NOT NULL DEFAULT '0',
+  `qc_passed_quantity` int unsigned NOT NULL DEFAULT '0',
+  `dispatched_quantity` int unsigned NOT NULL DEFAULT '0',
+  `status` varchar(32) NOT NULL DEFAULT 'DRAFT',
+  `customer_name` varchar(180) NOT NULL,
+  `customer_reference` varchar(120) DEFAULT NULL,
+  `problem_description` text NOT NULL,
+  `diagnosis` text,
+  `repair_notes` text,
+  `approval_remarks` text,
+  `qc_remarks` text,
+  `dispatch_reference` varchar(120) DEFAULT NULL,
+  `dispatch_remarks` text,
+  `created_by` int NOT NULL,
+  `approved_by` int DEFAULT NULL,
+  `approved_at` datetime DEFAULT NULL,
+  `dispatched_by` int DEFAULT NULL,
+  `dispatched_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_repair_number` (`repair_number`),
+  KEY `idx_repair_status` (`status`),
+  KEY `idx_repair_created_by` (`created_by`),
+  KEY `fk_repair_product` (`product_id`),
+  KEY `fk_repair_approved_by` (`approved_by`),
+  KEY `fk_repair_dispatched_by` (`dispatched_by`),
+  CONSTRAINT `fk_repair_approved_by` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `fk_repair_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `fk_repair_dispatched_by` FOREIGN KEY (`dispatched_by`) REFERENCES `users` (`id`),
+  CONSTRAINT `fk_repair_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`),
+  CONSTRAINT `chk_repair_quantities` CHECK (((`repaired_quantity` <= `requested_quantity`) and (`qc_passed_quantity` <= `repaired_quantity`) and (`dispatched_quantity` <= `qc_passed_quantity`))),
+  CONSTRAINT `chk_repair_requested_qty` CHECK ((`requested_quantity` > 0))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `testing_records` (

@@ -37,15 +37,24 @@ async function log(entry) {
     return activity;
 }
 
-async function list({ limit = 30 } = {}) {
+const ROLE_ACTIVITY_RESOURCES = {
+    // Production Admin must not see HR, purchasing, marketing or other department activity.
+    PRODUCTION_ADMIN: ["production", "quality-control", "qc-failed", "finished-goods", "repairs"],
+};
+
+async function list({ limit = 30, role } = {}) {
     const n = Math.min(Math.max(Number(limit) || 30, 1), 200);
+    const resources = ROLE_ACTIVITY_RESOURCES[String(role || "").toUpperCase()];
+    const filter = resources ? "WHERE a.resource IN (?)" : "";
+    const params = resources ? [resources, n] : [n];
     const [rows] = await db.query(
         `SELECT a.id, a.user_id, u.name AS user_name, a.action, a.resource, a.resource_id, a.summary, a.created_at
          FROM activity_log a
          JOIN users u ON u.id = a.user_id
+         ${filter}
          ORDER BY a.id DESC
          LIMIT ?`,
-        [n]
+        params
     );
     return rows;
 }

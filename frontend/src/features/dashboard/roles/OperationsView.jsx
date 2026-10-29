@@ -1,23 +1,22 @@
 import { useMemo, useState } from "react"
-import { MotionConfig } from "motion/react"
-import { AlertTriangle, CheckCircle2, ClipboardCheck, ShoppingCart, XCircle } from "lucide-react"
-import { Reveal } from "@/components/HistoryUI"
-import { EmptyState } from "@/components/feedback"
-import { useGetMeQuery } from "@/features/auth/authApi"
+import { Link } from "react-router-dom"
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Hourglass, ShoppingCart, XCircle } from "lucide-react"
+import { pageButtonClass } from "@/components/PageKit"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useGetOrderApprovalsQuery } from "@/features/order-approvals/orderApprovalsApi"
 import OpsOrderDrawer from "@/features/order-approvals/OpsOrderDrawer"
 import PurchaseDrawer from "@/features/purchase/PurchaseDrawer"
-import { ApprovalList, OPS_ALL, OPS_STAGES, OpsPanel, OpsTileGrid, opsHref } from "@/features/order-approvals/opsKit"
-import { HeroLink, MktHero, StageTile } from "@/features/marketing-orders/mktKit"
-import { OrderPipeline, countByStatus, newestFirst, plural } from "@/features/marketing-orders/orderParts"
+import { ApprovalList, opsHref } from "@/features/order-approvals/opsKit"
+import { countByStatus, newestFirst, plural } from "@/features/marketing-orders/orderParts"
 import { useGetPurchasesQuery } from "@/features/purchasing/purchasingApi"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
 import DepartmentOverview from "../DepartmentOverview"
-import { ListPanel, useDrill } from "../DashboardKit"
+import { EmptyLine, Greeting, ListPanel, Panel, PanelLink, StatRow, useDrill } from "../DashboardKit"
 import { isLowStock, onOrderByComponent, purchaseRow, stockRow } from "../rows"
 
 const EMPTY = []
 const QUEUE = "PENDING_APPROVAL"
+const LIMIT = 5
 
 /* The Purchase page's side drawer for one purchase, read-only here (the Operations Admin only follows purchases).
    It reads the purchase from the live list by id, and closes itself if the purchase is no longer in it. */
@@ -29,20 +28,19 @@ function OpsPurchaseDrawer({ purchaseId, onClose }) {
 }
 
 /* Plain-language line under "Hello": the one thing worth doing next. */
-function nudge(counts) {
-  if (counts[QUEUE]) return `${plural(counts[QUEUE], "order")} waiting for your decision.`
+function nudge(counts, low) {
+  if (counts[QUEUE]) return `${plural(counts[QUEUE], "order")} waiting for your decision. Open one to check stock and decide.`
+  if (low) return `No order is waiting. ${plural(low, "component")} at or below the minimum: check they are on order.`
   return "Nothing is waiting for you. Here is how orders, purchase and stock are doing."
 }
 
 /*
-  Operations Admin dashboard, built like the Marketing Manager one: a hero, one colour tile per stage (each is a
-  link to Incoming Orders with that filter on), the pipeline bar, then the lists. Clicking an order opens the full
-  Operations popup (stock check, progress, products, Reject / Check stock & send). The purchase and stock lists
-  below keep the shared dashboard panels, because those records belong to other roles.
+  Operations Admin dashboard, in the one dashboard look (the Super Admin's): "Hello" and the next thing to do, the
+  figures (each opens its list), then the lists. Clicking an order opens the full Operations popup (stock check,
+  progress, products, Reject / Check stock & send); a purchase opens the Purchase drawer read-only.
 */
 export default function OperationsView() {
   const drill = useDrill()
-  const { data: me } = useGetMeQuery()
   const appr = useGetOrderApprovalsQuery()
   const buys = useGetPurchasesQuery()
   const inv = useGetInventoryQuery("active")
@@ -64,57 +62,45 @@ export default function OperationsView() {
     }
   }, [orders, buys.data, inv.data])
 
-  // Every figure opens Incoming Orders with that filter already on.
-  const tiles = [
-    { key: "ALL", stage: OPS_ALL, value: counts.total, to: opsHref("ALL") },
-    ...OPS_STAGES.map((s) => ({ key: s.status, stage: s, value: counts[s.status], to: opsHref(s.status) })),
-  ]
-
   const open = (o) => setOpenedId(o.id)
 
   return (
-    <MotionConfig reducedMotion="user">
-      <MktHero eyebrow="Operations dashboard" title={me?.name ? `Hello, ${me.name}` : "Hello"} description={nudge(counts)}>
-        <HeroLink wrap="flex w-full sm:inline-flex sm:w-auto" className="h-11 w-full sm:h-10 sm:w-auto" to={opsHref(QUEUE)}><ClipboardCheck /> Open incoming orders</HeroLink>
-      </MktHero>
+    <>
+      <Greeting description={nudge(counts, d.low.length)}>
+        <Link to={opsHref(QUEUE)} className={pageButtonClass("primary")}><ClipboardCheck /> Orders to approve</Link>
+      </Greeting>
 
-      <OpsTileGrid>
-        {tiles.map((t) => (
-          <StageTile key={t.key} solid stage={t.stage} value={t.value} loading={appr.isLoading} to={t.to} />
-        ))}
-      </OpsTileGrid>
+      <StatRow drill={drill} stats={[
+        { label: "Waiting for your decision", value: counts[QUEUE] ?? 0, icon: Hourglass, tone: counts[QUEUE] ? "amber" : "green", loading: appr.isLoading,
+          detail: counts[QUEUE] ? "Check stock, then approve or reject" : "Nothing to decide", to: opsHref(QUEUE) },
+        { label: "Approved", value: counts.APPROVED ?? 0, icon: CheckCircle2, tone: "green", loading: appr.isLoading, detail: "Sent on to Production and Purchase", to: opsHref("APPROVED") },
+        { label: "Rejected", value: counts.REJECTED ?? 0, icon: XCircle, tone: counts.REJECTED ? "red" : "green", loading: appr.isLoading, detail: "With the reason you gave", to: opsHref("REJECTED") },
+        { label: "Purchases in progress", value: d.inProgress.length, icon: ShoppingCart, tone: "blue", loading: buys.isLoading, detail: "Missing components being bought", to: "/purchase" },
+        { label: "Components to reorder", value: d.low.length, icon: AlertTriangle, tone: d.low.length ? "amber" : "green", loading: inv.isLoading,
+          detail: d.low.length ? "At or below the minimum" : "All above the minimum", to: "/inventory?filter=low" },
+      ]} />
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Reveal delay={0.3}>
-          <OpsPanel title="Waiting for approval" description="Newest first. Open an order to check stock and decide." loading={appr.isLoading} to={d.pending.length > 5 ? opsHref(QUEUE) : null} toLabel={`View all (${d.pending.length})`}>
-            {d.pending.length === 0 ? (
-              <EmptyState icon={ClipboardCheck} title="Nothing waiting for approval">New orders will show up here as soon as they are raised.</EmptyState>
-            ) : (
-              <ApprovalList orders={d.pending.slice(0, 5)} onOpen={open} />
-            )}
-          </OpsPanel>
-        </Reveal>
-        <Reveal delay={0.4}>
-          <ListPanel table drill={drill} loading={loading} title="Purchases in progress" description="Where the missing components are." rows={d.inProgress} to="/purchase" toLabel="Open Purchase" emptyIcon={ShoppingCart} empty="No purchase in progress" />
-        </Reveal>
-        <Reveal delay={0.4}>
-          <OpsPanel title="Rejected orders" description="With the reason you gave." loading={appr.isLoading} to={d.rejected.length > 5 ? opsHref("REJECTED") : null} toLabel={`View all (${d.rejected.length})`}>
-            {d.rejected.length === 0 ? (
-              <EmptyState icon={XCircle} title="Nothing rejected" />
-            ) : (
-              <ApprovalList orders={d.rejected.slice(0, 5)} onOpen={open} />
-            )}
-          </OpsPanel>
-        </Reveal>
-        <Reveal delay={0.5}>
-          <ListPanel table rightLabel="On hand / min" drill={drill} loading={loading} title="Components to reorder" description="Stock on hand is at or below the minimum." rows={d.low} to="/inventory?filter=low" toLabel="Open Inventory" emptyIcon={d.low.length ? AlertTriangle : CheckCircle2} empty="All components are above minimum" />
-        </Reveal>
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <Panel flush className="lg:col-span-2" title="Waiting for your decision" description="Newest first. Open an order to check stock and decide."
+          action={d.pending.length > LIMIT ? <PanelLink to={opsHref(QUEUE)}>All {d.pending.length}</PanelLink> : <PanelLink to={opsHref(QUEUE)}>Orders to approve</PanelLink>}>
+          {appr.isLoading ? <div className="space-y-2 px-5 pb-5"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+            : d.pending.length === 0 ? <EmptyLine>Nothing is waiting for your decision.</EmptyLine>
+            : <ApprovalList orders={d.pending.slice(0, LIMIT)} onOpen={open} />}
+        </Panel>
+        <ListPanel drill={drill} loading={loading} title="Purchases in progress" description="Where the missing components are." rows={d.inProgress} to="/purchase" toLabel="Purchase" empty="No purchase in progress." />
+        <Panel flush className="lg:col-span-2" title="Rejected orders" description="With the reason you gave."
+          action={d.rejected.length > LIMIT ? <PanelLink to={opsHref("REJECTED")}>All {d.rejected.length}</PanelLink> : null}>
+          {appr.isLoading ? <div className="space-y-2 px-5 pb-5"><Skeleton className="h-10 w-full" /></div>
+            : d.rejected.length === 0 ? <EmptyLine>Nothing rejected.</EmptyLine>
+            : <ApprovalList orders={d.rejected.slice(0, LIMIT)} onOpen={open} />}
+        </Panel>
+        <ListPanel drill={drill} loading={loading} title="Components to reorder" description="At or below the minimum." rows={d.low} to="/inventory?filter=low" toLabel="Component Stock" empty="All components are above the minimum." />
       </div>
 
-      <DepartmentOverview className="mt-6" depts={["iqc", "store", "purchase"]} />
+      <DepartmentOverview className="mt-4" depts={["iqc", "store", "purchase"]} />
 
       <OpsOrderDrawer orderId={openedId} onClose={() => setOpenedId(null)} />
       {drill.host}
-    </MotionConfig>
+    </>
   )
 }

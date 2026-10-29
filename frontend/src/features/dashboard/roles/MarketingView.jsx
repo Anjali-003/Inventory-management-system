@@ -24,6 +24,8 @@ import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
 import OrderDrawer from "@/features/marketing-orders/OrderDrawer"
+import { Flag, StageBar, WorkCard, useFlash } from "@/features/dashboard/components/WorkKit"
+import { Greeting, StatRow } from "@/features/dashboard/DashboardKit"
 
 const EMPTY = []
 
@@ -208,13 +210,13 @@ const RowList = ({ children }) => (
 
 /* ------------------------------------------------------------------ billing list */
 
-/* Finished goods where the next step is Marketing's: make the bill, or take the payment. A row opens Finished Goods. */
+/* Finished goods where the next step is Marketing's: make the bill (opens To Bill), or take the payment (opens that bill). */
 function BillingList({ rows }) {
   return (
     <ul className="divide-y divide-lp-line">
       {rows.map(({ item: f, step }) => (
         <li key={f.id}>
-          <Link to={`/finished-goods?status=${f.status}`} className="group flex items-center gap-3 px-5 py-3 outline-none transition-[background-color,box-shadow] hover:bg-lp-tint focus-visible:bg-lp-tint active:bg-lp-portal-on/40 hover:shadow-[inset_3px_0_0_var(--color-lp-green)] focus-visible:shadow-[inset_3px_0_0_var(--color-lp-green)]">
+          <Link to={step.action === "pay" && f.bill ? `/bills?show=open&bill=${f.bill.id}` : "/to-bill"} className="group flex items-center gap-3 px-5 py-3 outline-none transition-[background-color,box-shadow] hover:bg-lp-tint focus-visible:bg-lp-tint active:bg-lp-portal-on/40 hover:shadow-[inset_3px_0_0_var(--color-lp-green)] focus-visible:shadow-[inset_3px_0_0_var(--color-lp-green)]">
             <span className="min-w-0 flex-1">
               <span className="block whitespace-nowrap font-semibold tabular-nums text-lp-ink transition-colors group-hover:text-lp-green">{f.orderNumber}</span>
               <span className="block truncate text-xs text-lp-muted">{[f.customerName || f.bill?.customerName, f.productName].filter(Boolean).join(" · ")}</span>
@@ -268,39 +270,6 @@ function DateNotices({ items, onOpen, onAcknowledge }) {
 
 /* ------------------------------------------------------------------ KPI cards */
 
-/*
-  One figure: label and a small icon, the number, one line under it (a change, or what it means). Link or button.
-  Hover: violet border, soft shadow, the icon turns violet. Press: shrinks a little. `selected`: the Orders card below
-  is showing this figure's list, so it keeps the violet border and ring.
-*/
-function Kpi({ icon: Icon, label, value, foot, chart = null, to, onClick, selected = false, title, className }) {
-  const body = (
-    <>
-      <span className="flex items-center justify-between gap-2">
-        <span className="text-[13px] font-medium text-lp-muted">{label}</span>
-        <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg transition-colors group-hover:bg-lp-green group-hover:text-white", selected ? "bg-lp-green text-white" : "bg-lp-bg text-lp-muted")} aria-hidden>
-          <Icon className="size-4" />
-        </span>
-      </span>
-      <span className="mt-2 flex items-end justify-between gap-3">
-        <span className="text-2xl font-semibold tracking-tight text-lp-ink tabular-nums">{value}</span>
-        {chart}
-      </span>
-      <span className="mt-1.5 block min-h-5 text-xs text-lp-muted">{foot}</span>
-    </>
-  )
-  // flex-col: a <button> centres its content up and down, a link does not; both start at the top this way
-  const cls = cn(
-    "group flex min-w-0 flex-col justify-start rounded-xl border bg-white p-4 text-start outline-none transition-[border-color,box-shadow,transform,background-color] duration-150",
-    "hover:-translate-y-0.5 hover:border-lp-green hover:bg-lp-soft hover:shadow-[0_14px_30px_-14px_rgba(122,53,255,0.55)] active:translate-y-0 active:scale-[0.98] active:bg-lp-tint focus-visible:ring-2 focus-visible:ring-lp-green/40",
-    selected ? "border-lp-green ring-2 ring-lp-green/15" : "border-lp-line",
-    className
-  )
-  // neither a link nor a button: a figure to read only, so it does not light up on hover
-  if (!to && !onClick) return <div title={title} className={cn("flex min-w-0 flex-col justify-start rounded-xl border border-lp-line bg-white p-4", className)}>{body}</div>
-  return to ? <Link to={to} title={title} className={cls}>{body}</Link> : <button type="button" onClick={onClick} aria-pressed={selected} title={title} className={cls}>{body}</button>
-}
-
 /* "↗ 3.2 pts vs last month": the margin's change in percentage points; what the figure is when there is nothing to compare */
 function MarginChange({ pct, lastPct, prev = "last month" }) {
   if (pct == null || lastPct == null) return <span>Parts cost only, an estimate</span>
@@ -315,9 +284,6 @@ function MarginChange({ pct, lastPct, prev = "last month" }) {
     </span>
   )
 }
-
-/* a status word with its colour: "4 late" in red, "2 this week" in amber */
-const Flag = ({ tone, children }) => <span className={cn("font-medium", tone === "bad" ? "text-destructive" : "text-warning")}>{children}</span>
 
 /* ------------------------------------------------------------------ going quiet */
 
@@ -360,20 +326,6 @@ function GoingQuiet({ customers, loading }) {
 
 /* ------------------------------------------------------------------ orders card */
 
-/* The orders that need something, in one card: a tab per kind of work, each with how many are waiting. */
-/*
-  "You landed here": after a figure or link above scrolls the page down to a card, the whole card blinks twice (light
-  violet fill and a violet ring, the Tailwind animation animate-card-flash in index.css) so the eye finds it.
-  flash() restarts it on every click: the class goes off for one frame, then on again; it goes off by itself at the end.
-*/
-function useFlash() {
-  const [on, setOn] = useState(false)
-  const flash = () => { setOn(false); requestAnimationFrame(() => setOn(true)) }
-  // only the card's own animation ends it (the rows inside fade in with animations of their own)
-  const onAnimationEnd = (e) => { if (e.target === e.currentTarget) setOn(false) }
-  return [{ className: on ? "animate-card-flash" : "", onAnimationEnd }, flash]
-}
-
 /*
   Where the open orders are, as one bar: Draft -> With Operations -> Being made -> In the Store -> Billed. Each part
   is as wide as its count and named under the bar with its count (one violet, light to dark, in the order of the flow).
@@ -394,56 +346,6 @@ function stageOfOrder(o, fgStatuses = []) {
   if (fgStatuses.includes("BILLED")) return "billed"
   if (fgStatuses.includes("IN_STORE")) return "store"
   return "making"
-}
-function Pipeline({ counts }) {
-  const total = PIPELINE.reduce((sum, p) => sum + counts[p.id], 0)
-  if (!total) return null
-  return (
-    <div className="mt-3">
-      <div className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-lp-bg" role="img"
-        aria-label={`${total} open orders: ${PIPELINE.map((p) => `${p.label} ${counts[p.id]}`).join(", ")}`}>
-        {PIPELINE.map((p) => counts[p.id] > 0 && (
-          <span key={p.id} title={`${p.label}: ${counts[p.id]}`} className={cn("h-full first:rounded-s-full last:rounded-e-full", p.color)} style={{ width: `${(counts[p.id] / total) * 100}%` }} />
-        ))}
-      </div>
-      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-lp-muted" aria-hidden>
-        {PIPELINE.map((p) => (
-          <li key={p.id} className={cn("flex items-center gap-1.5", !counts[p.id] && "opacity-50")}>
-            <span className={cn("size-2 rounded-full", p.color)} />{p.label} <b className="font-semibold text-lp-ink tabular-nums">{counts[p.id]}</b>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function OrdersCard({ tabs, tab, onTab, summary, pipeline, children, footer, flash }) {
-  return (
-    <Card id="work" className={cn("scroll-mt-20 overflow-hidden", flash?.className)} onAnimationEnd={flash?.onAnimationEnd}>
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 px-5 pt-4">
-        <div className="min-w-0">
-          <CardTitle>Orders</CardTitle>
-          <p className="mt-0.5 text-xs text-lp-muted">{summary}</p>
-        </div>
-      </div>
-      <div className="px-5">{pipeline}</div>
-      <div role="tablist" aria-label="Orders" className="mkt-scroll-x mt-3 flex gap-1 overflow-x-auto border-b px-3">
-        {tabs.map((t) => {
-          const active = t.id === tab
-          return (
-            <button key={t.id} type="button" role="tab" aria-selected={active} onClick={() => onTab(t.id)}
-              className={cn("-mb-px inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md border-b-2 px-2 py-2.5 text-[13px] font-medium outline-none transition-colors focus-visible:bg-lp-bg active:bg-lp-line/60",
-                active ? "border-lp-green text-lp-green" : "border-transparent text-lp-muted hover:border-lp-portal-on hover:bg-lp-tint hover:text-lp-green")}>
-              {t.label}
-              {t.count != null && <span className={cn("rounded px-1.5 text-[11px] font-semibold tabular-nums", t.alert && t.count ? "bg-rose-50 text-rose-700" : "bg-lp-bg text-lp-muted")}>{t.count}</span>}
-            </button>
-          )
-        })}
-      </div>
-      <div role="tabpanel">{children}</div>
-      {footer && <div className="border-t px-5 py-2.5 text-end">{footer}</div>}
-    </Card>
-  )
 }
 
 export default function MarketingView() {
@@ -553,46 +455,41 @@ export default function MarketingView() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <header className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0">
-          <h1 className="font-lp-head text-2xl font-semibold tracking-tight text-lp-ink">Marketing</h1>
-          <p className="mt-1 text-sm text-lp-muted">{nudge(counts, revised, late)}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="sr-only" htmlFor="mkt-month">Month</label>
-          <select id="mkt-month" value={month} onChange={(e) => setMonth(e.target.value)}
-            className="h-11 rounded-lg border border-lp-line bg-white ps-3 pe-8 text-[13px] font-medium text-lp-ink outline-none transition-colors hover:border-lp-green/50 hover:bg-lp-soft focus-visible:ring-2 focus-visible:ring-lp-green/40 sm:h-9">
-            {MONTHS.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
-          </select>
-          {editable && <Link to={ordersHref(null, { new: 1 })} className={cn(pageButtonClass("primary"), "max-md:hidden")}><Plus /> New order</Link>}
-        </div>
-      </header>
+      <Greeting description={nudge(counts, revised, late)}>
+        <label className="sr-only" htmlFor="mkt-month">Month</label>
+        <select id="mkt-month" value={month} onChange={(e) => setMonth(e.target.value)}
+          className="h-11 rounded-lg border border-lp-line bg-white ps-3 pe-8 text-[13px] font-medium text-lp-ink outline-none transition-colors hover:border-lp-green/50 hover:bg-lp-soft focus-visible:ring-2 focus-visible:ring-lp-green/40 sm:h-9">
+          {MONTHS.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+        </select>
+        {editable && <Link to={ordersHref(null, { new: 1 })} className={cn(pageButtonClass("primary"), "max-md:hidden")}><Plus /> New order</Link>}
+      </Greeting>
 
       {dateNotifs.length > 0 && (
         <DateNotices items={dateNotifs} onOpen={(n) => { markRead(n.id); openOrder({ id: n.order_id }) }} onAcknowledge={(n) => markRead(n.id)} />
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
-        <Kpi icon={FileText} label={month === thisMonth ? "Billed this month" : `Billed in ${label}`} to={`/bills?show=all${monthParam}`} value={money(sales?.net)} chart={<TrendBars trend={sales?.trend} />}
-          foot={sales?.lastMonth ? <VsLastMonth now={sales.net} before={sales.lastMonth.net} prev={prev} /> : `${sales?.bills ?? 0} bills`} />
-        <Kpi icon={Wallet} label={month === thisMonth ? "Received this month" : `Received in ${label}`} to={`/bills?show=received${monthParam}`} value={money(sales?.collected)}
-          foot={sales?.lastMonth ? <VsLastMonth now={sales.collected} before={sales.lastMonth.collected} prev={prev} /> : "Payments in"} />
-        {/* gross margin: an estimate from the parts' cost, so it says so on hover; only the % is shown, never costs */}
-        <Kpi icon={Percent} label={month === thisMonth ? "Margin this month" : `Margin in ${label}`}
-          title="Sales minus what the products' parts cost at their latest purchase rate (and credit notes). Labour and overheads are not included."
-          value={loadingFigures ? "…" : sales?.margin?.pct == null ? "—" : `${sales.margin.pct}%`}
-          foot={sales?.margin ? <MarginChange pct={sales.margin.pct} lastPct={sales.margin.lastPct} prev={prev ?? "last month"} /> : "Parts cost only, an estimate"} />
-        <Kpi icon={IndianRupee} label="Money to collect" to="/bills?show=open" value={money(owed)}
-          foot={owed ? (oldest != null ? <Flag tone={oldest > 30 ? "bad" : "warn"}>{`Oldest bill is ${plural(oldest, "day")} old`}</Flag> : "Bills not fully paid") : "Every bill is paid"} />
-        <Kpi icon={CalendarClock} label="Due for delivery" onClick={() => show("risk")} selected={shownTab === "risk"} className="col-span-2 lg:col-span-1" value={isLoading ? "…" : risk.length}
-          foot={risk.length ? <>{late > 0 && <Flag tone="bad">{late} late</Flag>}{late > 0 && risk.length - late > 0 && " · "}{risk.length - late > 0 && <Flag tone="warn">{risk.length - late} this week</Flag>}</> : "Nothing due this week"} />
-      </div>
+      <StatRow stats={[
+        { label: month === thisMonth ? "Billed this month" : `Billed in ${label}`, icon: FileText, tone: "violet", to: `/bills?show=all${monthParam}`, value: money(sales?.net),
+          chart: <TrendBars trend={sales?.trend} />,
+          detail: sales?.lastMonth ? <VsLastMonth now={sales.net} before={sales.lastMonth.net} prev={prev} /> : `${sales?.bills ?? 0} bills` },
+        { label: month === thisMonth ? "Received this month" : `Received in ${label}`, icon: Wallet, tone: "green", to: `/bills?show=received${monthParam}`, value: money(sales?.collected),
+          detail: sales?.lastMonth ? <VsLastMonth now={sales.collected} before={sales.lastMonth.collected} prev={prev} /> : "Payments in" },
+        // gross margin: an estimate from the parts' cost, so it says so on hover; only the % is shown, never costs
+        { label: month === thisMonth ? "Margin this month" : `Margin in ${label}`, icon: Percent, tone: "blue",
+          title: "Sales minus what the products' parts cost at their latest purchase rate (and credit notes). Labour and overheads are not included.",
+          value: loadingFigures ? "…" : sales?.margin?.pct == null ? "—" : `${sales.margin.pct}%`,
+          detail: sales?.margin ? <MarginChange pct={sales.margin.pct} lastPct={sales.margin.lastPct} prev={prev ?? "last month"} /> : "Parts cost only, an estimate" },
+        { label: "Money to collect", icon: IndianRupee, tone: owed ? "amber" : "green", to: "/bills?show=open", value: money(owed),
+          detail: owed ? (oldest != null ? <Flag tone={oldest > 30 ? "bad" : "warn"}>{`Oldest bill is ${plural(oldest, "day")} old`}</Flag> : "Bills not fully paid") : "Every bill is paid" },
+        { label: "Due for delivery", icon: CalendarClock, tone: late ? "red" : risk.length ? "amber" : "green", onClick: () => show("risk"), active: shownTab === "risk", value: isLoading ? "…" : risk.length,
+          detail: risk.length ? <>{late > 0 && <Flag tone="bad">{late} late</Flag>}{late > 0 && risk.length - late > 0 && " · "}{risk.length - late > 0 && <Flag tone="warn">{risk.length - late} this week</Flag>}</> : "Nothing due this week" },
+      ]} />
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
         {/* min-w-0: a grid column would otherwise grow to its longest one-line text and push the page sideways on a phone */}
         <div className="min-w-0 lg:col-span-2">
-          <OrdersCard flash={workFlash} tabs={tabs} tab={shownTab} onTab={setWorkTab}
-            pipeline={<Pipeline counts={pipeline} />}
+          <WorkCard title="Orders" flash={workFlash} tabs={tabs} tab={shownTab} onTab={setWorkTab}
+            pipeline={<StageBar stages={PIPELINE} counts={pipeline} noun="open orders" />}
             summary={<>Your turn: <button type="button" onClick={() => show(revised + counts.DRAFT === 0 && toBill ? "billing" : "attention")} className="rounded font-semibold text-lp-green underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-lp-green/40 active:opacity-70">{yourTurn || "Nothing is waiting for you"}</button></>}
             footer={more && <Link to={moreLink[0]} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary outline-none transition-colors hover:bg-lp-tint focus-visible:ring-2 focus-visible:ring-lp-green/40 active:bg-lp-portal-on/40">{moreLink[1]}<ChevronRight className="size-3.5" /></Link>}>
             {isLoading ? (
@@ -618,15 +515,15 @@ export default function MarketingView() {
                 )}
               </EmptyState>
             )}
-          </OrdersCard>
+          </WorkCard>
         </div>
-        <div className="flex min-w-0 flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-4">
           <TopSellers s={sales} loading={salesLoading} month={month === thisMonth ? "This month" : label} monthParam={monthParam} />
           <GoingQuiet customers={customers} loading={customersLoading} />
         </div>
       </div>
 
-      <Receivables s={sales} loading={salesLoading} className="mt-6" />
+      <Receivables s={sales} loading={salesLoading} className="mt-4" />
 
       <OrderDrawer
         order={opened && !confirmDelete ? opened : null}

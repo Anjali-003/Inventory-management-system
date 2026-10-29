@@ -27,7 +27,7 @@ export const fgStepFor = (item) => (item?.status === "BILLED" && item.bill?.due 
 export const myFgStep = (item, role) => {
   const step = fgStepFor(item)
   if (!step?.action) return null
-  return role === "SUPER_ADMIN" || role === step.owner ? step : null
+  return role === "SUPER_ADMIN" || role === "PRODUCTION_ADMIN" || role === step.owner ? step : null
 }
 
 export const fgBadge = (status) => {

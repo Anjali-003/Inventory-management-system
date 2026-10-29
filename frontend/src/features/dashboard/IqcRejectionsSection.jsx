@@ -1,8 +1,7 @@
 import { Fragment, useMemo, useState } from "react"
-import { AlertOctagon, CheckCircle2, ChevronDown, Download, ExternalLink, FileSpreadsheet, Filter, Search, X } from "lucide-react"
+import { AlertOctagon, ChevronDown, Download, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { EmptyState } from "@/components/feedback"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import RejectedPurchaseDrawer from "./RejectedPurchaseDrawer"
 import { downloadRejected } from "@/features/purchasing/purchasingUtils"
@@ -98,29 +97,18 @@ export default function IqcRejectionsSection({ purchases = [] }) {
     return Array.from(map.values())
   }, [filtered])
 
+  // nothing rejected: no card at all (the "IQC rejected" figure above already says 0)
   if (rejectedItems.length === 0) {
-    return (
-      <Card className="mt-6 border-emerald-500/20 bg-emerald-50/20">
-        <div className="p-6 text-center">
-          <div className="inline-flex size-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mb-2">
-            <CheckCircle2 className="size-5" />
-          </div>
-          <h3 className="text-sm font-bold text-foreground">No Discarded / Rejected Components</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            All supplier purchases have passed IQC testing or no rejections recorded.
-          </p>
-        </div>
-      </Card>
-    )
+    return null
   }
 
   return (
-    <Card className="mt-6 overflow-hidden border-rose-200 dark:border-rose-900/40">
-      <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-rose-50/40 dark:bg-rose-950/10 border-b border-rose-100 dark:border-rose-900/30">
+    <Card className="mt-4 overflow-hidden">
+      <CardHeader className="flex flex-col gap-2 border-b sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <AlertOctagon className="size-5 text-rose-600 shrink-0" />
-            <CardTitle className="text-lg font-bold text-rose-950 dark:text-rose-200">
+            <CardTitle>
               IQC Rejected / Discarded Components
             </CardTitle>
             <Badge variant="danger" className="font-semibold">

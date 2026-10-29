@@ -33,7 +33,11 @@ const ProductStock = lazy(() => import("@/features/product-stock/ProductStock"))
 const OrderTracker = lazy(() => import("@/features/order-tracker/OrderTracker"));
 const Reports = lazy(() => import("@/features/order-tracker/Reports"));
 const Bills = lazy(() => import("@/features/sales/Bills"));
+const ToBill = lazy(() => import("@/features/sales/ToBill"));
 const Customers = lazy(() => import("@/features/sales/Customers"));
+const RepairRequests = lazy(() => import("@/features/repairs/RepairRequests"));
+const RepairApprovals = lazy(() => import("@/features/repairs/RepairApprovals"));
+const RepairRegister = lazy(() => import("@/features/repairs/RepairRegister"));
 
 /** { path, module (see MODULE_PATHS in lib/permissions.js), Page, title } */
 //Page batata hai kya render karna hai, module batata hai kis permission ko check karna hai, aur path batata hai kis URL par route match karna hai.
@@ -44,6 +48,7 @@ export const PAGES = [
   { path: "/order-tracker", module: "orderTracker", Page: OrderTracker, title: "Order tracker" },
   { path: "/reports", module: "reports", Page: Reports, title: "Reports" },
   { path: "/bills", module: "sales", Page: Bills, title: "Bills" },
+  { path: "/to-bill", module: "sales", Page: ToBill, title: "To bill" },
   { path: "/customers", module: "customers", Page: Customers, title: "Customers" },
   { path: "/orders", module: "orders", Page: Orders, title: "Orders" },
   { path: "/products", module: "products", Page: Products, title: "Products" },
@@ -61,6 +66,9 @@ export const PAGES = [
   { path: "/incoming-stock", module: "incomingStock", Page: IncomingStock, title: "Receive from IQC" },
   { path: "/store-material-requests", module: "storeMaterialRequests", Page: StoreMaterialRequests, title: "Issue to production" },
   { path: "/marketing-orders", module: "marketingOrders", Page: MarketingOrders, title: "Marketing orders" },
+  { path: "/repair-requests", module: "repairRequests", Page: RepairRequests, title: "Repair requests" },
+  { path: "/repair-approvals", module: "repairApprovals", Page: RepairApprovals, title: "Repair approvals" },
+  { path: "/repair-register", module: "repairRegister", Page: RepairRegister, title: "Repair register" },
   { path: "/order-approvals", module: "orderApprovals", Page: OrderApprovals, title: "Orders to approve" },
   { path: "/approved-orders", module: "approvedOrders", Page: ApprovedOrders, title: "Approved orders" },
   // the four Store dashboard figures in one place; needs the same access as the store pages it lists (see lib/permissions.js)

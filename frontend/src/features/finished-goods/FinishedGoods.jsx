@@ -134,7 +134,7 @@ function StepDialog({ item, step, onClose, onDone }) {
   for a discount, which then needs a reason (an agreed discount brings its reason from the order). A product with no
   agreed rate and no price in the list asks for its rate.
 */
-function BillDialog({ item, onClose, onDone }) {
+export function BillDialog({ item, onClose, onDone }) {
   const toast = useToast()
   const lines = item?.lines || []
   const startRate = (l) => l.agreedRate ?? l.listPrice
@@ -293,7 +293,7 @@ export function BillView({ item, role, onClose, onChanged }) {
     return () => { live = false; setBill(null); setError(""); setAction(null) }
   }, [item, version])
   const admin = role === "SUPER_ADMIN"
-  const canPay = (admin || role === "MARKETING_MANAGER") && bill?.due > 0
+  const canPay = (admin || role === "PRODUCTION_ADMIN" || role === "MARKETING_MANAGER") && bill?.due > 0
   const canCancel = admin && bill?.goodsStatus === "BILLED" && bill?.paid === 0
   const done = () => { setAction(null); setVersion((v) => v + 1); onChanged() }
 

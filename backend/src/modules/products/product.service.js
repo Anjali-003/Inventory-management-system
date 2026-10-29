@@ -190,6 +190,20 @@ async function lockProduct(conn, productId) {
     if (rows.length === 0) throw new AppError(404, "Product not found", "NOT_FOUND");
 }
 
+async function assertBomCanBeInitialized(conn, productId) {
+    const [rows] = await conn.query(
+        "SELECT id FROM product_bom WHERE product_id = ? LIMIT 1",
+        [productId]
+    );
+    if (rows.length > 0) {
+        throw new AppError(
+            409,
+            "This product version's BOM is locked. Create a new product version to make BOM changes.",
+            "BOM_VERSION_IMMUTABLE"
+        );
+    }
+}
+
 async function loadComponents(conn) {
     const [rows] = await conn.query("SELECT id, sku, name, size FROM components ORDER BY id");
     return rows;
@@ -254,6 +268,56 @@ async function replaceBom(conn, productId, lines) {
     return { createdComponents: made.size };
 }
 
+/* Validate and normalize BOM editor lines without changing any product's stored BOM. */
+async function normalizeBomLines(conn, lines) {
+    const components = await loadComponents(conn);
+    const byId = new Map(components.map((c) => [c.id, c]));
+    const byKey = new Map();
+    for (const c of components) {
+        const key = normKey(c.name, c.size);
+        if (!byKey.has(key)) byKey.set(key, c);
+    }
+
+    const seen = new Map();
+    const final = [];
+    lines.forEach((raw, i) => {
+        const fail = (message, field) => {
+            throw new AppError(422, `Line ${i + 1}: ${message}`, "VALIDATION", { line: i, field });
+        };
+        const quantity = parseQty(raw && raw.quantity_required);
+        if (quantity.error) fail(quantity.error, "quantity_required");
+        const location = clean(raw && raw.location);
+        if (location.length > 255) fail("Location is longer than 255 characters", "location");
+
+        let line;
+        if (raw && raw.component_id !== undefined && raw.component_id !== null) {
+            const component = byId.get(Number(raw.component_id));
+            if (!component) fail("Component not found", "component");
+            line = { component_id: component.id };
+        } else if (raw && raw.newComponent) {
+            const component = {
+                name: clean(raw.newComponent.name),
+                size: clean(raw.newComponent.size),
+                category: clean(raw.newComponent.category),
+            };
+            const textError = checkLineText({ ...component, location: "" });
+            if (textError) fail(textError, "component");
+            const existing = byKey.get(normKey(component.name, component.size));
+            line = existing
+                ? { component_id: existing.id }
+                : { newKey: normKey(component.name, component.size), name: component.name, size: orNull(component.size), category: orNull(component.category) };
+        } else {
+            fail("Choose a component", "component");
+        }
+
+        const identity = line.newKey || `id:${line.component_id}`;
+        if (seen.has(identity)) fail(`This component is already on line ${seen.get(identity) + 1}`, "component");
+        seen.set(identity, i);
+        final.push({ ...line, quantity_required: quantity.value, location: orNull(location) });
+    });
+    return final;
+}
+
 /* ---------------------------------------------------------------- products */
 
 async function nextProductSku(conn = db) {
@@ -281,7 +345,12 @@ async function createProduct(input, userId = null) {
         const sku = p.sku || (await nextProductSku(conn));
         try {
             const [r] = await conn.query("INSERT INTO products (sku, name, description, created_by) VALUES (?, ?, ?, ?)", [sku, p.name, p.description, userId]);
-            const [[row]] = await conn.query("SELECT * FROM products WHERE id = ?", [r.insertId]);
+            await conn.query("UPDATE products SET version_family_id = id WHERE id = ?", [r.insertId]);
+            const [[row]] = await conn.query(
+                `SELECT p.*, CONCAT('v', p.version_major, '.', p.version_minor) AS version_label
+                 FROM products p WHERE p.id = ?`,
+                [r.insertId]
+            );
             return row;
         } catch (error) {
             if (error.errno === 1062) throw new AppError(409, `SKU ${sku} is already used by another product`, "DUPLICATE_SKU", { field: "sku" });
@@ -319,7 +388,11 @@ async function importProducts({ rows, dryRun, userId = null }) {
             if (taken.has(row.sku)) { row.status = "exists"; row.message = "A product with this SKU already exists. It will be skipped."; continue; }
             taken.add(row.sku);
             if (!dryRun) {
-                await conn.query("INSERT INTO products (sku, name, description, created_by) VALUES (?, ?, ?, ?)", [row.sku, p.name, p.description, userId]);
+                const [inserted] = await conn.query(
+                    "INSERT INTO products (sku, name, description, created_by) VALUES (?, ?, ?, ?)",
+                    [row.sku, p.name, p.description, userId]
+                );
+                await conn.query("UPDATE products SET version_family_id = id WHERE id = ?", [inserted.insertId]);
             }
         }
         const count = (s) => out.filter((r) => r.status === s).length;
@@ -348,43 +421,81 @@ async function saveBom(productId, input) {
 
     return inTransaction(async (conn) => {
         await lockProduct(conn, productId);
-        const components = await loadComponents(conn);
-        const byId = new Map(components.map((c) => [c.id, c]));
-        const byKey = new Map();
-        for (const c of components) { const k = normKey(c.name, c.size); if (!byKey.has(k)) byKey.set(k, c); }
-
-        const seen = new Map();
-        const final = [];
-        lines.forEach((raw, i) => {
-            const fail = (message, field) => { throw new AppError(422, `Line ${i + 1}: ${message}`, "VALIDATION", { line: i, field }); };
-            const q = parseQty(raw && raw.quantity_required);
-            if (q.error) fail(q.error, "quantity_required");
-            const location = clean(raw && raw.location);
-            if (location.length > 255) fail("Location is longer than 255 characters", "location");
-
-            let line;
-            if (raw && raw.component_id !== undefined && raw.component_id !== null) {
-                const c = byId.get(Number(raw.component_id));
-                if (!c) fail("Component not found", "component");
-                line = { component_id: c.id };
-            } else if (raw && raw.newComponent) {
-                const nc = { name: clean(raw.newComponent.name), size: clean(raw.newComponent.size), category: clean(raw.newComponent.category) };
-                const err = checkLineText({ ...nc, location: "" });
-                if (err) fail(err, "component");
-                const hit = byKey.get(normKey(nc.name, nc.size));
-                line = hit ? { component_id: hit.id } : { newKey: normKey(nc.name, nc.size), name: nc.name, size: orNull(nc.size), category: orNull(nc.category) };
-            } else {
-                fail("Choose a component", "component");
-            }
-            const ident = line.newKey || `id:${line.component_id}`;
-            if (seen.has(ident)) fail(`This component is already on line ${seen.get(ident) + 1}`, "component");
-            seen.set(ident, i);
-            final.push({ ...line, quantity_required: q.value, location: orNull(location) });
-        });
-
+        await assertBomCanBeInitialized(conn, productId);
+        const final = await normalizeBomLines(conn, lines);
         const { createdComponents } = await replaceBom(conn, productId, final);
         return { bom: await getBom(conn, productId), createdComponents };
     });
+}
+
+/*
+    Create a new immutable product version. Its BOM is based on the source version, but all submitted
+    changes are saved against the new product ID so existing orders and BOM history remain unchanged.
+*/
+async function createProductVersion(sourceProductId, input, userId = null) {
+    const lines = input && input.lines;
+    if (!Array.isArray(lines)) throw new AppError(422, "BOM lines are missing", "VALIDATION");
+    if (lines.length > MAX_BOM_LINES) throw new AppError(422, `A BOM can have at most ${MAX_BOM_LINES} lines`, "VALIDATION");
+    if (lines.length === 0) throw new AppError(422, "Add at least one component before creating a product version", "VALIDATION");
+
+    try {
+        return await inTransaction(async (conn) => {
+            const [[source]] = await conn.query("SELECT * FROM products WHERE id = ? FOR UPDATE", [sourceProductId]);
+            if (!source) throw new AppError(404, "Product not found", "NOT_FOUND");
+
+            const familyId = Number(source.version_family_id || source.id);
+            // Serialize version creation at the family root so two requests cannot choose the same version.
+            await conn.query("SELECT id FROM products WHERE id = ? FOR UPDATE", [familyId]);
+            const [[latest]] = await conn.query(
+                `SELECT version_major, version_minor
+                 FROM products
+                 WHERE COALESCE(version_family_id, id) = ?
+                 ORDER BY version_major DESC, version_minor DESC, id DESC
+                 LIMIT 1`,
+                [familyId]
+            );
+            const latestMajor = Number(latest?.version_major || 1);
+            const latestMinor = Number(latest?.version_minor || 0);
+            const versionMajor = latestMinor >= 9 ? latestMajor + 1 : latestMajor;
+            const versionMinor = latestMinor >= 9 ? 0 : latestMinor + 1;
+            const sku = await nextProductSku(conn);
+            const final = await normalizeBomLines(conn, lines);
+
+            const [inserted] = await conn.query(
+                `INSERT INTO products
+                    (sku, name, description, is_active, created_by, selling_price, gst_percent,
+                     version_family_id, version_major, version_minor)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    sku,
+                    source.name,
+                    source.description,
+                    source.is_active,
+                    userId,
+                    source.selling_price,
+                    source.gst_percent,
+                    familyId,
+                    versionMajor,
+                    versionMinor,
+                ]
+            );
+            const newProductId = inserted.insertId;
+            const { createdComponents } = await replaceBom(conn, newProductId, final);
+            const [[product]] = await conn.query(
+                `SELECT p.*, u.name AS created_by_name,
+                        CONCAT('v', p.version_major, '.', p.version_minor) AS version_label
+                 FROM products p LEFT JOIN users u ON u.id = p.created_by
+                 WHERE p.id = ?`,
+                [newProductId]
+            );
+            return { product, bom: await getBom(conn, newProductId), createdComponents };
+        });
+    } catch (error) {
+        if (error.errno === 1062) {
+            throw new AppError(409, "A product SKU or version was created at the same time. Refresh the product list and try again.", "CONFLICT");
+        }
+        throw error;
+    }
 }
 
 /* ---------------------------------------------------------------- BOM: spreadsheet import */
@@ -420,6 +531,7 @@ async function importBom(productId, input) {
 
     return inTransaction(async (conn) => {
         await lockProduct(conn, productId);
+        await assertBomCanBeInitialized(conn, productId);
         const { rows: planned, lines, summary } = await plan(conn);
         if (summary.invalid > 0) throw new AppError(422, "Fix the rows marked invalid first", "VALIDATION", { summary });
         if (summary.missing > 0) throw new AppError(422, "Some parts do not exist yet. Allow creating missing components or remove those rows.", "VALIDATION", { summary });
@@ -432,7 +544,8 @@ async function importBom(productId, input) {
 /* Plain reads used by the controller (previously queried straight from the route file). */
 async function listProducts() {
     const [rows] = await db.query(
-        `SELECT p.*, u.name AS created_by_name
+        `SELECT p.*, u.name AS created_by_name,
+                CONCAT('v', p.version_major, '.', p.version_minor) AS version_label
          FROM products p
          LEFT JOIN users u ON u.id = p.created_by
          ORDER BY p.id`
@@ -467,5 +580,5 @@ module.exports = {
     // pure, for tests
     normKey, parseQty, checkLineText, planBomImport, checkProduct,
     // database
-    getBom, fetchBom, listProducts, getProductById, nextProductSku, createProduct, importProducts, saveBom, importBom, setPrice,
+    getBom, fetchBom, listProducts, getProductById, nextProductSku, createProduct, createProductVersion, importProducts, saveBom, importBom, setPrice,
 };

@@ -5,8 +5,8 @@ const requireRole = require("../../middleware/requireRole")
 
 const router = express.Router()
 
-// every step has ONE owner role (Super Admin can do all of them)
-const by = (role) => [resolveUser, requireRole(role, "SUPER_ADMIN")]
+// Each step has an owner role; Super Admin and Production Admin can perform every workflow step.
+const by = (role) => [resolveUser, requireRole(role, "PRODUCTION_ADMIN", "SUPER_ADMIN")]
 
 router.get("/", controller.list)
 router.get("/:id", controller.getOne)

@@ -1,10 +1,9 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
-import { ChevronRight } from "lucide-react"
+import { Link, useNavigate } from "react-router-dom"
+import { CheckCircle2, ChevronRight } from "lucide-react"
 import { Modal } from "@/components/Modal"
 import PageHeader from "@/components/PageHeader"
-import { EmptyState } from "@/components/feedback"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,9 +11,15 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { StatCard } from "@/components/HistoryUI"
 import { useGetMeQuery } from "@/features/auth/authApi"
+import { cn } from "@/lib/utils"
 
 /*
-  Building blocks shared by every role's dashboard.
+  THE dashboard look (the Super Admin's), shared by every role's dashboard so they all read the same way:
+
+    <Greeting description="the one thing to do next">   "Hello, <name>", one line, at most one primary button
+    <StatRow stats={...} />                             4-5 figures, each answers one question and opens its list
+    grid of <Panel> / <ListPanel>                        the lists and figures behind them; "All 5 ›" links
+                                                         at the top right, a one-line note when a list is empty
 
   A ROW is { id, title, sub, badge: { variant, label }, right, detail }:
     detail = (close) => <Modal .../>   the popup that opens when the row is clicked (optional)
@@ -26,6 +31,46 @@ import { useGetMeQuery } from "@/features/auth/authApi"
 export function Greeting({ description, children }) {
   const { data: me } = useGetMeQuery()
   return <PageHeader title={me?.name ? `Hello, ${me.name}` : "Hello"} description={description}>{children}</PageHeader>
+}
+
+/* The link at the top right of a panel: "All late ›". A link with `to`, a button with `onClick`. */
+export function PanelLink({ to, onClick, children }) {
+  const cls = "inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-primary outline-none transition-colors hover:bg-lp-tint focus-visible:ring-2 focus-visible:ring-lp-green/40"
+  return to
+    ? <Link to={to} className={cls}>{children}<ChevronRight className="size-3.5" /></Link>
+    : <button type="button" onClick={onClick} className={cls}>{children}<ChevronRight className="size-3.5" /></button>
+}
+
+/* What an empty list says, in one line (no big empty box): "Nothing is stuck." */
+export function EmptyLine({ children }) {
+  return <p className="flex items-center gap-2 px-5 py-4 text-sm text-muted-foreground"><CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden />{children}</p>
+}
+
+/*
+  A titled card: title and one line of help, a link at the top right, then its content.
+  `flush`: the content runs to the card's edges (a list of rows); otherwise it gets the card's padding.
+*/
+export function Panel({ title, description, to, toLabel, action, children, className, flush = false }) {
+  return (
+    <Card className={cn("overflow-hidden", className)}>
+      <CardHeader className="items-center">
+        <div className="min-w-0"><CardTitle>{title}</CardTitle>{description && <CardDescription>{description}</CardDescription>}</div>
+        {action ?? (to && <PanelLink to={to}>{toLabel}</PanelLink>)}
+      </CardHeader>
+      {flush ? children : <div className="px-5 pb-5">{children}</div>}
+    </Card>
+  )
+}
+
+/* One figure in a Panel: label (and a muted line under it) on the left, the value on the right; a link with `to`. */
+export function Line({ label, value, bad, sub, to }) {
+  const body = (
+    <div className="flex items-baseline justify-between gap-3 py-1.5">
+      <span className="min-w-0">{label}{sub && <span className="block text-xs text-muted-foreground">{sub}</span>}</span>
+      <span className={cn("shrink-0 font-semibold tabular-nums", bad && "text-destructive")}>{value}</span>
+    </div>
+  )
+  return to ? <Link to={to} className="-mx-2 block rounded-md px-2 hover:bg-muted/60">{body}</Link> : body
 }
 
 const openable = (r) => !!(r.detail || r.to)
@@ -77,7 +122,7 @@ function DrillHost({ list, row, onOpenRow, onCloseList, onCloseRow }) {
         }
       >
         {list && (list.rows.length === 0 ? (
-          <EmptyState title={list.empty || "Nothing here right now"} />
+          <p className="py-6 text-center text-sm text-muted-foreground">{list.empty || "Nothing here right now"}</p>
         ) : (
           <div className="-mx-5 -my-4 max-h-[60vh] divide-y overflow-y-auto">
             {list.rows.map((r) => <RowButton key={r.id} row={r} onOpen={onOpenRow} />)}
@@ -89,12 +134,17 @@ function DrillHost({ list, row, onOpenRow, onCloseList, onCloseRow }) {
   )
 }
 
-/* Top-of-page figures. Each one opens a popup with the records behind the number, or (with `to`) goes to that page. */
-export function StatRow({ stats, drill, cols = "sm:grid-cols-2 xl:grid-cols-4" }) {
-  const navigate = useNavigate()
+/*
+  Top-of-page figures (4 or 5 in a row). Each one goes to its page (`to`), does something on this page (`onClick`,
+  with `active` while its list is the one shown below), or opens a popup with the records behind it (`drill`).
+  Optional per figure: `chart` (a small chart beside the number), `title` (a hover note).
+*/
+export function StatRow({ stats, drill, cols }) {
+  const shown = stats.filter(Boolean)
+  const grid = cols ?? (shown.length >= 5 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5" : "sm:grid-cols-2 xl:grid-cols-4")
   return (
-    <div className={`grid gap-4 ${cols}`}>
-      {stats.map((s, i) => (
+    <div className={`grid gap-4 ${grid}`}>
+      {shown.map((s, i) => (
         <StatCard
           key={s.label}
           index={i}
@@ -104,7 +154,11 @@ export function StatRow({ stats, drill, cols = "sm:grid-cols-2 xl:grid-cols-4" }
           value={s.value}
           detail={s.detail}
           loading={s.loading}
-          onClick={s.to ? () => navigate(s.to) : () => drill.openList(s.drill)}
+          chart={s.chart}
+          title={s.title}
+          active={s.active}
+          to={s.onClick ? undefined : s.to}
+          onClick={s.onClick ?? (!s.to && s.drill ? () => drill.openList(s.drill) : undefined)}
         />
       ))}
     </div>
@@ -170,26 +224,27 @@ function RowCards({ rows, onOpen, rightLabel }) {
   )
 }
 
-/* A card with the first few rows of a list; "View all" opens the full list in a popup. */
-export function ListPanel({ drill, title, description, rows, limit = 5, loading, empty, emptyIcon, to, toLabel, className, table = false, rightLabel }) {
+/*
+  A card with the first few rows of a list. Top right: "All 12 ›" (the whole list in a popup) when there are more,
+  else a link to the page (`to`, `toLabel`). Empty: one line (`empty`).
+*/
+export function ListPanel({ drill, title, description, rows, limit = 5, loading, empty, to, toLabel, className, table = false, rightLabel }) {
   const shown = rows.slice(0, limit)
   return (
     <Card className={`overflow-hidden ${className || ""}`}>
       <CardHeader className="items-center">
-        <div>
+        <div className="min-w-0">
           <CardTitle>{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </div>
-        {rows.length > limit && (
-          <Button variant="ghost" size="sm" onClick={() => drill.openList({ title, description, rows, to, toLabel, empty })}>
-            View all ({rows.length})
-          </Button>
-        )}
+        {rows.length > limit
+          ? <PanelLink onClick={() => drill.openList({ title, description, rows, to, toLabel, empty })}>All {rows.length}</PanelLink>
+          : to && <PanelLink to={to}>{toLabel || "Open"}</PanelLink>}
       </CardHeader>
       {loading ? (
         <div className="space-y-2 p-5">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
       ) : shown.length === 0 ? (
-        <EmptyState icon={emptyIcon} title={empty || "Nothing here right now"} />
+        <EmptyLine>{empty || "Nothing here right now."}</EmptyLine>
       ) : table ? (
         <>
           <div className="hidden md:block"><RowTable rows={shown} onOpen={drill.openRow} rightLabel={rightLabel} /></div>

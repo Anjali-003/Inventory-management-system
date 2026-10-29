@@ -17,11 +17,13 @@ import PurchaseView from "./roles/PurchaseView";
 import StoreView from "./roles/StoreView";
 import SuperAdminView from "./roles/SuperAdminView";
 import HRView from "./roles/HRView";
+import ProductionAdminView from "./roles/ProductionAdminView";
 
 /*
   One dashboard per role, all on /dashboard.
 
   Production Manager       -> ProductionDashboard
+  Production Admin         -> ProductionAdminView
   Quality FG Manager       -> QualityFinishedGoodsDashboard
   Other configured roles   -> Their respective role views
   Remaining roles          -> GeneralDashboard
@@ -40,6 +42,7 @@ const VIEWS = {
   [ROLES.OPERATIONS_ADMIN]: OperationsView,
   [ROLES.MARKETING_MANAGER]: MarketingView,
   [ROLES.HR_MANAGER]: HRView,
+  [ROLES.PRODUCTION_ADMIN]: ProductionAdminView,
 };
 
 /*

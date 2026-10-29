@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react"
-import { ChevronDown, ChevronRight, ChevronUp, Clock, PackageSearch } from "lucide-react"
+import { ChevronDown, ChevronRight, ChevronUp, Clock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { EmptyState } from "@/components/feedback"
+import { EmptyLine } from "./DashboardKit"
 import { timeAgo } from "@/features/activity/time"
 import { fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -134,22 +134,20 @@ export default function UrgentPurchaseSection({ orders = [], canRaise = true }) 
   const hot = useMemo(() => needs.filter((o) => isHot(getDeliveryMeta(o))).length, [needs])
 
   return (
-    <Card className="mt-6 overflow-hidden">
-      <CardHeader className="gap-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <CardTitle className="text-lg font-bold">Urgent Purchase Requirements</CardTitle>
-          {needs.length > 0 && <Badge variant="warning" className="font-semibold">{plural(needs.length, "order")} need components</Badge>}
-          {hot > 0 && <Badge variant="danger" className="font-semibold">{hot} due in 3 days or less</Badge>}
+    <Card className="mt-4 overflow-hidden">
+      <CardHeader className="items-center">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle>What to buy first</CardTitle>
+            {needs.length > 0 && <Badge variant="warning">{plural(needs.length, "order")} need components</Badge>}
+            {hot > 0 && <Badge variant="danger">{hot} due in 3 days or less</Badge>}
+          </div>
+          <CardDescription>Nearest delivery date first. Buy what is listed for the orders at the top.</CardDescription>
         </div>
-        <CardDescription>Nearest delivery date first. Buy what is listed for the orders at the top.</CardDescription>
       </CardHeader>
 
       {needs.length === 0 ? (
-        <div className="p-8">
-          <EmptyState icon={PackageSearch} title="No orders need purchase">
-            All approved customer orders have components in stock or already on order.
-          </EmptyState>
-        </div>
+        <EmptyLine>No order needs anything bought: every approved order has its components in stock or on order.</EmptyLine>
       ) : (
         <>
           <ul className="divide-y border-t">

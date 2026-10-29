@@ -60,6 +60,8 @@ const GROUPS = [
     label: "1 · Orders",
     items: [
       { to: "/marketing-orders", label: "Customer Orders", icon: ClipboardList, module: "marketingOrders" },
+      { to: "/repair-requests", label: "Repair Requests", icon: Wrench, module: "repairRequests" },
+      { to: "/repair-approvals", label: "Repair Approvals", icon: ClipboardCheck, module: "repairApprovals" },
       { to: "/order-approvals", label: "Orders to Approve", icon: ClipboardCheck, module: "orderApprovals" },
       { to: "/approved-orders", label: "Approved Orders", icon: ClipboardList, module: "approvedOrders" },
       { to: "/orders", label: "All Orders", icon: ClipboardList, module: "orders" },
@@ -87,6 +89,7 @@ const GROUPS = [
     label: "4 · Production",
     items: [
       { to: "/production", label: "Production", icon: Factory, module: "production" },
+      { to: "/repair-register", label: "Repair Register", icon: Wrench, module: "repairRegister" },
       { to: "/quality-control", label: "Quality Check (QC)", icon: ClipboardCheck, module: "qualityControl" },
       { to: "/qc-failed", label: "QC Failed / Rework", icon: Wrench, module: "qcFailed" },
     ],
@@ -100,7 +103,7 @@ const GROUPS = [
   {
     label: "6 · Sales & Billing",
     items: [
-      { to: "/finished-goods?status=IN_STORE", label: "To Bill", icon: FileText, module: "sales" },
+      { to: "/to-bill", label: "To Bill", icon: FileText, module: "sales" },
       { to: "/bills", label: "Bills & Payments", icon: Receipt, module: "sales" },
       { to: "/customers", label: "Customers", icon: Contact, module: "customers" },
     ],
@@ -121,7 +124,7 @@ const GROUPS = [
 ];
 
 /*
-  Two entries can open the same page with a different filter ("To Bill" = Finished Goods ?status=IN_STORE). The one
+  Two entries can open the same page with a different filter (e.g. "/page" and "/page?status=X"). The one
   whose filter is in the address is the active one; the plain entry is active only when no such filter is.
 */
 const FILTERED = GROUPS.flatMap((g) => g.items).filter((i) => i.to.includes("?")).map((i) => i.to.split("?"))
@@ -183,13 +186,14 @@ const ROLE_GROUPS = {
       items: [
         DASHBOARD,
         { to: "/marketing-orders", label: "Customer Orders", icon: ClipboardList, module: "marketingOrders" },
+        { to: "/repair-requests", label: "Repair Requests", icon: Wrench, module: "repairRequests" },
         { to: "/order-tracker", label: "Order Tracker", icon: Route, module: "orderTracker" },
       ],
     },
     {
       label: "Billing",
       items: [
-        { to: "/finished-goods?status=IN_STORE", label: "To Bill", icon: FileText, module: "sales" },
+        { to: "/to-bill", label: "To Bill", icon: FileText, module: "sales" },
         { to: "/bills", label: "Bills & Payments", icon: Receipt, module: "sales" },
         { to: "/customers", label: "Customers", icon: Contact, module: "customers" },
       ],
@@ -210,6 +214,33 @@ const ROLE_GROUPS = {
       items: [
         { to: "/inventory", label: "Component Stock", icon: Warehouse, module: "inventory" },
         { to: "/purchase", label: "Parts being bought", icon: ShoppingCart, module: "purchase" },
+        { to: "/finished-goods", label: "Finished Goods", icon: PackageCheck, module: "finishedGoods" },
+      ],
+    },
+  ],
+  // making things: the daily work, then the stock it draws on, then where the made goods go next
+  PRODUCTION_MANAGER: [
+    {
+      label: "Production",
+      items: [
+        DASHBOARD,
+        { to: "/production", label: "Production", icon: Factory, module: "production" },
+        { to: "/qc-failed", label: "Rework (QC failed)", icon: Wrench, module: "qcFailed" },
+        { to: "/repair-register", label: "Customer Repairs", icon: Wrench, module: "repairRegister" },
+      ],
+    },
+    {
+      label: "Stock",
+      items: [
+        { to: "/inventory", label: "Component Stock", icon: Warehouse, module: "inventory" },
+        { to: "/product-stock", label: "Product Stock", icon: Package, module: "productStock" },
+      ],
+    },
+    {
+      label: "After production",
+      items: [
+        { to: "/order-tracker", label: "Order Tracker", icon: Route, module: "orderTracker" },
+        { to: "/quality-control", label: "Quality Check", icon: ClipboardCheck, module: "qualityControl" },
         { to: "/finished-goods", label: "Finished Goods", icon: PackageCheck, module: "finishedGoods" },
       ],
     },

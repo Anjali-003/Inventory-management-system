@@ -32,6 +32,7 @@ const PORTAL_CARDS = [
   { portal: LOGIN_PORTALS.IQC_MANAGER, label: "IQC Manager", note: "Inspect incoming components", icon: ClipboardCheck },
   { portal: LOGIN_PORTALS.PURCHASE_MANAGER, label: "Purchase Manager", note: "Raise and track purchases", icon: ShoppingCart },
   { portal: LOGIN_PORTALS.PRODUCTION_MANAGER, label: "Production", note: "Update production runs and view inventory", icon: Factory },
+  { portal: LOGIN_PORTALS.PRODUCTION_ADMIN, label: "Production Admin", note: "Manage production, quality, finished goods and inventory", icon: Factory },
   {
     portal: LOGIN_PORTALS.QUALITY_FG_MANAGER,
     label: "Quality Control & Finished Goods",
@@ -117,7 +118,7 @@ export default function Landing() {
 
 function Hero({ loginLabel }) {
   const stats = [
-    ["9", "role workspaces"],
+    ["10", "role workspaces"],
     ["1", "login per role, side by side"],
     ["Live", "updates in every tab"],
   ];
@@ -269,7 +270,7 @@ function MaterialCheckPreview() {
 // the order people work in (marketing -> ... -> quality & finished goods), then the roles beside the flow
 const ORDER = [
   "MARKETING_MANAGER", "OPERATIONS_ADMIN", "PURCHASE_MANAGER", "IQC_MANAGER", "STORE_MANAGER",
-  "PRODUCTION_MANAGER", "QUALITY_FG_MANAGER", "HR_MANAGER", "SUPER_ADMIN",
+  "PRODUCTION_MANAGER", "PRODUCTION_ADMIN", "QUALITY_FG_MANAGER", "HR_MANAGER", "SUPER_ADMIN",
 ];
 const PORTALS_IN_ORDER = [...AVAILABLE_PORTAL_CARDS].sort(
   (a, b) => (ORDER.indexOf(a.portal.role) + 1 || 99) - (ORDER.indexOf(b.portal.role) + 1 || 99)

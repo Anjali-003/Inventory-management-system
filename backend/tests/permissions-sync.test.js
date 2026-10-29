@@ -12,7 +12,9 @@ const backend = require("../src/middleware/permissions.js");
 
 // frontend-only page keys (no API module of that name) and backend-only API modules (no page of that name)
 const FRONTEND_ONLY = new Set(["dashboard", "storeMaterialRequests", "activity", "orders"]);
-const BACKEND_ONLY = new Set(["materialRequests"]);
+const BACKEND_ONLY = new Set(["materialRequests", "repairs"]);
+// the three repair pages all use the one repairs API module
+const REPAIR_PAGES = ["repairRequests", "repairApprovals", "repairRegister"];
 
 const level = (view, edit) => (edit ? "edit" : view ? "view" : null);
 const modulesOf = (rule) => (rule === "*" ? [] : Object.keys(rule));
@@ -41,6 +43,13 @@ describe("frontend and backend role tables agree", () => {
     // the Store's "Issue to Production" page (storeMaterialRequests) uses the materialRequests API
     for (const role of backend.ROLE_NAMES) {
       if (canView(role, "storeMaterialRequests")) expect(backend.levelOf(role, "materialRequests")).not.toBeNull();
+    }
+  });
+
+  it("a role sees a repair page exactly when it may use the repairs API", () => {
+    for (const role of backend.ROLE_NAMES) {
+      const page = REPAIR_PAGES.some((p) => canView(role, p));
+      expect({ role, page }).toEqual({ role, page: backend.levelOf(role, "repairs") !== null });
     }
   });
 });

@@ -17,6 +17,7 @@ router.put("/:id/price", controller.setPrice);
 
 router.get("/:id/bom", controller.getBom);
 router.put("/:id/bom", controller.saveBom);
+router.post("/:id/versions", resolveUser, controller.createVersion);
 router.post("/:id/bom/import", controller.importBom);
 
 module.exports = router;

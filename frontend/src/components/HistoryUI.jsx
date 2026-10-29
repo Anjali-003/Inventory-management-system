@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { animate, AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import { SURFACE, pageButtonClass } from "@/components/PageKit";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -141,6 +142,8 @@ const STAT_TONE = {
   amber: ["bg-amber-50 text-amber-700", "font-semibold text-amber-700"],
 };
 
+const MotionLink = motion.create(Link);
+
 // Icon tile on the left, label, big number, one small line underneath. (Icon sits on top on phones.)
 export function StatCard({
   label,
@@ -154,19 +157,25 @@ export function StatCard({
   badge,
   onClick,
   active,
+  chart = null,
+  title,
+  to,
 }) {
   const [tile, detailCls] = STAT_TONE[tone] || STAT_TONE.blue;
-  const Tag = onClick ? motion.button : motion.div;
+  // a page to go to is a real link (opens in a new tab with a middle click); an action on this page is a button
+  const Tag = to ? MotionLink : onClick ? motion.button : motion.div;
+  const live = !!(to || onClick);
   return (
     <Tag
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.07, duration: 0.4, ease: EASE }}
       whileHover={{ y: -2 }}
-      {...(onClick ? { type: "button", onClick, "aria-pressed": active } : {})}
-      className={cn(SURFACE, "group relative min-h-[122px] overflow-hidden py-5 pl-[68px] pr-5 transition-[transform,border-color] duration-200 hover:border-lp-rule max-sm:min-h-[142px] max-sm:pl-4 max-sm:pt-[61px]", onClick && "w-full cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-lp-green", active && "border-lp-green ring-2 ring-lp-green/20")}
+      {...(to ? { to } : onClick ? { type: "button", onClick, "aria-pressed": active } : {})}
+      title={title}
+      className={cn(SURFACE, "group relative min-h-[122px] overflow-hidden py-5 pl-[68px] pr-5 transition-[transform,border-color] duration-200 hover:border-lp-rule max-sm:min-h-[142px] max-sm:pl-4 max-sm:pt-[61px]", live && "block w-full cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-lp-green", active && "border-lp-green ring-2 ring-lp-green/20")}
     >
-      {onClick && (
+      {live && (
         <ArrowUpRight
           aria-hidden
           className="absolute right-3.5 top-4 size-4 text-slate-400 opacity-60 transition-[transform,opacity,color] duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary group-hover:opacity-100 group-focus-visible:text-primary group-focus-visible:opacity-100"
@@ -186,17 +195,13 @@ export function StatCard({
       {loading ? (
         <Skeleton className="my-2 h-8 w-24 rounded-md" />
       ) : (
-        <p
-          className={cn(
-            "my-1 text-[28px] font-bold leading-tight tracking-tight text-lp-ink tabular-nums",
-          )}
-        >
-          {value === null || value === undefined ? (
-            "-"
-          ) : (
-            <CountUp value={value} format={format} />
-          )}
-        </p>
+        <div className="my-1 flex items-end justify-between gap-3">
+          <p className="text-[28px] font-bold leading-tight tracking-tight text-lp-ink tabular-nums">
+            {/* only a number counts up; a figure already written out ("₹32,961", "22%") shows as it is */}
+            {value === null || value === undefined ? "-" : typeof value === "number" ? <CountUp value={value} format={format} /> : value}
+          </p>
+          {chart}
+        </div>
       )}
       {!loading && (detail || badge) && (
         <div className="flex flex-wrap items-center gap-2">

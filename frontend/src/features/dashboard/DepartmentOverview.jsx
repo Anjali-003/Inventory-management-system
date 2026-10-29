@@ -1,6 +1,5 @@
 import { ChevronRight, FlaskConical, ShoppingCart, Warehouse } from "lucide-react"
 import { Link } from "react-router-dom"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { usePermissions } from "@/features/auth/usePermissions"
 import { useGetInventoryQuery } from "@/features/inventory/inventoryApi"
@@ -22,35 +21,27 @@ export const shortageOf = (o) => (o.purchase_request?.items || EMPTY).filter((c)
 */
 function Stat({ label, value, loading, tone, to }) {
   return (
-    <Link to={to} className="flex items-center justify-between gap-3 rounded-xl border border-[#E3E6EB] bg-background px-3.5 py-2.5 outline-none transition-colors hover:border-[#CDD2DA] hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/60">
-      <span className="min-w-0 truncate text-sm text-muted-foreground">{label}</span>
-      <span className="flex shrink-0 items-center gap-1">
-        <span className={cn("text-lg font-bold tabular-nums", tone)}>
-          {loading ? <span className="inline-block h-5 w-8 animate-pulse rounded-md bg-slate-200/80 align-middle" aria-label="Loading" /> : value}
-        </span>
-        <ChevronRight className="size-3.5 text-muted-foreground" aria-hidden />
+    <Link to={to} className="-mx-2 flex items-baseline justify-between gap-3 rounded-md px-2 py-1.5 outline-none transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/60">
+      <span className="min-w-0 truncate text-sm">{label}</span>
+      <span className={cn("shrink-0 font-semibold tabular-nums", tone)}>
+        {loading ? <span className="inline-block h-4 w-6 animate-pulse rounded bg-slate-200/80 align-middle" aria-label="Loading" /> : value}
       </span>
     </Link>
   )
 }
 
-/* Read-only summary of a department: each figure opens its list, the link at the bottom the department's MAIN dashboard. */
+/* Read-only summary of a department, in the Super Admin's Panel look: name, its figures as lines, then a link to its own dashboard. */
 function Panel({ icon: Icon, title, description, dept, children }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-[#E3E6EB] bg-card p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground"><Icon className="size-[18px]" aria-hidden /></span>
-          <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold">{title}</h3>
-            <p className="truncate text-xs text-muted-foreground">{description}</p>
-          </div>
-        </div>
-        <Badge variant="neutral" className="shrink-0">View only</Badge>
+    <div className="flex flex-col">
+      <div className="mb-1.5 flex items-center gap-2">
+        <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <span className="truncate text-xs text-muted-foreground">· {description}</span>
       </div>
-      <div className="grid gap-2">{children}</div>
-      <Link to={`/dashboard?dept=${dept}`} className="mt-auto inline-flex items-center gap-0.5 self-start text-xs font-semibold text-primary hover:underline">
-        Open {title} Dashboard <ChevronRight className="size-3.5" aria-hidden />
+      <div>{children}</div>
+      <Link to={`/dashboard?dept=${dept}`} className="mt-2 inline-flex items-center gap-0.5 self-start text-xs font-semibold text-primary hover:underline">
+        {title} dashboard <ChevronRight className="size-3.5" aria-hidden />
       </Link>
     </div>
   )
@@ -62,7 +53,7 @@ function IqcPanel() {
   const l = buys.isLoading
   return (
     <Panel icon={FlaskConical} title="IQC" description="Incoming inspection" dept="iqc">
-      <Stat label="Waiting for inspection" value={c.PENDING_IQC} loading={l} tone={c.PENDING_IQC ? "text-violet-700" : undefined} to="/iqc?status=PENDING_IQC" />
+      <Stat label="Waiting for inspection" value={c.PENDING_IQC} loading={l} tone={c.PENDING_IQC ? "text-lp-ink" : undefined} to="/iqc?status=PENDING_IQC" />
       <Stat label="Inspected, all time" value={c.PENDING_STORE + c.STORED + c.REJECTED} loading={l} to="/iqc?status=INSPECTED" />
       <Stat label="Rejected" value={c.REJECTED} loading={l} tone={c.REJECTED ? "text-rose-700" : undefined} to="/iqc?status=REJECTED" />
     </Panel>
@@ -78,7 +69,7 @@ function StorePanel() {
   const out = stock.filter((i) => stockState(i) === "out").length
   return (
     <Panel icon={Warehouse} title="Store" description="Incoming stock and inventory" dept="store">
-      <Stat label="To accept into stock" value={c.PENDING_STORE} loading={buys.isLoading} tone={c.PENDING_STORE ? "text-cyan-700" : undefined} to="/incoming-stock?status=PENDING_STORE" />
+      <Stat label="To accept into stock" value={c.PENDING_STORE} loading={buys.isLoading} tone={c.PENDING_STORE ? "text-lp-ink" : undefined} to="/incoming-stock?status=PENDING_STORE" />
       <Stat label="Low stock" value={low} loading={inv.isLoading} tone={low ? "text-amber-700" : undefined} to="/inventory?filter=low" />
       <Stat label="Out of stock" value={out} loading={inv.isLoading} tone={out ? "text-rose-700" : undefined} to="/inventory?filter=out" />
     </Panel>
@@ -95,9 +86,9 @@ function PurchasePanel() {
   return (
     <Panel icon={ShoppingCart} title="Purchase" description="Buying and supplier deliveries" dept="purchase">
       {canOrders && <Stat label="Component lines to order" value={lines} loading={ord.isLoading} tone={lines ? "text-amber-700" : undefined} to="/purchase-requests" />}
-      <Stat label="Awaiting supplier delivery" value={c.ORDER_PLACED} loading={buys.isLoading} tone={c.ORDER_PLACED ? "text-blue-700" : undefined} to="/purchase?status=ORDER_PLACED" />
+      <Stat label="Awaiting supplier delivery" value={c.ORDER_PLACED} loading={buys.isLoading} tone={c.ORDER_PLACED ? "text-lp-ink" : undefined} to="/purchase?status=ORDER_PLACED" />
       <Stat label="Received, not sent to IQC" value={c.RECEIVED} loading={buys.isLoading} to="/purchase?status=RECEIVED" />
-      <Stat label="Sent to IQC" value={c.PENDING_IQC} loading={buys.isLoading} tone={c.PENDING_IQC ? "text-violet-700" : undefined} to="/purchase?status=PENDING_IQC" />
+      <Stat label="Sent to IQC" value={c.PENDING_IQC} loading={buys.isLoading} tone={c.PENDING_IQC ? "text-lp-ink" : undefined} to="/purchase?status=PENDING_IQC" />
     </Panel>
   )
 }
@@ -121,11 +112,11 @@ export default function DepartmentOverview({ depts, className }) {
       <Card className="overflow-hidden">
         <CardHeader className="items-center">
           <div>
-            <CardTitle id="dept-overview">Department Overview</CardTitle>
+            <CardTitle id="dept-overview">Other departments</CardTitle>
             <CardDescription>What {names.join(" and ")} {names.length > 1 ? "have" : "has"} in hand right now.</CardDescription>
           </div>
         </CardHeader>
-        <div className={cn("grid gap-3 p-4 pt-0", shown.length > 1 && "sm:grid-cols-2", shown.length > 2 && "xl:grid-cols-3")}>
+        <div className={cn("grid gap-x-8 gap-y-5 px-5 pb-5", shown.length > 1 && "sm:grid-cols-2", shown.length > 2 && "xl:grid-cols-3")}>
           {shown.map((d) => { const P = PANELS[d]; return <P key={d} /> })}
         </div>
       </Card>

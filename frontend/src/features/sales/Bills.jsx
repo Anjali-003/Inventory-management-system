@@ -81,7 +81,7 @@ export default function Bills() {
   return (
     <>
       <PageHeader title="Bills" description="Every bill: what came in and what is still to collect. Click a bill to record a payment or print it.">
-        <Link to="/finished-goods?status=IN_STORE" className="inline-flex h-10 items-center rounded-[8px] bg-primary px-4 text-[13px] font-semibold text-primary-foreground outline-none transition-colors hover:bg-primary/90 focus-visible:ring-3 focus-visible:ring-primary/30">
+        <Link to="/to-bill" className="inline-flex h-10 items-center rounded-[8px] bg-primary px-4 text-[13px] font-semibold text-primary-foreground outline-none transition-colors hover:bg-primary/90 focus-visible:ring-3 focus-visible:ring-primary/30">
           Make a bill ({summary?.toBill ?? 0} waiting)
         </Link>
       </PageHeader>
@@ -91,7 +91,7 @@ export default function Bills() {
           <Figure label={`Sales ${period}`} to={`/bills?show=all${month ? `&month=${month}` : ""}`} value={rupees(summary.net)} sub={`${summary.bills} bill${summary.bills === 1 ? "" : "s"}`} />
           <Figure label={`Received ${period}`} to={`/bills?show=received${month ? `&month=${month}` : ""}`} value={rupees(summary.collected)} sub={`${payments.length} payment${payments.length === 1 ? "" : "s"}`} />
           <Figure label="NOT RECEIVED" to="/bills?show=open" value={rupees(summary.toCollect)} bad={summary.toCollect > 0} sub={summary.owed[0] ? `Oldest: ${summary.owed[0].billNumber}, ${summary.owed[0].days} days` : "Every bill is paid"} />
-          <Figure label="Orders to bill" to="/finished-goods?status=IN_STORE" value={summary.toBill} bad={summary.toBill > 0} sub="In the Store, no bill yet" />
+          <Figure label="Orders to bill" to="/to-bill" value={summary.toBill} bad={summary.toBill > 0} sub="In the Store, no bill yet" />
         </div>
       )}
 

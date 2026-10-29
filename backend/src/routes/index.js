@@ -30,6 +30,7 @@ const purchaseRoutes = require("../modules/purchase/purchase.routes");
 const iqcRoutes = require("../modules/iqc/iqc.routes");
 const incomingStockRoutes = require("../modules/incoming-stock/incoming-stock.routes");
 const marketingOrderRoutes = require("../modules/marketing-orders/marketing-order.routes");
+const repairRoutes = require("../modules/repairs/repair.routes");
 const orderApprovalRoutes = require("../modules/order-approvals/order-approval.routes");
 const approvedOrdersRoutes = require("../modules/order-approvals/approved-orders.routes");
 const employeeRoutes = require("../modules/employees/employee.routes");
@@ -85,6 +86,8 @@ const MODULES = [
 
     // Order approval:  order raised -> Operations Admin approves / rejects -> approved orders go to the Purchase Manager
     { path: "/marketing-orders", router: marketingOrderRoutes, resource: "marketing-orders", guards: [permit("marketingOrders")] },
+    // Customer repairs use their own records and statuses; normal orders/production/QC are untouched.
+    { path: "/repairs", router: repairRoutes, resource: "repairs", guards: [permit("repairs")] },
     { path: "/order-approvals", router: orderApprovalRoutes, resource: "order-approvals", guards: [permit("orderApprovals")] },
     { path: "/approved-orders", router: approvedOrdersRoutes, resource: "approved-orders", guards: [permit("approvedOrders")] },
 
@@ -93,7 +96,7 @@ const MODULES = [
 
     // super admins only (requireRole is also applied inside super-admin.routes.js)
     { path: "/super-admins", router: superAdminRoutes, resource: "super-admins" },
-    { path: "/activity", router: activityRoutes, guards: [requireRole("SUPER_ADMIN")] },
+    { path: "/activity", router: activityRoutes, guards: [requireRole("SUPER_ADMIN", "PRODUCTION_ADMIN")] },
 
     // notification inbox of the logged-in role (header bell + dashboard panels). Every role has one, so no permit():
     // the service scopes every query to req.user.role. No broadcastChanges: the service pushes its own live event after commit.

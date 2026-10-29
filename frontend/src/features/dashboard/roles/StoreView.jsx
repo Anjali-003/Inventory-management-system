@@ -3,7 +3,6 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
-  ArrowRight,
   ClipboardList,
   PackageCheck,
   Truck,
@@ -98,64 +97,36 @@ export default function StoreView({ readOnly = false }) {
     };
   }, [inv.data, fg.data, inc.data, buys.data, direct]);
 
+  const material = pendingMaterialRequests.length;
+  // the one thing to do first: Production waiting on material stops the floor, then goods to accept and hand out
+  const nudge = readOnly
+    ? "What the Store has in hand right now."
+    : material
+      ? `Production is waiting for material on ${material} request${material === 1 ? "" : "s"}. Hand it over first.`
+      : waiting.length
+        ? `${waiting.length} IQC-approved purchase${waiting.length === 1 ? "" : "s"} to accept into stock.`
+        : toGiveOut.length
+          ? `${toGiveOut.length} billed order${toGiveOut.length === 1 ? "" : "s"} to give out for delivery.`
+          : "Nothing is waiting for the Store right now.";
+
   return (
     <>
-      <Greeting description="What is waiting for the store today." />
-      {!readOnly && <WaitingForYou className="mb-4" />}
-
-      {!readOnly && (
-        <div
-          className={`mb-4 overflow-hidden rounded-xl border ${
-            pendingMaterialRequests.length
-              ? "border-amber-300 bg-gradient-to-r from-amber-50 via-white to-emerald-50"
-              : "border-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-teal-50"
-          }`}
-        >
-          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-            <div className="flex min-w-0 items-start gap-3">
-              <div
-                className={`grid size-10 shrink-0 place-items-center rounded-xl ${
-                  pendingMaterialRequests.length
-                    ? "bg-amber-100 text-amber-700"
-                    : "bg-emerald-100 text-emerald-700"
-                }`}
-              >
-                <ClipboardList className="size-5" />
-              </div>
-
-              <div className="min-w-0">
-                <p className="font-semibold">
-                  Production is asking for material
-                </p>
-
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {requests.isLoading
-                    ? "Checking material requests…"
-                    : pendingMaterialRequests.length
-                      ? `${pendingMaterialRequests.length} request${
-                          pendingMaterialRequests.length === 1
-                            ? " is"
-                            : "s are"
-                        } waiting for you to hand over.`
-                      : "No material requests are waiting. New requests from Production will appear here."}
-                </p>
-              </div>
-            </div>
-
-            <Button
-              onClick={() => navigate("/store-material-requests")}
-              className="shrink-0"
-            >
-              Open Issue to Production
-              <ArrowRight className="size-4" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <Greeting description={nudge}>
+        {!readOnly && <Button onClick={() => navigate("/store-material-requests")}><ClipboardList /> Issue to Production</Button>}
+      </Greeting>
 
       <StatRow
         drill={drill}
         stats={[
+          !readOnly && {
+            label: "Material for Production",
+            value: material,
+            icon: ClipboardList,
+            tone: material ? "red" : "green",
+            loading: requests.isLoading,
+            detail: material ? "Requests waiting for you" : "Nothing to hand over",
+            to: "/store-material-requests",
+          },
           {
             label: "To accept into stock",
             value: waiting.length,
@@ -196,6 +167,8 @@ export default function StoreView({ readOnly = false }) {
           },
         ]}
       />
+
+      {!readOnly && <WaitingForYou className="mt-4" />}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ListPanel

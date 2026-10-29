@@ -257,6 +257,13 @@ async function getProductionOrders() {
       SELECT po.id, oi.id AS order_item_id, oi.product_id, o.id AS order_id, o.order_number,
              o.status AS order_status, o.approval_status, oi.quantity AS ordered_quantity,
              o.inventory_issued_at,
+             -- who it is for and by when (the earlier date is the one Production works to)
+             c.name AS customer_name,
+             DATE_FORMAT(o.required_by_date, '%Y-%m-%d') AS required_by_date,
+             DATE_FORMAT(o.estimated_delivery_date, '%Y-%m-%d') AS estimated_delivery_date,
+             -- since when the Store has had an open material request for this line
+             (SELECT MIN(mr.created_at) FROM production_material_requests mr
+              WHERE mr.order_item_id = oi.id AND mr.status IN ('PENDING', 'PARTIALLY_ISSUED')) AS material_requested_at,
              p.name AS product_name, p.sku AS product_sku,
              (SELECT COUNT(*) FROM order_items siblings WHERE siblings.order_id = o.id) AS item_count,
              (SELECT COUNT(*) FROM order_items previous WHERE previous.order_id = o.id AND previous.id <= oi.id) AS item_index,
@@ -278,6 +285,7 @@ async function getProductionOrders() {
       FROM orders o
       JOIN order_items oi ON oi.order_id = o.id
       JOIN products p ON p.id = oi.product_id
+      LEFT JOIN customers c ON c.id = o.customer_id
       LEFT JOIN production_orders po ON po.order_item_id = oi.id
       LEFT JOIN users su ON su.id = po.started_by
       LEFT JOIN users uu ON uu.id = po.updated_by

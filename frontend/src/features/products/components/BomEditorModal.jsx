@@ -37,7 +37,8 @@ const fromBom = (b) => ({
  * Write a product's BOM by hand: pick components (or create a new one on the spot), then give the quantity per
  * unit and the PCB location. Saving replaces the whole BOM.   onSaved(bom, createdComponents)
  */
-export default function BomEditorModal({ open, product, bom, onClose, onSaved }) {
+export default function BomEditorModal({ open, product, bom, onClose, onSaved, mode = "edit", onVersionCreated }) {
+  const creatingVersion = mode === "create-version"
   const [lines, setLines] = useState([])
   const [errors, setErrors] = useState({})
   const [formError, setFormError] = useState("")
@@ -101,11 +102,20 @@ export default function BomEditorModal({ open, product, bom, onClose, onSaved })
         quantity_required: l.quantity.trim() || null,
         location: l.location.trim(),
       }))
+    if (creatingVersion && payload.length === 0) {
+      setFormError("Add at least one component before creating a new product version.")
+      return
+    }
     lock.current = true
     setBusy(true)
     try {
-      const { data } = await productsService.saveBom(product.id, payload)
-      onSaved(data.bom, data.createdComponents)
+      if (creatingVersion) {
+        const { data } = await productsService.createVersion(product.id, payload)
+        onVersionCreated(data.product, data.bom, data.createdComponents)
+      } else {
+        const { data } = await productsService.saveBom(product.id, payload)
+        onSaved(data.bom, data.createdComponents)
+      }
     } catch (err) {
       setFormError(errorMessage(err))
       lock.current = false
@@ -121,18 +131,21 @@ export default function BomEditorModal({ open, product, bom, onClose, onSaved })
       onClose={onClose}
       busy={busy}
       size="xl"
-      title={product ? `Edit BOM · ${product.name}` : "Edit BOM"}
-      description={product ? `${product.sku} · components needed for ONE unit. Saving replaces the whole BOM.` : undefined}
+      title={product ? (creatingVersion ? `Create new version · ${product.name}` : `Add initial BOM · ${product.name}`) : (creatingVersion ? "Create new product version" : "Add BOM")}
+      description={product ? (creatingVersion
+        ? `${product.sku} · ${product.version_label || `v${product.version_major ?? 1}.${product.version_minor ?? 0}`} will remain unchanged. Save to create a separate version with this BOM.`
+        : `${product.sku} · components needed for ONE unit. This is the initial BOM for a new product.`) : undefined}
       footer={
         <>
           <span className="text-sm text-muted-foreground sm:mr-auto">
             {filled.length} line{filled.length === 1 ? "" : "s"}
             {newCount > 0 && ` · ${newCount} new component${newCount === 1 ? "" : "s"} will be added to Inventory`}
+            {creatingVersion && " · Existing version will not be changed"}
           </span>
           <Button type="button" variant="outline" size="lg" onClick={onClose} disabled={busy}>Cancel</Button>
           <Button type="button" size="lg" onClick={save} disabled={busy}>
             {busy ? <Loader2 className="animate-spin" /> : <Save />}
-            Save BOM
+            {creatingVersion ? "Create product version" : "Save initial BOM"}
           </Button>
         </>
       }

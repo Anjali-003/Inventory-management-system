@@ -38,6 +38,7 @@ const ACCESS = {
     // Marketing Manager: prepares orders and sends them to the Operations Admin
     MARKETING_MANAGER: {
         marketingOrders: "edit",
+        repairs: "edit",
         // makes the bill and confirms delivery (finished-goods steps)
         finishedGoods: "edit",
         productStock: "view",
@@ -101,7 +102,20 @@ const ACCESS = {
     },
 
     // Production updates production runs and asks Store for material; it can only LOOK at Store's stock.
+    PRODUCTION_ADMIN: {
+        repairs: "edit",
+        dashboard: "view",
+        production: "edit",
+        qualityControl: "edit",
+        qcFailed: "edit",
+        finishedGoods: "edit",
+        inventory: "edit",
+        materialRequests: "edit",
+        customers: "edit"
+    },
+
     PRODUCTION_MANAGER: {
+        repairs: "edit",
         orderTracker: "view", // "waiting for you" on the dashboard
         dashboard: "view",
         production: "edit",
@@ -116,6 +130,7 @@ const ACCESS = {
     // Quality Control can record test/QC results and manage finished-goods transitions;
     // Production is visible as a read-only reference.
     QUALITY_FG_MANAGER: {
+        repairs: "edit",
         orderTracker: "view", // "waiting for you" on the dashboard
         dashboard: "view",
         qualityControl: "edit",
@@ -140,6 +155,7 @@ const LOGIN_ROUTES = {
     IQC_MANAGER: "/iqc-manager/login",
     PURCHASE_MANAGER: "/purchase-manager/login",
     PRODUCTION_MANAGER: "/production-manager/login",
+    PRODUCTION_ADMIN: "/production-admin/login",
     QUALITY_FG_MANAGER: "/quality-fg-manager/login",
     OPERATIONS_ADMIN: "/operations-admin/login",
     MARKETING_MANAGER: "/marketing-manager/login",
@@ -192,6 +208,7 @@ const RESOURCE_MODULE = {
     iqc: "iqc",
     "incoming-stock": "incomingStock",
     "marketing-orders": "marketingOrders",
+    repairs: "repairs",
     "order-approvals": "orderApprovals",
     "approved-orders": "approvedOrders",
     employees: "employees",
