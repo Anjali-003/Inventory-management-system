@@ -90,7 +90,7 @@ export default function Bills() {
         <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Figure label={`Sales ${period}`} to={`/bills?show=all${month ? `&month=${month}` : ""}`} value={rupees(summary.net)} sub={`${summary.bills} bill${summary.bills === 1 ? "" : "s"}`} />
           <Figure label={`Received ${period}`} to={`/bills?show=received${month ? `&month=${month}` : ""}`} value={rupees(summary.collected)} sub={`${payments.length} payment${payments.length === 1 ? "" : "s"}`} />
-          <Figure label="Still to collect" to="/bills?show=open" value={rupees(summary.toCollect)} bad={summary.toCollect > 0} sub={summary.owed[0] ? `Oldest: ${summary.owed[0].billNumber}, ${summary.owed[0].days} days` : "Every bill is paid"} />
+          <Figure label="NOT RECEIVED" to="/bills?show=open" value={rupees(summary.toCollect)} bad={summary.toCollect > 0} sub={summary.owed[0] ? `Oldest: ${summary.owed[0].billNumber}, ${summary.owed[0].days} days` : "Every bill is paid"} />
           <Figure label="Orders to bill" to="/finished-goods?status=IN_STORE" value={summary.toBill} bad={summary.toBill > 0} sub="In the Store, no bill yet" />
         </div>
       )}

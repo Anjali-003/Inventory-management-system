@@ -89,7 +89,7 @@ describe("Marketing dashboard figures", () => {
 
     expect(await screen.findByText("vs ₹10,000 last month", { exact: false })).toHaveTextContent("up20%");
     expect(screen.getByText("Last month ₹0")).toBeInTheDocument(); // nothing received last month: no %
-    expect(screen.getByText("Top customers")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Customers", selected: true })).toBeInTheDocument();
     expect(screen.getByText("2 bills", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("Over 90 days").nextSibling).toHaveTextContent("₹9,000");
   });
@@ -107,5 +107,70 @@ describe("Marketing dashboard figures", () => {
     expect(names).toEqual(["Silent Co", "Quiet Co"]); // 3.0x late before 1.7x; Busy Co is on time
     expect(screen.getByText("No order for 60 days · usually every 20")).toBeInTheDocument();
     expect(screen.getByText("3.0× late")).toBeInTheDocument();
+  });
+
+  it("shows the 6 months' sales as bars beside the billed figure", async () => {
+    respond("GET", "/sales/summary", {
+      net: 4000, collected: 0, toCollect: 0, owed: [], toBill: 0,
+      trend: [["2026-05", 1000], ["2026-06", 0], ["2026-07", 2000], ["2026-08", 0], ["2026-09", 2500], ["2026-10", 4000]].map(([month, net]) => ({ month, net })),
+    });
+    renderApp(<MarketingView />, { role: "MARKETING_MANAGER" });
+
+    expect(await screen.findByRole("img", { name: /^Last 6 months: May ₹1,000, Jun ₹0, Jul ₹2,000, Aug ₹0, Sept? ₹2,500, Oct ₹4,000$/ })).toBeInTheDocument();
+  });
+
+  it("offers a WhatsApp payment reminder for a bill whose customer has a phone number", async () => {
+    respond("GET", "/sales/summary", {
+      net: 0, collected: 0, toCollect: 2000, toBill: 0, ageing: [2000, 0, 0, 0],
+      owed: [
+        { billNumber: "BILL-1", customer: "Phone Traders", days: 12, due: 1200, phone: "98765 43210" },
+        { billNumber: "BILL-2", customer: "Typed By Hand", days: 5, due: 800, phone: null },
+      ],
+    });
+    renderApp(<MarketingView />, { role: "MARKETING_MANAGER" });
+
+    const link = await screen.findByRole("link", { name: "Send Phone Traders a payment reminder on WhatsApp" });
+    const url = new URL(link.getAttribute("href"));
+    expect(url.origin + url.pathname).toBe("https://wa.me/919876543210");
+    expect(url.searchParams.get("text")).toBe("Hello Phone Traders, a reminder that ₹1,200 is still due on bill BILL-1 (12 days). Kindly arrange the payment. Thank you.");
+    expect(screen.queryByRole("link", { name: /Typed By Hand.*WhatsApp/ })).toBeNull();
+  });
+
+  it("shows where the open orders are, from draft to billed", async () => {
+    respond("GET", "/marketing-orders", [
+      order("DRAFT"), order("PENDING_APPROVAL"), order("QUANTITY_REVISED"),
+      order("APPROVED"), // being made
+      { ...order("APPROVED"), id: 901 }, // its goods are in the Store
+      { ...order("APPROVED"), id: 902 }, // billed
+      order("APPROVED", { units: 10, given: 10 }), // delivered: not open
+      order("REJECTED"),
+    ]);
+    respond("GET", "/finished-goods", [{ id: 1, orderId: 901, status: "IN_STORE" }, { id: 2, orderId: 902, status: "BILLED" }]);
+    renderApp(<MarketingView />, { role: "MARKETING_MANAGER" });
+
+    expect(await screen.findByRole("img", { name: "6 open orders: Draft 1, With Operations 2, Being made 1, In the Store 1, Billed 1" })).toBeInTheDocument();
+  });
+
+  it("switches the top list to the products that sold the most", async () => {
+    respond("GET", "/sales/summary", {
+      net: 3150, collected: 0, toCollect: 0, owed: [], toBill: 0, byCustomer: [{ name: "B Traders", bills: 1, total: 2000 }],
+      byProduct: [
+        { productId: 1, name: "Controller", sku: "T-CTRL", units: 15, amount: 1650, customers: 2, share: 52, margin: 41 },
+        { productId: 2, name: "Sensor", sku: "T-SENS", units: 50, amount: 1500, customers: 1, share: 48, margin: 12 },
+      ],
+      margin: { pct: 27.4, lastPct: 30, estimated: true, uncosted: 0 },
+    });
+    renderApp(<MarketingView />, { role: "MARKETING_MANAGER" });
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Products" }));
+    expect(await screen.findByText("Controller")).toBeInTheDocument();
+    expect(screen.getByText("15 units · 2 customers · 52% of sales")).toBeInTheDocument();
+    expect(screen.getByText("50 units · 1 customer · 48% of sales")).toBeInTheDocument();
+    expect(screen.queryByText("B Traders")).toBeNull();
+    expect(screen.getByText("41% margin")).toHaveClass("text-success");
+    expect(screen.getByText("12% margin")).toHaveClass("text-destructive");
+    // the month's margin, against last month in points
+    expect(screen.getByText("27.4%")).toBeInTheDocument();
+    expect(screen.getByText("vs 30% last month", { exact: false })).toHaveTextContent("down2.6 pts");
   });
 });

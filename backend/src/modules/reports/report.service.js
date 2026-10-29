@@ -52,10 +52,10 @@ async function sales({ start, end }) {
     );
     // what is still owed, bill by bill (oldest first)
     const [owed] = await db.query(
-        `SELECT b.bill_number, b.finished_goods_id, b.customer_name, b.created_at,
+        `SELECT b.bill_number, b.finished_goods_id, b.customer_name, b.created_at, c.phone,
                 b.total - COALESCE((SELECT SUM(amount) FROM bill_credit_notes WHERE bill_id = b.id), 0)
                         - COALESCE((SELECT SUM(amount) FROM bill_payments WHERE bill_id = b.id), 0) AS due
-         FROM bills b WHERE b.status = 'ACTIVE'
+         FROM bills b LEFT JOIN customers c ON c.id = b.customer_id WHERE b.status = 'ACTIVE'
          HAVING due > 0.004 ORDER BY b.created_at`
     );
     const [byCustomer] = await db.query(
@@ -85,6 +85,8 @@ async function sales({ start, end }) {
         owed: owed.slice(0, 10).map((r) => ({
             billNumber: r.bill_number, finishedGoodsId: r.finished_goods_id, customer: r.customer_name, due: Number(n(r.due).toFixed(2)),
             days: age(r),
+            // the saved customer's phone, for a payment reminder (null for a bill typed by hand or a customer without one)
+            phone: r.phone || null,
         })),
         ageing: ageing.map((v) => Number(v.toFixed(2))),
         byCustomer: byCustomer.map((r) => ({ name: r.name, bills: n(r.bills), total: n(r.total) })),
@@ -139,7 +141,7 @@ async function costs({ start, end }, salesFigures) {
         revenue += amount;
         cost += quantity * each;
         products.push({
-            name: r.name, quantity,
+            productId: r.product_id, name: r.name, quantity,
             soldFor: Number(amount.toFixed(2)), pricePerPiece: Number((amount / quantity).toFixed(2)),
             cost: Number((quantity * each).toFixed(2)), costPerPiece: Number(each.toFixed(2)),
             profit: Number((amount - quantity * each).toFixed(2)),
@@ -270,4 +272,4 @@ async function monthly(rawMonth) {
     return { month: range.month, sales: s, money, suppliers: sup, qualityCheck: qc, orderTime: time };
 }
 
-module.exports = { monthly, monthRange, sales };
+module.exports = { monthly, monthRange, sales, costs };

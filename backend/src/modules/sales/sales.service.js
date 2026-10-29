@@ -92,10 +92,65 @@ function previousMonth(month) {
     return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
 }
 
-/* the month's money (and last month's, to compare) + what still has to be billed (orders in the Store without a bill) */
+/*
+    Net sales (bills after credit notes, as `net`) of the 6 months ending with `month`, oldest first:
+    [{ month: "2026-05", net }, ...]. Two grouped queries, not 6 month reports.
+*/
+async function trend(month) {
+    const months = [month];
+    while (months.length < 6) months.unshift(previousMonth(months[0]));
+    const start = reports.monthRange(months[0]).start;
+    const { end } = reports.monthRange(month);
+    const [billed] = await db.query(
+        `SELECT DATE_FORMAT(created_at, '%Y-%m') AS m, SUM(total) AS total FROM bills
+         WHERE status = 'ACTIVE' AND created_at >= ? AND created_at < ? GROUP BY m`,
+        [start, end]
+    );
+    const [credited] = await db.query(
+        `SELECT DATE_FORMAT(created_at, '%Y-%m') AS m, SUM(amount) AS amount FROM bill_credit_notes
+         WHERE created_at >= ? AND created_at < ? GROUP BY m`,
+        [start, end]
+    );
+    const of = (rows, key) => new Map(rows.map((r) => [r.m, n(r[key])]));
+    const b = of(billed, "total");
+    const c = of(credited, "amount");
+    return months.map((m) => ({ month: m, net: round((b.get(m) || 0) - (c.get(m) || 0)) }));
+}
+
+/*
+    What sold best in the month: one row per product billed (ACTIVE bills made in the month), biggest amount first,
+    the top 10: { productId, name, sku, units, amount, customers, share }. share = % of everything billed for
+    products that month. Amounts are the bill lines' (a credit note reduces a whole bill, not a product line).
+*/
+async function topProducts(month, costed = []) {
+    const { start, end } = reports.monthRange(month);
+    const [rows] = await db.query(
+        `SELECT p.id, p.name, p.sku, SUM(bi.quantity) AS units, SUM(bi.amount) AS amount, COUNT(DISTINCT b.customer_name) AS customers
+         FROM bill_items bi
+         JOIN bills b ON b.id = bi.bill_id
+         JOIN products p ON p.id = bi.product_id
+         WHERE b.status = 'ACTIVE' AND b.created_at >= ? AND b.created_at < ?
+         GROUP BY p.id, p.name, p.sku
+         ORDER BY amount DESC, units DESC`,
+        [start, end]
+    );
+    const total = rows.reduce((sum, r) => sum + n(r.amount), 0);
+    // margin % per product from the month report's costing (null: a product that could not be costed)
+    const marginOf = new Map(costed.filter((c) => c.soldFor > 0).map((c) => [c.productId, Math.round((c.profit / c.soldFor) * 100)]));
+    return rows.slice(0, 10).map((r) => ({
+        productId: r.id, name: r.name, sku: r.sku, units: n(r.units), amount: round(n(r.amount)), customers: n(r.customers),
+        share: total > 0 ? Math.round((n(r.amount) / total) * 100) : 0,
+        margin: marginOf.has(r.id) ? marginOf.get(r.id) : null,
+    }));
+}
+
+/* the month's money (and last month's, to compare, and the 6 months' trend) + what still has to be billed (orders in
+   the Store without a bill) */
 async function summary(month) {
-    const { sales } = await reports.monthly(month);
-    const last = await reports.sales(reports.monthRange(previousMonth(month)));
+    const { sales, money } = await reports.monthly(month);
+    const lastRange = reports.monthRange(previousMonth(month));
+    const last = await reports.sales(lastRange);
+    const lastMoney = await reports.costs(lastRange, last);
     const [[toBill]] = await db.query(`SELECT COUNT(*) AS n FROM finished_goods WHERE status = 'IN_STORE'`);
     return {
         month,
@@ -108,7 +163,16 @@ async function summary(month) {
         owed: sales.owed,
         ageing: sales.ageing,
         lastMonth: { net: last.net, collected: last.collected },
+        trend: await trend(month),
         byCustomer: sales.byCustomer,
+        byProduct: await topProducts(month, money.products),
+        /*
+            Gross margin %, the month and the month before (the same estimate as Reports: what was sold minus what its
+            parts cost at their latest purchase rate, and credit notes; no labour or overheads). Only the percentages
+            go to Marketing, never the costs. estimated: some parts costed at their standard cost (never bought yet);
+            uncosted: products sold that could not be costed at all (left out of the margin).
+        */
+        margin: { pct: money.marginPct, lastPct: lastMoney.marginPct, estimated: money.estimatedProducts > 0, uncosted: money.unpricedProducts },
         toBill: n(toBill.n),
     };
 }

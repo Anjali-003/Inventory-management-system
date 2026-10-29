@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { MotionConfig, motion } from "motion/react"
-import { CalendarClock, CheckCircle2, ChevronRight, ClipboardList, FileText, IndianRupee, Loader2, Plus, Receipt, Send, Wallet } from "lucide-react"
+import { ArrowDownRight, ArrowUpRight, CalendarClock, CheckCircle2, ChevronRight, ClipboardList, FileText, IndianRupee, Loader2, Percent, Plus, Receipt, Send, Wallet } from "lucide-react"
 import { EmptyState } from "@/components/feedback"
 import { ConfirmDialog } from "@/components/Modal"
 import { pageButtonClass } from "@/components/PageKit"
@@ -19,7 +19,7 @@ import { MktBtn, NewOrderFab, StatusPill } from "@/features/marketing-orders/mkt
 import { rise, stagger } from "@/features/marketing-orders/mktMotion"
 import { countByStatus, newestFirst, ordersHref, plural, rupees, stageOf } from "@/features/marketing-orders/orderParts"
 import { useGetSalesSummaryQuery } from "@/features/sales/salesApi"
-import { Receivables, TopCustomers, VsLastMonth } from "@/features/sales/SalesSnapshot"
+import { Receivables, TopSellers, TrendBars, VsLastMonth } from "@/features/sales/SalesSnapshot"
 import { timeAgo } from "@/features/activity/time"
 import { errorMessage, fmtQty } from "@/lib/stock"
 import { cn } from "@/lib/utils"
@@ -273,7 +273,7 @@ function DateNotices({ items, onOpen, onAcknowledge }) {
   Hover: violet border, soft shadow, the icon turns violet. Press: shrinks a little. `selected`: the Orders card below
   is showing this figure's list, so it keeps the violet border and ring.
 */
-function Kpi({ icon: Icon, label, value, foot, to, onClick, selected = false }) {
+function Kpi({ icon: Icon, label, value, foot, chart = null, to, onClick, selected = false, title, className }) {
   const body = (
     <>
       <span className="flex items-center justify-between gap-2">
@@ -282,7 +282,10 @@ function Kpi({ icon: Icon, label, value, foot, to, onClick, selected = false }) 
           <Icon className="size-4" />
         </span>
       </span>
-      <span className="mt-2 block text-2xl font-semibold tracking-tight text-lp-ink tabular-nums">{value}</span>
+      <span className="mt-2 flex items-end justify-between gap-3">
+        <span className="text-2xl font-semibold tracking-tight text-lp-ink tabular-nums">{value}</span>
+        {chart}
+      </span>
       <span className="mt-1.5 block min-h-5 text-xs text-lp-muted">{foot}</span>
     </>
   )
@@ -290,9 +293,27 @@ function Kpi({ icon: Icon, label, value, foot, to, onClick, selected = false }) 
   const cls = cn(
     "group flex min-w-0 flex-col justify-start rounded-xl border bg-white p-4 text-start outline-none transition-[border-color,box-shadow,transform,background-color] duration-150",
     "hover:-translate-y-0.5 hover:border-lp-green hover:bg-lp-soft hover:shadow-[0_14px_30px_-14px_rgba(122,53,255,0.55)] active:translate-y-0 active:scale-[0.98] active:bg-lp-tint focus-visible:ring-2 focus-visible:ring-lp-green/40",
-    selected ? "border-lp-green ring-2 ring-lp-green/15" : "border-lp-line"
+    selected ? "border-lp-green ring-2 ring-lp-green/15" : "border-lp-line",
+    className
   )
-  return to ? <Link to={to} className={cls}>{body}</Link> : <button type="button" onClick={onClick} aria-pressed={selected} className={cls}>{body}</button>
+  // neither a link nor a button: a figure to read only, so it does not light up on hover
+  if (!to && !onClick) return <div title={title} className={cn("flex min-w-0 flex-col justify-start rounded-xl border border-lp-line bg-white p-4", className)}>{body}</div>
+  return to ? <Link to={to} title={title} className={cls}>{body}</Link> : <button type="button" onClick={onClick} aria-pressed={selected} title={title} className={cls}>{body}</button>
+}
+
+/* "↗ 3.2 pts vs last month": the margin's change in percentage points; what the figure is when there is nothing to compare */
+function MarginChange({ pct, lastPct, prev = "last month" }) {
+  if (pct == null || lastPct == null) return <span>Parts cost only, an estimate</span>
+  const change = Math.round((pct - lastPct) * 10) / 10
+  const Icon = change >= 0 ? ArrowUpRight : ArrowDownRight
+  return (
+    <span className="flex flex-wrap items-center gap-x-1.5">
+      <span className={cn("inline-flex items-center gap-0.5 font-semibold", change > 0 ? "text-success" : change < 0 ? "text-destructive" : "text-lp-ink")}>
+        <Icon className="size-3.5" aria-hidden /><span className="sr-only">{change >= 0 ? "up" : "down"}</span>{Math.abs(change)} pts
+      </span>
+      vs {lastPct}% {prev}
+    </span>
+  )
 }
 
 /* a status word with its colour: "4 late" in red, "2 this week" in amber */
@@ -353,7 +374,50 @@ function useFlash() {
   return [{ className: on ? "animate-card-flash" : "", onAnimationEnd }, flash]
 }
 
-function OrdersCard({ tabs, tab, onTab, summary, children, footer, flash }) {
+/*
+  Where the open orders are, as one bar: Draft -> With Operations -> Being made -> In the Store -> Billed. Each part
+  is as wide as its count and named under the bar with its count (one violet, light to dark, in the order of the flow).
+  Delivered, rejected and cancelled orders are not open, so they are left out.
+*/
+const PIPELINE = [
+  { id: "draft", label: "Draft", color: "bg-[#E4D7FF]" },
+  { id: "ops", label: "With Operations", color: "bg-[#C4A6FF]" },
+  { id: "making", label: "Being made", color: "bg-[#A27BFF]" },
+  { id: "store", label: "In the Store", color: "bg-[#7A35FF]" },
+  { id: "billed", label: "Billed", color: "bg-[#4E1BB8]" },
+]
+function stageOfOrder(o, fgStatuses = []) {
+  if (o.approval_status === "DRAFT") return "draft"
+  if (o.approval_status === "PENDING_APPROVAL" || o.approval_status === "QUANTITY_REVISED") return "ops"
+  if (o.approval_status !== "APPROVED") return null // rejected or cancelled
+  if (Number(o.delivered_units || 0) >= Number(o.totals?.quantity || 0) && Number(o.totals?.quantity || 0) > 0) return null // delivered
+  if (fgStatuses.includes("BILLED")) return "billed"
+  if (fgStatuses.includes("IN_STORE")) return "store"
+  return "making"
+}
+function Pipeline({ counts }) {
+  const total = PIPELINE.reduce((sum, p) => sum + counts[p.id], 0)
+  if (!total) return null
+  return (
+    <div className="mt-3">
+      <div className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-lp-bg" role="img"
+        aria-label={`${total} open orders: ${PIPELINE.map((p) => `${p.label} ${counts[p.id]}`).join(", ")}`}>
+        {PIPELINE.map((p) => counts[p.id] > 0 && (
+          <span key={p.id} title={`${p.label}: ${counts[p.id]}`} className={cn("h-full first:rounded-s-full last:rounded-e-full", p.color)} style={{ width: `${(counts[p.id] / total) * 100}%` }} />
+        ))}
+      </div>
+      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-lp-muted" aria-hidden>
+        {PIPELINE.map((p) => (
+          <li key={p.id} className={cn("flex items-center gap-1.5", !counts[p.id] && "opacity-50")}>
+            <span className={cn("size-2 rounded-full", p.color)} />{p.label} <b className="font-semibold text-lp-ink tabular-nums">{counts[p.id]}</b>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function OrdersCard({ tabs, tab, onTab, summary, pipeline, children, footer, flash }) {
   return (
     <Card id="work" className={cn("scroll-mt-20 overflow-hidden", flash?.className)} onAnimationEnd={flash?.onAnimationEnd}>
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1 px-5 pt-4">
@@ -362,6 +426,7 @@ function OrdersCard({ tabs, tab, onTab, summary, children, footer, flash }) {
           <p className="mt-0.5 text-xs text-lp-muted">{summary}</p>
         </div>
       </div>
+      <div className="px-5">{pipeline}</div>
       <div role="tablist" aria-label="Orders" className="mkt-scroll-x mt-3 flex gap-1 overflow-x-auto border-b px-3">
         {tabs.map((t) => {
           const active = t.id === tab
@@ -414,6 +479,14 @@ export default function MarketingView() {
     [latest]
   )
   const billing = useMemo(() => goods.map((item) => ({ item, step: myFgStep(item, role) })).filter((r) => r.step), [goods, role])
+  // how many open orders are at each step (an order's finished goods tell whether it is in the Store or billed)
+  const pipeline = useMemo(() => {
+    const fgOf = new Map()
+    for (const f of goods) fgOf.set(f.orderId, [...(fgOf.get(f.orderId) || []), f.status])
+    const counts = Object.fromEntries(PIPELINE.map((p) => [p.id, 0]))
+    for (const o of data) { const st = stageOfOrder(o, fgOf.get(o.id)); if (st) counts[st] += 1 }
+    return counts
+  }, [data, goods])
 
   // read from the live list, so the drawer moves on by itself once the order is sent or decided
   const opened = useMemo(() => data.find((o) => o.id === openedId) ?? null, [data, openedId])
@@ -499,14 +572,19 @@ export default function MarketingView() {
         <DateNotices items={dateNotifs} onOpen={(n) => { markRead(n.id); openOrder({ id: n.order_id }) }} onAcknowledge={(n) => markRead(n.id)} />
       )}
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <Kpi icon={FileText} label={month === thisMonth ? "Billed this month" : `Billed in ${label}`} to={`/bills?show=all${monthParam}`} value={money(sales?.net)}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+        <Kpi icon={FileText} label={month === thisMonth ? "Billed this month" : `Billed in ${label}`} to={`/bills?show=all${monthParam}`} value={money(sales?.net)} chart={<TrendBars trend={sales?.trend} />}
           foot={sales?.lastMonth ? <VsLastMonth now={sales.net} before={sales.lastMonth.net} prev={prev} /> : `${sales?.bills ?? 0} bills`} />
         <Kpi icon={Wallet} label={month === thisMonth ? "Received this month" : `Received in ${label}`} to={`/bills?show=received${monthParam}`} value={money(sales?.collected)}
           foot={sales?.lastMonth ? <VsLastMonth now={sales.collected} before={sales.lastMonth.collected} prev={prev} /> : "Payments in"} />
+        {/* gross margin: an estimate from the parts' cost, so it says so on hover; only the % is shown, never costs */}
+        <Kpi icon={Percent} label={month === thisMonth ? "Margin this month" : `Margin in ${label}`}
+          title="Sales minus what the products' parts cost at their latest purchase rate (and credit notes). Labour and overheads are not included."
+          value={loadingFigures ? "…" : sales?.margin?.pct == null ? "—" : `${sales.margin.pct}%`}
+          foot={sales?.margin ? <MarginChange pct={sales.margin.pct} lastPct={sales.margin.lastPct} prev={prev ?? "last month"} /> : "Parts cost only, an estimate"} />
         <Kpi icon={IndianRupee} label="Money to collect" to="/bills?show=open" value={money(owed)}
           foot={owed ? (oldest != null ? <Flag tone={oldest > 30 ? "bad" : "warn"}>{`Oldest bill is ${plural(oldest, "day")} old`}</Flag> : "Bills not fully paid") : "Every bill is paid"} />
-        <Kpi icon={CalendarClock} label="Due for delivery" onClick={() => show("risk")} selected={shownTab === "risk"} value={isLoading ? "…" : risk.length}
+        <Kpi icon={CalendarClock} label="Due for delivery" onClick={() => show("risk")} selected={shownTab === "risk"} className="col-span-2 lg:col-span-1" value={isLoading ? "…" : risk.length}
           foot={risk.length ? <>{late > 0 && <Flag tone="bad">{late} late</Flag>}{late > 0 && risk.length - late > 0 && " · "}{risk.length - late > 0 && <Flag tone="warn">{risk.length - late} this week</Flag>}</> : "Nothing due this week"} />
       </div>
 
@@ -514,6 +592,7 @@ export default function MarketingView() {
         {/* min-w-0: a grid column would otherwise grow to its longest one-line text and push the page sideways on a phone */}
         <div className="min-w-0 lg:col-span-2">
           <OrdersCard flash={workFlash} tabs={tabs} tab={shownTab} onTab={setWorkTab}
+            pipeline={<Pipeline counts={pipeline} />}
             summary={<>Your turn: <button type="button" onClick={() => show(revised + counts.DRAFT === 0 && toBill ? "billing" : "attention")} className="rounded font-semibold text-lp-green underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-lp-green/40 active:opacity-70">{yourTurn || "Nothing is waiting for you"}</button></>}
             footer={more && <Link to={moreLink[0]} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-primary outline-none transition-colors hover:bg-lp-tint focus-visible:ring-2 focus-visible:ring-lp-green/40 active:bg-lp-portal-on/40">{moreLink[1]}<ChevronRight className="size-3.5" /></Link>}>
             {isLoading ? (
@@ -542,7 +621,7 @@ export default function MarketingView() {
           </OrdersCard>
         </div>
         <div className="flex min-w-0 flex-col gap-6">
-          <TopCustomers s={sales} loading={salesLoading} month={month === thisMonth ? "This month" : label} monthParam={monthParam} />
+          <TopSellers s={sales} loading={salesLoading} month={month === thisMonth ? "This month" : label} monthParam={monthParam} />
           <GoingQuiet customers={customers} loading={customersLoading} />
         </div>
       </div>
