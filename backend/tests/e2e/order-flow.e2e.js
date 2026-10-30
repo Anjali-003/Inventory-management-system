@@ -325,7 +325,7 @@ describe(`one order through every role${ONE_ROLE ? ` (every step as ${ONE_ROLE})
       }
       // an order waiting 5 days: the hourly check tells the CEO once a day
       await db.query("UPDATE orders SET updated_at = DATE_SUB(NOW(), INTERVAL 5 DAY) WHERE id = ?", [o3]);
-      const tracker = require("../../src/modules/reports/order-tracker.service");
+      const tracker = require("../../src/core/reports/order-tracker.service");
       const firstRun = await tracker.notifyStuckOrders();
       const secondRun = await tracker.notifyStuckOrders();
       const stuckNote = (await SA("GET", "/notifications?important=1")).data.items.find((x) => x.type === "ORDER_STUCK" && x.order_id === o3);

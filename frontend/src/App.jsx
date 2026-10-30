@@ -9,21 +9,22 @@ import { Loader2 } from "lucide-react";
 import { MotionConfig } from "motion/react";
 
 import Layout from "@/components/Layout";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { ToastProvider } from "@/components/toast";
 import LiveSync from "@/realtime/LiveSync";
-import Login from "@/features/auth/Login";
-import ProtectedRoute from "@/features/auth/ProtectedRoute";
-import RequireAccess from "@/features/auth/RequireAccess";
+import Login from "@/core/auth/Login";
+import ProtectedRoute from "@/core/auth/ProtectedRoute";
+import RequireAccess from "@/core/auth/RequireAccess";
 import { LOGIN_PORTALS } from "@/lib/permissions"; // each portal object will have ROLE, PATH, API, and TITLE properties
 import { useResponsiveTables } from "@/lib/responsiveTables";
 import { setPageTitle } from "@/lib/pageTitle";
 import { PAGES } from "@/app/routes"; // { path, module, Page, title } per page
 
 // loaded on demand like the pages: someone opening a login page never downloads the home page's animations
-const Landing = lazy(() => import("@/features/landing/Landing"));
-const NotFound = lazy(() => import("@/features/not-found/NotFound"));
-const About = lazy(() => import("@/features/site/About"));
-const Contact = lazy(() => import("@/features/site/Contact"));
+const Landing = lazy(() => import("@/core/landing/Landing"));
+const NotFound = lazy(() => import("@/core/not-found/NotFound"));
+const About = lazy(() => import("@/core/site/About"));
+const Contact = lazy(() => import("@/core/site/Contact"));
 
 /* Shown for the moment a page's code is being downloaded. */
 function PageLoading() {
@@ -31,6 +32,16 @@ function PageLoading() {
     <div role="status" className="flex min-h-[50vh] items-center justify-center gap-2 text-sm text-muted-foreground">
       <Loader2 className="size-4 animate-spin" aria-hidden /> Loading...
     </div>
+  );
+}
+
+/* Every page: its own crash guard (cleared when the URL changes) around the on-demand code download. */
+function PageFrame({ children }) {
+  const { pathname } = useLocation();
+  return (
+    <ErrorBoundary resetKey={pathname}>
+      <Suspense fallback={<PageLoading />}>{children}</Suspense>
+    </ErrorBoundary>
   );
 }
 
@@ -55,15 +66,16 @@ function App() {
   useResponsiveTables(); // phones: every table row becomes a card
   return (
     // every animation in the app follows the OS "reduce motion" setting
+    <ErrorBoundary>
     <MotionConfig reducedMotion="user">
     <ToastProvider>
       <BrowserRouter>
         <TitleSync />
         <Routes>
           {/* public: landing page, the first thing anyone sees */}
-          <Route path="/" element={<Suspense fallback={<PageLoading />}><Landing /></Suspense>} />
-          <Route path="/about" element={<Suspense fallback={<PageLoading />}><About /></Suspense>} />
-          <Route path="/contact" element={<Suspense fallback={<PageLoading />}><Contact /></Suspense>} />
+          <Route path="/" element={<PageFrame><Landing /></PageFrame>} />
+          <Route path="/about" element={<PageFrame><About /></PageFrame>} />
+          <Route path="/contact" element={<PageFrame><Contact /></PageFrame>} />
 
           {/* public: one login page per role (/login = super admin, /store-manager/login ...) */}
           {/*.map() 4 routes banata hai;*/}
@@ -87,9 +99,9 @@ function App() {
                 path={path}
                 element={
                   <RequireAccess module={module}>
-                    <Suspense fallback={<PageLoading />}>
+                    <PageFrame>
                       <Page />
-                    </Suspense>
+                    </PageFrame>
                   </RequireAccess>
                 }
               />
@@ -97,11 +109,12 @@ function App() {
           </Route>
 
           {/* any other address: a real "page not found", not a blank screen */}
-          <Route path="*" element={<Suspense fallback={<PageLoading />}><NotFound /></Suspense>} />
+          <Route path="*" element={<PageFrame><NotFound /></PageFrame>} />
         </Routes>
       </BrowserRouter>
     </ToastProvider>
     </MotionConfig>
+    </ErrorBoundary>
   );
 }
 

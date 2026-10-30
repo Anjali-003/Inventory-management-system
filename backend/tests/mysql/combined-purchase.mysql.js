@@ -14,9 +14,9 @@ const require = createRequire(import.meta.url);
 const testDb = require("../helpers/mysqlDb").throwaway("t_purchase"); // before anything from src/
 
 const db = require("../../src/config/db");
-const marketing = require("../../src/modules/marketing-orders/marketing-order.service");
-const approvals = require("../../src/modules/order-approvals/order-approval.service");
-const purchase = require("../../src/modules/purchase/purchase.service");
+const marketing = require("../../src/sales/marketing-orders/marketing-order.service");
+const approvals = require("../../src/sales/order-approvals/order-approval.service");
+const purchase = require("../../src/purchase/purchase-orders/purchase-order.service");
 
 let fx;
 const key = (p) => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;

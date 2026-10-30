@@ -8,7 +8,7 @@ import fake from "./helpers/fakeDb.js";
 
 const require = createRequire(import.meta.url);
 require.cache[require.resolve("../src/config/db.js")] = { id: "db", filename: "db", loaded: true, exports: fake.fakeDb };
-const { inTransaction } = require("../src/modules/inventory/inventory.service.js");
+const { inTransaction } = require("../src/store/inventory/inventory.service.js");
 
 beforeEach(() => fake.reset());
 

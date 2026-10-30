@@ -1,5 +1,5 @@
 /**
- * Operations Admin, after an order is sent (modules/order-approvals/order-approval.service.js):
+ * Operations Admin, after an order is sent (sales/order-approvals/order-approval.service.js):
  *   approve()          the decision only: Marketing is told, no stock moves, no list is sent
  *   sendToPurchase()   the components that are short go to Purchase, once per order
  *   sendToProduction() what the stock can build now goes to Production and its stock is deducted; again when parts come in
@@ -155,7 +155,7 @@ const fakeDb = {
 };
 
 require.cache[require.resolve("../src/config/db.js")] = { id: "db", filename: "db", loaded: true, exports: fakeDb };
-const service = require("../src/modules/order-approvals/order-approval.service.js");
+const service = require("../src/sales/order-approvals/order-approval.service.js");
 // live pushes: record them instead of writing to real browser connections
 const hub = require("../src/realtime/hub.js");
 let pushes = [];

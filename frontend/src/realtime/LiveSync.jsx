@@ -4,8 +4,8 @@ import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import api, { isMock } from "@/api/api";
 import { baseApi } from "@/api/baseApi";
-import { notificationsApi } from "@/features/notifications/notificationsApi";
-import { useGetMeQuery } from "@/features/auth/authApi";
+import { notificationsApi } from "@/core/notifications/notificationsApi";
+import { useGetMeQuery } from "@/core/auth/authApi";
 import { useToast } from "@/components/toast";
 import { getActiveRole, loginPathFor, setViewAs } from "@/lib/permissions";
 import { pushOn, pushState } from "@/lib/push";
@@ -14,7 +14,7 @@ import { pushOn, pushState } from "@/lib/push";
   One SSE connection per logged-in browser tab (GET /api/v1/events).
   When anyone changes something, the backend sends { resource, actorId, activity }.
     1) The cache tags that resource affects are invalidated, so only the RTK Query lists currently on
-       screen refetch (every list screen uses RTK Query, see features/<name>/<name>Api.js).
+       screen refetch (every list screen uses RTK Query, see <department>/<feature>/<name>Api.js).
     2) If ANOTHER user did it, a small toast tells you who did what.
 
   TAGS: backend resource name -> RTK Query tags to refetch. Add a line here when a new screen should

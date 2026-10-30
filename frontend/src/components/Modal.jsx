@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react"
+import { useEffect, useId, useLayoutEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
 import { AlertCircle, Loader2, X } from "lucide-react"
@@ -14,8 +14,10 @@ function Panel({ onClose, title, description, size, busy, onSubmit, footer, chil
   const descId = useId()
   const closeRef = useRef(onClose)
   const busyRef = useRef(busy)
-  closeRef.current = onClose
-  busyRef.current = busy
+  useLayoutEffect(() => {
+    closeRef.current = onClose
+    busyRef.current = busy
+  })
 
   // Focus management, scroll lock, Escape and Tab trapping. Runs once while the dialog is mounted.
   useEffect(() => {

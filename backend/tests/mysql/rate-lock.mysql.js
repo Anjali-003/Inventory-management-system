@@ -11,9 +11,9 @@ const require = createRequire(import.meta.url);
 const testDb = require("../helpers/mysqlDb").throwaway("t_ratelock"); // before anything from src/
 
 const db = require("../../src/config/db");
-const marketing = require("../../src/modules/marketing-orders/marketing-order.service");
-const finishedGoods = require("../../src/modules/finished-goods/finished-goods.service");
-const customers = require("../../src/modules/customers/customer.service");
+const marketing = require("../../src/sales/marketing-orders/marketing-order.service");
+const finishedGoods = require("../../src/production/finished-goods/finished-goods.service");
+const customers = require("../../src/sales/customers/customer.service");
 
 let fx;
 const one = async (sql, params) => (await db.query(sql, params))[0][0];

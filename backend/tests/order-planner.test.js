@@ -1,12 +1,12 @@
 /**
- * Order planner (modules/order-approvals/order-planner.js): "what can be built now, what is short?"
+ * Order planner (sales/order-approvals/order-planner.js): "what can be built now, what is short?"
  *   npm test
  */
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
-const { planOrder } = require("../src/modules/order-approvals/order-planner.js");
+const { planOrder } = require("../src/sales/order-approvals/order-planner.js");
 
 // seed BOMs (product 1 = Smart Controller, 2 = Sensor Node)
 const toBom = (rows) => rows.map(([component_id, quantity_per_unit]) => ({ component_id, quantity_per_unit }));

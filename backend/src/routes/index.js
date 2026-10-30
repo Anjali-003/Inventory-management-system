@@ -3,12 +3,12 @@
  *
  *   { path, router, resource?, guards? }
  *     path      mount point below the API prefix            ("/orders" -> /api/v1/orders)
- *     router    the module's routes (modules/<name>/<name>.routes.js)
+ *     router    the module's routes (<department>/<name>/<name>.routes.js)
  *     resource  name used by the activity feed + live refresh; omit to skip activity logging
  *     guards    extra middleware that runs after login, in order (permit(...), requireRole(...))
  *     public    true = no login needed (only /auth)
  *
- * To add a module: create modules/<name>/{controller,service,routes}.js and add ONE entry below.
+ * To add a module: create <department>/<name>/{controller,service,routes}.js and add ONE entry below.
  */
 const express = require("express");
 
@@ -17,35 +17,35 @@ const requireRole = require("../middleware/requireRole");
 const broadcastChanges = require("../middleware/broadcastChanges");
 const { permit } = require("../middleware/permissions");
 
-const authRoutes = require("../modules/auth/auth.routes");
-const productRoutes = require("../modules/products/product.routes");
-const componentRoutes = require("../modules/components/component.routes");
-const inventoryRoutes = require("../modules/inventory/inventory.routes");
-const orderRoutes = require("../modules/orders/order.routes");
-const productionRoutes = require("../modules/production/production.routes");
-const qcFailedRoutes = require("../modules/production/qc-failed.routes");
-const qualityControlRoutes = require("../modules/quality-control/quality-control.routes");
-const finishedGoodsRoutes = require("../modules/finished-goods/finished-goods.routes");
-const purchaseRoutes = require("../modules/purchase/purchase.routes");
-const iqcRoutes = require("../modules/iqc/iqc.routes");
-const incomingStockRoutes = require("../modules/incoming-stock/incoming-stock.routes");
-const marketingOrderRoutes = require("../modules/marketing-orders/marketing-order.routes");
-const repairRoutes = require("../modules/repairs/repair.routes");
-const orderApprovalRoutes = require("../modules/order-approvals/order-approval.routes");
-const approvedOrdersRoutes = require("../modules/order-approvals/approved-orders.routes");
-const employeeRoutes = require("../modules/employees/employee.routes");
-const attendanceRoutes = require("../modules/attendance/attendance.routes");
-const superAdminRoutes = require("../modules/super-admins/super-admin.routes");
-const activityRoutes = require("../modules/activity/activity.routes");
-const notificationRoutes = require("../modules/notifications/notification.routes");
-const pushRoutes = require("../modules/push/push.routes");
-const materialRequestRoutes = require("../modules/material-requests/material-request.routes");
-const extraMaterialRoutes = require("../modules/extra-materials/extra-material.routes");
-const productStockRoutes = require("../modules/product-stock/product-stock.routes");
-const customerRoutes = require("../modules/customers/customer.routes");
-const reportRoutes = require("../modules/reports/report.routes");
-const salesRoutes = require("../modules/sales/sales.routes");
-const orderTrackerRoutes = require("../modules/reports/order-tracker.routes");
+const authRoutes = require("../core/auth/auth.routes");
+const productRoutes = require("../store/products/product.routes");
+const componentRoutes = require("../store/components/component.routes");
+const inventoryRoutes = require("../store/inventory/inventory.routes");
+const orderRoutes = require("../sales/orders/order.routes");
+const productionRoutes = require("../production/production/production.routes");
+const qcFailedRoutes = require("../production/production/qc-failed.routes");
+const qualityControlRoutes = require("../production/quality-control/quality-control.routes");
+const finishedGoodsRoutes = require("../production/finished-goods/finished-goods.routes");
+const purchaseRoutes = require("../purchase/purchase-orders/purchase-order.routes");
+const iqcRoutes = require("../purchase/iqc/iqc.routes");
+const incomingStockRoutes = require("../purchase/incoming-stock/incoming-stock.routes");
+const marketingOrderRoutes = require("../sales/marketing-orders/marketing-order.routes");
+const repairRoutes = require("../production/repairs/repair.routes");
+const orderApprovalRoutes = require("../sales/order-approvals/order-approval.routes");
+const approvedOrdersRoutes = require("../sales/order-approvals/approved-orders.routes");
+const employeeRoutes = require("../people/employees/employee.routes");
+const attendanceRoutes = require("../people/attendance/attendance.routes");
+const superAdminRoutes = require("../core/super-admins/super-admin.routes");
+const activityRoutes = require("../core/activity/activity.routes");
+const notificationRoutes = require("../core/notifications/notification.routes");
+const pushRoutes = require("../core/push/push.routes");
+const materialRequestRoutes = require("../store/material-requests/material-request.routes");
+const extraMaterialRoutes = require("../store/extra-materials/extra-material.routes");
+const productStockRoutes = require("../store/product-stock/product-stock.routes");
+const customerRoutes = require("../sales/customers/customer.routes");
+const reportRoutes = require("../core/reports/report.routes");
+const salesRoutes = require("../sales/billing/billing.routes");
+const orderTrackerRoutes = require("../core/reports/order-tracker.routes");
 const eventsRoutes = require("../realtime/events.routes");
 
 const MODULES = [

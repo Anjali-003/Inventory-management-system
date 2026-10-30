@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { animate, AnimatePresence, motion } from "motion/react";
+import { animate, AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { SURFACE, pageButtonClass } from "@/components/PageKit";
@@ -28,10 +28,10 @@ export function CountUp({ value, format = fmtQty, duration = 0.9 }) {
   const target = Number(value) || 0;
   const from = useRef(0);
   const [n, setN] = useState(0);
+  const reduceMotion = useReducedMotion();
   useEffect(() => {
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    if (reduceMotion) {
       from.current = target;
-      setN(target);
       return;
     }
     const c = animate(from.current, target, {
@@ -47,8 +47,8 @@ export function CountUp({ value, format = fmtQty, duration = 0.9 }) {
       from.current = target;
       c.stop();
     };
-  }, [target, duration]);
-  return format(n);
+  }, [target, duration, reduceMotion]);
+  return format(reduceMotion ? target : n);
 }
 
 // Fade + rise on mount. `delay` staggers sections down the page.
@@ -340,22 +340,6 @@ export function Pill({
     </span>
   );
 }
-
-// Reason colour: loss / damage in red, checks and trials in blue, count corrections in amber, everything else quiet.
-const REASON_TONE = {
-  DAMAGED: "danger",
-  PRODUCTION_WASTAGE: "danger",
-  LOST: "danger",
-  WRONG_ISSUE: "danger",
-  QUALITY_CONTROL: "info",
-  TESTING: "info",
-  SAMPLE_TESTING: "info",
-  RND: "info",
-  REWORK: "info",
-  CUSTOMER_SAMPLE: "info",
-  ADJUSTMENT: "warning",
-};
-export const reasonTone = (code) => REASON_TONE[code] || "neutral";
 
 export function Initials({ name, className }) {
   const letters = String(name || "?")

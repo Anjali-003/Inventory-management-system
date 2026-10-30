@@ -25,11 +25,11 @@ fake("../src/realtime/hub.js", {
   notifyUser: (userId, data) => sent.push(["tab-user", userId, data]),
   broadcast: () => {},
 });
-fake("../src/modules/push/push.service.js", {
+fake("../src/core/push/push.service.js", {
   sendToRole: (role, msg) => sent.push(["push-role", role, msg]),
   sendToUser: (userId, role, msg) => sent.push(["push-user", userId, role, msg]),
 });
-const notifications = require("../src/modules/notifications/notification.service.js");
+const notifications = require("../src/core/notifications/notification.service.js");
 const requestContext = require("../src/shared/requestContext.js");
 
 // runs notify() as if inside a request with (or without) the X-View-As header

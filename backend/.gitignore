@@ -1,7 +1,6 @@
 .env
 node_modules/
 
-.env.example
 docs
 # saved test data (npm run db:save)
 snapshots/

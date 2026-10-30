@@ -3,6 +3,7 @@
 
     respond("GET", "/marketing-orders", [order1, order2])   // this test's answer for that path
     respond("POST", /\/send$/, { ok: true })                // a RegExp matches any path it fits
+    fail("GET", "/inventory/5", 404, "Inventory item not found") // the server refuses, as an axios error
     requests                                                // every request made so far: { method, url, data }
 
   Anything not set gets a harmless default: the logged-in user, empty lists, zero figures. Reset before each test.
@@ -45,6 +46,12 @@ export function setRole(asRole) {
 
 export function respond(method, path, data) {
   table.unshift([method.toUpperCase(), path, () => data]);
+}
+
+export function fail(method, path, status, message) {
+  table.unshift([method.toUpperCase(), path, () => {
+    throw Object.assign(new Error(message), { response: { status, data: { message } } });
+  }]);
 }
 
 const matches = (want, path) => (want instanceof RegExp ? want.test(path) : want === path);

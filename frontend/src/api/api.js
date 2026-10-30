@@ -1,8 +1,8 @@
 /*
   The one axios instance every request goes through (cookies, base URL, mock mode).
 
-  Do not import this in components. Use a feature service (features/<name>/<name>Service.js)
-  for one-off requests, or an RTK Query endpoint (features/<name>/<name>Api.js) for data shown on screens.
+  Do not import this in components. Use a feature service (<department>/<feature>/<name>Service.js)
+  for one-off requests, or an RTK Query endpoint (<department>/<feature>/<name>Api.js) for data shown on screens.
 */
 import axios from "axios";
 import { isMock, resolveApiUrl } from "@/config/env";

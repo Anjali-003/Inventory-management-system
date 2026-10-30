@@ -1,4 +1,4 @@
-const activity = require("../modules/activity/activity.service");
+const activity = require("../core/activity/activity.service");
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 

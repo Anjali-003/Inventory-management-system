@@ -19,7 +19,7 @@ const server = app.listen(env.port, "0.0.0.0", () => {
 startPurgeJob(db);
 
 // every hour: tell the Super Admin about orders stuck 3+ days at one step (once a day per order)
-require("./src/modules/reports/order-tracker.service").startStuckOrderJob();
+require("./src/core/reports/order-tracker.service").startStuckOrderJob();
 
 async function shutdown(signal) {
     console.log(`${signal} received, shutting down...`);
@@ -42,4 +42,10 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 process.on("unhandledRejection", (reason) => {
     console.error("Unhandled promise rejection:", reason);
+});
+
+// A throw outside any request leaves the process in an unknown state: log it and exit so the process manager restarts us.
+process.on("uncaughtException", (error) => {
+    console.error("Uncaught exception, shutting down:", error);
+    process.exit(1);
 });

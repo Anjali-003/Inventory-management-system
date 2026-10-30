@@ -1,6 +1,6 @@
 const { input, password } = require("@inquirer/prompts");
 
-const superAdminService = require("../modules/super-admins/super-admin.service");
+const superAdminService = require("../core/super-admins/super-admin.service");
 const db = require("../config/db");
 
 async function main() {

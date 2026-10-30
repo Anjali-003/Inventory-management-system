@@ -1,4 +1,4 @@
-const { findUserById } = require("../modules/auth/auth.service");
+const { findUserById } = require("../core/auth/auth.service");
 const AppError = require("../shared/AppError");
 const asyncHandler = require("./asyncHandler");
 

@@ -1,43 +1,43 @@
 /* eslint-disable react-refresh/only-export-components -- a route table: lazy page components, not components defined here */
 /**
  * The app's page table: ONE place that lists every page, its URL and the permission module it needs.
- * To add a page: create features/<name>/<Name>.jsx and add one line here
+ * To add a page: create <department>/<feature>/<Name>.jsx and add one line here
  * (and a sidebar entry in components/Layout.jsx GROUPS, and the module in lib/permissions.js).
  * Pages are loaded on demand (React.lazy): opening one page never downloads the code of the others.
  * `title` is what the browser tab says on that page.
  */
 import { lazy } from "react";
 
-const Dashboard = lazy(() => import("@/features/dashboard/Dashboard"));
-const Products = lazy(() => import("@/features/products/Products"));
-const Inventory = lazy(() => import("@/features/inventory/Inventory"));
-const InventoryHistory = lazy(() => import("@/features/inventory/InventoryHistory"));
-const Orders = lazy(() => import("@/features/orders/Orders"));
-const Production = lazy(() => import("@/features/production/Production"));
-const QCFailed = lazy(() => import("@/features/production/QCFailed"));
-const QualityControl = lazy(() => import("@/features/quality-control/QualityControl"));
-const FinishedGoods = lazy(() => import("@/features/finished-goods/FinishedGoods"));
-const Employees = lazy(() => import("@/features/employees/Employees"));
-const Attendance = lazy(() => import("@/features/attendance/Attendance"));
-const Activity = lazy(() => import("@/features/activity/Activity"));
-const Iqc = lazy(() => import("@/features/iqc/Iqc"));
-const Purchase = lazy(() => import("@/features/purchase/Purchase"));
-const PurchaseRequests = lazy(() => import("@/features/purchase/PurchaseRequests"));
-const IncomingStock = lazy(() => import("@/features/incoming-stock/IncomingStock"));
-const MarketingOrders = lazy(() => import("@/features/marketing-orders/MarketingOrders"));
-const OrderApprovals = lazy(() => import("@/features/order-approvals/OrderApprovals"));
-const ApprovedOrders = lazy(() => import("@/features/approved-orders/ApprovedOrders"));
-const StoreStatus = lazy(() => import("@/features/store-status/StoreStatus"));
-const StoreMaterialRequests = lazy(() => import("@/features/material-requests/StoreMaterialRequests"));
-const ProductStock = lazy(() => import("@/features/product-stock/ProductStock"));
-const OrderTracker = lazy(() => import("@/features/order-tracker/OrderTracker"));
-const Reports = lazy(() => import("@/features/order-tracker/Reports"));
-const Bills = lazy(() => import("@/features/sales/Bills"));
-const ToBill = lazy(() => import("@/features/sales/ToBill"));
-const Customers = lazy(() => import("@/features/sales/Customers"));
-const RepairRequests = lazy(() => import("@/features/repairs/RepairRequests"));
-const RepairApprovals = lazy(() => import("@/features/repairs/RepairApprovals"));
-const RepairRegister = lazy(() => import("@/features/repairs/RepairRegister"));
+const Dashboard = lazy(() => import("@/core/dashboard/Dashboard"));
+const Products = lazy(() => import("@/store/products/Products"));
+const Inventory = lazy(() => import("@/store/inventory/Inventory"));
+const InventoryHistory = lazy(() => import("@/store/inventory/InventoryHistory"));
+const Orders = lazy(() => import("@/sales/orders/Orders"));
+const Production = lazy(() => import("@/production/production/Production"));
+const QCFailed = lazy(() => import("@/production/production/QCFailed"));
+const QualityControl = lazy(() => import("@/production/quality-control/QualityControl"));
+const FinishedGoods = lazy(() => import("@/production/finished-goods/FinishedGoods"));
+const Employees = lazy(() => import("@/people/employees/Employees"));
+const Attendance = lazy(() => import("@/people/attendance/Attendance"));
+const Activity = lazy(() => import("@/core/activity/Activity"));
+const Iqc = lazy(() => import("@/purchase/iqc/Iqc"));
+const Purchase = lazy(() => import("@/purchase/purchase-orders/Purchase"));
+const PurchaseRequests = lazy(() => import("@/purchase/purchase-orders/PurchaseRequests"));
+const IncomingStock = lazy(() => import("@/purchase/incoming-stock/IncomingStock"));
+const MarketingOrders = lazy(() => import("@/sales/marketing-orders/MarketingOrders"));
+const OrderApprovals = lazy(() => import("@/sales/order-approvals/OrderApprovals"));
+const ApprovedOrders = lazy(() => import("@/sales/approved-orders/ApprovedOrders"));
+const StoreStatus = lazy(() => import("@/store/store-status/StoreStatus"));
+const StoreMaterialRequests = lazy(() => import("@/store/material-requests/StoreMaterialRequests"));
+const ProductStock = lazy(() => import("@/store/product-stock/ProductStock"));
+const OrderTracker = lazy(() => import("@/core/order-tracker/OrderTracker"));
+const Reports = lazy(() => import("@/core/order-tracker/Reports"));
+const Bills = lazy(() => import("@/sales/billing/Bills"));
+const ToBill = lazy(() => import("@/sales/billing/ToBill"));
+const Customers = lazy(() => import("@/sales/billing/Customers"));
+const RepairRequests = lazy(() => import("@/production/repairs/RepairRequests"));
+const RepairApprovals = lazy(() => import("@/production/repairs/RepairApprovals"));
+const RepairRegister = lazy(() => import("@/production/repairs/RepairRegister"));
 
 /** { path, module (see MODULE_PATHS in lib/permissions.js), Page, title } */
 //Page batata hai kya render karna hai, module batata hai kis permission ko check karna hai, aur path batata hai kis URL par route match karna hai.

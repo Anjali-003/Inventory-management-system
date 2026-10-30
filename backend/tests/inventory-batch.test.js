@@ -12,7 +12,7 @@ import fake from "./helpers/fakeDb.js";
 // the service loads (vi.mock cannot intercept require()).
 const require = createRequire(import.meta.url);
 require.cache[require.resolve("../src/config/db.js")] = { id: "db", filename: "db", loaded: true, exports: fake.fakeDb };
-const service = require("../src/modules/inventory/inventory.service.js");
+const service = require("../src/store/inventory/inventory.service.js");
 
 const { reset, state, clone } = fake;
 

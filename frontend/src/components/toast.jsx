@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { AlertCircle, ArrowUpRight, CheckCircle2, X } from "lucide-react"
-import { severityOf } from "@/features/notifications/notificationStyle"
-import NotificationIcon from "@/features/notifications/NotificationIcon"
+import { severityOf } from "@/core/notifications/notificationStyle"
+import NotificationIcon from "@/core/notifications/NotificationIcon"
 
 /*
   toast.success("Saved") / toast.error("Could not save")       short feedback for the user's own action

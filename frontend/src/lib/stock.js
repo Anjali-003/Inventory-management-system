@@ -128,3 +128,28 @@ export function suggestSku(base, newSkus = []) {
   }
   return prefix + String(n).padStart(digits.length, "0")
 }
+
+/** "archived" | "out" | "low" | "ok" for an inventory row (StockBadge, dashboards, filters). */
+export function stockState(item) {
+  if (item.is_active === 0) return "archived"
+  const onHand = Number(item.quantity_on_hand)
+  if (onHand <= 0) return "out"
+  if (onHand <= Number(item.minimum_stock_level)) return "low"
+  return "ok"
+}
+
+// Ledger reason colour: loss / damage in red, checks and trials in blue, count corrections in amber, everything else quiet.
+const REASON_TONE = {
+  DAMAGED: "danger",
+  PRODUCTION_WASTAGE: "danger",
+  LOST: "danger",
+  WRONG_ISSUE: "danger",
+  QUALITY_CONTROL: "info",
+  TESTING: "info",
+  SAMPLE_TESTING: "info",
+  RND: "info",
+  REWORK: "info",
+  CUSTOMER_SAMPLE: "info",
+  ADJUSTMENT: "warning",
+}
+export const reasonTone = (code) => REASON_TONE[code] || "neutral"

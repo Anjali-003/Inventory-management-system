@@ -126,7 +126,7 @@ const ORDER_STATUS = {
 
   /*
   -----------------------------------------------
-  AFTER QC (finished-goods steps, see features/finished-goods/fgFlow.js; PACKAGING / PACKED / DISPATCHED are old records)
+  AFTER QC (finished-goods steps, see production/finished-goods/fgFlow.js; PACKAGING / PACKED / DISPATCHED are old records)
   -----------------------------------------------
   */
 

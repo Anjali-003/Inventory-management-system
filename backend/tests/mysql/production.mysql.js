@@ -17,10 +17,10 @@ const require = createRequire(import.meta.url);
 const testDb = require("../helpers/mysqlDb").throwaway("t_production"); // before anything from src/
 
 const db = require("../../src/config/db");
-const marketing = require("../../src/modules/marketing-orders/marketing-order.service");
-const approvals = require("../../src/modules/order-approvals/order-approval.service");
-const materialRequests = require("../../src/modules/material-requests/material-request.service");
-const production = require("../../src/modules/production/production.service");
+const marketing = require("../../src/sales/marketing-orders/marketing-order.service");
+const approvals = require("../../src/sales/order-approvals/order-approval.service");
+const materialRequests = require("../../src/store/material-requests/material-request.service");
+const production = require("../../src/production/production/production.service");
 
 let fx; // fixtures: users per role, products, stock
 const key = (p = "k") => `${p}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;

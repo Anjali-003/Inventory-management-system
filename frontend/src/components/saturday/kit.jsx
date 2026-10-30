@@ -1,17 +1,16 @@
-/* eslint-disable react-refresh/only-export-components */
 /*
   The Saturday look (2026-10-24) of the page title, buttons and figure tiles, kept for the Production, Quality Control
   and Finished Goods screens, which stay as they were on Saturday. The rest of the app uses components/PageKit.
-  Copied from features/marketing-orders/mktKit.jsx as it was in commit 9efc4bd. Do not restyle it to the new look.
+  Copied from sales/marketing-orders/mktKit.jsx as it was in commit 9efc4bd. Do not restyle it to the new look.
 */
 import { Link } from "react-router-dom"
 import { motion } from "motion/react"
 import { ArrowUpRight } from "lucide-react"
 import { CountUp } from "@/components/HistoryUI"
 import { cn } from "@/lib/utils"
-import { PRESS, PRESS_SOFT, SPRING_SOFT, rise, stagger } from "@/features/marketing-orders/mktMotion"
+import { PRESS, PRESS_SOFT, SPRING_SOFT, rise, stagger } from "@/sales/marketing-orders/mktMotion"
 
-export { SearchField } from "@/features/marketing-orders/mktKit"
+export { SearchField } from "@/sales/marketing-orders/mktKit"
 
 /** Gradient banner at the top of a page: eyebrow, big title, one line of help, buttons on the right. */
 export function MktHero({ eyebrow, title, description, children, className }) {

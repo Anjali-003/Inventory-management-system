@@ -11,7 +11,7 @@ const require = createRequire(import.meta.url);
 const testDb = require("../helpers/mysqlDb").throwaway("t_salessum"); // before anything from src/
 
 const db = require("../../src/config/db");
-const sales = require("../../src/modules/sales/sales.service");
+const sales = require("../../src/sales/billing/billing.service");
 
 let n = 0;
 let fx;

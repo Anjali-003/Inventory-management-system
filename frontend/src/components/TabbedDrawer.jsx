@@ -1,9 +1,9 @@
-import { useEffect, useId, useRef } from "react"
+import { useEffect, useId, useLayoutEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { AnimatePresence, motion } from "motion/react"
 import { X } from "lucide-react"
-import { MktBtn } from "@/features/marketing-orders/mktKit"
-import { SPRING } from "@/features/marketing-orders/mktMotion"
+import { MktBtn } from "@/sales/marketing-orders/mktKit"
+import { SPRING } from "@/sales/marketing-orders/mktMotion"
 import { cn } from "@/lib/utils"
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
@@ -31,7 +31,9 @@ function Panel({ eyebrow, title, subtitle, tabs = [], tab, onTab, tabContent, ac
   const bodyRef = useRef(null)
   const uid = useId()
   const closeRef = useRef(onClose)
-  closeRef.current = onClose
+  useLayoutEffect(() => {
+    closeRef.current = onClose
+  })
   const rtl = typeof document !== "undefined" && document.documentElement.dir === "rtl"
   const offscreen = `${rtl ? -100 : 100}%`
 

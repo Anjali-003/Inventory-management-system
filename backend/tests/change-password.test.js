@@ -17,7 +17,7 @@ const fakeDb = {
   },
 };
 require.cache[require.resolve("../src/config/db.js")] = { id: "db", filename: "db", loaded: true, exports: fakeDb };
-const auth = require("../src/modules/auth/auth.service.js");
+const auth = require("../src/core/auth/auth.service.js");
 
 beforeEach(async () => {
   user = { id: 4, is_active: 1, password_hash: await bcrypt.hash("old-secret-1", 4) };

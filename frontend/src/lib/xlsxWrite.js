@@ -62,6 +62,7 @@ function zip(files) {
 // ---------------------------------------------------------------- sheet xml
 const xmlEsc = (s) =>
   String(s)
+    // eslint-disable-next-line no-control-regex -- stripping control characters is the point
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "") // characters XML cannot hold
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 

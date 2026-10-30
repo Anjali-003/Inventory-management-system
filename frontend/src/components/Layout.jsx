@@ -35,13 +35,14 @@ import {
 } from "lucide-react";
 
 import { cn } from "../lib/utils";
-import { authService } from "@/features/auth/authService"
+import { authService } from "@/core/auth/authService"
 import { disablePush } from "@/lib/push";
 import { baseApi } from "../api/baseApi";
-import { usePermissions } from "@/features/auth/usePermissions";
-import NotificationBell from "@/features/notifications/NotificationBell";
-import ProfileMenu from "@/features/auth/ProfileMenu";
+import { usePermissions } from "@/core/auth/usePermissions";
+import NotificationBell from "@/core/notifications/NotificationBell";
+import ProfileMenu from "@/core/auth/ProfileMenu";
 import { ROLE_LABELS, clearActiveRole, loginPathFor, setViewAs } from "@/lib/permissions";
+import { useChanged } from "@/lib/useChanged";
 
 /*
   The sidebar follows the work, in order: an order comes in -> components are bought and checked -> Store keeps
@@ -366,10 +367,11 @@ export default function Layout() {
   const [pinned, setPinned] = useState(readPinned); // desktop: fixed in the layout (default: pinned)
   const [floatOpen, setFloatOpen] = useState(false); // desktop: floating over the page while unpinned
 
-  useEffect(() => {
-    setOpen(false);
-    setFloatOpen(false);
-  }, [pathname]);
+  // a new page closes the phone menu and the floating sidebar
+  if (useChanged(pathname)) {
+    if (open) setOpen(false);
+    if (floatOpen) setFloatOpen(false);
+  }
 
   // Escape closes the floating sidebar and the phone menu
   useEffect(() => {

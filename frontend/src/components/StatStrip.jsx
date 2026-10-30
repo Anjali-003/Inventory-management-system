@@ -1,5 +1,5 @@
 import { motion } from "motion/react"
-import { StageChips, StatusSelect } from "@/features/marketing-orders/mktKit"
+import { StageChips, StatusSelect } from "@/sales/marketing-orders/mktKit"
 import { cn } from "../lib/utils"
 
 const DOT = {

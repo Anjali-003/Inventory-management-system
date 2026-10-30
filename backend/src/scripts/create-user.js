@@ -11,7 +11,7 @@
 */
 const { input, password, select } = require("@inquirer/prompts");
 
-const superAdminService = require("../modules/super-admins/super-admin.service");
+const superAdminService = require("../core/super-admins/super-admin.service");
 const { ROLE_NAMES } = require("../middleware/permissions");
 const db = require("../config/db");
 

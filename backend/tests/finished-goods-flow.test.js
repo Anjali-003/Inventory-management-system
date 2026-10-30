@@ -1,5 +1,5 @@
 /**
- * After QC (modules/finished-goods/finished-goods.service.js): each step needs the status before it, moves the
+ * After QC (production/finished-goods/finished-goods.service.js): each step needs the status before it, moves the
  * order along, product stock goes up on receive and down on dispatch, and the bill adds up.
  * MySQL is replaced by a small in-memory fake that understands only the queries these steps send.
  */
@@ -65,8 +65,8 @@ const conn = { query: async (sql, p) => run(sql, p), beginTransaction: async () 
 require.cache[require.resolve("../src/config/db.js")] = { id: "db", filename: "db", loaded: true, exports: { query: conn.query, getConnection: async () => conn } };
 // live push / web push are not part of this test
 require.cache[require.resolve("../src/realtime/hub.js")] = { id: "hub", filename: "hub", loaded: true, exports: { notifyRole: () => {}, broadcast: () => {} } };
-require.cache[require.resolve("../src/modules/push/push.service.js")] = { id: "push", filename: "push", loaded: true, exports: { sendToRole: () => {} } };
-const fg = require("../src/modules/finished-goods/finished-goods.service.js");
+require.cache[require.resolve("../src/core/push/push.service.js")] = { id: "push", filename: "push", loaded: true, exports: { sendToRole: () => {} } };
+const fg = require("../src/production/finished-goods/finished-goods.service.js");
 
 beforeEach(() => { s = fresh(); });
 

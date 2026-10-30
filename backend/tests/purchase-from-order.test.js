@@ -50,7 +50,7 @@ function run(sql, p = []) {
 }
 const conn = { query: async (sql, p) => run(sql, p), beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release: () => {} };
 require.cache[require.resolve("../src/config/db.js")] = { id: "db", filename: "db", loaded: true, exports: { query: conn.query, getConnection: async () => conn } };
-const service = require("../src/modules/purchase/purchase.service.js");
+const service = require("../src/purchase/purchase-orders/purchase-order.service.js");
 
 const body = (extra = {}) => ({ order_id: 7, supplier: "Sharma Electronics", expected_delivery_date: "2026-11-30", request_item_ids: [1, 2], ...extra });
 

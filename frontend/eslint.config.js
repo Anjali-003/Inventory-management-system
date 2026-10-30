@@ -13,6 +13,10 @@ export default defineConfig([
       reactHooks.configs.flat.recommended,
       reactRefresh.configs.vite,
     ],
+    rules: {
+      // conventional companions of a component: shadcn's buttonVariants, the useToast hook of ToastProvider
+      'react-refresh/only-export-components': ['error', { allowConstantExport: true, allowExportNames: ['buttonVariants', 'useToast'] }],
+    },
     languageOptions: {
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },

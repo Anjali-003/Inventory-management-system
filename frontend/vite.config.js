@@ -19,7 +19,7 @@ export default defineConfig({
 
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
 
@@ -31,10 +31,10 @@ export default defineConfig({
         // libraries in their own files: they change rarely, so the browser keeps them cached across app updates
         codeSplitting: {
           groups: [
-            { name: "react", test: /node_modules[\/](react|react-dom|scheduler|react-router|react-router-dom)[\/]/ },
-            { name: "redux", test: /node_modules[\/](@reduxjs|redux|react-redux|immer|reselect)[\/]/ },
-            { name: "motion", test: /node_modules[\/](motion|framer-motion|motion-dom|motion-utils)[\/]/ },
-            { name: "icons", test: /node_modules[\/]lucide-react[\/]/ },
+            { name: "react", test: /node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/ },
+            { name: "redux", test: /node_modules[\\/](@reduxjs|redux|react-redux|immer|reselect)[\\/]/ },
+            { name: "motion", test: /node_modules[\\/](motion|framer-motion|motion-dom|motion-utils)[\\/]/ },
+            { name: "icons", test: /node_modules[\\/]lucide-react[\\/]/ },
           ],
         },
       },

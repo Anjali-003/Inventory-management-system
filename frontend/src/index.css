@@ -311,7 +311,7 @@
 }
 
 /* ------------------------------------------------------------------------------------------------
-   Marketing Manager screens (features/marketing-orders + dashboard/roles/MarketingView).
+   Marketing Manager screens (sales/marketing-orders + sales/dashboards/MarketingView).
    In @layer components so Tailwind utilities (md:bg-transparent, md:static ...) can still override them.
    ------------------------------------------------------------------------------------------------ */
 @layer components {

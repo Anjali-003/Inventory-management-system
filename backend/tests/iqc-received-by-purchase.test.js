@@ -39,11 +39,11 @@ function run(sql, p = []) {
 }
 const conn = { query: async (sql, p) => run(sql, p), beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release: () => {} };
 require.cache[require.resolve("../src/config/db.js")] = { id: "db", filename: "db", loaded: true, exports: { query: conn.query, getConnection: async () => conn } };
-require.cache[require.resolve("../src/modules/notifications/notification.service.js")] = {
+require.cache[require.resolve("../src/core/notifications/notification.service.js")] = {
   id: "n", filename: "n", loaded: true, exports: { notify: async () => {}, notifyCommitted: () => {} },
 };
-const purchases = require("../src/modules/purchase/purchase.service.js");
-const iqc = require("../src/modules/iqc/iqc.service.js");
+const purchases = require("../src/purchase/purchase-orders/purchase-order.service.js");
+const iqc = require("../src/purchase/iqc/iqc.service.js");
 
 beforeEach(() => { s = fresh(); });
 
