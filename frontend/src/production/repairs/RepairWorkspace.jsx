@@ -77,7 +77,7 @@ function RepairCard({ repair, mode }) {
   const canApprove = ["PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
   const canRepair = ["PRODUCTION_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
   const canQc = ["QUALITY_FG_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
-  const canDispatch = ["MARKETING_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
+  const canDispatch = ["QUALITY_FG_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
   const limits = { outstanding: outstanding(repair), awaitingQc: awaitingQc(repair), dispatchable: dispatchable(repair) };
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   function openAction(nextAction, quantity) {
@@ -145,60 +145,122 @@ function SectionTabs({ value, onChange, items }) {
 
 function QuantitySummary({ repairs }) {
   const cards = [
-    { label: "In production", value: sum(repairs, outstanding), icon: Factory, tone: "text-blue-700 bg-blue-50" },
+    { label: "To repair", value: sum(repairs, outstanding), icon: Factory, tone: "text-blue-700 bg-blue-50" },
     { label: "Awaiting QC", value: sum(repairs, awaitingQc), icon: ClipboardCheck, tone: "text-amber-700 bg-amber-50" },
     { label: "Dispatched", value: sum(repairs, (r) => number(r.dispatched_quantity)), icon: PackageCheck, tone: "text-emerald-700 bg-emerald-50" },
   ];
   return <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">{cards.map(({ label, value, icon: Icon, tone }) => <Card key={label} className="rounded-xl border-[#dce5e0] shadow-sm"><CardContent className="flex items-center gap-3 p-4"><span className={`grid size-11 shrink-0 place-items-center rounded-xl ${tone}`}><Icon className="size-5"/></span><div className="min-w-0"><p className="text-sm text-muted-foreground">{label}</p><p className="text-2xl font-bold tabular-nums">{fmtQty(value)} <span className="text-sm font-medium text-muted-foreground">items</span></p></div></CardContent></Card>)}</div>;
 }
 
+const PAGE_CONFIG = {
+  requests: {
+    title: "Repair Requests",
+    description: "Raise customer repair requests and track their progress through the repair workflow.",
+    initialSection: "requests",
+  },
+  approvals: {
+    title: "Repair Approvals",
+    description: "Review customer repair requests before repair work begins. Rejections require a reason.",
+    initialSection: "pending",
+  },
+  production: {
+    title: "Repair Production",
+    description: "Record repaired quantities, diagnosis and repair notes for approved customer returns.",
+    initialSection: "active",
+  },
+  qc: {
+    title: "Repair QC",
+    description: "Inspect repaired items, record pass or fail results, and send failed items back for rework.",
+    initialSection: "awaiting",
+  },
+  dispatch: {
+    title: "Repair Dispatch",
+    description: "Dispatch QC-passed repaired items and record the return reference for the customer.",
+    initialSection: "ready",
+  },
+};
+
 export default function RepairWorkspace({ mode }) {
+  const config = PAGE_CONFIG[mode] || PAGE_CONFIG.production;
   const { data: repairs = [], isLoading, isFetching, error, refetch } = useGetRepairsQuery();
   const [notice, setNotice] = useState("");
   const [query, setQuery] = useState("");
-  const [section, setSection] = useState(mode === "requests" ? "requests" : mode === "approvals" ? "pending" : "production");
-  const title = mode === "requests" ? "Repair Requests" : mode === "approvals" ? "Repair Approvals" : "Repair Register";
-  const description = mode === "requests" ? "Raise customer repair requests and track approvals, inspection and dispatch." : mode === "approvals" ? "Review Marketing's repair requests before work begins. Rejections require a reason." : "Manage repaired quantities, repair QC and dispatch in separate work sections.";
+  const [section, setSection] = useState(config.initialSection);
   const requestTabs = [
-    { key: "requests", label: "Requests", count: repairs.filter((r) => !terminal(r)).length },
-    { key: "history", label: "History", count: repairs.filter(terminal).length },
+    { key: "requests", label: "Open requests", count: repairs.filter((r) => !terminal(r)).length },
+    { key: "history", label: "Completed / rejected", count: repairs.filter(terminal).length },
   ];
   const approvalTabs = [
     { key: "pending", label: "Awaiting approval", count: repairs.filter((r) => r.status === "PENDING_APPROVAL").length },
     { key: "history", label: "Reviewed", count: repairs.filter((r) => r.status !== "PENDING_APPROVAL").length },
   ];
-  const registerTabs = [
-    { key: "production", label: "Repair Production", count: sum(repairs.filter((r) => !["PENDING_APPROVAL", "REJECTED", "RETURNED"].includes(r.status)), outstanding) },
-    { key: "qc", label: "Repair QC", count: sum(repairs, awaitingQc) },
-    { key: "dispatch", label: "Dispatch", count: sum(repairs, dispatchable) },
+  const productionTabs = [
+    { key: "active", label: "To repair", count: sum(repairs.filter((r) => !["PENDING_APPROVAL", "REJECTED", "RETURNED"].includes(r.status) && outstanding(r) > 0), outstanding) },
+    { key: "completed", label: "Repair completed", count: repairs.filter((r) => number(r.repaired_quantity) >= number(r.requested_quantity) && number(r.requested_quantity) > 0).length },
   ];
+  const qcTabs = [
+    { key: "awaiting", label: "Awaiting QC", count: sum(repairs, awaitingQc) },
+    { key: "history", label: "QC history", count: repairs.filter((r) => number(r.qc_passed_quantity) > 0 || r.status === "QC_FAILED" || Boolean(r.qc_remarks)).length },
+  ];
+  const dispatchTabs = [
+    { key: "ready", label: "Ready to dispatch", count: sum(repairs, dispatchable) },
+    { key: "history", label: "Dispatch history", count: sum(repairs, (r) => number(r.dispatched_quantity)) },
+  ];
+
   const sourceRows = useMemo(() => {
     if (mode === "requests") return repairs.filter((r) => section === "history" ? terminal(r) : !terminal(r));
     if (mode === "approvals") return repairs.filter((r) => section === "history" ? r.status !== "PENDING_APPROVAL" : r.status === "PENDING_APPROVAL");
-    if (section === "production") return repairs.filter((r) => !["PENDING_APPROVAL", "REJECTED", "RETURNED"].includes(r.status) && outstanding(r) > 0);
-    if (section === "qc") return repairs.filter((r) => awaitingQc(r) > 0 && !["PENDING_APPROVAL", "REJECTED"].includes(r.status));
-    return repairs.filter((r) => dispatchable(r) > 0 || number(r.dispatched_quantity) > 0);
+    if (mode === "production") {
+      return repairs.filter((r) => section === "completed"
+        ? number(r.requested_quantity) > 0 && number(r.repaired_quantity) >= number(r.requested_quantity)
+        : !["PENDING_APPROVAL", "REJECTED", "RETURNED"].includes(r.status) && outstanding(r) > 0);
+    }
+    if (mode === "qc") {
+      return repairs.filter((r) => section === "history"
+        ? number(r.qc_passed_quantity) > 0 || r.status === "QC_FAILED" || Boolean(r.qc_remarks)
+        : awaitingQc(r) > 0 && !["PENDING_APPROVAL", "REJECTED"].includes(r.status));
+    }
+    return repairs.filter((r) => section === "history"
+      ? number(r.dispatched_quantity) > 0
+      : dispatchable(r) > 0);
   }, [mode, repairs, section]);
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     if (!needle) return sourceRows;
     return sourceRows.filter((r) => [r.repair_number, r.product_name, r.product_sku, r.customer_name, r.customer_reference, r.problem_description, r.status, r.dispatch_reference].some((v) => String(v || "").toLocaleLowerCase().includes(needle)));
   }, [sourceRows, query]);
-  const tabs = mode === "requests" ? requestTabs : mode === "approvals" ? approvalTabs : registerTabs;
+
+  const tabs = mode === "requests" ? requestTabs
+    : mode === "approvals" ? approvalTabs
+      : mode === "production" ? productionTabs
+        : mode === "qc" ? qcTabs : dispatchTabs;
+  const emptyTitle = query
+    ? "No matching repair records"
+    : mode === "approvals" && section === "pending" ? "No requests awaiting approval"
+      : mode === "requests" && section === "history" ? "No repair history yet"
+        : mode === "production" && section === "completed" ? "No completed repairs yet"
+          : mode === "production" ? "No repairs waiting for production"
+            : mode === "qc" && section === "history" ? "No QC history yet"
+              : mode === "qc" ? "No repaired items awaiting QC"
+                : mode === "dispatch" && section === "history" ? "No dispatch history yet"
+                  : mode === "dispatch" ? "No repaired items ready for dispatch"
+                    : "Nothing to show in this section";
+
   return <div className="mx-auto w-full max-w-[1600px] space-y-5 pb-8">
-    <MktHero eyebrow="Repair management" title={title} description={description}>
+    <MktHero eyebrow="Customer repairs" title={config.title} description={config.description}>
       <Button variant="outline" onClick={() => refetch()} disabled={isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />Refresh</Button>
     </MktHero>
     {notice && <Notice title="Repair request submitted">{notice}</Notice>}
     {mode === "requests" && section === "requests" && <RequestForm onCreated={() => { setNotice("Your request was submitted to Production Admin for approval."); setSection("requests"); refetch(); }} />}
     {error && <Notice title="Repair data could not be loaded">{errorText(error)}</Notice>}
-    {mode === "register" && <QuantitySummary repairs={repairs.filter((r) => !["PENDING_APPROVAL", "REJECTED"].includes(r.status))} />}
+    {mode === "production" && <QuantitySummary repairs={repairs.filter((r) => !["PENDING_APPROVAL", "REJECTED"].includes(r.status))} />}
     <Card className="min-w-0 overflow-hidden rounded-xl border-[#dce5e0] shadow-sm">
       <div className="space-y-3 border-b bg-slate-50/70 p-3 sm:p-4">
         <SectionTabs value={section} onChange={setSection} items={tabs}/>
         <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center"><div className="w-full min-w-0 sm:max-w-md"><SearchField className="w-full" value={query} onChange={setQuery} placeholder="Search repair no., product, customer, status…" /></div><p className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground sm:ml-auto">{filtered.length} result{filtered.length === 1 ? "" : "s"}{isFetching ? " · Updating…" : ""}</p></div>
       </div>
-      {isLoading ? <div className="p-4"><TableSkeleton rows={4}/></div> : filtered.length === 0 ? <div className="p-5"><EmptyState title={query ? "No matching repair requests" : mode === "approvals" && section === "pending" ? "No requests awaiting approval" : mode === "requests" && section === "history" ? "No repair history yet" : mode === "register" && section === "qc" ? "No items awaiting repair QC" : mode === "register" && section === "dispatch" ? "No repaired items ready for dispatch" : "Nothing to show in this section"}>{query ? "Try another search term or clear the search field." : "New repair work will appear here when it reaches this stage."}</EmptyState></div> : <div className="grid min-w-0 gap-4 p-3 sm:p-4 xl:grid-cols-2">{filtered.map((repair) => <RepairCard key={repair.id} repair={repair} mode={mode === "register" ? section : mode === "approvals" ? "approvals" : "requests"}/>)}</div>}
+      {isLoading ? <div className="p-4"><TableSkeleton rows={4}/></div> : filtered.length === 0 ? <div className="p-5"><EmptyState title={emptyTitle}>{query ? "Try another search term or clear the search field." : "New repair work will appear here when it reaches this stage."}</EmptyState></div> : <div className="grid min-w-0 gap-4 p-3 sm:p-4 xl:grid-cols-2">{filtered.map((repair) => <RepairCard key={repair.id} repair={repair} mode={mode}/>)}</div>}
     </Card>
   </div>;
 }

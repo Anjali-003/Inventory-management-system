@@ -92,7 +92,8 @@ const GROUPS = [
     label: "4 · Production",
     items: [
       { to: "/production", label: "Production", icon: Factory, module: "production" },
-      { to: "/repair-register", label: "Repair Register", icon: Wrench, module: "repairRegister" },
+      { to: "/repair-production", label: "Repair Production", icon: Wrench, module: "repairProduction" },
+      { to: "/repair-qc", label: "Repair QC", icon: ClipboardCheck, module: "repairQc" },
       { to: "/quality-control", label: "Quality Check (QC)", icon: ClipboardCheck, module: "qualityControl" },
       { to: "/qc-failed", label: "QC Failed / Rework", icon: Wrench, module: "qcFailed" },
     ],
@@ -100,6 +101,7 @@ const GROUPS = [
   {
     label: "5 · Dispatch",
     items: [
+      { to: "/repair-dispatch", label: "Repair Dispatch", icon: Truck, module: "repairDispatch" },
       { to: "/finished-goods", label: "Finished Goods & Dispatch", icon: PackageCheck, module: "finishedGoods" },
     ],
   },
@@ -229,7 +231,7 @@ const ROLE_GROUPS = {
         DASHBOARD,
         { to: "/production", label: "Production", icon: Factory, module: "production" },
         { to: "/qc-failed", label: "Rework (QC failed)", icon: Wrench, module: "qcFailed" },
-        { to: "/repair-register", label: "Customer Repairs", icon: Wrench, module: "repairRegister" },
+        { to: "/repair-production", label: "Repair Production", icon: Wrench, module: "repairProduction" },
       ],
     },
     {

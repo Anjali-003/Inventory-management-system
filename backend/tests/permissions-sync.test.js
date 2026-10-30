@@ -13,8 +13,9 @@ const backend = require("../src/middleware/permissions.js");
 // frontend-only page keys (no API module of that name) and backend-only API modules (no page of that name)
 const FRONTEND_ONLY = new Set(["dashboard", "storeMaterialRequests", "activity", "orders"]);
 const BACKEND_ONLY = new Set(["materialRequests", "repairs"]);
-// the three repair pages all use the one repairs API module
-const REPAIR_PAGES = ["repairRequests", "repairApprovals", "repairRegister"];
+// Repair Requests, Repair Approvals and the three stage workspaces share one repairs API module.
+const REPAIR_PAGES = ["repairRequests", "repairApprovals", "repairProduction", "repairQc", "repairDispatch"];
+
 
 const level = (view, edit) => (edit ? "edit" : view ? "view" : null);
 const modulesOf = (rule) => (rule === "*" ? [] : Object.keys(rule));
@@ -38,6 +39,23 @@ describe("frontend and backend role tables agree", () => {
       expect(diffs).toEqual([]);
     });
   }
+
+
+  it("assigns each repair workspace to the intended roles", () => {
+    expect(canEdit("PRODUCTION_MANAGER", "repairProduction")).toBe(true);
+    expect(canView("PRODUCTION_MANAGER", "repairQc")).toBe(false);
+    expect(canView("PRODUCTION_MANAGER", "repairDispatch")).toBe(false);
+
+    for (const module of ["repairProduction", "repairQc", "repairDispatch"]) {
+      expect(canEdit("PRODUCTION_ADMIN", module)).toBe(true);
+    }
+
+    expect(canEdit("QUALITY_FG_MANAGER", "repairProduction")).toBe(false);
+    expect(canEdit("QUALITY_FG_MANAGER", "repairQc")).toBe(true);
+    expect(canEdit("QUALITY_FG_MANAGER", "repairDispatch")).toBe(true);
+    expect(canView("MARKETING_MANAGER", "repairRequests")).toBe(true);
+    expect(canView("MARKETING_MANAGER", "repairProduction")).toBe(false);
+  });
 
   it("the Store page for production material follows the API module", () => {
     // the Store's "Issue to Production" page (storeMaterialRequests) uses the materialRequests API

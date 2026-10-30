@@ -269,7 +269,9 @@ export const MODULE_PATHS = {
   marketingOrders: "/marketing-orders",
   repairRequests: "/repair-requests",
   repairApprovals: "/repair-approvals",
-  repairRegister: "/repair-register",
+  repairProduction: "/repair-production",
+  repairQc: "/repair-qc",
+  repairDispatch: "/repair-dispatch",
   orderApprovals: "/order-approvals",
   approvedOrders: "/approved-orders",
 };
@@ -331,7 +333,7 @@ const ACCESS = {
   // Production Manager handles production.
   PRODUCTION_MANAGER: {
     dashboard: "view",
-    repairRegister: "edit",
+    repairProduction: "edit",
     orderTracker: "view", // "waiting for you" on the dashboard
     production: "edit",
     qcFailed: "edit",
@@ -347,7 +349,9 @@ const ACCESS = {
   PRODUCTION_ADMIN: {
     dashboard: "view",
     repairApprovals: "edit",
-    repairRegister: "edit",
+    repairProduction: "edit",
+    repairQc: "edit",
+    repairDispatch: "edit",
     production: "edit",
     qualityControl: "edit",
     qcFailed: "edit",
@@ -360,7 +364,8 @@ const ACCESS = {
   // Quality Control & Finished Goods workspace.
   QUALITY_FG_MANAGER: {
     dashboard: "view",
-    repairRegister: "edit",
+    repairQc: "edit",
+    repairDispatch: "edit",
     orderTracker: "view", // "waiting for you" on the dashboard
     qualityControl: "edit",
     finishedGoods: "view",

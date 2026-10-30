@@ -8,7 +8,7 @@ const MARKETING = new Set(["MARKETING_MANAGER", "SUPER_ADMIN"]);
 const APPROVERS = new Set(["PRODUCTION_ADMIN", "SUPER_ADMIN"]);
 const PRODUCTION = new Set(["PRODUCTION_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"]);
 const QC = new Set(["QUALITY_FG_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"]);
-const RETURNERS = new Set(["MARKETING_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"]);
+const RETURNERS = new Set(["QUALITY_FG_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"]);
 const roleOf = (user) => String(user && user.role || "").toUpperCase();
 const positiveInt = (value, label) => {
   const n = Number(value);
@@ -111,7 +111,7 @@ async function decide(id, body, user) {
     await conn.query(`UPDATE repair_requests SET status = ?, approval_remarks = ?, approved_by = ?, approved_at = NOW() WHERE id = ?`, [next, remarks, user.id, id]);
     await addEvent(conn, id, user.id, decision, r.status, next, null, remarks);
     await notifications.notify(conn, { role: "MARKETING_MANAGER", type: decision === "APPROVE" ? "REPAIR_APPROVED" : "REPAIR_REJECTED", title: `Repair ${r.repair_number || `#${id}`} ${decision === "APPROVE" ? "approved" : "rejected"}`, body: remarks || "The repair request has been reviewed.", severity: decision === "APPROVE" ? "success" : "warning", link: "/repair-requests", payload: { repair_id: id }, userId: user.id });
-    if (decision === "APPROVE") await notifications.notify(conn, { role: "PRODUCTION_MANAGER", type: "REPAIR_APPROVED", title: `Repair ${r.repair_number} ready for production`, body: `Repair ${r.requested_quantity} items and update progress in Repair Register.`, severity: "action", link: "/repair-register", payload: { repair_id: id }, userId: user.id });
+    if (decision === "APPROVE") await notifications.notify(conn, { role: "PRODUCTION_MANAGER", type: "REPAIR_APPROVED", title: `Repair ${r.repair_number} ready for production`, body: `Repair ${r.requested_quantity} items and update progress in Repair Production.`, severity: "action", link: "/repair-production", payload: { repair_id: id }, userId: user.id });
     return getOne(id, conn);
   });
 }
@@ -131,7 +131,7 @@ async function updateProgress(id, body, user) {
     const nextQty = r.repaired_quantity + quantity;
     await conn.query(`UPDATE repair_requests SET repaired_quantity = ?, diagnosis = COALESCE(?, diagnosis), repair_notes = COALESCE(?, repair_notes), status = 'READY_FOR_QC' WHERE id = ?`, [nextQty, diagnosis, notes, id]);
     await addEvent(conn, id, user.id, "REPAIR_PROGRESS", r.status, "READY_FOR_QC", quantity, notes || diagnosis);
-    await notifications.notify(conn, { role: "QUALITY_FG_MANAGER", type: "REPAIR_READY_FOR_QC", title: `Repair ${r.repair_number} ready for QC`, body: `${nextQty} of ${r.requested_quantity} item(s) have been repaired; inspect the untested quantity.`, severity: "action", link: "/repair-register", payload: { repair_id: id }, userId: user.id });
+    await notifications.notify(conn, { role: "QUALITY_FG_MANAGER", type: "REPAIR_READY_FOR_QC", title: `Repair ${r.repair_number} ready for QC`, body: `${nextQty} of ${r.requested_quantity} item(s) have been repaired; inspect the untested quantity.`, severity: "action", link: "/repair-qc", payload: { repair_id: id }, userId: user.id });
     return getOne(id, conn);
   });
 }
@@ -158,14 +158,14 @@ async function inspect(id, body, user) {
     const status = decision === "FAIL" ? "QC_FAILED" : (repairedQty > passedQty ? "READY_FOR_QC" : (passedQty > r.dispatched_quantity ? "QC_PASSED" : "APPROVED"));
     await conn.query(`UPDATE repair_requests SET repaired_quantity = ?, qc_passed_quantity = ?, qc_remarks = ?, status = ? WHERE id = ?`, [repairedQty, passedQty, remarks, status, id]);
     await addEvent(conn, id, user.id, `QC_${decision}`, r.status, status, quantity, remarks);
-    if (decision === "FAIL") await notifications.notify(conn, { role: "PRODUCTION_MANAGER", type: "REPAIR_QC_FAILED", title: `Repair ${r.repair_number} needs rework`, body: `${quantity} item(s) failed QC. ${remarks}`, severity: "action", link: "/repair-register", payload: { repair_id: id }, userId: user.id });
+    if (decision === "FAIL") await notifications.notify(conn, { role: "PRODUCTION_MANAGER", type: "REPAIR_QC_FAILED", title: `Repair ${r.repair_number} needs rework`, body: `${quantity} item(s) failed QC. ${remarks}`, severity: "action", link: "/repair-production", payload: { repair_id: id }, userId: user.id });
     if (decision === "PASS") await notifications.notify(conn, { role: "MARKETING_MANAGER", type: "REPAIR_QC_PASSED", title: `Repair ${r.repair_number} passed QC`, body: `${quantity} additional item(s) passed inspection.`, severity: "success", link: "/repair-requests", payload: { repair_id: id }, userId: user.id });
     return getOne(id, conn);
   });
 }
 
 async function dispatch(id, body, user) {
-  if (!RETURNERS.has(roleOf(user))) throw AppError.forbidden("Only Marketing or Production Admin can record the repaired items as dispatched.");
+  if (!RETURNERS.has(roleOf(user))) throw AppError.forbidden("Only Production Admin or Quality Control & Finished Goods can record repaired items as dispatched.");
   const quantity = positiveInt(body.quantity, "Dispatch quantity");
   const reference = optionalText(body.dispatchReference, 120);
   if (!reference) throw new AppError(422, "Dispatch reference is required", "VALIDATION");

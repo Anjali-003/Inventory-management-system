@@ -37,7 +37,9 @@ const ToBill = lazy(() => import("@/sales/billing/ToBill"));
 const Customers = lazy(() => import("@/sales/billing/Customers"));
 const RepairRequests = lazy(() => import("@/production/repairs/RepairRequests"));
 const RepairApprovals = lazy(() => import("@/production/repairs/RepairApprovals"));
-const RepairRegister = lazy(() => import("@/production/repairs/RepairRegister"));
+const RepairProduction = lazy(() => import("@/production/repairs/RepairProduction"));
+const RepairQC = lazy(() => import("@/production/repairs/RepairQC"));
+const RepairDispatch = lazy(() => import("@/production/repairs/RepairDispatch"));
 
 /** { path, module (see MODULE_PATHS in lib/permissions.js), Page, title } */
 //Page batata hai kya render karna hai, module batata hai kis permission ko check karna hai, aur path batata hai kis URL par route match karna hai.
@@ -68,7 +70,9 @@ export const PAGES = [
   { path: "/marketing-orders", module: "marketingOrders", Page: MarketingOrders, title: "Marketing orders" },
   { path: "/repair-requests", module: "repairRequests", Page: RepairRequests, title: "Repair requests" },
   { path: "/repair-approvals", module: "repairApprovals", Page: RepairApprovals, title: "Repair approvals" },
-  { path: "/repair-register", module: "repairRegister", Page: RepairRegister, title: "Repair register" },
+  { path: "/repair-production", module: "repairProduction", Page: RepairProduction, title: "Repair production" },
+  { path: "/repair-qc", module: "repairQc", Page: RepairQC, title: "Repair QC" },
+  { path: "/repair-dispatch", module: "repairDispatch", Page: RepairDispatch, title: "Repair dispatch" },
   { path: "/order-approvals", module: "orderApprovals", Page: OrderApprovals, title: "Orders to approve" },
   { path: "/approved-orders", module: "approvedOrders", Page: ApprovedOrders, title: "Approved orders" },
   // the four Store dashboard figures in one place; needs the same access as the store pages it lists (see lib/permissions.js)

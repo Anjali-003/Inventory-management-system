@@ -10,7 +10,7 @@ import { renderApp } from "./renderApp";
 
 const ROLES = [
   "SUPER_ADMIN", "MARKETING_MANAGER", "OPERATIONS_ADMIN", "PURCHASE_MANAGER", "IQC_MANAGER",
-  "STORE_MANAGER", "PRODUCTION_MANAGER", "QUALITY_FG_MANAGER", "HR_MANAGER",
+  "STORE_MANAGER", "PRODUCTION_MANAGER", "PRODUCTION_ADMIN", "QUALITY_FG_MANAGER", "HR_MANAGER",
 ];
 
 /* rendered, the lazy page loaded, and its data in: the "loading page" fallback is gone and nothing crashed */
