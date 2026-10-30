@@ -10,8 +10,8 @@ import { cn } from "@/lib/utils"
 import OrderDisplayNumber from "@/components/OrderDisplayNumber"
 
 const STAGES = [
-  { key: "failed", status: "NEEDS_REWORK", label: "QC Failed", description: "Review the original QC failure, record the fix and submit the batch for retesting.", tone: "danger", icon: AlertTriangle },
-  { key: "ready", status: "READY_FOR_QC", label: "Ready for QC", description: "These batches have been submitted and are waiting for a QC retest decision.", tone: "success", icon: ClipboardCheck },
+  { key: "failed", status: "NEEDS_REWORK", label: "To rework", description: "Batches that failed QC and need a correction.", tone: "danger", icon: AlertTriangle },
+  { key: "ready", status: "READY_FOR_QC", label: "Sent for QC", description: "Corrected batches waiting for another QC decision.", tone: "success", icon: ClipboardCheck },
 ]
 
 function formatWhen(value) {
@@ -29,7 +29,7 @@ function StageBadge({ status }) {
   const labels = {
     NEEDS_REWORK: "Needs rework",
     IN_PROGRESS: "Correction started",
-    READY_FOR_QC: "Ready for QC retest",
+    READY_FOR_QC: "Sent for QC",
   }
 
   return (
@@ -83,10 +83,10 @@ function ReworkCard({ item, editable, busy, onSubmit }) {
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600"><ClipboardCheck className="size-3.5" /> Attempt {item.rework_attempt_number || 1}</span>
           {canSubmit ? (
             <MktBtn type="button" variant="primary" size="md" className="w-full sm:w-auto" onClick={() => onSubmit(item)} disabled={busy}>
-              <Wrench className="size-4" /> Record fix &amp; submit <ArrowRight className="size-4" />
+              <Wrench className="size-4" /> Submit correction for QC <ArrowRight className="size-4" />
             </MktBtn>
           ) : status === "READY_FOR_QC" ? (
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800"><PackageCheck className="size-4" /> QC team has the batch</span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800"><PackageCheck className="size-4" /> Waiting for QC</span>
           ) : (
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600"><Clock3 className="size-4" /> View only</span>
           )}
@@ -98,20 +98,14 @@ function ReworkCard({ item, editable, busy, onSubmit }) {
 
 function StageSection({ stage, items, loading, editable, busy, onSubmit, view = "cards" }) {
   const Icon = stage.icon
-
   return (
-    <section className="overflow-hidden rounded-2xl border-2 border-slate-300 bg-white shadow-sm">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-slate-200 bg-slate-50 px-4 py-4 sm:px-5">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", stage.tone === "danger" ? "bg-rose-100 text-rose-800" : stage.tone === "warning" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800")}>
-            <Icon className="size-5" aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <h3 className="text-lg font-extrabold leading-tight text-slate-950">{stage.label}</h3>
-            <p className="mt-1 text-sm leading-snug text-slate-700">{stage.description}</p>
-          </div>
+    <section className="overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/30 px-4 py-3 sm:px-5">
+        <div className="min-w-0">
+          <h3 className="text-base font-bold leading-tight text-foreground">{stage.label}</h3>
+          <p className="mt-1 text-sm leading-snug text-muted-foreground">{stage.description}</p>
         </div>
-        <span className={cn("inline-flex shrink-0 rounded-full px-3 py-1 text-xs font-bold tabular-nums", stage.tone === "danger" ? "bg-rose-100 text-rose-800" : stage.tone === "warning" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800")}>
+        <span className={cn("inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold tabular-nums", stage.tone === "danger" ? "bg-rose-50 text-rose-800" : stage.tone === "warning" ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800")}>
           {loading ? "…" : `${items.length} ${items.length === 1 ? "batch" : "batches"}`}
         </span>
       </header>
@@ -122,10 +116,10 @@ function StageSection({ stage, items, loading, editable, busy, onSubmit, view = 
           <div className="h-48 animate-pulse rounded-xl bg-slate-100" />
         </div>
       ) : items.length === 0 ? (
-        <EmptyState icon={Icon} title={stage.key === "failed" ? "No QC-failed batches" : "No batches waiting for QC retest"}>
+        <EmptyState icon={Icon} title={stage.key === "failed" ? "No batches to rework" : "No batches sent for QC"}>
           {stage.key === "failed"
-            ? "Batches that fail QC appear here with the original failure remark. Record the correction and submit the batch for retesting."
-            : "After the correction is submitted, the batch appears here while it waits for the QC team to make the next Pass/Fail decision."}
+            ? "Batches that fail QC appear here with the original failure remark. Record the correction and send the batch for another QC check."
+            : "After you submit a correction, the batch appears here until QC makes the next Pass/Fail decision."}
         </EmptyState>
       ) : (
         <>
@@ -147,7 +141,7 @@ function StageSection({ stage, items, loading, editable, busy, onSubmit, view = 
                   <TableCell className="whitespace-normal align-top"><p className="font-semibold tabular-nums">{Number(item.quantity_completed || 0).toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">of {Number(item.ordered_quantity || 0).toLocaleString()}</p></TableCell>
                   <TableCell className="min-w-0 whitespace-normal align-top"><StageBadge status={status} /><p className="mt-2 text-xs text-muted-foreground">{status === "READY_FOR_QC" ? `Retest attempt ${attempt + 1}` : `QC attempt ${attempt}`}</p></TableCell>
                   <TableCell className="min-w-0 whitespace-normal align-top"><p className="text-[10px] font-bold uppercase tracking-wide text-rose-800">Original failure</p><p className="mt-1 break-words whitespace-pre-wrap text-sm leading-relaxed">{item.qc_remarks || "No failure remark recorded."}</p>{status !== "NEEDS_REWORK" && <><p className="mt-3 text-[10px] font-bold uppercase tracking-wide text-emerald-800">Correction notes</p><p className="mt-1 break-words whitespace-pre-wrap text-sm leading-relaxed">{item.rework_remarks || "No repair notes recorded yet."}</p></>}</TableCell>
-                  <TableCell className="min-w-0 whitespace-normal align-top"><p className="mb-2 break-words text-xs text-muted-foreground">{status === "READY_FOR_QC" ? `Submitted ${formatWhen(item.rework_submitted_at)}` : status === "IN_PROGRESS" ? `Started ${formatWhen(item.rework_started_at)}` : `Failed ${formatWhen(item.qc_decided_at)}`}</p>{canSubmit ? <MktBtn type="button" variant="primary" size="sm" className="whitespace-normal" onClick={() => onSubmit(item)} disabled={busy}><Wrench className="size-3.5" /> Record fix &amp; submit</MktBtn> : status === "READY_FOR_QC" ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800"><PackageCheck className="size-4" /> Waiting for QC</span> : <span className="text-xs font-semibold text-slate-600">View only</span>}</TableCell>
+                  <TableCell className="min-w-0 whitespace-normal align-top"><p className="mb-2 break-words text-xs text-muted-foreground">{status === "READY_FOR_QC" ? `Submitted ${formatWhen(item.rework_submitted_at)}` : status === "IN_PROGRESS" ? `Started ${formatWhen(item.rework_started_at)}` : `Failed ${formatWhen(item.qc_decided_at)}`}</p>{canSubmit ? <MktBtn type="button" variant="primary" size="sm" className="whitespace-normal" onClick={() => onSubmit(item)} disabled={busy}><Wrench className="size-3.5" /> Submit correction for QC</MktBtn> : status === "READY_FOR_QC" ? <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800"><PackageCheck className="size-4" /> Waiting for QC</span> : <span className="text-xs font-semibold text-slate-600">View only</span>}</TableCell>
                 </TableRow>
               })}</TableBody>
             </Table>
@@ -186,7 +180,6 @@ export default function ReworkWorkspace({ items = [], loading = false, editable 
     })
     return { failed: sort(failed), ready: sort(ready) }
   }, [items, query, productFilter, fromDate, toDate, sortBy])
-  const openTasks = groups.failed.length + groups.ready.length
   const currentStage = STAGES.find((stage) => stage.key === activeStage) || STAGES[0]
   const clearToolbarFilters = () => { setProductFilter("all"); setFromDate(""); setToDate("") }
   const toolbarFilters = [
@@ -205,49 +198,36 @@ export default function ReworkWorkspace({ items = [], loading = false, editable 
   ]
 
   return (
-    <div className="min-w-0 space-y-5">
-      <section className="relative overflow-hidden rounded-[20px] border-2 border-slate-300 bg-white shadow-sm">
-        <div className="relative flex flex-wrap items-start justify-between gap-4 border-b-2 border-slate-200 bg-gradient-to-r from-rose-50 via-white to-white px-5 py-5 sm:px-6">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-rose-100 text-rose-800"><Wrench className="size-5" /></span>
-            <div className="min-w-0">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-rose-800">QC recovery</p>
-              <h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">QC Failed</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-700">Review the failure remark and submit the completed correction for QC retest. Only a QC PASS can release a batch to Finished Goods.</p>
-            </div>
-          </div>
-          <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700">
-            <span className="size-2 rounded-full bg-rose-600" /> {loading ? "Loading tasks…" : `${openTasks} open ${openTasks === 1 ? "task" : "tasks"}`}
-          </span>
-        </div>
-        <div className="px-3 pt-3 sm:px-5 sm:pt-5">
-          <div role="tablist" aria-label="QC failed views" className="grid grid-cols-1 gap-2 rounded-2xl border-2 border-slate-200 bg-slate-50 p-2 sm:grid-cols-2">
-            {STAGES.map((stage) => {
-              const Icon = stage.icon
-              const selected = activeStage === stage.key
-              const activeStyle = stage.key === "failed"
-                ? "border-rose-700 bg-rose-700 text-white shadow-sm"
-                : "border-emerald-700 bg-emerald-700 text-white shadow-sm"
-              return (
-                <button key={stage.key} type="button" role="tab" aria-selected={selected} onClick={() => setActiveStage(stage.key)} className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${selected ? activeStyle : "border-slate-200 bg-white text-slate-800 hover:bg-slate-100"}`}>
-                  <span className="flex min-w-0 items-center gap-2.5"><Icon className="size-5 shrink-0" aria-hidden /><span className="text-sm font-extrabold sm:text-base">{stage.label}</span></span>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold tabular-nums ${selected ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"}`}>{loading ? "…" : groups[stage.key].length}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-        <div className="border-b border-slate-200 bg-slate-50/70 px-3 py-3 sm:px-5">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <div className="min-w-0 flex-1 sm:max-w-md"><SearchField value={query} onChange={setQuery} placeholder="Search order, product, SKU or failure remark..." /></div>
-            <p className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-slate-600">{groups[currentStage.key].length} batch{groups[currentStage.key].length === 1 ? "" : "es"}</p>
-            <ListViewControls view={view} onViewChange={setView} sortBy={sortBy} onSortChange={setSortBy} sortOptions={sortOptions} filters={toolbarFilters} onClearFilters={clearToolbarFilters} hasActiveFilters={productFilter !== "all" || !!fromDate || !!toDate} />
-          </div>
-        </div>
-        <div className="space-y-5 p-3 sm:p-5">
-          <StageSection stage={currentStage} items={groups[currentStage.key]} loading={loading} editable={editable} busy={busy} onSubmit={onSubmitRework} view={view} />
+    <div className="min-w-0 space-y-4">
+      <div role="tablist" aria-label="Filter QC rework batches" className="inline-flex max-w-full flex-wrap gap-1 rounded-xl border border-border bg-white p-1">
+        {STAGES.map((stage) => {
+          const selected = activeStage === stage.key
+          return (
+            <button
+              key={stage.key}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setActiveStage(stage.key)}
+              className={`inline-flex min-h-9 items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${selected ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-muted"}`}
+            >
+              <span>{stage.label}</span>
+              <span className={`min-w-5 rounded-full px-1.5 text-xs tabular-nums ${selected ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}>{loading ? "…" : groups[stage.key].length}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      <section className="overflow-hidden rounded-xl border border-border bg-white p-3 shadow-sm sm:p-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1 sm:max-w-md"><SearchField value={query} onChange={setQuery} placeholder="Search order, product, SKU or failure remark..." /></div>
+          <p className="ml-auto shrink-0 text-xs font-semibold tabular-nums text-slate-600">{groups[currentStage.key].length} result{groups[currentStage.key].length === 1 ? "" : "s"}</p>
+          <ListViewControls view={view} onViewChange={setView} sortBy={sortBy} onSortChange={setSortBy} sortOptions={sortOptions} filters={toolbarFilters} onClearFilters={clearToolbarFilters} hasActiveFilters={productFilter !== "all" || !!fromDate || !!toDate} />
         </div>
       </section>
+      <div className="space-y-4">
+        <StageSection stage={currentStage} items={groups[currentStage.key]} loading={loading} editable={editable} busy={busy} onSubmit={onSubmitRework} view={view} />
+      </div>
     </div>
   )
 }

@@ -1,10 +1,12 @@
 import { useCallback, useMemo, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
-import { CheckCircle2, ClipboardCheck, PackageCheck, RefreshCw, XCircle } from "lucide-react"
+import { useSearchParams } from "react-router-dom"
+import { CheckCircle2, ClipboardCheck, RefreshCw } from "lucide-react"
 import { useDispatch } from "react-redux"
 import { useToast } from "@/components/toast"
-import { HeroButton, MktHero, SearchField } from "@/components/saturday/kit"
+import { SearchField } from "@/components/saturday/kit"
+import { Button } from "@/components/ui/button"
 import ListViewControls from "@/components/ListViewControls"
+import { FilterTabs } from "@/components/PageKit"
 import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import { usePermissions } from "@/core/auth/usePermissions"
 import { useGetQualityControlQuery } from "@/production/quality-control/qualityControlApi"
@@ -25,7 +27,6 @@ const monthName = (key) => new Date(`${key}-01T00:00:00`).toLocaleDateString("en
 const searchText = (item) => `${item.orderNumber || ""} ${item.productName || ""} ${item.productSku || ""} ${item.decisionRemarks || ""} ${(item.decisionHistory || []).map((attempt) => `${attempt.remarks || ""} ${attempt.reworkRemarks || ""}`).join(" ")}`.toLowerCase()
 
 export default function QualityControl() {
-  const navigate = useNavigate()
   const [params] = useSearchParams()
   const linkedMonth = MONTH_RE.test(params.get("month") || "") ? params.get("month") : null
   const dispatch = useDispatch()
@@ -111,24 +112,10 @@ export default function QualityControl() {
     { value: "oldest", label: "Oldest QC decision first" },
     { value: "retest", label: "Highest retest attempt" },
   ]
-  const counts = useMemo(() => ({
-    pending: rows.filter((item) => !item.batchDecision).length,
-    passed: rows.filter((item) => item.latestDecision === "PASS" || item.legacyFinishedGoodsPass).length,
-    failed: rows.filter((item) => item.latestDecision === "FAIL" && item.reworkStatus !== "READY_FOR_QC").length,
-    released: rows.filter((item) => item.finishedGoodsId).length,
-  }), [rows])
-
   const switchActiveView = (nextView) => {
     setActiveView(nextView)
     if (nextView === "history" && sortBy === "waiting") setSortBy("oldest")
   }
-
-  const summaryCards = [
-    { key: "pending", label: "Pending QC", value: counts.pending, hint: "Completed batches awaiting decision", icon: ClipboardCheck, tone: "amber" },
-    { key: "passed", label: "Passed batches", value: counts.passed, hint: "Latest decision is Pass", icon: CheckCircle2, tone: "green" },
-    { key: "failed", label: "Failed batches", value: counts.failed, hint: "Require rework or retest", icon: XCircle, tone: "rose" },
-    { key: "released", label: "Sent to Finished Goods", value: counts.released, hint: "Released for packaging", icon: PackageCheck, tone: "teal" },
-  ]
 
   const refresh = useCallback(async () => {
     setActionError("")
@@ -179,15 +166,16 @@ export default function QualityControl() {
 
   return (
     <div className="min-w-0 space-y-4">
-      <MktHero
-        eyebrow="Quality & release"
-        title="Quality Control"
-        description="Review completed production batches, record Pass/Fail decisions and send failed batches back for correction."
-      >
-        <HeroButton variant="glass" onClick={refresh} disabled={loading || isFetching} aria-label="Refresh quality control">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-primary">Quality &amp; production</p>
+          <h1 className="mt-0.5 text-2xl font-bold leading-tight tracking-tight text-foreground">Quality Control</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Inspect completed production batches and record one Pass or Fail decision per batch.</p>
+        </div>
+        <Button type="button" variant="outline" onClick={refresh} disabled={loading || isFetching} aria-label="Refresh quality control">
           <RefreshCw className={isFetching ? "animate-spin" : ""} /> Refresh
-        </HeroButton>
-      </MktHero>
+        </Button>
+      </header>
 
       {error && (
         <div role="alert" className="rounded-2xl border-2 border-rose-200 bg-rose-50 px-4 py-3 text-rose-900 sm:px-5">
@@ -196,73 +184,14 @@ export default function QualityControl() {
         </div>
       )}
 
-      <section className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
-        {summaryCards.map(({ key, label, value, hint, icon: Icon, tone }) => {
-          const toneStyles = {
-            amber: { edge: "bg-gradient-to-r from-amber-700 to-orange-800", icon: "bg-gradient-to-br from-amber-700 to-orange-800", text: "text-amber-800" },
-            green: { edge: "bg-gradient-to-r from-emerald-700 to-teal-800", icon: "bg-gradient-to-br from-emerald-700 to-teal-800", text: "text-emerald-800" },
-            rose: { edge: "bg-gradient-to-r from-rose-600 to-red-800", icon: "bg-gradient-to-br from-rose-600 to-red-800", text: "text-rose-800" },
-            teal: { edge: "bg-gradient-to-r from-teal-700 to-cyan-800", icon: "bg-gradient-to-br from-teal-700 to-cyan-800", text: "text-teal-800" },
-          }[tone]
-          const openSummary = () => {
-            if (key === "pending") switchActiveView("pending")
-            else if (key === "passed") switchActiveView("history")
-            else if (key === "failed") navigate("/qc-failed")
-            else navigate("/finished-goods")
-          }
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={openSummary}
-              aria-label={`${label}: ${loading ? "loading" : value}. Open related work.`}
-              className="group relative min-w-0 overflow-hidden rounded-2xl border border-border bg-white p-4 text-left shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] outline-none transition-[border-color,box-shadow,transform] hover:-translate-y-0.5 hover:border-lp-rule hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary/40 sm:p-5"
-            >
-              <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${toneStyles.edge}`} />
-              <div className="flex min-w-0 items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold leading-snug text-slate-700 sm:text-sm">{label}</p>
-                  <p className={`mt-3 text-3xl font-extrabold leading-none tabular-nums sm:text-4xl ${toneStyles.text}`}>{loading ? "—" : value}</p>
-                </div>
-                <span className={`grid size-9 shrink-0 place-items-center rounded-xl text-white shadow-sm transition-transform group-hover:scale-105 sm:size-11 ${toneStyles.icon}`}>
-                  <Icon className="size-5 sm:size-6" aria-hidden />
-                </span>
-              </div>
-              <p className="mt-3 text-[11px] leading-snug text-slate-600 sm:text-xs">{hint}</p>
-              <span className="mt-3 inline-flex items-center text-[11px] font-semibold text-primary">Open details <span aria-hidden className="ml-1">→</span></span>
-            </button>
-          )
-        })}
-      </section>
-
-      <section aria-label="Quality Control views" className="grid min-w-0 grid-cols-1 gap-2 rounded-2xl border border-border bg-white p-1.5 sm:grid-cols-2 sm:p-2">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeView === "pending"}
-          onClick={() => switchActiveView("pending")}
-          className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${activeView === "pending" ? "border-emerald-700 bg-emerald-700 text-white shadow-sm" : "border-slate-200 bg-white text-slate-800 hover:bg-emerald-50"}`}
-        >
-          <span className="flex min-w-0 items-center gap-2.5">
-            <ClipboardCheck className="size-5 shrink-0" aria-hidden />
-            <span className="text-sm font-extrabold sm:text-base">Pending batches for QC</span>
-          </span>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold tabular-nums ${activeView === "pending" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"}`}>{pendingRows.length}</span>
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeView === "history"}
-          onClick={() => switchActiveView("history")}
-          className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 ${activeView === "history" ? "border-emerald-700 bg-emerald-700 text-white shadow-sm" : "border-slate-200 bg-white text-slate-800 hover:bg-emerald-50"}`}
-        >
-          <span className="flex min-w-0 items-center gap-2.5">
-            <CheckCircle2 className="size-5 shrink-0" aria-hidden />
-            <span className="text-sm font-extrabold sm:text-base">Previous QC tests</span>
-          </span>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-extrabold tabular-nums ${activeView === "history" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"}`}>{historyRows.length}</span>
-        </button>
-      </section>
+      <FilterTabs
+        label="Filter quality control batches"
+        layoutId="quality-control-tabs"
+        items={[
+          { key: "pending", label: "Open for QC", value: pendingRows.length, active: activeView === "pending", onClick: () => switchActiveView("pending") },
+          { key: "history", label: "QC history", value: historyRows.length, active: activeView === "history", onClick: () => switchActiveView("history") },
+        ]}
+      />
 
       <section className="overflow-hidden rounded-2xl border border-border bg-white p-3 shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)] sm:p-4">
         <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -281,13 +210,13 @@ export default function QualityControl() {
             <span className="font-semibold text-foreground tabular-nums">Passed first try: {firstTryPassed} of {firstTry.length}</span>
           </p>
         )}
-        <p className="mt-3 text-xs leading-relaxed text-slate-600">Only batches where completed production meets the full ordered quantity are listed.</p>
+        {activeView === "pending" && <p className="mt-3 text-xs leading-relaxed text-slate-600">Only fully completed production batches appear here.</p>}
       </section>
 
       {activeView === "pending" ? (
         <QcBatchSection
-          title="Pending batches for QC"
-          description="Review the completed batch, then choose Pass or Fail. The decision applies to the whole batch. Retest batches include the original failure and repair notes."
+          title="Open for QC"
+          description="Review each completed batch and record one Pass or Fail decision. The decision applies to the entire batch."
           icon={ClipboardCheck}
           kind="pending"
           items={pendingRows}
@@ -299,8 +228,8 @@ export default function QualityControl() {
         />
       ) : (
         <QcBatchSection
-          title="Previous QC tests"
-          description="Every QC attempt remains here, including the original failure remark, repair notes and the final release decision."
+          title="QC history"
+          description="Review previous QC decisions, including failures, corrections and retest results."
           icon={CheckCircle2}
           kind="history"
           items={historyRows}

@@ -7,7 +7,7 @@ import { baseApi } from "@/api/baseApi"
 import ReworkWorkspace from "@/production/production/components/ReworkWorkspace"
 import ReworkSubmitModal from "@/production/production/components/ReworkSubmitModal"
 import { errorMessage } from "@/lib/stock"
-import { HeroButton, MktHero } from "@/components/saturday/kit"
+import { Button } from "@/components/ui/button"
 import { Notice } from "@/components/feedback"
 import { useToast } from "@/components/toast"
 import { usePermissions } from "@/core/auth/usePermissions"
@@ -70,18 +70,19 @@ export default function QCFailed() {
   }
 
   return (
-    <>
-      <MktHero
-        eyebrow="Quality & Production"
-        title="QC Failed"
-        description="Review batches that failed Quality Control, record the correction, and submit them for retesting. Submitted batches move to Ready for QC."
-      >
-        <HeroButton variant="glass" onClick={load} disabled={loading} aria-label="Refresh QC failed batches">
+    <div className="min-w-0 space-y-4 pb-8">
+      <header className="mb-1 flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold text-primary">Quality &amp; production</p>
+          <h1 className="mt-0.5 text-2xl font-bold leading-tight tracking-tight text-foreground">QC Rework</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Correct batches that failed QC and send them back for another inspection.</p>
+        </div>
+        <Button type="button" variant="outline" onClick={load} disabled={loading} aria-label="Refresh QC rework batches">
           <RefreshCw className={loading ? "animate-spin" : ""} /> Refresh
-        </HeroButton>
-      </MktHero>
+        </Button>
+      </header>
 
-      {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
+      {error && <Notice title="Something went wrong">{error}</Notice>}
 
       <ReworkWorkspace
         items={items}
@@ -102,6 +103,6 @@ export default function QCFailed() {
           onSubmit={submitRework}
         />
       )}
-    </>
+    </div>
   )
 }

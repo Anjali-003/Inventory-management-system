@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ClipboardCheck, ImagePlus, Plus, RefreshCw, Send, Trash2, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/Modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterTabs, Panel } from "@/components/PageKit";
+import ListViewControls from "@/components/ListViewControls";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils";
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback";
 import { usePermissions } from "@/core/auth/usePermissions";
 import { MktHero, SearchField } from "@/sales/marketing-orders/mktKit";
@@ -38,6 +41,29 @@ const isReadyForDispatch = (repair) => ["QC_PASSED", "PARTIALLY_DISPATCHED"].inc
   && number(repair.qc_passed_quantity) === number(repair.requested_quantity)
   && number(repair.dispatched_quantity) < number(repair.requested_quantity);
 const sum = (rows, getValue) => rows.reduce((total, row) => total + getValue(row), 0);
+
+function repairActivityDate(repair, mode, section) {
+  if (mode === "requests") return repair.created_at;
+  if (mode === "approvals") return repair.approved_at || repair.created_at;
+
+  const actions = mode === "production"
+    ? ["REPAIR_PROGRESS", "APPROVE"]
+    : mode === "qc"
+      ? section === "awaiting" ? ["REPAIR_PROGRESS"] : ["QC_PASS", "QC_FAIL"]
+      : mode === "dispatch"
+        ? section === "ready" ? ["QC_PASS"] : ["DISPATCHED"]
+        : [];
+  const event = (repair.events || []).find((item) => actions.includes(item.action));
+  return event?.created_at || repair.updated_at || repair.approved_at || repair.created_at;
+}
+
+const repairQuantity = (repair, mode) => {
+  const requested = number(repair.requested_quantity);
+  if (mode === "production") return `${fmtQty(repair.repaired_quantity)} / ${fmtQty(requested)} repaired`;
+  if (mode === "qc") return `${fmtQty(repair.repaired_quantity)} / ${fmtQty(requested)} repaired`;
+  if (mode === "dispatch") return `${fmtQty(repair.qc_passed_quantity)} / ${fmtQty(requested)} QC passed`;
+  return `${fmtQty(requested)} requested`;
+}
 
 function Progress({ repair }) {
   const requested = number(repair.requested_quantity);
@@ -382,6 +408,47 @@ function RepairCard({ repair, mode }) {
   </>;
 }
 
+function RepairResultsTable({ repairs, mode, section }) {
+  const [expandedId, setExpandedId] = useState(null);
+  const dateLabel = mode === "requests" ? "Request date" : mode === "approvals" ? "Review date" : mode === "production" ? "Repair activity" : mode === "qc" ? "QC date" : "Dispatch date";
+
+  return <Panel className="overflow-hidden p-0">
+    <Table className="w-full table-fixed">
+      <TableHeader>
+        <TableRow className="hover:bg-transparent">
+          <TableHead className="w-[17%] whitespace-normal">Repair number</TableHead>
+          <TableHead className="w-[28%] whitespace-normal">Product / company</TableHead>
+          <TableHead className="w-[17%] whitespace-normal">Quantity</TableHead>
+          <TableHead className="w-[16%] whitespace-normal">Status</TableHead>
+          <TableHead className="w-[13%] whitespace-normal">{dateLabel}</TableHead>
+          <TableHead className="w-[9%] whitespace-normal text-right">Details</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {repairs.map((repair) => {
+          const expanded = expandedId === repair.id;
+          const activityDate = repairActivityDate(repair, mode, section);
+          return <Fragment key={repair.id}>
+            <TableRow>
+              <TableCell className="whitespace-normal align-top"><p className="break-words font-semibold tabular-nums">{repair.repair_number}</p><p className="mt-1 text-xs text-muted-foreground">{repair.customer_reference || "No customer reference"}</p></TableCell>
+              <TableCell className="whitespace-normal align-top"><p className="break-words font-medium">{repair.product_name || "Product unavailable"}</p><p className="mt-1 break-words text-xs text-muted-foreground">{repair.customer_name || "Customer not specified"}</p><p className="mt-1 break-words text-xs text-muted-foreground">{repair.product_sku || "SKU unavailable"}</p></TableCell>
+              <TableCell className="whitespace-normal align-top"><p className="break-words text-sm font-semibold tabular-nums">{repairQuantity(repair, mode)}</p><p className="mt-1 text-xs text-muted-foreground">{fmtQty(repair.requested_quantity)} total</p></TableCell>
+              <TableCell className="whitespace-normal align-top"><Badge variant={statusVariant(repair.status)}>{statusLabel[repair.status] || repair.status}</Badge></TableCell>
+              <TableCell className="whitespace-normal align-top text-xs text-muted-foreground">{activityDate ? fmtDateTime(activityDate) : "—"}</TableCell>
+              <TableCell className="whitespace-normal align-top text-right"><Button type="button" size="sm" variant="outline" aria-expanded={expanded} onClick={() => setExpandedId(expanded ? null : repair.id)}>{expanded ? "Hide" : "View"}</Button></TableCell>
+            </TableRow>
+            {expanded && <TableRow key={`${repair.id}-details`}>
+              <TableCell colSpan={6} className="whitespace-normal bg-muted/20 p-3 sm:p-4">
+                <div className="max-w-3xl"><RepairCard repair={repair} mode={mode} /></div>
+              </TableCell>
+            </TableRow>}
+          </Fragment>;
+        })}
+      </TableBody>
+    </Table>
+  </Panel>;
+}
+
 function SectionTabs({ value, onChange, items }) {
   return <FilterTabs
     label="Filter repair records by stage"
@@ -430,6 +497,12 @@ export default function RepairWorkspace({ mode }) {
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [section, setSection] = useState(config.initialSection);
+  const [productFilter, setProductFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
+  const [view, setView] = useState("cards");
   const requestTabs = [
     { key: "requests", label: "Open requests", count: repairs.filter((r) => !terminal(r)).length },
     { key: "history", label: "Completed / rejected", count: repairs.filter(terminal).length },
@@ -469,17 +542,50 @@ export default function RepairWorkspace({ mode }) {
       : isReadyForDispatch(r));
   }, [mode, repairs, section]);
 
+  const productOptions = useMemo(() => uniqueStringOptions(repairs, (repair) => repair.product_name), [repairs]);
+  const statusOptions = useMemo(() => [
+    { value: "all", label: "All statuses" },
+    ...[...new Set(repairs.map((repair) => repair.status).filter(Boolean))]
+      .sort((a, b) => (statusLabel[a] || a).localeCompare(statusLabel[b] || b))
+      .map((value) => ({ value, label: statusLabel[value] || value })),
+  ], [repairs]);
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
-    if (!needle) return sourceRows;
-    return sourceRows.filter((r) => [r.repair_number, r.product_name, r.product_sku, r.customer_name, r.customer_reference, r.problem_description, r.status, r.dispatch_reference].some((v) => String(v || "").toLocaleLowerCase().includes(needle)));
-  }, [sourceRows, query]);
+    return sourceRows.filter((repair) => {
+      if (productFilter !== "all" && repair.product_name !== productFilter) return false;
+      if (statusFilter !== "all" && repair.status !== statusFilter) return false;
+      if (!isWithinDateRange(repairActivityDate(repair, mode, section), fromDate, toDate)) return false;
+      if (!needle) return true;
+      return [repair.repair_number, repair.product_name, repair.product_sku, repair.customer_name, repair.customer_reference, repair.problem_description, repair.status, repair.dispatch_reference]
+        .some((value) => String(value || "").toLocaleLowerCase().includes(needle));
+    }).sort((a, b) => {
+      if (sortBy === "quantity-desc") return number(b.requested_quantity) - number(a.requested_quantity) || recordTimestamp(repairActivityDate(b, mode, section)) - recordTimestamp(repairActivityDate(a, mode, section));
+      if (sortBy === "quantity-asc") return number(a.requested_quantity) - number(b.requested_quantity) || recordTimestamp(repairActivityDate(b, mode, section)) - recordTimestamp(repairActivityDate(a, mode, section));
+      const difference = recordTimestamp(repairActivityDate(a, mode, section)) - recordTimestamp(repairActivityDate(b, mode, section));
+      return sortBy === "oldest" ? difference : -difference;
+    });
+  }, [sourceRows, query, productFilter, statusFilter, fromDate, toDate, sortBy, mode, section]);
+
+  const toolbarFilters = [
+    { key: "product", label: "Product", value: productFilter, options: productOptions, onChange: (value) => setProductFilter(value) },
+    { key: "status", label: "Status", value: statusFilter, options: statusOptions, onChange: setStatusFilter },
+    { key: "from-date", label: "Activity date from", type: "date", value: fromDate, onChange: setFromDate },
+    { key: "to-date", label: "Activity date to", type: "date", value: toDate, onChange: setToDate },
+  ];
+  const sortOptions = [
+    { value: "newest", label: "Latest activity first" },
+    { value: "oldest", label: "Oldest activity first" },
+    { value: "quantity-desc", label: "Largest quantity first" },
+    { value: "quantity-asc", label: "Smallest quantity first" },
+  ];
+  const clearToolbarFilters = () => { setProductFilter("all"); setStatusFilter("all"); setFromDate(""); setToDate(""); };
+  const hasActiveFilters = productFilter !== "all" || statusFilter !== "all" || Boolean(fromDate || toDate);
 
   const tabs = mode === "requests" ? requestTabs
     : mode === "approvals" ? approvalTabs
       : mode === "production" ? productionTabs
         : mode === "qc" ? qcTabs : dispatchTabs;
-  const emptyTitle = query
+  const emptyTitle = query || hasActiveFilters
     ? "No matching repair records"
     : mode === "approvals" && section === "pending" ? "No requests awaiting approval"
       : mode === "requests" && section === "history" ? "No repair history yet"
@@ -509,18 +615,27 @@ export default function RepairWorkspace({ mode }) {
     {error && <Notice title="Repair data could not be loaded">{errorText(error)}</Notice>}
 
     <SectionTabs value={section} onChange={setSection} items={tabs}/>
-    <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-4 md:bg-transparent md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
-      <SearchField className="min-w-0 flex-1 sm:max-w-md sm:flex-none" value={query} onChange={setQuery} placeholder="Search repair no., product, customer, status…" />
-      <div className="flex shrink-0 items-center gap-3 text-[13px] text-muted-foreground sm:flex-1 sm:justify-end" aria-live="polite">
-        <span className="tabular-nums">{filtered.length} result{filtered.length === 1 ? "" : "s"}{isFetching ? " · Updating…" : ""}</span>
-        {query.trim() && <button type="button" onClick={() => setQuery("")} className="whitespace-nowrap font-semibold text-primary hover:underline">Clear</button>}
+    <section className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 rounded-xl px-3 py-2.5 md:static md:mx-0 md:mt-4 md:bg-white md:p-3 md:shadow-sm md:backdrop-blur-none">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <SearchField className="min-w-0 flex-1 sm:max-w-md sm:flex-none" value={query} onChange={setQuery} placeholder="Search repair no., product, customer, status…" />
+        <div className="ml-auto shrink-0 text-[13px] text-muted-foreground" aria-live="polite">
+          <span className="tabular-nums">{filtered.length} result{filtered.length === 1 ? "" : "s"}{isFetching ? " · Updating…" : ""}</span>
+        </div>
+        <ListViewControls view={view} onViewChange={setView} sortBy={sortBy} onSortChange={setSortBy} sortOptions={sortOptions} filters={toolbarFilters} onClearFilters={clearToolbarFilters} hasActiveFilters={hasActiveFilters} />
       </div>
-    </div>
+      {(query.trim() || hasActiveFilters) && <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/70 pt-2">
+        {query.trim() && <button type="button" onClick={() => setQuery("")} className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground">Search: {query} ×</button>}
+        {hasActiveFilters && <button type="button" onClick={clearToolbarFilters} className="rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-primary hover:bg-accent">Clear filters</button>}
+      </div>}
+    </section>
 
     <div className="@container">
       {isLoading ? <Panel className="p-4"><TableSkeleton rows={4}/></Panel>
-        : filtered.length === 0 ? <Panel className="p-5"><EmptyState title={emptyTitle}>{query ? "Try another search term or clear the search field." : "New repair work will appear here when it reaches this stage."}</EmptyState></Panel>
-          : <div className="grid min-w-0 gap-3 @2xl:grid-cols-2">{filtered.map((repair) => <RepairCard key={repair.id} repair={repair} mode={mode}/>)}</div>}
+        : filtered.length === 0 ? <Panel className="p-5"><EmptyState title={emptyTitle}>{query || hasActiveFilters ? "Try changing the search or clearing the filters." : "New repair work will appear here when it reaches this stage."}</EmptyState></Panel>
+          : <>
+            {view === "table" && <div className="hidden min-w-0 xl:block"><RepairResultsTable repairs={filtered} mode={mode} section={section}/></div>}
+            <div className={`grid min-w-0 gap-3 @2xl:grid-cols-2 ${view === "table" ? "xl:hidden" : ""}`}>{filtered.map((repair) => <RepairCard key={repair.id} repair={repair} mode={mode}/>)}</div>
+          </>}
     </div>
   </div>;
 }

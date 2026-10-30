@@ -31,7 +31,7 @@ export default function ListViewControls({
         <button type="button" className={iconButton} title="Sort records" aria-label="Sort records" aria-expanded={sortOpen} onClick={() => { setSortOpen((open) => !open); setFilterOpen(false) }}>
           <ArrowDownWideNarrow className="size-4" aria-hidden />
         </button>
-        <button type="button" className={`${iconButton} hidden lg:inline-flex`} title={`Switch to ${switchTo} view`} aria-label={`Switch to ${switchTo} view`} onClick={() => onViewChange?.(switchTo)}>
+        <button type="button" className={`${iconButton} hidden xl:inline-flex`} title={`Switch to ${switchTo} view`} aria-label={`Switch to ${switchTo} view`} onClick={() => onViewChange?.(switchTo)}>
           <ViewIcon className="size-4" aria-hidden />
         </button>
       </div>
