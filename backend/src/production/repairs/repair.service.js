@@ -22,6 +22,33 @@ const optionalText = (value, max = 4000) => {
   return text || null;
 };
 
+function parseCustomerImage(image) {
+  if (image == null) return null;
+  if (!image || typeof image !== "object" || Array.isArray(image)) {
+    throw new AppError(422, "The attached picture is invalid.", "VALIDATION");
+  }
+
+  const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(String(image.dataUrl || ""));
+  if (!match) throw new AppError(422, "Attach a valid JPG, PNG or WEBP picture.", "VALIDATION");
+
+  const mimeType = match[1].toLowerCase();
+  const data = Buffer.from(match[2], "base64");
+  if (!data.length || data.length > 1024 * 1024) {
+    throw new AppError(422, "The compressed picture must be 1 MB or smaller.", "VALIDATION");
+  }
+
+  const validSignature = mimeType === "image/jpeg"
+    ? data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff
+    : mimeType === "image/png"
+      ? data.length >= 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+      : data.length >= 12 && data.toString("ascii", 0, 4) === "RIFF" && data.toString("ascii", 8, 12) === "WEBP";
+  if (!validSignature) throw new AppError(422, "The attached file does not match its image type.", "VALIDATION");
+
+  const rawName = String(image.fileName || "repair-picture").split(/[\\/]/).pop().trim();
+  const fileName = (rawName || "repair-picture").replace(/[\r\n\"<>]/g, "_").slice(0, 255);
+  return { data, mimeType, fileName: fileName || "repair-picture" };
+}
+
 async function addEvent(conn, repairId, userId, action, fromStatus, toStatus, quantity = null, remarks = null) {
   await conn.query(
     `INSERT INTO repair_events (repair_id, action, from_status, to_status, quantity, remarks, created_by)
@@ -34,12 +61,16 @@ async function getOne(id, conn = db) {
   const [rows] = await conn.query(
     `SELECT r.*, p.sku AS product_sku, p.name AS product_name,
             creator.name AS created_by_name, approver.name AS approved_by_name,
-            dispatcher.name AS dispatched_by_name
+            dispatcher.name AS dispatched_by_name,
+            attachment.file_name AS customer_image_file_name,
+            attachment.mime_type AS customer_image_mime_type,
+            attachment.file_size AS customer_image_file_size
      FROM repair_requests r
      JOIN products p ON p.id = r.product_id
      JOIN users creator ON creator.id = r.created_by
      LEFT JOIN users approver ON approver.id = r.approved_by
      LEFT JOIN users dispatcher ON dispatcher.id = r.dispatched_by
+     LEFT JOIN repair_attachments attachment ON attachment.repair_id = r.id
      WHERE r.id = ?`, [id]
   );
   if (!rows.length) throw AppError.notFound("Repair request not found", "NOT_FOUND");
@@ -48,7 +79,14 @@ async function getOne(id, conn = db) {
      FROM repair_events e JOIN users u ON u.id = e.created_by
      WHERE e.repair_id = ? ORDER BY e.id DESC LIMIT 100`, [id]
   );
-  return { ...rows[0], events };
+  const {
+    customer_image_file_name: imageName,
+    customer_image_mime_type: imageMimeType,
+    customer_image_file_size: imageSize,
+    ...repair
+  } = rows[0];
+  const customerImage = imageName ? { file_name: imageName, mime_type: imageMimeType, file_size: imageSize } : null;
+  return { ...repair, customer_image: customerImage, events };
 }
 
 async function list(user) {
@@ -78,6 +116,7 @@ async function create(body, user) {
   if (!customerName) throw new AppError(422, "Customer name is required", "VALIDATION");
   if (!problem) throw new AppError(422, "Describe the reported problem", "VALIDATION");
   const customerReference = optionalText(body.customerReference, 120);
+  const customerImage = parseCustomerImage(body.customerImage);
   return inTransaction(async (conn) => {
     const [products] = await conn.query(`SELECT id FROM products WHERE id = ? AND is_active = TRUE`, [productId]);
     if (!products.length) throw AppError.notFound("Product not found or inactive", "NOT_FOUND");
@@ -90,10 +129,30 @@ async function create(body, user) {
     const pad = (n) => String(n).padStart(2, "0");
     const repairNumber = `RPR-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${String(insert.insertId).padStart(4, "0")}`;
     await conn.query(`UPDATE repair_requests SET repair_number = ?, status = 'PENDING_APPROVAL' WHERE id = ?`, [repairNumber, insert.insertId]);
+    if (customerImage) {
+      await conn.query(
+        `INSERT INTO repair_attachments (repair_id, file_name, mime_type, file_size, file_data)
+         VALUES (?, ?, ?, ?, ?)`,
+        [insert.insertId, customerImage.fileName, customerImage.mimeType, customerImage.data.length, customerImage.data]
+      );
+    }
     await addEvent(conn, insert.insertId, user.id, "REQUEST_SUBMITTED", "DRAFT", "PENDING_APPROVAL", quantity, problem);
     await notifications.notify(conn, { role: "PRODUCTION_ADMIN", type: "REPAIR_REQUESTED", title: `Repair request ${repairNumber} needs approval`, body: `${quantity} × product repair requested by Marketing.`, severity: "action", link: "/repair-approvals", payload: { repair_number: repairNumber }, userId: user.id });
     return getOne(insert.insertId, conn);
   });
+}
+
+async function getImage(id) {
+  const [rows] = await db.query(
+    `SELECT file_name, mime_type, file_size, file_data FROM repair_attachments WHERE repair_id = ? LIMIT 1`, [id]
+  );
+  if (!rows.length) throw AppError.notFound("Repair picture not found", "NOT_FOUND");
+  return {
+    file_name: rows[0].file_name,
+    mime_type: rows[0].mime_type,
+    file_size: rows[0].file_size,
+    data: rows[0].file_data,
+  };
 }
 
 async function decide(id, body, user) {
@@ -125,65 +184,144 @@ async function updateProgress(id, body, user) {
     const [rows] = await conn.query(`SELECT * FROM repair_requests WHERE id = ? FOR UPDATE`, [id]);
     if (!rows.length) throw AppError.notFound("Repair request not found", "NOT_FOUND");
     const r = rows[0];
-    if (!["APPROVED", "IN_REPAIR", "QC_FAILED", "READY_FOR_QC", "QC_PASSED", "PARTIALLY_DISPATCHED"].includes(r.status)) throw AppError.conflict("This repair is not currently available for repair work.", "INVALID_STATUS");
+    if (!["APPROVED", "IN_REPAIR", "QC_FAILED", "READY_FOR_QC"].includes(r.status)) {
+      throw AppError.conflict("This repair is not currently available for repair work.", "INVALID_STATUS");
+    }
+
     const outstanding = r.requested_quantity - r.repaired_quantity;
+    if (outstanding <= 0) throw AppError.conflict("All requested items are already repaired and waiting for QC.", "INVALID_STATUS");
     if (quantity > outstanding) throw new AppError(422, `Only ${outstanding} item(s) remain to be repaired.`, "QUANTITY_EXCEEDED");
+
     const nextQty = r.repaired_quantity + quantity;
-    await conn.query(`UPDATE repair_requests SET repaired_quantity = ?, diagnosis = COALESCE(?, diagnosis), repair_notes = COALESCE(?, repair_notes), status = 'READY_FOR_QC' WHERE id = ?`, [nextQty, diagnosis, notes, id]);
-    await addEvent(conn, id, user.id, "REPAIR_PROGRESS", r.status, "READY_FOR_QC", quantity, notes || diagnosis);
-    await notifications.notify(conn, { role: "QUALITY_FG_MANAGER", type: "REPAIR_READY_FOR_QC", title: `Repair ${r.repair_number} ready for QC`, body: `${nextQty} of ${r.requested_quantity} item(s) have been repaired; inspect the untested quantity.`, severity: "action", link: "/repair-qc", payload: { repair_id: id }, userId: user.id });
+    const nextStatus = nextQty === r.requested_quantity ? "READY_FOR_QC" : "IN_REPAIR";
+    await conn.query(
+      `UPDATE repair_requests
+       SET repaired_quantity = ?, diagnosis = COALESCE(?, diagnosis), repair_notes = COALESCE(?, repair_notes), status = ?
+       WHERE id = ?`,
+      [nextQty, diagnosis, notes, nextStatus, id]
+    );
+    await addEvent(conn, id, user.id, "REPAIR_PROGRESS", r.status, nextStatus, quantity, notes || diagnosis);
+
+    if (nextStatus === "READY_FOR_QC") {
+      await notifications.notify(conn, {
+        role: "QUALITY_FG_MANAGER",
+        type: "REPAIR_READY_FOR_QC",
+        title: `Repair ${r.repair_number} ready for final QC`,
+        body: `All ${r.requested_quantity} requested item(s) have been repaired. Make one pass/fail decision for the complete repair batch.`,
+        severity: "action",
+        link: "/repair-qc",
+        payload: { repair_id: id },
+        userId: user.id,
+      });
+    }
+
     return getOne(id, conn);
   });
 }
 
 async function inspect(id, body, user) {
   if (!QC.has(roleOf(user))) throw AppError.forbidden("Only Quality Control can inspect repairs.");
-  const quantity = positiveInt(body.quantity, "QC quantity");
   const decision = String(body.decision || "").toUpperCase();
   if (!["PASS", "FAIL"].includes(decision)) throw new AppError(422, "Choose Pass or Fail", "VALIDATION");
   const remarks = optionalText(body.remarks, 4000);
   if (decision === "FAIL" && !remarks) throw new AppError(422, "A failure remark is required", "VALIDATION");
+
   return inTransaction(async (conn) => {
     const [rows] = await conn.query(`SELECT * FROM repair_requests WHERE id = ? FOR UPDATE`, [id]);
     if (!rows.length) throw AppError.notFound("Repair request not found", "NOT_FOUND");
     const r = rows[0];
-    const awaitingQc = r.repaired_quantity - r.qc_passed_quantity;
-    if (!awaitingQc || quantity > awaitingQc) throw new AppError(422, `Only ${Math.max(0, awaitingQc)} item(s) are awaiting QC.`, "QUANTITY_EXCEEDED");
-    const nextStatus = decision === "PASS"
-      ? ((r.qc_passed_quantity + quantity) === r.requested_quantity ? "QC_PASSED" : "READY_FOR_QC")
-      : "QC_FAILED";
-    const repairedQty = decision === "FAIL" ? r.repaired_quantity - quantity : r.repaired_quantity;
-    const passedQty = decision === "PASS" ? r.qc_passed_quantity + quantity : r.qc_passed_quantity;
-    // A failed unit returns to the repair queue, so it can be counted again when fixed.
-    const status = decision === "FAIL" ? "QC_FAILED" : (repairedQty > passedQty ? "READY_FOR_QC" : (passedQty > r.dispatched_quantity ? "QC_PASSED" : "APPROVED"));
-    await conn.query(`UPDATE repair_requests SET repaired_quantity = ?, qc_passed_quantity = ?, qc_remarks = ?, status = ? WHERE id = ?`, [repairedQty, passedQty, remarks, status, id]);
-    await addEvent(conn, id, user.id, `QC_${decision}`, r.status, status, quantity, remarks);
-    if (decision === "FAIL") await notifications.notify(conn, { role: "PRODUCTION_MANAGER", type: "REPAIR_QC_FAILED", title: `Repair ${r.repair_number} needs rework`, body: `${quantity} item(s) failed QC. ${remarks}`, severity: "action", link: "/repair-production", payload: { repair_id: id }, userId: user.id });
-    if (decision === "PASS") await notifications.notify(conn, { role: "MARKETING_MANAGER", type: "REPAIR_QC_PASSED", title: `Repair ${r.repair_number} passed QC`, body: `${quantity} additional item(s) passed inspection.`, severity: "success", link: "/repair-requests", payload: { repair_id: id }, userId: user.id });
+    const requested = Number(r.requested_quantity);
+    const repaired = Number(r.repaired_quantity);
+
+    if (r.status !== "READY_FOR_QC" || requested <= 0 || repaired !== requested) {
+      throw AppError.conflict("QC is available only after every requested item has been repaired.", "INVALID_STATUS");
+    }
+
+    const passed = decision === "PASS";
+    const nextStatus = passed ? "QC_PASSED" : "QC_FAILED";
+    // QC is a single decision for the entire repair batch. A failure resets the
+    // repaired and passed counters so the complete batch must be reworked.
+    const nextRepairedQuantity = passed ? requested : 0;
+    const nextPassedQuantity = passed ? requested : 0;
+
+    await conn.query(
+      `UPDATE repair_requests
+       SET repaired_quantity = ?, qc_passed_quantity = ?, qc_remarks = ?, status = ?
+       WHERE id = ?`,
+      [nextRepairedQuantity, nextPassedQuantity, remarks, nextStatus, id]
+    );
+    await addEvent(conn, id, user.id, `QC_${decision}`, r.status, nextStatus, requested, remarks);
+
+    if (passed) {
+      await notifications.notify(conn, {
+        role: "QUALITY_FG_MANAGER",
+        type: "REPAIR_QC_PASSED",
+        title: `Repair ${r.repair_number} passed QC`,
+        body: `All ${requested} repaired item(s) passed QC and are ready for dispatch.`,
+        severity: "success",
+        link: "/repair-dispatch",
+        payload: { repair_id: id },
+        userId: user.id,
+      });
+    } else {
+      await notifications.notify(conn, {
+        role: "PRODUCTION_MANAGER",
+        type: "REPAIR_QC_FAILED",
+        title: `Repair ${r.repair_number} needs rework`,
+        body: `The complete batch of ${requested} item(s) failed QC and has been returned to Repair Production. ${remarks}`,
+        severity: "action",
+        link: "/repair-production",
+        payload: { repair_id: id },
+        userId: user.id,
+      });
+    }
+
     return getOne(id, conn);
   });
 }
 
 async function dispatch(id, body, user) {
   if (!RETURNERS.has(roleOf(user))) throw AppError.forbidden("Only Production Admin or Quality Control & Finished Goods can record repaired items as dispatched.");
-  const quantity = positiveInt(body.quantity, "Dispatch quantity");
-  const reference = optionalText(body.dispatchReference, 120);
-  if (!reference) throw new AppError(422, "Dispatch reference is required", "VALIDATION");
   const remarks = optionalText(body.remarks, 2000);
   return inTransaction(async (conn) => {
     const [rows] = await conn.query(`SELECT * FROM repair_requests WHERE id = ? FOR UPDATE`, [id]);
     if (!rows.length) throw AppError.notFound("Repair request not found", "NOT_FOUND");
     const r = rows[0];
-    const available = r.qc_passed_quantity - r.dispatched_quantity;
-    if (quantity > available || quantity <= 0) throw new AppError(422, `Only ${Math.max(0, available)} QC-passed item(s) are available to dispatch.`, "QUANTITY_EXCEEDED");
-    const dispatched = r.dispatched_quantity + quantity;
-    const allPassed = r.repaired_quantity === r.requested_quantity && r.qc_passed_quantity === r.requested_quantity;
-    const status = dispatched === r.requested_quantity ? "RETURNED" : (allPassed ? "PARTIALLY_DISPATCHED" : r.status);
-    await conn.query(`UPDATE repair_requests SET dispatched_quantity = ?, dispatch_reference = ?, dispatch_remarks = ?, dispatched_by = ?, dispatched_at = NOW(), status = ? WHERE id = ?`, [dispatched, reference, remarks, user.id, status, id]);
-    await addEvent(conn, id, user.id, "DISPATCHED", r.status, status, quantity, [reference, remarks].filter(Boolean).join(" — "));
-    await notifications.notify(conn, { role: "MARKETING_MANAGER", type: "REPAIR_DISPATCHED", title: `Repair ${r.repair_number} dispatched`, body: `${quantity} repaired item(s) dispatched. Reference: ${reference}. Total returned: ${dispatched}/${r.requested_quantity}.`, severity: "success", link: "/repair-requests", payload: { repair_id: id, quantity, dispatch_reference: reference }, userId: user.id });
+    const requested = Number(r.requested_quantity);
+    const qcPassed = Number(r.qc_passed_quantity);
+    const alreadyDispatched = Number(r.dispatched_quantity);
+
+    if (!["QC_PASSED", "PARTIALLY_DISPATCHED"].includes(r.status)
+      || requested <= 0
+      || qcPassed !== requested
+      || alreadyDispatched >= requested) {
+      throw AppError.conflict("Dispatch is available only for a complete batch that has passed QC and has not been fully dispatched.", "INVALID_STATUS");
+    }
+
+    // Dispatch is a single batch-level action. Legacy partially-dispatched
+    // records are completed by dispatching their remaining balance in one step.
+    const remaining = requested - alreadyDispatched;
+    const remarksText = remarks || "Complete repair batch marked as dispatched.";
+    await conn.query(
+      `UPDATE repair_requests
+       SET dispatched_quantity = ?, dispatch_remarks = ?,
+           dispatched_by = ?, dispatched_at = NOW(), status = 'RETURNED'
+       WHERE id = ?`,
+      [requested, remarksText, user.id, id]
+    );
+    await addEvent(conn, id, user.id, "DISPATCHED", r.status, "RETURNED", remaining, remarksText);
+    await notifications.notify(conn, {
+      role: "MARKETING_MANAGER",
+      type: "REPAIR_DISPATCHED",
+      title: `Repair ${r.repair_number} marked as dispatched`,
+      body: `The complete repair batch of ${requested} item(s) has been marked as dispatched and returned to the customer.`,
+      severity: "success",
+      link: "/repair-requests",
+      payload: { repair_id: id, quantity: requested },
+      userId: user.id,
+    });
     return getOne(id, conn);
   });
 }
 
-module.exports = { list, productOptions, create, decide, updateProgress, inspect, dispatch };
+module.exports = { list, productOptions, create, getImage, decide, updateProgress, inspect, dispatch };

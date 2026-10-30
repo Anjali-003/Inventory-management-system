@@ -1,13 +1,17 @@
-import { useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, ClipboardCheck, Factory, PackageCheck, RefreshCw, Send, Wrench } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, ClipboardCheck, ImagePlus, Plus, RefreshCw, Send, Trash2, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/Modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FilterTabs, Panel } from "@/components/PageKit";
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback";
 import { usePermissions } from "@/core/auth/usePermissions";
 import { MktHero, SearchField } from "@/sales/marketing-orders/mktKit";
 import { fmtDateTime, fmtQty } from "@/lib/stock";
+import { useToast } from "@/components/toast";
 import RepairActionModal from "./RepairActionModal";
+import { repairsService } from "./repairsService";
 import {
   useCreateRepairMutation, useDecideRepairMutation, useDispatchRepairMutation,
   useGetRepairProductsQuery, useGetRepairsQuery, useInspectRepairMutation, useUpdateRepairProgressMutation,
@@ -16,18 +20,23 @@ import {
 const inputClass = "min-h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const labelClass = "mb-1 block text-sm font-medium";
 const statusLabel = {
-  PENDING_APPROVAL: "Pending approval", APPROVED: "Approved", IN_REPAIR: "In repair", READY_FOR_QC: "Ready for QC",
+  PENDING_APPROVAL: "Pending approval", APPROVED: "Approved", IN_REPAIR: "In repair", READY_FOR_QC: "Ready for final QC",
   QC_FAILED: "QC failed — rework", QC_PASSED: "QC passed", PARTIALLY_DISPATCHED: "Partially dispatched", RETURNED: "Dispatched / returned", REJECTED: "Rejected",
 };
 const statusVariant = (status) => status === "REJECTED" || status === "QC_FAILED" ? "danger" : ["RETURNED", "QC_PASSED"].includes(status) ? "success" : status === "PENDING_APPROVAL" ? "warning" : "info";
 const errorText = (error) => error?.response?.data?.message || error?.data?.message || error?.message || "Something went wrong. Please try again.";
 const initialRequest = { productId: "", quantity: "1", customerName: "", customerReference: "", problemDescription: "" };
-const initialActionForm = { quantity: "1", remarks: "", diagnosis: "", notes: "", dispatchReference: "" };
+const initialActionForm = { quantity: "1", remarks: "", diagnosis: "", notes: "", decision: "" };
 const number = (value) => Math.max(0, Number(value) || 0);
 const terminal = (repair) => ["REJECTED", "RETURNED"].includes(repair.status);
-const awaitingQc = (repair) => Math.max(0, number(repair.repaired_quantity) - number(repair.qc_passed_quantity));
 const outstanding = (repair) => Math.max(0, number(repair.requested_quantity) - number(repair.repaired_quantity));
-const dispatchable = (repair) => Math.max(0, number(repair.qc_passed_quantity) - number(repair.dispatched_quantity));
+const isReadyForQc = (repair) => repair.status === "READY_FOR_QC"
+  && number(repair.requested_quantity) > 0
+  && number(repair.repaired_quantity) === number(repair.requested_quantity);
+const isReadyForDispatch = (repair) => ["QC_PASSED", "PARTIALLY_DISPATCHED"].includes(repair.status)
+  && number(repair.requested_quantity) > 0
+  && number(repair.qc_passed_quantity) === number(repair.requested_quantity)
+  && number(repair.dispatched_quantity) < number(repair.requested_quantity);
 const sum = (rows, getValue) => rows.reduce((total, row) => total + getValue(row), 0);
 
 function Progress({ repair }) {
@@ -37,36 +46,265 @@ function Progress({ repair }) {
   return <div className="space-y-2">
     <div className="flex flex-wrap justify-between gap-2 text-sm"><span className="font-medium">Repair progress</span><span className="tabular-nums font-semibold">{fmtQty(repaired)} of {fmtQty(requested)} fixed ({pct}%)</span></div>
     <div className="h-2.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} /></div>
-    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground"><span>In production: <b className="text-foreground">{fmtQty(outstanding(repair))}</b></span><span>Awaiting QC: <b className="text-foreground">{fmtQty(awaitingQc(repair))}</b></span><span>Dispatched: <b className="text-foreground">{fmtQty(repair.dispatched_quantity)}</b></span></div>
+    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground"><span>Remaining: <b className="text-foreground">{fmtQty(outstanding(repair))}</b></span><span>Repaired: <b className="text-foreground">{fmtQty(repaired)}</b></span><span>Dispatched: <b className="text-foreground">{fmtQty(repair.dispatched_quantity)}</b></span></div>
   </div>;
 }
 
-function RequestForm({ onCreated }) {
+const MAX_REPAIR_IMAGE_BYTES = 1024 * 1024;
+const MAX_REPAIR_IMAGE_SOURCE_BYTES = 10 * 1024 * 1024;
+
+async function compressRepairImage(file) {
+  if (typeof createImageBitmap !== "function") {
+    throw new Error("This browser cannot process the picture. Try a current version of Chrome or Edge.");
+  }
+
+  const bitmap = await createImageBitmap(file);
+  try {
+    const scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
+    let blob = null;
+
+    for (const resizeFactor of [1, 0.85, 0.7]) {
+      const width = Math.max(1, Math.round(bitmap.width * scale * resizeFactor));
+      const height = Math.max(1, Math.round(bitmap.height * scale * resizeFactor));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d", { alpha: false });
+      if (!context) throw new Error("The picture could not be processed. Please try another image.");
+      context.drawImage(bitmap, 0, 0, width, height);
+
+      for (const quality of [0.82, 0.72, 0.62, 0.52]) {
+        // The picture is normalized to JPEG so uploads have a predictable size and MIME type.
+        blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+        if (blob && blob.size <= MAX_REPAIR_IMAGE_BYTES) break;
+      }
+      if (blob && blob.size <= MAX_REPAIR_IMAGE_BYTES) break;
+    }
+
+    if (!blob || blob.size > MAX_REPAIR_IMAGE_BYTES) {
+      throw new Error("This picture is too large after compression. Choose a smaller image.");
+    }
+
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("The picture could not be read. Please try again."));
+      reader.readAsDataURL(blob);
+    });
+    const baseName = file.name.replace(/\.[^.]+$/, "").slice(0, 220) || "repair-picture";
+    return { fileName: `${baseName}.jpg`, mimeType: "image/jpeg", dataUrl };
+  } finally {
+    bitmap.close?.();
+  }
+}
+
+function RequestForm({ open, onClose, onCreated }) {
   const { data: products = [], isLoading: productsLoading } = useGetRepairProductsQuery();
   const [createRepair, state] = useCreateRepairMutation();
   const [form, setForm] = useState(initialRequest);
+  const [picture, setPicture] = useState(null);
+  const [picturePreview, setPicturePreview] = useState("");
+  const [pictureError, setPictureError] = useState("");
   const [error, setError] = useState("");
   const change = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
-  async function submit(event) {
-    event.preventDefault(); setError("");
-    try { await createRepair({ ...form, productId: Number(form.productId), quantity: Number(form.quantity) }).unwrap(); setForm(initialRequest); onCreated(); }
-    catch (e) { setError(errorText(e)); }
+
+  useEffect(() => {
+    if (!picture) {
+      setPicturePreview("");
+      return undefined;
+    }
+    const previewUrl = URL.createObjectURL(picture);
+    setPicturePreview(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [picture]);
+
+  function close() {
+    if (state.isLoading) return;
+    setForm(initialRequest);
+    setPicture(null);
+    setPictureError("");
+    setError("");
+    onClose();
   }
-  return <Card className="overflow-hidden rounded-xl border-[#dce5e0] shadow-sm"><CardHeader><CardTitle>Raise a repair request</CardTitle><p className="text-sm text-muted-foreground">Submit the customer's product and quantity. Production Admin must approve it before repair work starts.</p></CardHeader><CardContent>
-    {error && <Notice title="Request not saved">{error}</Notice>}
-    <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      <div><label className={labelClass}>Product *</label><select className={inputClass} required value={form.productId} onChange={change("productId")} disabled={productsLoading}><option value="">Select product</option>{products.map((p) => <option key={p.id} value={p.id}>{p.sku ? `${p.sku} — ` : ""}{p.name}</option>)}</select></div>
-      <div><label className={labelClass}>Items to repair *</label><input className={inputClass} type="number" min="1" max="1000000" step="1" required value={form.quantity} onChange={change("quantity")} /></div>
-      <div><label className={labelClass}>Customer name *</label><input className={inputClass} maxLength="180" required value={form.customerName} onChange={change("customerName")} placeholder="Customer / company" /></div>
-      <div><label className={labelClass}>Customer reference</label><input className={inputClass} maxLength="120" value={form.customerReference} onChange={change("customerReference")} placeholder="Invoice, serial or ticket no." /></div>
-      <div className="sm:col-span-2"><label className={labelClass}>Reported problem *</label><textarea className={`${inputClass} min-h-20`} required maxLength="4000" value={form.problemDescription} onChange={change("problemDescription")} placeholder="Describe the fault reported by the customer" /></div>
-      <div className="flex items-end"><Button type="submit" disabled={state.isLoading || productsLoading || !products.length} className="w-full sm:w-auto"><Wrench className="mr-2 h-4 w-4" />{state.isLoading ? "Submitting…" : "Submit repair request"}</Button></div>
-    </form>
-  </CardContent></Card>;
+
+  function selectPicture(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    setPictureError("");
+    if (!file) return;
+    setPicture(null);
+    if (!/^image\/(jpeg|png|webp)$/i.test(file.type)) {
+      setPictureError("Choose a JPG, PNG or WEBP image.");
+      return;
+    }
+    if (!file.size || file.size > MAX_REPAIR_IMAGE_SOURCE_BYTES) {
+      setPictureError("Choose a non-empty image smaller than 10 MB.");
+      return;
+    }
+    setPicture(file);
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+    if (!form.productId) return setError("Select a product.");
+    if (!Number.isSafeInteger(Number(form.quantity)) || Number(form.quantity) < 1 || Number(form.quantity) > 1000000) {
+      return setError("Enter a valid repair quantity between 1 and 1,000,000.");
+    }
+    if (!form.customerName.trim()) return setError("Enter the company or customer name.");
+    if (!form.problemDescription.trim()) return setError("Describe the problem reported by the customer.");
+
+    try {
+      const customerImage = picture ? await compressRepairImage(picture) : undefined;
+      const createdRepair = await createRepair({
+        ...form,
+        productId: Number(form.productId),
+        quantity: Number(form.quantity),
+        ...(customerImage ? { customerImage } : {}),
+      }).unwrap();
+      setForm(initialRequest);
+      setPicture(null);
+      setPictureError("");
+      onCreated(createdRepair);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
+
+  return <Modal
+    open={open}
+    onClose={close}
+    onSubmit={submit}
+    title="New repair request"
+    description="Submit the customer's product and quantity. Production Admin must approve it before repair work starts."
+    size="xl"
+    busy={state.isLoading}
+    footer={<>
+      <Button type="button" variant="outline" onClick={close} disabled={state.isLoading}>Cancel</Button>
+      <Button type="submit" disabled={state.isLoading || productsLoading || !products.length}>
+        <Wrench className="mr-2 h-4 w-4" />{state.isLoading ? "Submitting…" : "Submit repair request"}
+      </Button>
+    </>}
+  >
+    <div className="space-y-4">
+      {error && <Notice title="Request not saved">{error}</Notice>}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div>
+          <label className={labelClass} htmlFor="repair-request-product">Product *</label>
+          <select id="repair-request-product" className={inputClass} required value={form.productId} onChange={change("productId")} disabled={productsLoading}>
+            <option value="">Select product</option>
+            {products.map((product) => <option key={product.id} value={product.id}>{product.sku ? `${product.sku} — ` : ""}{product.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="repair-request-quantity">Items to repair *</label>
+          <input id="repair-request-quantity" className={inputClass} type="number" min="1" max="1000000" step="1" required value={form.quantity} onChange={change("quantity")} />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="repair-request-customer">Company / customer name *</label>
+          <input id="repair-request-customer" className={inputClass} maxLength="180" required value={form.customerName} onChange={change("customerName")} placeholder="Company or customer name" />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="repair-request-reference">Customer reference</label>
+          <input id="repair-request-reference" className={inputClass} maxLength="120" value={form.customerReference} onChange={change("customerReference")} placeholder="Invoice, serial or ticket no." />
+        </div>
+        <div className="sm:col-span-2 xl:col-span-2">
+          <label className={labelClass} htmlFor="repair-request-problem">Reported problem *</label>
+          <textarea id="repair-request-problem" className={`${inputClass} min-h-24`} required maxLength="4000" value={form.problemDescription} onChange={change("problemDescription")} placeholder="Describe the fault reported by the customer" />
+        </div>
+      </div>
+
+      <section className="space-y-2 rounded-xl border border-dashed border-border bg-muted/20 p-4" aria-labelledby="repair-picture-title">
+        <div>
+          <h3 id="repair-picture-title" className="text-sm font-semibold">Product picture <span className="font-normal text-muted-foreground">(optional)</span></h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">Attach a photo of the returned product or the reported damage. JPG, PNG or WEBP; maximum source size 10 MB.</p>
+        </div>
+        {picturePreview ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <img src={picturePreview} alt="Selected repair product" className="size-20 rounded-lg border bg-white object-cover" />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{picture?.name}</p>
+              <p className="text-xs text-muted-foreground">Picture attached to this request</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => setPicture(null)} disabled={state.isLoading}>
+              <Trash2 className="mr-1.5 h-4 w-4" />Remove
+            </Button>
+          </div>
+        ) : (
+          <label htmlFor="repair-request-picture" className="flex min-h-16 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-4 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary">
+            <ImagePlus className="h-5 w-5" />Add picture
+            <input id="repair-request-picture" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={selectPicture} disabled={state.isLoading} />
+          </label>
+        )}
+        {pictureError && <p role="alert" className="text-xs font-medium text-destructive">{pictureError}</p>}
+      </section>
+    </div>
+  </Modal>;
+}
+function RepairImageAttachment({ repair }) {
+  const [open, setOpen] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!imageUrl) return undefined;
+    return () => URL.revokeObjectURL(imageUrl);
+  }, [imageUrl]);
+
+  async function openPicture() {
+    setOpen(true);
+    if (imageUrl || loading) return;
+
+    setLoading(true);
+    setError("");
+    try {
+      // Use the shared Axios client so the role header and login cookie accompany the request.
+      const image = await repairsService.getImage(repair.id);
+      setImageUrl(URL.createObjectURL(image));
+    } catch (requestError) {
+      setError(errorText(requestError));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function closePicture() {
+    setOpen(false);
+    setImageUrl("");
+    setError("");
+  }
+
+  return <>
+    <button
+      type="button"
+      onClick={openPicture}
+      className="inline-flex items-center gap-2 text-left text-sm font-semibold text-primary hover:underline"
+    >
+      <ImagePlus className="size-4 shrink-0" />
+      <span>View attached product picture</span>
+      <span className="max-w-[180px] truncate font-normal text-muted-foreground">· {repair.customer_image.file_name}</span>
+    </button>
+    <Modal
+      open={open}
+      onClose={closePicture}
+      title="Attached product picture"
+      description={`${repair.repair_number} · ${repair.product_name}`}
+      size="xl"
+      busy={loading}
+    >
+      <div className="flex min-h-48 items-center justify-center">
+        {loading && <p className="text-sm text-muted-foreground" role="status">Loading picture…</p>}
+        {error && <Notice title="Unable to open picture">{error}</Notice>}
+        {imageUrl && <img src={imageUrl} alt={`Attached picture for ${repair.repair_number}`} className="max-h-[70vh] max-w-full rounded-lg object-contain" />}
+      </div>
+    </Modal>
+  </>;
 }
 
 function RepairCard({ repair, mode }) {
   const { role } = usePermissions();
+  const toast = useToast();
   const [action, setAction] = useState("");
   const [form, setForm] = useState(initialActionForm);
   const [actionError, setActionError] = useState("");
@@ -78,7 +316,7 @@ function RepairCard({ repair, mode }) {
   const canRepair = ["PRODUCTION_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
   const canQc = ["QUALITY_FG_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
   const canDispatch = ["QUALITY_FG_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
-  const limits = { outstanding: outstanding(repair), awaitingQc: awaitingQc(repair), dispatchable: dispatchable(repair) };
+  const limits = { outstanding: outstanding(repair) };
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   function openAction(nextAction, quantity) {
     setAction(nextAction); setActionError("");
@@ -90,42 +328,51 @@ function RepairCard({ repair, mode }) {
     let mutation;
     if (action === "approve" || action === "reject") mutation = () => decide({ id: repair.id, decision: action.toUpperCase(), remarks: form.remarks }).unwrap();
     else if (action === "progress") mutation = () => progress({ ...payload, diagnosis: form.diagnosis, notes: form.notes }).unwrap();
-    else if (action === "pass" || action === "fail") mutation = () => inspect({ ...payload, decision: action.toUpperCase() }).unwrap();
-    else if (action === "dispatch") mutation = () => dispatch({ ...payload, dispatchReference: form.dispatchReference }).unwrap();
+    else if (action === "qc") mutation = () => inspect({ id: repair.id, decision: form.decision, remarks: form.remarks }).unwrap();
+    else if (action === "dispatch") mutation = () => dispatch({ id: repair.id }).unwrap();
     if (!mutation) return;
     const quantity = Number(form.quantity);
-    const quantityLimit = action === "progress" ? limits.outstanding : action === "pass" || action === "fail" ? limits.awaitingQc : action === "dispatch" ? limits.dispatchable : Infinity;
-    if (["progress", "pass", "fail", "dispatch"].includes(action) && (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > quantityLimit)) {
-      setActionError(`Enter a whole number from 1 to ${quantityLimit}.`);
+    if (action === "progress" && (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > limits.outstanding)) {
+      setActionError(`Enter a whole number from 1 to ${limits.outstanding}.`);
       return;
     }
-    if (["reject", "fail"].includes(action) && !form.remarks.trim()) {
-      setActionError(action === "reject" ? "Enter a rejection reason." : "Enter the QC failure reason.");
+    if (action === "qc" && !["PASS", "FAIL"].includes(form.decision)) {
+      setActionError("Select Pass or Fail to continue.");
       return;
     }
-    if (action === "dispatch" && !form.dispatchReference.trim()) {
-      setActionError("Enter a dispatch reference or tracking number.");
+    if (action === "reject" && !form.remarks.trim()) {
+      setActionError("Enter a rejection reason.");
       return;
     }
-    try { await mutation(); setAction(""); setForm(initialActionForm); }
-    catch (error) { setActionError(errorText(error)); }
+    if (action === "qc" && form.decision === "FAIL" && !form.remarks.trim()) {
+      setActionError("Enter the QC failure reason.");
+      return;
+    }
+    try {
+      await mutation();
+      if (action === "dispatch") toast.success(`${repair.repair_number} marked as dispatched`);
+      setAction("");
+      setForm(initialActionForm);
+    } catch (error) { setActionError(errorText(error)); }
   }
   const [eventOpen, setEventOpen] = useState(false);
   return <>
     <Card className="min-w-0 overflow-hidden rounded-xl border-[#dce5e0] shadow-[0_1px_2px_rgba(22,34,30,0.04),0_8px_22px_rgba(22,34,30,0.05)]">
       <CardHeader className="space-y-3 pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{repair.repair_number}</p><CardTitle className="mt-1 text-lg">{repair.product_name} <span className="font-normal text-muted-foreground">× {fmtQty(repair.requested_quantity)}</span></CardTitle><p className="mt-1 text-sm text-muted-foreground">{repair.customer_name}{repair.customer_reference ? ` · Ref: ${repair.customer_reference}` : ""}</p></div><Badge variant={statusVariant(repair.status)}>{statusLabel[repair.status] || repair.status}</Badge></div>
-        <Progress repair={repair} />
+        {!["qc", "dispatch"].includes(mode) && <Progress repair={repair} />}
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="rounded-xl border bg-muted/30 p-3"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Reported problem</p><p className="mt-1 whitespace-pre-wrap text-sm">{repair.problem_description}</p>{repair.diagnosis && <p className="mt-2 text-sm"><b>Diagnosis:</b> {repair.diagnosis}</p>}{repair.repair_notes && <p className="mt-1 text-sm"><b>Repair notes:</b> {repair.repair_notes}</p>}</div>
+        {repair.customer_image && <RepairImageAttachment repair={repair} />}
         {repair.approval_remarks && <p className="text-sm"><b>Approval note:</b> {repair.approval_remarks}</p>}
         {repair.qc_remarks && <p className="text-sm"><b>Latest QC note:</b> {repair.qc_remarks}</p>}
-        {repair.dispatch_reference && <p className="text-sm"><b>Latest dispatch reference:</b> {repair.dispatch_reference}{repair.dispatched_at ? ` · ${fmtDateTime(repair.dispatched_at)}` : ""}</p>}
+        {repair.dispatch_reference && <p className="text-sm"><b>Dispatch reference:</b> {repair.dispatch_reference}</p>}
+        {repair.dispatched_at && <p className="text-sm"><b>Marked dispatched:</b> {fmtDateTime(repair.dispatched_at)}</p>}
         {mode === "approvals" && canApprove && repair.status === "PENDING_APPROVAL" && <div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => openAction("approve", 1)}><CheckCircle2 className="mr-2 h-4 w-4"/>Approve</Button><Button size="sm" variant="destructive" onClick={() => openAction("reject", 1)}>Reject</Button></div>}
         {mode === "production" && canRepair && !["PENDING_APPROVAL", "REJECTED", "RETURNED"].includes(repair.status) && limits.outstanding > 0 && <Button size="sm" onClick={() => openAction("progress", Math.min(limits.outstanding, 1))}><Wrench className="mr-2 h-4 w-4"/>Update repair progress</Button>}
-        {mode === "qc" && canQc && limits.awaitingQc > 0 && repair.status !== "PENDING_APPROVAL" && repair.status !== "REJECTED" && <div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => openAction("pass", limits.awaitingQc)}><ClipboardCheck className="mr-2 h-4 w-4"/>QC pass</Button><Button size="sm" variant="destructive" onClick={() => openAction("fail", limits.awaitingQc)}><AlertCircle className="mr-2 h-4 w-4"/>QC fail</Button></div>}
-        {mode === "dispatch" && canDispatch && limits.dispatchable > 0 && <Button size="sm" onClick={() => openAction("dispatch", limits.dispatchable)}><Send className="mr-2 h-4 w-4"/>Mark repaired items dispatched</Button>}
+        {mode === "qc" && canQc && isReadyForQc(repair) && <Button size="sm" onClick={() => openAction("qc")}><ClipboardCheck className="mr-2 h-4 w-4"/>Review repair QC</Button>}
+        {mode === "dispatch" && canDispatch && isReadyForDispatch(repair) && <Button size="sm" onClick={() => openAction("dispatch")}><Send className="mr-2 h-4 w-4"/>Mark as dispatched</Button>}
         <div className="border-t pt-3"><button type="button" className="text-sm font-semibold text-primary hover:underline" aria-expanded={eventOpen} onClick={() => setEventOpen((v) => !v)}>{eventOpen ? "Hide repair history" : `View repair history (${repair.events?.length || 0})`}</button>
           {eventOpen && <ol className="mt-3 space-y-3 border-l pl-4">{(repair.events || []).map((event) => <li key={event.id} className="relative"><span className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-primary"/><p className="text-sm font-medium">{String(event.action).replaceAll("_", " ")}{event.quantity ? ` · ${event.quantity} item(s)` : ""}</p><p className="text-xs text-muted-foreground">{event.actor_name} · {fmtDateTime(event.created_at)}</p>{event.remarks && <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{event.remarks}</p>}</li>)}</ol>}
         </div>
@@ -136,20 +383,16 @@ function RepairCard({ repair, mode }) {
 }
 
 function SectionTabs({ value, onChange, items }) {
-  return <div role="tablist" aria-label="Repair sections" className="flex min-w-0 gap-2 overflow-x-auto rounded-xl border bg-muted/30 p-1">
-    {items.map((item) => <button key={item.key} type="button" role="tab" aria-selected={value === item.key} onClick={() => onChange(item.key)} className={`min-h-10 shrink-0 rounded-lg px-3 py-2 text-sm font-semibold transition-colors sm:px-4 ${value === item.key ? "bg-background text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:bg-background/70 hover:text-foreground"}`}>
-      <span>{item.label}</span><span className={`ml-2 rounded-full px-2 py-0.5 text-xs tabular-nums ${value === item.key ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>{fmtQty(item.count)}</span>
-    </button>)}
-  </div>;
-}
-
-function QuantitySummary({ repairs }) {
-  const cards = [
-    { label: "To repair", value: sum(repairs, outstanding), icon: Factory, tone: "text-blue-700 bg-blue-50" },
-    { label: "Awaiting QC", value: sum(repairs, awaitingQc), icon: ClipboardCheck, tone: "text-amber-700 bg-amber-50" },
-    { label: "Dispatched", value: sum(repairs, (r) => number(r.dispatched_quantity)), icon: PackageCheck, tone: "text-emerald-700 bg-emerald-50" },
-  ];
-  return <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">{cards.map(({ label, value, icon: Icon, tone }) => <Card key={label} className="rounded-xl border-[#dce5e0] shadow-sm"><CardContent className="flex items-center gap-3 p-4"><span className={`grid size-11 shrink-0 place-items-center rounded-xl ${tone}`}><Icon className="size-5"/></span><div className="min-w-0"><p className="text-sm text-muted-foreground">{label}</p><p className="text-2xl font-bold tabular-nums">{fmtQty(value)} <span className="text-sm font-medium text-muted-foreground">items</span></p></div></CardContent></Card>)}</div>;
+  return <FilterTabs
+    label="Filter repair records by stage"
+    items={items.map((item) => ({
+      key: item.key,
+      label: item.label,
+      value: item.count,
+      active: value === item.key,
+      onClick: () => onChange(item.key),
+    }))}
+  />;
 }
 
 const PAGE_CONFIG = {
@@ -170,20 +413,21 @@ const PAGE_CONFIG = {
   },
   qc: {
     title: "Repair QC",
-    description: "Inspect repaired items, record pass or fail results, and send failed items back for rework.",
+    description: "Make one final pass or fail decision after the complete repair batch is finished.",
     initialSection: "awaiting",
   },
   dispatch: {
     title: "Repair Dispatch",
-    description: "Dispatch QC-passed repaired items and record the return reference for the customer.",
+    description: "Mark complete QC-passed repair batches as returned to the customer in one action.",
     initialSection: "ready",
   },
 };
 
 export default function RepairWorkspace({ mode }) {
   const config = PAGE_CONFIG[mode] || PAGE_CONFIG.production;
+  const toast = useToast();
   const { data: repairs = [], isLoading, isFetching, error, refetch } = useGetRepairsQuery();
-  const [notice, setNotice] = useState("");
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [section, setSection] = useState(config.initialSection);
   const requestTabs = [
@@ -199,12 +443,12 @@ export default function RepairWorkspace({ mode }) {
     { key: "completed", label: "Repair completed", count: repairs.filter((r) => number(r.repaired_quantity) >= number(r.requested_quantity) && number(r.requested_quantity) > 0).length },
   ];
   const qcTabs = [
-    { key: "awaiting", label: "Awaiting QC", count: sum(repairs, awaitingQc) },
-    { key: "history", label: "QC history", count: repairs.filter((r) => number(r.qc_passed_quantity) > 0 || r.status === "QC_FAILED" || Boolean(r.qc_remarks)).length },
+    { key: "awaiting", label: "Awaiting QC", count: repairs.filter(isReadyForQc).length },
+    { key: "history", label: "QC history", count: repairs.filter((r) => ["QC_PASSED", "QC_FAILED", "PARTIALLY_DISPATCHED", "RETURNED"].includes(r.status) || Boolean(r.qc_remarks)).length },
   ];
   const dispatchTabs = [
-    { key: "ready", label: "Ready to dispatch", count: sum(repairs, dispatchable) },
-    { key: "history", label: "Dispatch history", count: sum(repairs, (r) => number(r.dispatched_quantity)) },
+    { key: "ready", label: "Ready to dispatch", count: repairs.filter(isReadyForDispatch).length },
+    { key: "history", label: "Dispatch history", count: repairs.filter((r) => r.status === "RETURNED").length },
   ];
 
   const sourceRows = useMemo(() => {
@@ -213,16 +457,16 @@ export default function RepairWorkspace({ mode }) {
     if (mode === "production") {
       return repairs.filter((r) => section === "completed"
         ? number(r.requested_quantity) > 0 && number(r.repaired_quantity) >= number(r.requested_quantity)
-        : !["PENDING_APPROVAL", "REJECTED", "RETURNED"].includes(r.status) && outstanding(r) > 0);
+        : !["PENDING_APPROVAL", "REJECTED", "QC_PASSED", "PARTIALLY_DISPATCHED", "RETURNED"].includes(r.status) && outstanding(r) > 0);
     }
     if (mode === "qc") {
       return repairs.filter((r) => section === "history"
         ? number(r.qc_passed_quantity) > 0 || r.status === "QC_FAILED" || Boolean(r.qc_remarks)
-        : awaitingQc(r) > 0 && !["PENDING_APPROVAL", "REJECTED"].includes(r.status));
+        : isReadyForQc(r));
     }
     return repairs.filter((r) => section === "history"
-      ? number(r.dispatched_quantity) > 0
-      : dispatchable(r) > 0);
+      ? r.status === "RETURNED"
+      : isReadyForDispatch(r));
   }, [mode, repairs, section]);
 
   const filtered = useMemo(() => {
@@ -242,25 +486,41 @@ export default function RepairWorkspace({ mode }) {
         : mode === "production" && section === "completed" ? "No completed repairs yet"
           : mode === "production" ? "No repairs waiting for production"
             : mode === "qc" && section === "history" ? "No QC history yet"
-              : mode === "qc" ? "No repaired items awaiting QC"
+              : mode === "qc" ? "No complete repair batches awaiting QC"
                 : mode === "dispatch" && section === "history" ? "No dispatch history yet"
-                  : mode === "dispatch" ? "No repaired items ready for dispatch"
+                  : mode === "dispatch" ? "No QC-passed repair batches ready for dispatch"
                     : "Nothing to show in this section";
 
-  return <div className="mx-auto w-full max-w-[1600px] space-y-5 pb-8">
+  return <div className="mx-auto w-full max-w-[1600px] space-y-4 pb-8">
     <MktHero eyebrow="Customer repairs" title={config.title} description={config.description}>
+      {mode === "requests" && <Button onClick={() => setRequestModalOpen(true)}><Plus className="mr-2 h-4 w-4" />New request</Button>}
       <Button variant="outline" onClick={() => refetch()} disabled={isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />Refresh</Button>
     </MktHero>
-    {notice && <Notice title="Repair request submitted">{notice}</Notice>}
-    {mode === "requests" && section === "requests" && <RequestForm onCreated={() => { setNotice("Your request was submitted to Production Admin for approval."); setSection("requests"); refetch(); }} />}
+    {mode === "requests" && <RequestForm
+      open={requestModalOpen}
+      onClose={() => setRequestModalOpen(false)}
+      onCreated={(createdRepair) => {
+        setRequestModalOpen(false);
+        setSection("requests");
+        refetch();
+        toast.success(`${createdRepair?.repair_number || "Repair request"} sent to Production Admin`);
+      }}
+    />}
     {error && <Notice title="Repair data could not be loaded">{errorText(error)}</Notice>}
-    {mode === "production" && <QuantitySummary repairs={repairs.filter((r) => !["PENDING_APPROVAL", "REJECTED"].includes(r.status))} />}
-    <Card className="min-w-0 overflow-hidden rounded-xl border-[#dce5e0] shadow-sm">
-      <div className="space-y-3 border-b bg-slate-50/70 p-3 sm:p-4">
-        <SectionTabs value={section} onChange={setSection} items={tabs}/>
-        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center"><div className="w-full min-w-0 sm:max-w-md"><SearchField className="w-full" value={query} onChange={setQuery} placeholder="Search repair no., product, customer, status…" /></div><p className="shrink-0 text-xs font-semibold tabular-nums text-muted-foreground sm:ml-auto">{filtered.length} result{filtered.length === 1 ? "" : "s"}{isFetching ? " · Updating…" : ""}</p></div>
+
+    <SectionTabs value={section} onChange={setSection} items={tabs}/>
+    <div className="mkt-glass sticky top-14 z-20 -mx-4 mt-3 flex items-center gap-3 px-4 py-2.5 md:static md:mx-0 md:mt-4 md:bg-transparent md:p-0 md:pb-4 md:shadow-none md:backdrop-blur-none">
+      <SearchField className="min-w-0 flex-1 sm:max-w-md sm:flex-none" value={query} onChange={setQuery} placeholder="Search repair no., product, customer, status…" />
+      <div className="flex shrink-0 items-center gap-3 text-[13px] text-muted-foreground sm:flex-1 sm:justify-end" aria-live="polite">
+        <span className="tabular-nums">{filtered.length} result{filtered.length === 1 ? "" : "s"}{isFetching ? " · Updating…" : ""}</span>
+        {query.trim() && <button type="button" onClick={() => setQuery("")} className="whitespace-nowrap font-semibold text-primary hover:underline">Clear</button>}
       </div>
-      {isLoading ? <div className="p-4"><TableSkeleton rows={4}/></div> : filtered.length === 0 ? <div className="p-5"><EmptyState title={emptyTitle}>{query ? "Try another search term or clear the search field." : "New repair work will appear here when it reaches this stage."}</EmptyState></div> : <div className="grid min-w-0 gap-4 p-3 sm:p-4 xl:grid-cols-2">{filtered.map((repair) => <RepairCard key={repair.id} repair={repair} mode={mode}/>)}</div>}
-    </Card>
+    </div>
+
+    <div className="@container">
+      {isLoading ? <Panel className="p-4"><TableSkeleton rows={4}/></Panel>
+        : filtered.length === 0 ? <Panel className="p-5"><EmptyState title={emptyTitle}>{query ? "Try another search term or clear the search field." : "New repair work will appear here when it reaches this stage."}</EmptyState></Panel>
+          : <div className="grid min-w-0 gap-3 @2xl:grid-cols-2">{filtered.map((repair) => <RepairCard key={repair.id} repair={repair} mode={mode}/>)}</div>}
+    </div>
   </div>;
 }

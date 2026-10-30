@@ -741,6 +741,20 @@ CREATE TABLE IF NOT EXISTS `quality_control_rework_cycles` (
   CONSTRAINT `fk_qc_rework_submitted_by` FOREIGN KEY (`submitted_by`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS `repair_attachments` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `repair_id` bigint unsigned NOT NULL,
+  `file_name` varchar(255) NOT NULL,
+  `mime_type` varchar(40) NOT NULL,
+  `file_size` int unsigned NOT NULL,
+  `file_data` mediumblob NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_repair_attachment` (`repair_id`),
+  CONSTRAINT `fk_repair_attachment_request` FOREIGN KEY (`repair_id`) REFERENCES `repair_requests` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `chk_repair_attachment_size` CHECK (((`file_size` > 0) and (`file_size` <= 1048576)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 CREATE TABLE IF NOT EXISTS `repair_events` (
   `id` bigint unsigned NOT NULL AUTO_INCREMENT,
   `repair_id` bigint unsigned NOT NULL,
@@ -819,7 +833,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(100) NOT NULL,
   `email` varchar(150) NOT NULL,
-  `password_hash` varchar(255) DEFAULT NULL,
+  `password_hash` varchar(255) NOT NULL,
   `role` varchar(30) NOT NULL DEFAULT 'SUPER_ADMIN',
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `created_by` int DEFAULT NULL,

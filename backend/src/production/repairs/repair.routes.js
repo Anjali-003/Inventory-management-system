@@ -5,6 +5,7 @@ const router = express.Router();
 router.get("/", controller.list);
 router.get("/products", controller.products);
 router.post("/", resolveUser, controller.create);
+router.get("/:id/image", controller.image);
 router.post("/:id/decision", resolveUser, controller.decide);
 router.post("/:id/progress", resolveUser, controller.progress);
 router.post("/:id/qc", resolveUser, controller.inspect);
