@@ -2,7 +2,7 @@ import { baseApi } from "@/api/baseApi";
 
 /*
   GET /orders returns one row per order LINE (not per order).
-  Used by: Orders page, Dashboard, stock-out dialog.
+  Used by: General Dashboard and stock-out dialog.
 */
 export const ordersApi = baseApi.injectEndpoints({
   endpoints: (build) => ({

@@ -12,7 +12,6 @@ const Dashboard = lazy(() => import("@/core/dashboard/Dashboard"));
 const Products = lazy(() => import("@/store/products/Products"));
 const Inventory = lazy(() => import("@/store/inventory/Inventory"));
 const InventoryHistory = lazy(() => import("@/store/inventory/InventoryHistory"));
-const Orders = lazy(() => import("@/sales/orders/Orders"));
 const Production = lazy(() => import("@/production/production/Production"));
 const QCFailed = lazy(() => import("@/production/production/QCFailed"));
 const QualityControl = lazy(() => import("@/production/quality-control/QualityControl"));
@@ -52,7 +51,6 @@ export const PAGES = [
   { path: "/bills", module: "sales", Page: Bills, title: "Bills" },
   { path: "/to-bill", module: "sales", Page: ToBill, title: "To bill" },
   { path: "/customers", module: "customers", Page: Customers, title: "Customers" },
-  { path: "/orders", module: "orders", Page: Orders, title: "Orders" },
   { path: "/products", module: "products", Page: Products, title: "Products" },
   { path: "/inventory", module: "inventory", Page: Inventory, title: "Component stock" },
   { path: "/product-stock", module: "productStock", Page: ProductStock, title: "Product stock" },

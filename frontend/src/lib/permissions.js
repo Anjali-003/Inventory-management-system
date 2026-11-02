@@ -272,7 +272,6 @@ export const MODULE_PATHS = {
   qcFailed: "/qc-failed",
   inventory: "/inventory",
   inventoryHistory: "/inventory-history",
-  orders: "/orders",
   qualityControl: "/quality-control",
   finishedGoods: "/finished-goods",
   incomingStock: "/incoming-stock",

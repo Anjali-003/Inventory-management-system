@@ -35,7 +35,7 @@ const TAGS = {
   purchase: ["Purchases", "OrderApprovals"], // placing a purchase marks lines of the approved order as ordered
   iqc: ["Purchases"],
   "incoming-stock": ["Purchases", "Inventory"],
-  // order approval: both screens (Operations Admin + Purchase Manager) and the Orders page refresh together
+  // order approval: refresh shared order data used by the dashboard and related workflows
   "order-approvals": ["OrderApprovals", "Orders", "MarketingOrders", "Production", "Purchases", "Inventory"],
   "marketing-orders": ["MarketingOrders", "OrderApprovals", "Orders"],
   "approved-orders": ["OrderApprovals"],

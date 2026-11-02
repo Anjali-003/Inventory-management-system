@@ -34,7 +34,7 @@ export default function GeneralDashboard() {
   const { canEdit } = usePermissions()
   const canTakeAttendance = canEdit("attendance")
 
-  // Same cached data the Orders / Products / Inventory / Attendance pages use.
+  // Shared data also used by production and inventory workflows.
   const productsQ = useGetProductsQuery()
   const inventoryQ = useGetInventoryQuery("active")
   const ordersQ = useGetOrdersQuery()

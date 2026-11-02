@@ -69,7 +69,6 @@ const GROUPS = [
       { to: "/repair-approvals", label: "Repair Approvals", icon: ClipboardCheck, module: "repairApprovals" },
       { to: "/order-approvals", label: "Orders to Approve", icon: ClipboardCheck, module: "orderApprovals" },
       { to: "/approved-orders", label: "Approved Orders", icon: ClipboardList, module: "approvedOrders" },
-      { to: "/orders", label: "All Orders", icon: ClipboardList, module: "orders" },
     ],
   },
   {
