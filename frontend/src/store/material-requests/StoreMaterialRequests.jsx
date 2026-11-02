@@ -27,6 +27,7 @@ import MaterialRequestDetailsModal from "./MaterialRequestDetailsModal"
 import { errorMessage, fmtDateTime } from "@/lib/stock"
 import { isWithinDateRange, recordTimestamp, uniqueStringOptions } from "@/lib/listViewUtils"
 import { HeroButton, MktHero, SearchField, StageTile, TileGrid } from "@/sales/marketing-orders/mktKit"
+import { usePermissions } from "@/core/auth/usePermissions"
 
 const PAGE_SIZE = 9
 
@@ -124,7 +125,7 @@ function RequestProgress({ request, compact = false }) {
   )
 }
 
-function RequestCard({ request, onView, onAllot }) {
+function RequestCard({ request, onView, onAllot, editable = false }) {
   const { items, outstandingLines, partiallyIssuedLines } = getRequestMetrics(request)
   const meta = getStatusMeta(request.status)
   const StatusIcon = meta.icon
@@ -216,27 +217,27 @@ function RequestCard({ request, onView, onAllot }) {
           <Button type="button" variant="outline" size="sm" onClick={() => onView(request)}>
             <Eye className="size-4" /> View list
           </Button>
-          {canIssue ? (
+          {editable && canIssue ? (
             <Button type="button" size="sm" onClick={() => onAllot(request)}>
               <PackageCheck className="size-4" /> Allot materials
             </Button>
-          ) : (
+          ) : !canIssue ? (
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><CheckCircle2 className="size-4" /> Handover complete</span>
-          )}
+          ) : null}
         </div>
       </CardContent>
     </Card>
   )
 }
 
-function RequestActions({ request, onView, onAllot }) {
+function RequestActions({ request, onView, onAllot, editable = false }) {
   const { outstandingLines } = getRequestMetrics(request)
   return (
     <div className="flex flex-wrap gap-1.5">
       <Button type="button" variant="outline" size="sm" onClick={() => onView(request)}>
         <Eye className="size-3.5" /> View
       </Button>
-      {request.status !== "ISSUED" && outstandingLines > 0 && (
+      {editable && request.status !== "ISSUED" && outstandingLines > 0 && (
         <Button type="button" size="sm" onClick={() => onAllot(request)}>
           <PackageCheck className="size-3.5" /> Allot
         </Button>
@@ -246,6 +247,8 @@ function RequestActions({ request, onView, onAllot }) {
 }
 
 export default function StoreMaterialRequests() {
+  const { canEdit } = usePermissions()
+  const editable = canEdit("storeMaterialRequests")
   const { data = [], isLoading, isFetching, error, refetch } = useGetMaterialRequestsQuery()
   const [detailsRequest, setDetailsRequest] = useState(null)
   const [issueRequest, setIssueRequest] = useState(null)
@@ -490,7 +493,7 @@ export default function StoreMaterialRequests() {
             <>
               <div className={`hidden min-w-0 grid-cols-2 gap-4 p-4 2xl:grid-cols-3 ${view === "cards" ? "lg:grid" : "lg:hidden"}`}>
                 {pageRows.map((request) => (
-                  <RequestCard key={request.id} request={request} onView={setDetailsRequest} onAllot={setIssueRequest} />
+                  <RequestCard key={request.id} request={request} onView={setDetailsRequest} onAllot={setIssueRequest} editable={editable} />
                 ))}
               </div>
 
@@ -530,7 +533,7 @@ export default function StoreMaterialRequests() {
                           </TableCell>
                           <TableCell className="whitespace-normal align-top text-xs text-slate-600">{fmtDateTime(request.created_at)}</TableCell>
                           <TableCell className="whitespace-normal align-top"><RequestStatus status={request.status} /></TableCell>
-                          <TableCell className="min-w-0 whitespace-normal align-top" onClick={(event) => event.stopPropagation()}><RequestActions request={request} onView={setDetailsRequest} onAllot={setIssueRequest} /></TableCell>
+                          <TableCell className="min-w-0 whitespace-normal align-top" onClick={(event) => event.stopPropagation()}><RequestActions request={request} onView={setDetailsRequest} onAllot={setIssueRequest} editable={editable} /></TableCell>
                         </TableRow>
                       )
                     })}
@@ -540,7 +543,7 @@ export default function StoreMaterialRequests() {
 
               {/* Like Production, small screens use the readable cards regardless of the desktop view preference. */}
               <div className="grid min-w-0 gap-3 p-3 lg:hidden">
-                {pageRows.map((request) => <RequestCard key={request.id} request={request} onView={setDetailsRequest} onAllot={setIssueRequest} />)}
+                {pageRows.map((request) => <RequestCard key={request.id} request={request} onView={setDetailsRequest} onAllot={setIssueRequest} editable={editable} />)}
               </div>
 
               <Pagination page={page} pageSize={PAGE_SIZE} total={filteredRequests.length} onPage={setPage} noun="material requests" />
@@ -558,13 +561,13 @@ export default function StoreMaterialRequests() {
         <MaterialRequestDetailsModal
           request={detailsRequest}
           onClose={() => setDetailsRequest(null)}
-          onAllot={(request) => {
+          onAllot={editable ? (request) => {
             setDetailsRequest(null)
             setIssueRequest(request)
-          }}
+          } : undefined}
         />
       )}
-      {issueRequest && <IssueMaterialRequestModal request={issueRequest} onClose={() => setIssueRequest(null)} />}
+      {editable && issueRequest && <IssueMaterialRequestModal request={issueRequest} onClose={() => setIssueRequest(null)} />}
     </>
   )
 }

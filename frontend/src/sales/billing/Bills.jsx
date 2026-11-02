@@ -48,7 +48,8 @@ function Figure({ label, value, sub, to, bad }) {
             "Not paid" always shows everything still owed today, whatever month the bill is from)
 */
 export default function Bills() {
-  const { role } = usePermissions()
+  const { role, canEdit } = usePermissions()
+  const canMakeBill = canEdit("finishedGoods")
   const { params, setParams, openPopup, closePopup } = useUrlState()
   const month = MONTH_RE.test(params.get("month") || "") ? params.get("month") : null
   const { data: bills = EMPTY, isLoading, error, refetch } = useGetBillsQuery()
@@ -82,9 +83,11 @@ export default function Bills() {
   return (
     <>
       <PageHeader title="Bills" description="Every bill: what came in and what is still to collect. Click a bill to record a payment or print it.">
-        <Link to="/to-bill" className={pageButtonClass("primary")}>
-          Make a bill ({summary?.toBill ?? 0} waiting)
-        </Link>
+        {canMakeBill && (
+          <Link to="/to-bill" className={pageButtonClass("primary")}>
+            Make a bill ({summary?.toBill ?? 0} waiting)
+          </Link>
+        )}
       </PageHeader>
 
       {summary && (

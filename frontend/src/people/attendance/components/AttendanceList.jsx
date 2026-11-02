@@ -7,6 +7,7 @@ import { EmployeeRow } from "./EmployeeRow"
 
 export default function AttendanceList({
   busy,
+  editable = false,
   clearFilters,
   isToday,
   loading,
@@ -45,7 +46,7 @@ export default function AttendanceList({
           <span className="min-w-[14rem] flex-1">Employee</span>
           <span className="w-28 shrink-0">Status</span>
           <span className="w-40 shrink-0">Time</span>
-          <span className="w-[19.5rem] shrink-0 text-right">Actions</span>
+          {editable && <span className="w-[19.5rem] shrink-0 text-right">Actions</span>}
         </div>
         <ul className="divide-y">
           {visible.map((e) => (
@@ -55,6 +56,7 @@ export default function AttendanceList({
               isToday={isToday}
               now={now}
               busyKey={busy[e.employee_id]}
+              editable={editable}
               onCheck={() => onCheck(e)}
               onHalf={() => setConfirm({ employee: e, key: "half-day" })}
               onAbsent={() => setConfirm({ employee: e, key: "ABSENT" })}

@@ -7,6 +7,7 @@ import { useGetProductsQuery } from "@/store/products/productsApi"
 import { useGetInventoryQuery } from "@/store/inventory/inventoryApi"
 import { useGetAttendanceQuery } from "@/people/attendance/attendanceApi"
 import { useGetMeQuery } from "@/core/auth/authApi"
+import { usePermissions } from "@/core/auth/usePermissions"
 import RecentActivity from "@/core/activity/RecentActivity"
 import PageHeader from "@/components/PageHeader"
 import { EmptyState, Notice, TableSkeleton } from "@/components/feedback"
@@ -30,6 +31,9 @@ const STATUSES = [
 const EMPTY = []
 
 export default function GeneralDashboard() {
+  const { canEdit } = usePermissions()
+  const canTakeAttendance = canEdit("attendance")
+
   // Same cached data the Orders / Products / Inventory / Attendance pages use.
   const productsQ = useGetProductsQuery()
   const inventoryQ = useGetInventoryQuery("active")
@@ -165,7 +169,7 @@ export default function GeneralDashboard() {
               <CardTitle>Today&apos;s attendance</CardTitle>
               <CardDescription>{att.filter((e) => !e.status).length} of {att.length} employees not marked yet.</CardDescription>
             </div>
-            <Link to="/attendance" className="text-sm font-medium text-primary hover:underline">Mark attendance</Link>
+            {canTakeAttendance && <Link to="/attendance" className="text-sm font-medium text-primary hover:underline">Mark attendance</Link>}
           </CardHeader>
           <div className="grid grid-cols-2 divide-x divide-y sm:grid-cols-4 sm:divide-y-0">
             {[["Present", "PRESENT", "text-success"], ["Absent", "ABSENT", "text-destructive"], ["Half day", "HALF_DAY", "text-warning"], ["On leave", "LEAVE", "text-primary"]].map(([label, key, color]) => (

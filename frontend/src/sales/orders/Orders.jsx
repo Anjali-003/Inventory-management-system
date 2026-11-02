@@ -19,6 +19,7 @@ import { ApprovalStatus } from "@/sales/order-approvals/approvalParts"
 import { errorMessage } from "@/lib/stock"
 import { useGetOrdersQuery } from "./ordersApi"
 import { useGetProductsQuery } from "@/store/products/productsApi"
+import { usePermissions } from "@/core/auth/usePermissions"
 
 const PAGE_SIZE = 20
 const EMPTY = []
@@ -29,6 +30,8 @@ const when = (v) => (v ? new Date(v).toLocaleString(undefined, { dateStyle: "med
 const AFTER_QC = new Set(["HANDED_OVER", "IN_STORE", "BILLED"])
 
 export default function Orders() {
+  const { canEdit } = usePermissions()
+  const editable = canEdit("orders")
   const toast = useToast()
   const { data: ordersData, isLoading: loading, error: ordersError, refetch: loadOrders } = useGetOrdersQuery()
   // the create-order dialog reads products from the same cache; here we only surface a failed load
@@ -83,7 +86,7 @@ export default function Orders() {
   return (
     <>
       <PageHeader title="All Orders" description="Every order in the company and its status. For where an order is stuck, use the Order Tracker.">
-        <Button size="lg" onClick={() => setCreating(true)}><Plus /> Create order</Button>
+        {editable && <Button size="lg" onClick={() => setCreating(true)}><Plus /> Create order</Button>}
       </PageHeader>
 
       {error && <div className="mb-4"><Notice title="Something went wrong">{error}</Notice></div>}
@@ -114,7 +117,7 @@ export default function Orders() {
                     <TableHead>Status</TableHead>
                     <TableHead>Approval</TableHead>
                     <TableHead>Created by</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    {editable && <TableHead className="text-right">Action</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -126,7 +129,7 @@ export default function Orders() {
                       <TableCell><OrderStatus status={o.status} /></TableCell>
                       <TableCell><ApprovalStatus value={o.approval_status} /></TableCell>
                       <TableCell className="min-w-44"><UserCell name={o.created_by_name} sub={when(o.created_at)} /></TableCell>
-                      <TableCell><OrderActions order={o} onCheck={setCheckFor} onStart={setStartFor} /></TableCell>
+                      {editable && <TableCell><OrderActions order={o} onCheck={setCheckFor} onStart={setStartFor} /></TableCell>}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -152,7 +155,7 @@ export default function Orders() {
                     <span>Created by</span>
                     <UserCell name={o.created_by_name} sub={when(o.created_at)} className="text-foreground" />
                   </div>
-                  <OrderActions order={o} onCheck={setCheckFor} onStart={setStartFor} className="flex flex-wrap gap-2 border-t pt-3" />
+                  {editable && <OrderActions order={o} onCheck={setCheckFor} onStart={setStartFor} className="flex flex-wrap gap-2 border-t pt-3" />}
                 </li>
               ))}
             </ul>
@@ -162,9 +165,9 @@ export default function Orders() {
         )}
       </Card>
 
-      {creating && <CreateOrderModal onClose={() => setCreating(false)} onCreated={created} />}
-      {checkFor && <MaterialCheckModal order={checkFor} onClose={() => setCheckFor(null)} onStart={startFromCheck} partialProduction />}
-      {startFor && <StartProductionModal order={startFor} onClose={() => setStartFor(null)} onStarted={started} />}
+      {editable && creating && <CreateOrderModal onClose={() => setCreating(false)} onCreated={created} />}
+      {editable && checkFor && <MaterialCheckModal order={checkFor} onClose={() => setCheckFor(null)} onStart={startFromCheck} partialProduction />}
+      {editable && startFor && <StartProductionModal order={startFor} onClose={() => setStartFor(null)} onStarted={started} />}
     </>
   )
 }

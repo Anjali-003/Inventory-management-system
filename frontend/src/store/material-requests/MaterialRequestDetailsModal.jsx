@@ -38,7 +38,7 @@ export default function MaterialRequestDetailsModal({ request, onClose, onAllot 
       footer={
         <>
           <Button type="button" variant="outline" size="lg" onClick={onClose}>Close</Button>
-          {canIssue && (
+          {canIssue && onAllot && (
             <Button
               type="button"
               size="lg"

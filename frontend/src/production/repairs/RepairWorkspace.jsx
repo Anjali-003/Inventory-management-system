@@ -329,7 +329,7 @@ function RepairImageAttachment({ repair }) {
 }
 
 function RepairCard({ repair, mode }) {
-  const { role } = usePermissions();
+  const { canEdit } = usePermissions();
   const toast = useToast();
   const [action, setAction] = useState("");
   const [form, setForm] = useState(initialActionForm);
@@ -338,10 +338,14 @@ function RepairCard({ repair, mode }) {
   const [progress, progressState] = useUpdateRepairProgressMutation();
   const [inspect, inspectState] = useInspectRepairMutation();
   const [dispatch, dispatchState] = useDispatchRepairMutation();
-  const canApprove = ["PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
-  const canRepair = ["PRODUCTION_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
-  const canQc = ["QUALITY_FG_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
-  const canDispatch = ["QUALITY_FG_MANAGER", "PRODUCTION_ADMIN", "SUPER_ADMIN"].includes(role);
+  const canApprove = canEdit("repairApprovals");
+  const canRepair = canEdit("repairProduction");
+  const canQc = canEdit("repairQc");
+  const canDispatch = canEdit("repairDispatch");
+  const actionAllowed = action === "approve" || action === "reject" ? canApprove
+    : action === "progress" ? canRepair
+      : action === "qc" ? canQc
+        : action === "dispatch" ? canDispatch : false;
   const limits = { outstanding: outstanding(repair) };
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }));
   function openAction(nextAction, quantity) {
@@ -404,7 +408,7 @@ function RepairCard({ repair, mode }) {
         </div>
       </CardContent>
     </Card>
-    <RepairActionModal open={Boolean(action)} action={action} repair={repair} form={form} onChange={set} onClose={() => setAction("")} onSubmit={submitAction} busy={decisionState.isLoading || progressState.isLoading || inspectState.isLoading || dispatchState.isLoading} error={actionError} limits={limits}/>
+    {actionAllowed && <RepairActionModal open={Boolean(action)} action={action} repair={repair} form={form} onChange={set} onClose={() => setAction("")} onSubmit={submitAction} busy={decisionState.isLoading || progressState.isLoading || inspectState.isLoading || dispatchState.isLoading} error={actionError} limits={limits}/> }
   </>;
 }
 
@@ -493,6 +497,8 @@ const PAGE_CONFIG = {
 export default function RepairWorkspace({ mode }) {
   const config = PAGE_CONFIG[mode] || PAGE_CONFIG.production;
   const toast = useToast();
+  const { canEdit } = usePermissions();
+  const canCreateRequest = canEdit("repairRequests");
   const { data: repairs = [], isLoading, isFetching, error, refetch } = useGetRepairsQuery();
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -599,10 +605,10 @@ export default function RepairWorkspace({ mode }) {
 
   return <div className="mx-auto w-full max-w-[1600px] space-y-4 pb-8">
     <MktHero eyebrow="Customer repairs" title={config.title} description={config.description}>
-      {mode === "requests" && <Button onClick={() => setRequestModalOpen(true)}><Plus className="mr-2 h-4 w-4" />New request</Button>}
+      {mode === "requests" && canCreateRequest && <Button onClick={() => setRequestModalOpen(true)}><Plus className="mr-2 h-4 w-4" />New request</Button>}
       <Button variant="outline" onClick={() => refetch()} disabled={isFetching}><RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />Refresh</Button>
     </MktHero>
-    {mode === "requests" && <RequestForm
+    {mode === "requests" && canCreateRequest && <RequestForm
       open={requestModalOpen}
       onClose={() => setRequestModalOpen(false)}
       onCreated={(createdRepair) => {

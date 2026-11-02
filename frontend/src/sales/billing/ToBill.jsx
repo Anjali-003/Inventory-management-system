@@ -41,7 +41,8 @@ function estimate(item) {
   mark it as paid). Bills already made are on the Bills page.
 */
 export default function ToBill() {
-  const { role } = usePermissions()
+  const { role, canEdit } = usePermissions()
+  const editable = canEdit("finishedGoods")
   const { data: items = EMPTY, isLoading, error, refetch } = useGetFinishedGoodsQuery()
   const [query, setQuery] = useState("")
   const [billFor, setBillFor] = useState(null) // order whose bill is being made
@@ -92,7 +93,7 @@ export default function ToBill() {
             </TableRow></TableHeader>
             <TableBody>
               {rows.map(({ item: i, amount, missing, days }) => {
-                const canBill = myFgStep(i, role)?.action === "bill"
+                const canBill = editable && myFgStep(i, role)?.action === "bill"
                 return (
                   <TableRow key={i.id}>
                     <TableCell className="whitespace-normal align-top">
@@ -126,7 +127,7 @@ export default function ToBill() {
         )}
       </Card>
 
-      {billFor && <BillDialog item={billFor} onClose={() => setBillFor(null)} onDone={() => { setMade(billFor); setBillFor(null); refetch() }} />}
+      {editable && billFor && <BillDialog item={billFor} onClose={() => setBillFor(null)} onDone={() => { setMade(billFor); setBillFor(null); refetch() }} />}
       <BillView item={made ? { id: made.id, orderNumber: made.orderNumber } : null} role={role} onClose={() => setMade(null)} onChanged={refetch} />
     </>
   )

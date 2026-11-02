@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import UserCell from "@/components/UserCell"
 import { errorMessage, fmtQty } from "@/lib/stock"
 import { useToast } from "@/components/toast"
+import { usePermissions } from "@/core/auth/usePermissions"
 import AddProductModal from "./components/AddProductModal"
 import ImportProductsModal from "./components/ImportProductsModal"
 import ImportBomModal from "./components/ImportBomModal"
@@ -24,6 +25,8 @@ import SetPriceDialog from "./SetPriceDialog"
 const EMPTY = []
 
 export default function Products() {
+  const { canEdit } = usePermissions()
+  const editable = canEdit("products")
   const [pricing, setPricing] = useState(null) // product whose selling price is being set
   const dispatch = useDispatch()
   const { data, isLoading: loading, error: loadError, refetch: loadProducts } = useGetProductsQuery()
@@ -128,11 +131,11 @@ export default function Products() {
       <PageHeader title="Products & BOM" description="Products the company makes and the components each one needs (BOM).">
         <div className="flex flex-wrap items-center gap-2">
           <SearchBar value={search} onChange={setSearch} placeholder="Search products" />
-          <Button variant="outline" size="lg" onClick={() => setImportingProducts(true)}>
+          {editable && <Button variant="outline" size="lg" onClick={() => setImportingProducts(true)}>
             <Upload />
             Import from Excel
-          </Button>
-          <Button
+          </Button>}
+          {editable && <Button
             variant="outline"
             size="lg"
             onClick={() => setVersionPickerOpen(true)}
@@ -140,11 +143,11 @@ export default function Products() {
           >
             <GitBranch />
             Create product version
-          </Button>
-          <Button size="lg" onClick={() => setAdding(true)}>
+          </Button>}
+          {editable && <Button size="lg" onClick={() => setAdding(true)}>
             <Plus />
             Add product
-          </Button>
+          </Button>}
         </div>
       </PageHeader>
       {error && <div className="mb-6"><Notice title="Something went wrong">{error}</Notice></div>}
@@ -187,7 +190,7 @@ export default function Products() {
                   <TableCell className="min-w-40"><UserCell name={p.created_by_name} /></TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setPricing(p)}>Set price</Button>
+                      {editable && <Button variant="outline" size="sm" onClick={() => setPricing(p)}>Set price</Button>}
                       <Button variant="outline" size="sm" onClick={() => openBom(p)}>View BOM</Button>
                     </div>
                   </TableCell>
@@ -198,7 +201,7 @@ export default function Products() {
         )}
       </Card>
 
-      {pricing && <SetPriceDialog product={pricing} onClose={() => setPricing(null)} onSaved={() => { setPricing(null); loadProducts() }} />}
+      {editable && pricing && <SetPriceDialog product={pricing} onClose={() => setPricing(null)} onSaved={() => { setPricing(null); loadProducts() }} />}
 
       <Modal
         open={!!selected}
@@ -208,7 +211,7 @@ export default function Products() {
         description={selected ? `${selected.sku} · every component needed to build one unit, with its place on the PCB` : undefined}
         footer={
           <>
-            {bom.length === 0 && !bomLoading && !bomError && (
+            {editable && bom.length === 0 && !bomLoading && !bomError && (
               <>
                 <Button variant="outline" size="lg" onClick={startImport} className="sm:mr-auto">
                   <FileUp />
@@ -278,35 +281,35 @@ export default function Products() {
         )}
       </Modal>
 
-      <AddProductModal open={adding} onClose={() => setAdding(false)} onCreated={productAdded} />
-      <ImportProductsModal open={importingProducts} onClose={() => setImportingProducts(false)} onImported={productsImported} />
-      <CreateProductVersionModal
+      {editable && <AddProductModal open={adding} onClose={() => setAdding(false)} onCreated={productAdded} />}
+      {editable && <ImportProductsModal open={importingProducts} onClose={() => setImportingProducts(false)} onImported={productsImported} />}
+      {editable && <CreateProductVersionModal
         open={versionPickerOpen}
         products={products}
         onClose={() => setVersionPickerOpen(false)}
         onContinue={versionSourceSelected}
-      />
-      <BomEditorModal
+      />}
+      {editable && <BomEditorModal
         open={!!editing}
         product={editing}
         bom={bom}
         onClose={() => backToBom(editing)}
         onSaved={(next, created) => bomSaved(editing, next, created, "saved")}
-      />
-      <BomEditorModal
+      />}
+      {editable && <BomEditorModal
         open={!!versionEditor}
         product={versionEditor?.product}
         bom={versionEditor?.bom ?? []}
         mode="create-version"
         onClose={() => setVersionEditor(null)}
         onVersionCreated={versionCreated}
-      />
-      <ImportBomModal
+      />}
+      {editable && <ImportBomModal
         open={!!importing}
         product={importing}
         onClose={() => backToBom(importing)}
         onImported={(next, created) => bomSaved(importing, next, created, "imported")}
-      />
+      />}
     </>
   )
 }

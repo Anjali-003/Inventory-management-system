@@ -6,7 +6,7 @@
 */
 import axios from "axios";
 import { isMock, resolveApiUrl } from "@/config/env";
-import { getActiveRole, getViewAs } from "@/lib/permissions";
+import { getActiveRole, getViewAs, isSuperAdminViewOnly } from "@/lib/permissions";
 
 export { DATA_MODE, isMock } from "@/config/env";
 
@@ -25,6 +25,26 @@ export const ROLE_HEADER = "X-Login-Role";
 // server checks he is a Super Admin)
 const VIEW_AS_HEADER = "X-View-As";
 api.interceptors.request.use((config) => {
+  const method = String(config.method || "get").toLowerCase();
+  const requestPath = String(config.url || "").split("?")[0].replace(/\/+$/, "");
+  const isWriteRequest = ["post", "put", "patch", "delete"].includes(method);
+  const isSessionOrPushRequest =
+    requestPath.includes("/auth/") || requestPath.includes("/push/");
+
+  // A shared guard covers both direct Axios services and RTK Query mutations.
+  // Reads, navigation, filters and refresh requests remain available in View Only.
+  if (isWriteRequest && !isSessionOrPushRequest && isSuperAdminViewOnly()) {
+    const error = new Error("View Only is active. Switch to Edit Mode to make changes.");
+    error.code = "SUPER_ADMIN_VIEW_ONLY";
+    error.config = config;
+    error.response = {
+      status: 423,
+      data: { message: error.message, code: error.code },
+      config,
+    };
+    return Promise.reject(error);
+  }
+
   const role = getActiveRole();
   if (role && !config.headers.get(ROLE_HEADER)) config.headers.set(ROLE_HEADER, role);
   const viewAs = getViewAs();

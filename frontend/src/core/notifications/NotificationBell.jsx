@@ -8,7 +8,7 @@ import { timeAgo } from "@/core/activity/time"
 import { severityOf } from "./notificationStyle"
 import NotificationIcon from "./NotificationIcon"
 import { usePermissions } from "@/core/auth/usePermissions"
-import { ROLE_LABELS, setViewAs } from "@/lib/permissions"
+import { isSuperAdminViewOnly, ROLE_LABELS, setViewAs } from "@/lib/permissions"
 import {
   useGetNotificationsQuery,
   useMarkAllNotificationsReadMutation,
@@ -34,6 +34,7 @@ export default function NotificationBell() {
   const navigate = useNavigate()
   const { realRole, viewingAs } = usePermissions()
   const ceo = realRole === "SUPER_ADMIN"
+  const viewOnly = isSuperAdminViewOnly()
   const [dept, setDept] = useState("")
   const { data = EMPTY } = useGetNotificationsQuery()
   const [markRead] = useMarkNotificationReadMutation()
@@ -71,7 +72,7 @@ export default function NotificationBell() {
   }, [open])
 
   const openItem = (n) => {
-    if (!n.read) markRead(n.id)
+    if (!n.read && !viewOnly) markRead(n.id)
     setOpen(false)
     // the Super Admin in "View as": opening another role's notification switches the view to that role
     if (viewingAs && n.for_role && n.for_role !== "SUPER_ADMIN") setViewAs(n.for_role)
@@ -124,14 +125,14 @@ export default function NotificationBell() {
                 <p className="text-sm font-bold">Notifications</p>
                 <p className="text-[11px] text-muted-foreground">{unread ? `${unread} unread` : "You're all caught up"}</p>
               </div>
-              <button
+              {!viewOnly && <button
                 type="button"
                 disabled={!unread}
                 onClick={() => markAllRead()}
                 className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-semibold text-primary outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-primary/30 disabled:pointer-events-none disabled:text-muted-foreground disabled:opacity-60"
               >
                 <CheckCheck className="size-3.5" /> Mark all as read
-              </button>
+              </button>}
             </div>
 
             <div role="tablist" className="flex gap-1 border-b px-3 py-2">

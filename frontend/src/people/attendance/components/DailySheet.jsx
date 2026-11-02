@@ -14,8 +14,11 @@ import TimePromptModal from "./TimePromptModal"
 import ConfirmMarkDialog from "./ConfirmMarkDialog"
 import AttendanceList from "./AttendanceList"
 import useDailySheet from "../hooks/useDailySheet"
+import { usePermissions } from "@/core/auth/usePermissions"
 
 export function DailySheet() {
+  const { canEdit } = usePermissions()
+  const editable = canEdit("attendance")
   const {
     today,
     date,
@@ -98,12 +101,12 @@ export function DailySheet() {
           <p className="ml-auto text-sm text-muted-foreground tabular-nums">{visible.length} {visible.length === 1 ? "employee" : "employees"}</p>
         </div>
 
-        {<AttendanceList busy={busy} clearFilters={clearFilters} isToday={isToday} loading={loading} now={now} onCheck={onCheck} rows={rows} setConfirm={setConfirm} visible={visible} />}
+        {<AttendanceList editable={editable} busy={busy} clearFilters={clearFilters} isToday={isToday} loading={loading} now={now} onCheck={onCheck} rows={rows} setConfirm={setConfirm} visible={visible} />}
       </Card>
 
-      <ConfirmMarkDialog confirm={confirm} confirmBusy={confirmBusy} confirmMeta={confirmMeta} date={date} runConfirm={runConfirm} setConfirm={setConfirm} />
+      {editable && <ConfirmMarkDialog confirm={confirm} confirmBusy={confirmBusy} confirmMeta={confirmMeta} date={date} runConfirm={runConfirm} setConfirm={setConfirm} />}
 
-      <TimePromptModal date={date} setTimeAsk={setTimeAsk} setTimeValue={setTimeValue} submitTime={submitTime} timeAsk={timeAsk} timeBusy={timeBusy} timeValue={timeValue} />
+      {editable && <TimePromptModal date={date} setTimeAsk={setTimeAsk} setTimeValue={setTimeValue} submitTime={submitTime} timeAsk={timeAsk} timeBusy={timeBusy} timeValue={timeValue} />}
     </div>
   )
 }

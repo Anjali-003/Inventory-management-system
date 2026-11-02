@@ -2,6 +2,7 @@ import { useMemo } from "react"
 import { Link } from "react-router-dom"
 import { CheckCircle2, ClipboardCheck, Factory, RefreshCw, RotateCcw, XCircle } from "lucide-react"
 import { Notice } from "@/components/feedback"
+import { usePermissions } from "@/core/auth/usePermissions"
 import { PageButton, pageButtonClass } from "@/components/PageKit"
 import { useGetQualityControlQuery } from "@/production/quality-control/qualityControlApi"
 import { useGetFinishedGoodsQuery } from "@/production/finished-goods/finishedGoodsApi"
@@ -39,6 +40,8 @@ const batchRow = (item, extra) => ({
 */
 export default function QualityFinishedGoodsDashboard() {
   const drill = useDrill()
+  const { canEdit } = usePermissions()
+  const canOpenQualityCheck = canEdit("qualityControl")
   const qcQuery = useGetQualityControlQuery()
   const finishedQuery = useGetFinishedGoodsQuery()
   const productionQuery = useGetProductionQuery()
@@ -95,7 +98,7 @@ export default function QualityFinishedGoodsDashboard() {
     <>
       <Greeting description={nudge}>
         <PageButton onClick={refresh} disabled={fetching} aria-label="Refresh"><RefreshCw className={fetching ? "animate-spin" : ""} /> Refresh</PageButton>
-        <Link to="/quality-control" className={pageButtonClass("primary")}><ClipboardCheck /> Open Quality Check</Link>
+        {canOpenQualityCheck && <Link to="/quality-control" className={pageButtonClass("primary")}><ClipboardCheck /> Open Quality Check</Link>}
       </Greeting>
 
       {errors.length > 0 && (

@@ -39,7 +39,8 @@ const ACCEPT_PAGE = "/incoming-stock?status=PENDING_STORE";
 export default function StoreView({ readOnly = false }) {
   const drill = useDrill();
   const navigate = useNavigate();
-  const { canView } = usePermissions();
+  const { canView, canEdit } = usePermissions();
+  const canIssueMaterials = !readOnly && canEdit("storeMaterialRequests");
 
   // Store managers with incoming-stock access can go directly to acceptance.
   const direct = !readOnly && canView("incomingStock");
@@ -112,7 +113,7 @@ export default function StoreView({ readOnly = false }) {
   return (
     <>
       <Greeting description={nudge}>
-        {!readOnly && <Button onClick={() => navigate("/store-material-requests")}><ClipboardList /> Issue to Production</Button>}
+        {canIssueMaterials && <Button onClick={() => navigate("/store-material-requests")}><ClipboardList /> Issue to Production</Button>}
       </Greeting>
 
       <StatRow

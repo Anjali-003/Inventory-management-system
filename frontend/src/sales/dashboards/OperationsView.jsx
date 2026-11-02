@@ -10,6 +10,7 @@ import { ApprovalList, opsHref } from "@/sales/order-approvals/opsKit"
 import { countByStatus, newestFirst, plural } from "@/sales/marketing-orders/orderParts"
 import { useGetPurchasesQuery } from "@/purchase/shared/purchasingApi"
 import { useGetInventoryQuery } from "@/store/inventory/inventoryApi"
+import { usePermissions } from "@/core/auth/usePermissions"
 import DepartmentOverview from "../../core/dashboard/DepartmentOverview"
 import { EmptyLine, Greeting, ListPanel, Panel, PanelLink, StatRow, useDrill } from "../../core/dashboard/DashboardKit"
 import { isLowStock, onOrderByComponent, purchaseRow, stockRow } from "../../core/dashboard/rows"
@@ -41,6 +42,8 @@ function nudge(counts, low) {
 */
 export default function OperationsView() {
   const drill = useDrill()
+  const { canEdit } = usePermissions()
+  const canApproveOrders = canEdit("orderApprovals")
   const appr = useGetOrderApprovalsQuery()
   const buys = useGetPurchasesQuery()
   const inv = useGetInventoryQuery("active")
@@ -67,7 +70,7 @@ export default function OperationsView() {
   return (
     <>
       <Greeting description={nudge(counts, d.low.length)}>
-        <Link to={opsHref(QUEUE)} className={pageButtonClass("primary")}><ClipboardCheck /> Orders to approve</Link>
+        {canApproveOrders && <Link to={opsHref(QUEUE)} className={pageButtonClass("primary")}><ClipboardCheck /> Orders to approve</Link>}
       </Greeting>
 
       <StatRow drill={drill} stats={[

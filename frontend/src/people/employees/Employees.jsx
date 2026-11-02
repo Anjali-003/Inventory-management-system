@@ -16,11 +16,14 @@ import EmployeeFormModal from "./components/EmployeeFormModal";
 import EmployeeList from "./components/EmployeeList";
 import EmployeeFilters from "./components/EmployeeFilters";
 import EmployeeStats from "./components/EmployeeStats";
-import { useChanged } from "@/lib/useChanged";
+import { useChanged } from "@/lib/useChanged"
+import { usePermissions } from "@/core/auth/usePermissions";
 
 const PAGE_SIZE = 10;
 
 export default function Employees() {
+  const { canEdit } = usePermissions()
+  const editable = canEdit("employees")
   const toast = useToast();
   const { employees, loading, error, load, reload } = useEmployees();
 
@@ -269,9 +272,9 @@ export default function Employees() {
           >
             <Download /> Export
           </Button>
-          <Button size="lg" onClick={openNew}>
+          {editable && <Button size="lg" onClick={openNew}>
             <Plus /> Add employee
-          </Button>
+          </Button>}
         </div>
       </PageHeader>
 
@@ -292,7 +295,7 @@ export default function Employees() {
       <Card className="overflow-hidden">
         <EmployeeFilters clearFilters={clearFilters} departments={departments} dept={dept} filtered={filtered} filtering={filtering} query={query} setDept={setDept} setQuery={setQuery} />
 
-        {<EmployeeList busyId={busyId} clearFilters={clearFilters} filtered={filtered} filtering={filtering} loading={loading} onSort={onSort} openEdit={openEdit} openNew={openNew} setActive={setActive} setSelectedEmployee={setSelectedEmployee} setToDelete={setToDelete} sort={sort} visible={visible} />}
+        {<EmployeeList editable={editable} busyId={busyId} clearFilters={clearFilters} filtered={filtered} filtering={filtering} loading={loading} onSort={onSort} openEdit={openEdit} openNew={openNew} setActive={setActive} setSelectedEmployee={setSelectedEmployee} setToDelete={setToDelete} sort={sort} visible={visible} />}
         {!loading && (
           <Pagination
             page={safePage}
@@ -304,11 +307,11 @@ export default function Employees() {
         )}
       </Card>
 
-      <EmployeeFormModal closeModal={closeModal} departments={departments} errors={errors} form={form} formError={formError} isNew={isNew} modal={modal} saving={saving} set={set} setForm={setForm} submit={submit} />
+      {editable && <EmployeeFormModal closeModal={closeModal} departments={departments} errors={errors} form={form} formError={formError} isNew={isNew} modal={modal} saving={saving} set={set} setForm={setForm} submit={submit} />}
 
       <EmployeeDetailModal selectedEmployee={selectedEmployee} setSelectedEmployee={setSelectedEmployee} />
 
-      <DeleteEmployeeDialog deleting={deleting} doDelete={doDelete} setActive={setActive} setToDelete={setToDelete} toDelete={toDelete} />
+      {editable && <DeleteEmployeeDialog deleting={deleting} doDelete={doDelete} setActive={setActive} setToDelete={setToDelete} toDelete={toDelete} />}
     </>
   );
 }

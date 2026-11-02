@@ -72,9 +72,9 @@ export default function PurchaseView() {
     <>
       <Greeting description={canOrders ? nudge(pending) : "Purchases and supplier deliveries."}>
         {/* the purchase manager's way into one combined order for every pending request */}
-        <Link to={canOrders ? "/purchase-requests" : "/purchase"} className={pageButtonClass("primary")}>
+        {canRaise && <Link to={canOrders ? "/purchase-requests" : "/purchase"} className={pageButtonClass("primary")}>
           <ShoppingCart /> {canOrders ? `Purchase requests${pending ? ` (${pending})` : ""}` : "Open purchase"}
-        </Link>
+        </Link>}
       </Greeting>
 
       <StatRow drill={drill} stats={stats} />

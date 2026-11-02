@@ -56,9 +56,9 @@ function NextStep({ item, role }) {
 }
 
 /* the buttons of one order: view its bill, and the step that is this role's turn */
-function Actions({ item, role, onAct, onBill }) {
-  const mine = myFgStep(item, role)
-  if (!item.bill && !mine) return <span className="text-xs text-muted-foreground">No action</span>
+function Actions({ item, role, editable, onAct, onBill }) {
+  const mine = editable ? myFgStep(item, role) : null
+  if (!item.bill && !mine) return null
   return (
     <div className="flex min-w-0 flex-wrap justify-end gap-1.5">
       {item.bill && <Button size="sm" variant="outline" onClick={() => onBill(item)}><FileText /> Bill</Button>}
@@ -70,7 +70,7 @@ function Actions({ item, role, onAct, onBill }) {
 const unitsOf = (item) => item.lines.reduce((s, l) => s + Number(l.quantity || 0), 0)
 
 /* phones and tablets: one card per order */
-function ItemCard({ item, role, onAct, onBill }) {
+function ItemCard({ item, role, editable, onAct, onBill }) {
   const last = lastAction(item)
   return (
     <div className="min-w-0 rounded-xl border bg-card p-4">
@@ -83,7 +83,7 @@ function ItemCard({ item, role, onAct, onBill }) {
       </div>
       <div className="mt-3"><NextStep item={item} role={role} /></div>
       {last && <p className="mt-2 text-xs text-muted-foreground">Last action: {last.name} · {last.sub}</p>}
-      <div className="mt-3 border-t pt-3"><Actions item={item} role={role} onAct={onAct} onBill={onBill} /></div>
+      {(editable || item.bill) && <div className="mt-3 border-t pt-3"><Actions item={item} role={role} editable={editable} onAct={onAct} onBill={onBill} /></div>}
     </div>
   )
 }
@@ -283,6 +283,8 @@ function BillAction({ kind, bill, finishedGoodsId, onDone, onClose }) {
 }
 
 export function BillView({ item, role, onClose, onChanged }) {
+  const { canEdit } = usePermissions()
+  const canManageBills = canEdit("finishedGoods") || canEdit("sales")
   const [bill, setBill] = useState(null)
   const [error, setError] = useState("")
   const [action, setAction] = useState(null) // "payment" | "cancel"
@@ -296,8 +298,8 @@ export function BillView({ item, role, onClose, onChanged }) {
     return () => { live = false; setBill(null); setError(""); setAction(null) }
   }, [item, version])
   const admin = role === "SUPER_ADMIN"
-  const canPay = (admin || role === "PRODUCTION_ADMIN" || role === "MARKETING_MANAGER") && bill?.due > 0
-  const canCancel = admin && bill?.goodsStatus === "BILLED" && bill?.paid === 0
+  const canPay = canManageBills && (admin || role === "PRODUCTION_ADMIN" || role === "MARKETING_MANAGER") && bill?.due > 0
+  const canCancel = canManageBills && admin && bill?.goodsStatus === "BILLED" && bill?.paid === 0
   const done = () => { setAction(null); setVersion((v) => v + 1); onChanged() }
 
   return (
@@ -339,9 +341,9 @@ export function BillView({ item, role, onClose, onChanged }) {
           )}
           {bill.notes && <p className="text-muted-foreground">{bill.notes}</p>}
 
-          {action ? (
+          {canManageBills && action ? (
             <BillAction kind={action} bill={bill} finishedGoodsId={item.id} onDone={done} onClose={() => setAction(null)} />
-          ) : (canPay || canCancel) && (
+          ) : !action && (canPay || canCancel) && (
             <div className="flex flex-wrap justify-end gap-2">
               {canCancel && <Button type="button" variant="outline" onClick={() => setAction("cancel")}>Cancel bill</Button>}
               {canPay && <Button type="button" onClick={() => setAction("payment")}>Mark as paid</Button>}
@@ -359,7 +361,8 @@ export function BillView({ item, role, onClose, onChanged }) {
   ?month=2026-10 keeps only the orders billed in that month (the bills behind the Reports' Sales figure).
 */
 export default function FinishedGoods() {
-  const { role } = usePermissions()
+  const { role, canEdit } = usePermissions()
+  const editable = canEdit("finishedGoods")
   const { params, setParams, openPopup, closePopup } = useUrlState()
   const month = MONTH_RE.test(params.get("month") || "") ? params.get("month") : null
   const clearMonth = () => setParams((p) => { const next = new URLSearchParams(p); next.delete("month"); return next }, { replace: true })
@@ -447,7 +450,7 @@ export default function FinishedGoods() {
         ) : (
           <>
             <div className="grid min-w-0 gap-3 p-3 md:hidden">
-              {rows.map((item) => <ItemCard key={item.id} item={item} role={role} onAct={onAct} onBill={setViewBill} />)}
+              {rows.map((item) => <ItemCard key={item.id} item={item} role={role} editable={editable} onAct={onAct} onBill={setViewBill} />)}
             </div>
             <div className="hidden md:block">
               <Table className="w-full table-fixed">
@@ -486,7 +489,7 @@ export default function FinishedGoods() {
                           {last ? <><p className="text-sm font-medium">{last.name}</p><p className="text-xs text-muted-foreground">{last.sub}</p></> : <span className="text-xs text-muted-foreground">-</span>}
                         </TableCell>
                         <TableCell className="min-w-0 whitespace-normal align-top text-right">
-                          <Actions item={item} role={role} onAct={onAct} onBill={setViewBill} />
+                          <Actions item={item} role={role} editable={editable} onAct={onAct} onBill={setViewBill} />
                         </TableCell>
                       </TableRow>
                     )
@@ -498,8 +501,8 @@ export default function FinishedGoods() {
         )}
       </Card>
 
-      {acting.item && <StepDialog item={acting.item} step={acting.step} onClose={() => setActing({ item: null, step: null })} onDone={done} />}
-      {billFor && <BillDialog item={billFor} onClose={() => setBillFor(null)} onDone={() => { setBillFor(null); refetch() }} />}
+      {editable && acting.item && <StepDialog item={acting.item} step={acting.step} onClose={() => setActing({ item: null, step: null })} onDone={done} />}
+      {editable && billFor && <BillDialog item={billFor} onClose={() => setBillFor(null)} onDone={() => { setBillFor(null); refetch() }} />}
       <BillView item={viewBill} role={role} onClose={() => setViewBill(null)} onChanged={refetch} />
     </>
   )

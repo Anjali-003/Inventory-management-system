@@ -1,6 +1,15 @@
 import { useSyncExternalStore } from "react"
 import { useGetMeQuery } from "@/core/auth/authApi"
-import { ROLE_LABELS, canEdit, canView, getViewAs, homePathFor, subscribeViewAs } from "@/lib/permissions"
+import {
+  ROLE_LABELS,
+  canEdit as canEditForRole,
+  canView,
+  getSuperAdminMode,
+  getViewAs,
+  homePathFor,
+  subscribeSuperAdminMode,
+  subscribeViewAs,
+} from "@/lib/permissions"
 
 /*
   const { canEdit, canView, role, user } = usePermissions()
@@ -14,9 +23,12 @@ export function usePermissions() {
   const { data: user, isLoading } = useGetMeQuery()
   const realRole = user?.role ?? null
   const picked = useSyncExternalStore(subscribeViewAs, getViewAs, () => null)
+  // Subscribe here so every page recomputes its action visibility immediately when the Super Admin switches modes.
+  const adminMode = useSyncExternalStore(subscribeSuperAdminMode, getSuperAdminMode, () => "view")
   // the Super Admin viewing the app as another role: every screen follows that role
   const viewingAs = realRole === "SUPER_ADMIN" ? picked : null
   const role = viewingAs || realRole
+  const superAdminViewOnly = realRole === "SUPER_ADMIN" && adminMode !== "edit"
 
   return {
     user,
@@ -26,7 +38,8 @@ export function usePermissions() {
     roleLabel: ROLE_LABELS[String(role || "").toUpperCase()] || role || "",
     loading: isLoading,
     canView: (module) => canView(role, module),
-    canEdit: (module) => canEdit(role, module),
+    // In Super Admin View Only, action controls are not rendered. Other roles keep their normal module permissions.
+    canEdit: (module) => !superAdminViewOnly && canEditForRole(role, module),
     homePath: homePathFor(role),
   }
 }

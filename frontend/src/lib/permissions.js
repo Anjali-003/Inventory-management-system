@@ -158,6 +158,25 @@ export const loginPathFor = (role) =>
 */
 
 const ROLE_KEY = "ims_active_role";
+const superAdminModeListeners = new Set();
+let superAdminMode = "view";
+
+// Super Admin starts in View Only. The setting is intentionally in-memory and resets on a full reload.
+export const getSuperAdminMode = () => superAdminMode;
+
+export const setSuperAdminMode = (mode) => {
+  superAdminMode = mode === "edit" ? "edit" : "view";
+  superAdminModeListeners.forEach((listener) => listener());
+};
+
+export const subscribeSuperAdminMode = (listener) => {
+  superAdminModeListeners.add(listener);
+  return () => superAdminModeListeners.delete(listener);
+};
+
+// Used by the shared API client to prevent accidental writes from the Super Admin UI.
+export const isSuperAdminViewOnly = () =>
+  getActiveRole() === "SUPER_ADMIN" && getSuperAdminMode() === "view";
 
 export const getActiveRole = () => {
   try {
@@ -169,20 +188,25 @@ export const getActiveRole = () => {
 };
 
 export const setActiveRole = (role) => {
+  // Changing the active login role always returns the Super Admin control to its safe default.
+  superAdminMode = "view";
   try {
     sessionStorage.setItem(ROLE_KEY, norm(role));
   } catch {
     // Ignore sessionStorage errors.
   }
+  superAdminModeListeners.forEach((listener) => listener());
 };
 
 export const clearActiveRole = () => {
+  superAdminMode = "view";
   try {
     sessionStorage.removeItem(ROLE_KEY);
     sessionStorage.removeItem(VIEW_AS_KEY);
   } catch {
     // Ignore sessionStorage errors.
   }
+  superAdminModeListeners.forEach((listener) => listener());
 };
 
 /*

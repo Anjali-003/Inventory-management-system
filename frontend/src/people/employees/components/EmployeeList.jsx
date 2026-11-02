@@ -10,6 +10,7 @@ import { IconButton } from "./IconButton";
 
 export default function EmployeeList({
   busyId,
+  editable = false,
   clearFilters,
   filtered,
   filtering,
@@ -55,11 +56,11 @@ export default function EmployeeList({
             <Button variant="outline" size="lg" onClick={clearFilters}>
               Clear filters
             </Button>
-          ) : (
+          ) : editable ? (
             <Button size="lg" onClick={openNew}>
               <Plus /> Add employee
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
     ) : (
@@ -106,12 +107,12 @@ export default function EmployeeList({
                 >
                   Status
                 </th>
-                <th
+                {editable && <th
                   scope="col"
                   className="px-5 py-2.5 text-right font-medium"
                 >
                   <span className="sr-only">Actions</span>
-                </th>
+                </th>}
               </tr>
             </thead>
             <tbody>
@@ -164,7 +165,7 @@ export default function EmployeeList({
                       {e.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </td>
-                  <td className="px-3 py-3">
+                  {editable && <td className="px-3 py-3">
                     <div className="flex items-center justify-end gap-0.5">
                       <IconButton
                         label={`Edit ${e.name}`}
@@ -197,7 +198,7 @@ export default function EmployeeList({
                         <Trash2 className="size-4" />
                       </IconButton>
                     </div>
-                  </td>
+                  </td>}
                 </tr>
               ))}
             </tbody>
@@ -253,7 +254,7 @@ export default function EmployeeList({
                 </div>
               </div>
 
-              <div className="mt-3 flex justify-end gap-1 border-t pt-2">
+              {editable && <div className="mt-3 flex justify-end gap-1 border-t pt-2">
                 <IconButton
                   label={`Edit ${e.name}`}
                   onClick={() => openEdit(e)}
@@ -284,7 +285,7 @@ export default function EmployeeList({
                 >
                   <Trash2 className="size-4" />
                 </IconButton>
-              </div>
+              </div>}
             </div>
           ))}
         </div>

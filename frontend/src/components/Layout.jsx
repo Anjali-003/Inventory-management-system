@@ -1,6 +1,6 @@
 // website ka common UI banata hai, jaise header, sidebar, navigation aur page display.
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { AnimatePresence, motion } from "motion/react";
@@ -32,6 +32,8 @@ import {
   FileText,
   Receipt,
   Contact,
+  Eye,
+  Pencil,
 } from "lucide-react";
 
 import { cn } from "../lib/utils";
@@ -41,7 +43,7 @@ import { baseApi } from "../api/baseApi";
 import { usePermissions } from "@/core/auth/usePermissions";
 import NotificationBell from "@/core/notifications/NotificationBell";
 import ProfileMenu from "@/core/auth/ProfileMenu";
-import { ROLE_LABELS, clearActiveRole, loginPathFor, setViewAs } from "@/lib/permissions";
+import { ROLE_LABELS, clearActiveRole, getSuperAdminMode, loginPathFor, setSuperAdminMode, setViewAs, subscribeSuperAdminMode } from "@/lib/permissions";
 import { useChanged } from "@/lib/useChanged";
 
 /*
@@ -358,9 +360,55 @@ function ViewAsSwitcher({ value, onChange }) {
   );
 }
 
+function AdminModeSwitcher({ value, onChange }) {
+  const isViewOnly = value !== "edit";
+
+  return (
+    <div
+      role="group"
+      aria-label="Super Admin editing mode"
+      className="inline-flex items-center gap-0.5 rounded-full border border-border bg-muted/60 p-1 shadow-sm"
+    >
+      <button
+        type="button"
+        aria-pressed={isViewOnly}
+        aria-label="Switch to View Only"
+        title="View Only: changes are blocked"
+        onClick={() => onChange("view")}
+        className={cn(
+          "inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 sm:px-3",
+          isViewOnly
+            ? "bg-white text-primary shadow-sm ring-1 ring-inset ring-primary/15"
+            : "text-muted-foreground hover:bg-white/70 hover:text-foreground",
+        )}
+      >
+        <Eye className="size-3.5" aria-hidden />
+        <span className="hidden lg:inline">View Only</span>
+      </button>
+      <button
+        type="button"
+        aria-pressed={!isViewOnly}
+        aria-label="Switch to Edit Mode"
+        title="Edit Mode: changes are enabled"
+        onClick={() => onChange("edit")}
+        className={cn(
+          "inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 sm:px-3",
+          !isViewOnly
+            ? "bg-primary text-primary-foreground shadow-sm"
+            : "text-muted-foreground hover:bg-white/70 hover:text-foreground",
+        )}
+      >
+        <Pencil className="size-3.5" aria-hidden />
+        <span className="hidden lg:inline">Edit Mode</span>
+      </button>
+    </div>
+  );
+}
+
 export default function Layout() {
   const { pathname } = useLocation();
   const { user, roleLabel, realRole, viewingAs } = usePermissions();
+  const adminMode = useSyncExternalStore(subscribeSuperAdminMode, getSuperAdminMode, () => "view");
 
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -466,6 +514,12 @@ export default function Layout() {
             </span>
           )}
         </div>
+
+        {realRole === "SUPER_ADMIN" && (
+          <div className="hidden min-w-0 flex-1 items-center justify-center px-1 md:flex">
+            <AdminModeSwitcher value={adminMode} onChange={setSuperAdminMode} />
+          </div>
+        )}
 
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-4">
           <span className="hidden text-xs text-muted-foreground xl:block">{today}</span>

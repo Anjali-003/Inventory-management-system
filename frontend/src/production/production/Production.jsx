@@ -44,7 +44,7 @@ function ProductionLineTable({ items, editable, onStart, onRecord, onRequest }) 
         <TableHead className="w-[19%] whitespace-normal">Production</TableHead>
         <TableHead className="w-[15%] whitespace-normal">Materials</TableHead>
         <TableHead className="w-[8%] whitespace-normal">Due</TableHead>
-        <TableHead className="w-[11%] whitespace-normal text-right">Actions</TableHead>
+        {editable && <TableHead className="w-[11%] whitespace-normal text-right">Actions</TableHead>}
       </TableRow></TableHeader>
       <TableBody>{items.map((item) => {
         const step = nextStep(item)
@@ -60,7 +60,7 @@ function ProductionLineTable({ items, editable, onStart, onRecord, onRequest }) 
           <TableCell className="whitespace-normal align-top"><p className="text-sm font-semibold tabular-nums">{made} of {ordered} made</p><div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-lp-bg"><div className="h-full rounded-full bg-lp-green" style={{ width: `${percentage}%` }}/></div><p className="mt-1 text-xs text-lp-muted">{percentage}% complete</p></TableCell>
           <TableCell className="whitespace-normal align-top"><p className="text-sm font-medium">{material.label}</p><p className="mt-1 text-xs text-lp-muted">{material.detail}</p></TableCell>
           <TableCell className="whitespace-normal align-top">{due ? <span className={`text-xs font-semibold ${days < 0 ? "text-rose-700" : days <= 7 ? "text-amber-800" : "text-lp-muted"}`}>{days <= 7 ? dueLine(days) : shortDay(due)}</span> : <span className="text-xs text-lp-muted">Not set</span>}</TableCell>
-          <TableCell className="whitespace-normal align-top text-right">{editable ? <LineActions item={item} onStart={onStart} onRecord={onRecord} onRequest={onRequest}/> : <span className="text-xs text-lp-muted">View only</span>}</TableCell>
+          {editable && <TableCell className="whitespace-normal align-top text-right"><LineActions item={item} onStart={onStart} onRecord={onRecord} onRequest={onRequest}/></TableCell>}
         </TableRow>;
       })}</TableBody>
     </Table>

@@ -19,7 +19,7 @@ function timeCell(e, stage, isToday, now) {
   return { main: "-", sub: null }
 }
 
-export function EmployeeRow({ e, isToday, now, busyKey, onCheck, onHalf, onAbsent, onLeave }) {
+export function EmployeeRow({ e, isToday, now, busyKey, editable = false, onCheck, onHalf, onAbsent, onLeave }) {
   const stage = stageOf(e)
   const busy = !!busyKey
   const checking = stage === "checkedIn"
@@ -46,7 +46,7 @@ export function EmployeeRow({ e, isToday, now, busyKey, onCheck, onHalf, onAbsen
         {t.sub && <p className={cn("text-xs tabular-nums", stage === "checkedIn" && !isToday ? "text-warning" : "text-muted-foreground")}>{t.sub}</p>}
       </div>
 
-      <div className="ml-auto flex shrink-0 items-center gap-2 xl:w-[19.5rem] xl:justify-end">
+      {editable && <div className="ml-auto flex shrink-0 items-center gap-2 xl:w-[19.5rem] xl:justify-end">
         <span title={checkDisabled && !busy ? "Attendance is already recorded" : undefined}>
           <Button size="sm" className="min-w-[6.5rem]" disabled={checkDisabled} onClick={onCheck}>
             {busyKey === "check-in" || busyKey === "check-out" ? <Loader2 className="animate-spin" /> : <CheckIcon />}
@@ -58,7 +58,7 @@ export function EmployeeRow({ e, isToday, now, busyKey, onCheck, onHalf, onAbsen
           <SegButton label="Absent" reason="Only available before check in" disabled={busy || stage !== "initial"} spinning={busyKey === "ABSENT"} onClick={onAbsent} />
           <SegButton label="Leave" reason="Only available before check in" disabled={busy || stage !== "initial"} spinning={busyKey === "LEAVE"} onClick={onLeave} />
         </div>
-      </div>
+      </div>}
     </li>
   )
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { CalendarCheck, CheckCircle2, Clock3, TrendingDown, UserX, Users } from "lucide-react"
 import { pageButtonClass } from "@/components/PageKit"
+import { usePermissions } from "@/core/auth/usePermissions"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useGetEmployeesQuery } from "@/people/employees/employeesApi"
 import { useGetAttendanceQuery } from "@/people/attendance/attendanceApi"
@@ -29,6 +30,8 @@ const personRow = (e, extra) => ({ id: `e${e.employee_id ?? e.id ?? e.employee_c
 */
 export default function HRView() {
   const drill = useDrill()
+  const { canEdit } = usePermissions()
+  const canTakeAttendance = canEdit("attendance")
   const date = useMemo(() => localDate(), [])
   const employeesQuery = useGetEmployeesQuery()
   const attendanceQuery = useGetAttendanceQuery(date)
@@ -76,7 +79,7 @@ export default function HRView() {
   return (
     <>
       <Greeting description={nudge}>
-        <Link to="/attendance" className={pageButtonClass("primary")}><CalendarCheck /> Take attendance</Link>
+        {canTakeAttendance && <Link to="/attendance" className={pageButtonClass("primary")}><CalendarCheck /> Take attendance</Link>}
       </Greeting>
 
       <StatRow drill={drill} stats={[
